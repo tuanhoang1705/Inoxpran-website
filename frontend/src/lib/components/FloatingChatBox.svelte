@@ -105,9 +105,7 @@
 		if (item?.role === 'system') return 'system';
 		if (
 			item?.role === 'assistant' &&
-			new Set(['handoff_confirmation', 'rate_limit_notice']).has(
-				String(item?.meta?.kind || '').trim()
-			)
+			new Set(['handoff_confirmation', 'rate_limit_notice']).has(String(item?.meta?.kind || '').trim())
 		) {
 			return 'system';
 		}
@@ -128,10 +126,7 @@
 	const buildUiMessagesFromPersisted = (items = []) =>
 		(Array.isArray(items) ? items : []).map(normalizePersistedMessage).filter(Boolean);
 	const syncMessageSeq = (items = []) => {
-		messageSeq = items.reduce(
-			(max, item, index) => Math.max(max, Number(item?.id) || index + 1),
-			0
-		);
+		messageSeq = items.reduce((max, item, index) => Math.max(max, Number(item?.id) || index + 1), 0);
 	};
 	const setMessagesFromSnapshot = (items = []) => {
 		messages = Array.isArray(items) ? items.map((item) => ({ ...item, pending: false })) : [];
@@ -150,10 +145,7 @@
 		if (!nextItems.length) return;
 		const shouldAutoScroll = isNearMessagesBottom;
 		const newConsultantCount = nextItems.filter((item) => item.role === 'consultant').length;
-		const nextMessages = [
-			...messages,
-			...nextItems.map((item) => ({ ...item, id: nextMessageId() }))
-		];
+		const nextMessages = [...messages, ...nextItems.map((item) => ({ ...item, id: nextMessageId() }))];
 		messages = nextMessages;
 		lastRemoteMessageAt = nextItems[nextItems.length - 1]?.createdAt || lastRemoteMessageAt;
 		await tick();
@@ -260,9 +252,7 @@
 					'Nên chọn dòng Inoxpran nào cho nhu cầu của tôi?'
 				];
 	};
-	const promptSuggestions = $derived.by(() =>
-		buildPromptSuggestions({ path: currentPath, locale: $locale })
-	);
+	const promptSuggestions = $derived.by(() => buildPromptSuggestions({ path: currentPath, locale: $locale }));
 	const visiblePromptSuggestions = $derived.by(() =>
 		Array.isArray(promptSuggestions) ? promptSuggestions.slice(0, 3) : []
 	);
@@ -294,10 +284,7 @@
 			.filter(Boolean);
 
 		return blocks.map((block) => {
-			const lines = block
-				.split('\n')
-				.map((line) => line.trim())
-				.filter(Boolean);
+			const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
 			const listLike = lines.length > 0 && lines.every((line) => line.startsWith('- '));
 			return {
 				type: listLike ? 'list' : 'paragraphs',
@@ -369,9 +356,9 @@
 					callTitle: `Call ${CHAT_SUPPORT_CONFIG.phoneLabel}`,
 					callSubtitle: 'Support hours: 8:30 - 17:30',
 					zaloTitle: 'Chat on Zalo',
-					zaloSubtitle: 'Reply within 2 business hours',
+					zaloSubtitle: 'Fast support via Zalo',
 					messengerTitle: 'Chat on Facebook Messenger',
-					messengerSubtitle: 'Reply within 2 business hours',
+					messengerSubtitle: 'Message us via Facebook page',
 					liveTitle: 'Start live support chat',
 					liveSubtitle: 'Chat with our support team',
 					openButton: 'Chat now',
@@ -399,9 +386,9 @@
 					callTitle: `Gọi ${CHAT_SUPPORT_CONFIG.phoneLabel}`,
 					callSubtitle: 'Hỗ trợ từ 8:30 - 17:30',
 					zaloTitle: 'Nhắn Zalo',
-					zaloSubtitle: 'Phản hồi trong 2 giờ làm việc',
+					zaloSubtitle: 'Trao đổi nhanh qua Zalo',
 					messengerTitle: 'Nhắn Facebook Messenger',
-					messengerSubtitle: 'Phản hồi trong 2 giờ làm việc',
+					messengerSubtitle: 'Liên hệ qua fanpage',
 					liveTitle: 'Chat trực tiếp ngay',
 					liveSubtitle: 'Chat với đội ngũ hỗ trợ của chúng tôi',
 					openButton: 'Chat ngay',
@@ -434,18 +421,23 @@
 				subtitle: copy.callSubtitle,
 				href: CHAT_SUPPORT_CONFIG.phoneHref
 			},
-			{
-				id: 'zalo',
-				title: copy.zaloTitle,
-				subtitle: copy.zaloSubtitle,
-				href: CHAT_SUPPORT_CONFIG.zaloUrl
-			},
+			/*
+			 * Temporarily disabled: Zalo support option.
+			 * Keeping this commented preserves the copy/config for later reuse while removing
+			 * both the visible "Nhắn Zalo" item and its outbound click functionality.
+			 */
+			// {
+			// 	id: 'zalo',
+			// 	title: copy.zaloTitle,
+			// 	subtitle: copy.zaloSubtitle,
+			// 	href: CHAT_SUPPORT_CONFIG.zaloUrl
+			// },
 			{
 				id: 'messenger',
 				title: copy.messengerTitle,
 				subtitle: copy.messengerSubtitle,
 				href: CHAT_SUPPORT_CONFIG.messengerUrl
-			}
+			},
 			/*
 			 * Temporarily disabled: direct live chat option.
 			 * Keeping this commented prevents the "Chat trực tiếp ngay" button from rendering,
@@ -828,8 +820,7 @@
 			}
 
 			handoffRequested = true;
-			lastRemoteMessageAt =
-				payload?.metadata?.messages?.at?.(-1)?.createdAt || new Date().toISOString();
+			lastRemoteMessageAt = payload?.metadata?.messages?.at?.(-1)?.createdAt || new Date().toISOString();
 			liveSupport = payload?.metadata?.liveSupport || liveSupport;
 			customerPresence = payload?.metadata?.customerPresence || customerPresence;
 			await appendPersistedMessages(payload?.metadata?.messages || []);
@@ -1245,41 +1236,41 @@
 											</div>
 										{/if}
 										<div
-											class="support-chat__bubble"
-											class:is-user={message.role === 'user'}
-											class:is-consultant={message.role === 'consultant'}
-											class:is-system={message.role === 'system'}
-										>
-											{#each parseBubbleBlocks(message.text) as block}
-												{#if block.type === 'list'}
-													<ul class="support-chat__bubble-list">
-														{#each block.items as item}
-															<li class="support-chat__bubble-list-item">
-																{#if item.label}
-																	<strong class="support-chat__bubble-key">{item.label}:</strong>
-																	<span>{item.value}</span>
-																{:else}
-																	<span>{item.text}</span>
-																{/if}
-															</li>
-														{/each}
-													</ul>
-												{:else}
-													<div class="support-chat__bubble-paragraphs">
-														{#each block.items as item}
-															<p class="support-chat__bubble-line">
-																{#if item.label}
-																	<strong class="support-chat__bubble-key">{item.label}:</strong>
-																	<span>{item.value}</span>
-																{:else}
-																	<span>{item.text}</span>
-																{/if}
-															</p>
-														{/each}
-													</div>
-												{/if}
-											{/each}
-										</div>
+										class="support-chat__bubble"
+										class:is-user={message.role === 'user'}
+										class:is-consultant={message.role === 'consultant'}
+										class:is-system={message.role === 'system'}
+									>
+										{#each parseBubbleBlocks(message.text) as block}
+											{#if block.type === 'list'}
+												<ul class="support-chat__bubble-list">
+													{#each block.items as item}
+														<li class="support-chat__bubble-list-item">
+															{#if item.label}
+																<strong class="support-chat__bubble-key">{item.label}:</strong>
+																<span>{item.value}</span>
+															{:else}
+																<span>{item.text}</span>
+															{/if}
+														</li>
+													{/each}
+												</ul>
+											{:else}
+												<div class="support-chat__bubble-paragraphs">
+													{#each block.items as item}
+														<p class="support-chat__bubble-line">
+															{#if item.label}
+																<strong class="support-chat__bubble-key">{item.label}:</strong>
+																<span>{item.value}</span>
+															{:else}
+																<span>{item.text}</span>
+															{/if}
+														</p>
+													{/each}
+												</div>
+											{/if}
+										{/each}
+									</div>
 									</div>
 								</div>
 							{/each}

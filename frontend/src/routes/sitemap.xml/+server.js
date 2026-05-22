@@ -120,39 +120,6 @@ const extractCategories = (products) => {
 	return Array.from(unique);
 };
 
-const resolveProductCategory = (product) => {
-	const raw =
-		typeof product?.product_type === 'string'
-			? product.product_type
-			: typeof product?.category === 'string'
-				? product.category
-				: '';
-	return String(raw || '').trim();
-};
-
-const buildCategoryLastmodMap = (products) => {
-	const bySlug = new Map();
-	let latestCatalogLastmod = null;
-
-	for (const product of products || []) {
-		const lastmod = toIsoDate(product?.updatedAt || product?.createdAt);
-		if (!lastmod) continue;
-		if (!latestCatalogLastmod || lastmod > latestCatalogLastmod) {
-			latestCatalogLastmod = lastmod;
-		}
-
-		const category = resolveProductCategory(product);
-		const slug = resolveCategorySlug(category);
-		if (!slug) continue;
-		const previous = bySlug.get(slug);
-		if (!previous || lastmod > previous) {
-			bySlug.set(slug, lastmod);
-		}
-	}
-
-	return { bySlug, latestCatalogLastmod };
-};
-
 const toUrlNode = ({ loc, alternates, lastmod, changefreq, priority }) => {
 	const nodes = [`<loc>${escapeXml(loc)}</loc>`];
 	if (Array.isArray(alternates)) {
@@ -237,7 +204,6 @@ export const GET = async ({ fetch, url }) => {
 
 	const [products, blogs] = await Promise.all([fetchAllProducts(fetch), fetchAllBlogs(fetch)]);
 	const categories = extractCategories(products);
-	const categoryLastmod = buildCategoryLastmodMap(products);
 
 	const productEntries = products
 		.map((product) => {
@@ -258,7 +224,6 @@ export const GET = async ({ fetch, url }) => {
 			if (!slug) return null;
 			return {
 				loc: `${baseUrl}/category/${encodeURIComponent(slug)}`,
-				lastmod: categoryLastmod.bySlug.get(slug) || categoryLastmod.latestCatalogLastmod,
 				changefreq: 'weekly',
 				priority: '0.7'
 			};

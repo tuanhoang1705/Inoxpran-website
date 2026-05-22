@@ -8,7 +8,6 @@
 	import { addGuestCartItem } from '$lib/client/guestCart.js';
 	import { syncCartCountFromActionResult } from '$lib/client/cartCountSync.js';
 	import RichTextDisplay from '$lib/components/RichTextDisplay.svelte';
-	import PaymentMethods from '$lib/components/PaymentMethods.svelte';
 	import { locale, t } from '$lib/i18n/index.js';
 	import {
 		buildStaticReviewsForProduct,
@@ -18,7 +17,6 @@
 	import { cartToast } from '$lib/stores/cartToast.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
 	import { resolveCategorySlug } from '$lib/utils/category.js';
-	import { CHAT_SUPPORT_CONFIG } from '$lib/config/chatSupport.js';
 
 	let { data, form } = $props();
 	let isAddingToCart = $state(false);
@@ -90,26 +88,6 @@
 		return raw.replace(/\/+$/, '');
 	};
 	const siteUrl = $derived(normalizeSiteUrl(env.PUBLIC_SITE_URL));
-	const reviewPromptText = $derived(
-		$locale === 'en'
-			? 'New product - be the first to review'
-			: 'Sản phẩm mới - hãy là người đầu tiên đánh giá'
-	);
-	const callConsultText = $derived(
-		$locale === 'en'
-			? `Call ${CHAT_SUPPORT_CONFIG.phoneLabel}`
-			: `Gọi tư vấn ${CHAT_SUPPORT_CONFIG.phoneLabel}`
-	);
-	const productTrustItems = $derived(
-		$locale === 'en'
-			? [
-					'12-month official warranty',
-					'7-day return support',
-					'Nationwide COD',
-					'EU-standard 304 stainless'
-				]
-			: ['Bảo hành 12 tháng chính hãng', 'Đổi trả 7 ngày', 'COD toàn quốc', 'Inox 304 đạt chuẩn EU']
-	);
 
 	const toAbsoluteUrl = (value) => {
 		const raw = String(value || '').trim();
@@ -2147,9 +2125,7 @@
 	<meta name="twitter:description" content={seoDescription} />
 	<meta name="twitter:image" content={seoImage} />
 	{#if productBreadcrumbJsonLd}
-		{@html '<script type="application/ld+json">' +
-			escapeJsonLd(productBreadcrumbJsonLd) +
-			'</script>'}
+		{@html '<script type="application/ld+json">' + escapeJsonLd(productBreadcrumbJsonLd) + '</script>'}
 	{/if}
 	{#if productJsonLd}
 		{@html '<script type="application/ld+json">' + escapeJsonLd(productJsonLd) + '</script>'}
@@ -2320,9 +2296,7 @@
 											? $t('product.lowStock')
 											: $t('product.outOfStock')}
 								</span>
-								{#if stockQuantity > 0 && stockQuantity <= 10}
-									<span>({$t('product.stockCount', { count: stockQuantity })})</span>
-								{/if}
+								<span>({$t('product.stockCount', { count: stockQuantity })})</span>
 							</div>
 						</div>
 					</div>
@@ -2416,28 +2390,6 @@
 						</div>
 					</div>
 
-					<div
-						class="product-trust-strip"
-						aria-label={$locale === 'en' ? 'Purchase assurances' : 'Cam kết mua hàng'}
-					>
-						{#each productTrustItems as trustItem}
-							<span>
-								<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-									<path
-										d="M13.5 4.5 6.4 11.6 2.8 8"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="1.8"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									/>
-								</svg>
-								{trustItem}
-							</span>
-						{/each}
-					</div>
-					<PaymentMethods compact />
-
 					<div class="action-buttons" class:action-buttons-mobile={isMobile}>
 						<div class="action-buy-now">
 							<form
@@ -2496,15 +2448,6 @@
 									{$t('common.addToCart')}
 								</button>
 							</form>
-							<a
-								class="btn-call-action"
-								href={CHAT_SUPPORT_CONFIG.phoneHref}
-								aria-label={callConsultText}
-								data-track="call_consult_click"
-								data-track-section="product_detail"
-							>
-								{callConsultText}
-							</a>
 						</div>
 					</div>
 
@@ -3114,18 +3057,10 @@
 											>
 											<span class="old-price fw-bold">{originalPrice}</span>
 										</div>
-										<div
-											class="product-rating-row"
-											class:product-rating-row--empty={relatedRatingSummary.isFallback}
-											aria-label={relatedRatingSummary.label}
-										>
-											{#if relatedRatingSummary.isFallback}
-												<span class="review-prompt">{reviewPromptText}</span>
-											{:else}
-												<span aria-hidden="true">★★★★★</span>
-												<strong>{relatedRatingSummary.formattedAverage}</strong>
-												<small>({relatedRatingSummary.count})</small>
-											{/if}
+										<div class="product-rating-row" aria-label={relatedRatingSummary.label}>
+											<span aria-hidden="true">★★★★★</span>
+											<strong>{relatedRatingSummary.formattedAverage}</strong>
+											<small>({relatedRatingSummary.count})</small>
 										</div>
 										<div class="product-desc-box">
 											<p class="product-desc mb-0">
@@ -4296,34 +4231,6 @@
 		font-weight: 700;
 	}
 
-	.product-trust-strip {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.45rem;
-		margin: 0.75rem 0 0.25rem;
-	}
-
-	.product-trust-strip span {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.38rem;
-		min-height: 32px;
-		padding: 0.42rem 0.68rem;
-		border: 1px solid rgba(17, 120, 100, 0.18);
-		border-radius: 8px;
-		background: rgba(17, 120, 100, 0.07);
-		color: #0f5f50;
-		font-size: 0.78rem;
-		font-weight: 800;
-		line-height: 1.25;
-	}
-
-	.product-trust-strip svg {
-		width: 15px;
-		height: 15px;
-		flex: 0 0 auto;
-	}
-
 	.action-buttons {
 		display: flex;
 		flex-direction: column;
@@ -4359,46 +4266,9 @@
 		width: 100%;
 	}
 
-	.action-secondary-row .action-form,
-	.btn-call-action {
-		flex: 1 1 0;
-		min-width: 0;
-	}
-
 	.action-secondary-row {
 		gap: 12px;
 		align-items: stretch;
-	}
-
-	.btn-call-action {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 46px;
-		padding: 0.72rem 0.9rem;
-		border: 1px solid rgba(17, 120, 100, 0.42);
-		border-radius: 999px;
-		background: #0f766e;
-		color: #ffffff;
-		font-size: 0.88rem;
-		font-weight: 800;
-		line-height: 1.15;
-		text-align: center;
-		text-decoration: none;
-		box-shadow: 0 10px 22px rgba(15, 118, 110, 0.18);
-		transition:
-			transform 0.18s ease,
-			box-shadow 0.18s ease,
-			background-color 0.18s ease;
-		overflow-wrap: anywhere;
-	}
-
-	.btn-call-action:hover,
-	.btn-call-action:focus-visible {
-		background: #0d625c;
-		color: #ffffff;
-		transform: translateY(-1px);
-		box-shadow: 0 14px 28px rgba(15, 118, 110, 0.22);
 	}
 
 	.product-action-spacer {
@@ -4406,7 +4276,7 @@
 	}
 	.product-action-spacer--on {
 		display: block;
-		height: calc(142px + env(safe-area-inset-bottom));
+		height: calc(124px + env(safe-area-inset-bottom));
 	}
 
 	.product-meta {
@@ -5059,25 +4929,10 @@
 		line-height: 1.2;
 	}
 
-	.related-section .product-rating-row--empty {
-		color: #52606d;
-		font-weight: 700;
-	}
-
 	.related-section .product-rating-row strong,
 	.related-section .product-rating-row small {
 		color: #334155;
 		font-size: 0.76rem;
-	}
-
-	.related-section .review-prompt {
-		display: -webkit-box;
-		-webkit-line-clamp: 1;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-		font-size: 0.75rem;
-		line-height: 1.25;
-		overflow-wrap: anywhere;
 	}
 
 	.related-section .product-desc-box {
@@ -5243,26 +5098,16 @@
 		}
 
 		.action-buttons :global(.btn-primary-action),
-		.action-buttons :global(.btn-secondary-action),
-		.action-buttons .btn-call-action {
+		.action-buttons :global(.btn-secondary-action) {
 			min-width: 0;
 			width: 100%;
 			padding: 0.65rem 0.8rem;
 			font-size: 0.85rem;
 		}
 
-		.product-trust-strip {
-			gap: 0.35rem;
-		}
-
-		.product-trust-strip span {
-			font-size: 0.72rem;
-			padding: 0.36rem 0.52rem;
-		}
-
 		.product-action-spacer {
 			display: block;
-			height: calc(142px + env(safe-area-inset-bottom));
+			height: calc(124px + env(safe-area-inset-bottom));
 		}
 	}
 

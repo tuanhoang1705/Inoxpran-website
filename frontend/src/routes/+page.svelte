@@ -11,7 +11,6 @@
 	import { cartToast } from '$lib/stores/cartToast.js';
 	import { getMarketingRatingSummary } from '$lib/data/staticReviews.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
-	import { CHAT_SUPPORT_CONFIG } from '$lib/config/chatSupport.js';
 	let { data } = $props();
 	const heroCompositeVersion = '20260324';
 	const heroCompositeUrl = `/images/bg-new.png?v=${heroCompositeVersion}`;
@@ -25,25 +24,6 @@
 	const latestPostImageSizes = '(max-width: 768px) 50vw, 25vw';
 	const CLIENT_HOME_FEED_TIMEOUT_MS = 1_500;
 	const DEFAULT_SITE_URL = 'https://inoxpran.com';
-	const HOME_MARKETING_LEAD_CAMPAIGN = Object.freeze({
-		enabled: true,
-		popupEnabled: true,
-		headerEnabled: false,
-		offerCode: 'CONSULT',
-		minOrderValue: 0,
-		kickerVi: 'Tư vấn chọn đúng sản phẩm',
-		kickerEn: 'Product match advice',
-		titleVi: 'Để Inoxpran gợi ý bộ nồi phù hợp với bếp nhà bạn',
-		titleEn: 'Let Inoxpran recommend the right cookware for your kitchen',
-		descriptionVi:
-			'Để lại email hoặc Zalo. Đội ngũ sẽ gửi gợi ý theo loại bếp, số người ăn, ngân sách và xác nhận ưu đãi hiện tại.',
-		descriptionEn:
-			'Leave an email or Zalo number. The team will recommend options by cooktop, family size, budget, and current offer.',
-		ctaVi: 'Nhận tư vấn',
-		ctaEn: 'Get advice',
-		successVi: 'Inoxpran đã nhận thông tin và sẽ phản hồi trong 2 giờ làm việc.',
-		successEn: 'Inoxpran received your request and will reply within 2 business hours.'
-	});
 	const HERO_TAG_SHOP_FILTER_HREF = $derived(localizeInternalHref('/shop?q=inox', $locale));
 	const normalizeSiteUrl = (value) => {
 		const raw = String(value || '').trim();
@@ -156,11 +136,6 @@
 	);
 	const isAuthenticated = $derived(Boolean(data?.user));
 	const showDiscountBadge = $derived(Boolean(data?.siteFeatures?.showDiscountBadge));
-	const reviewPromptText = $derived(
-		$locale === 'en'
-			? 'New product - be the first to review'
-			: 'Sản phẩm mới - hãy là người đầu tiên đánh giá'
-	);
 	const siteUrl = $derived(normalizeSiteUrl(env.PUBLIC_SITE_URL));
 	const seoTitle = $derived($t('home.title'));
 	const seoDescription = $derived(truncateMeta($t('site.description')));
@@ -249,338 +224,30 @@
 	const heroFashionIntro = $derived.by(() =>
 		$locale === 'en'
 			? {
-					origin: 'Official Italian 304 stainless cookware',
+					origin: 'Kitchenware from Italy',
 					eyebrow: 'Italia 1954',
-					titleLines: ['Italian 304', 'Cookware', 'for Vietnam'],
+					titleLines: ['Inoxpran', 'Italian', 'Kitchen', 'Atelier'],
 					description:
-						'Inoxpran brings 70 years of Italian stainless expertise to Vietnam, with official warranty support and nationwide COD for everyday family cooking.',
-					proofs: [
-						{ value: '1954', label: 'Brescia heritage' },
-						{ value: '304', label: 'Food-safe stainless' },
-						{ value: '12 mo', label: 'Official warranty' }
-					],
-					tags: ['70-year Italian heritage', '304 stainless', 'Nationwide COD'],
+						'Mirror-polished stainless steel, clean Italian lines, and durable cookware made for the rhythm of modern family cooking.',
+					tags: ['Italian heritage', '304 stainless', '12-month warranty'],
 					cta: 'Shop the collection',
 					storyCta: 'Our Italian story',
-					noteTitle: 'Official Vietnam',
-					noteMeta: 'Warranty and COD support'
+					noteTitle: 'Italian homeware',
+					noteMeta: 'Designed for Vietnamese kitchens'
 				}
 			: {
-					origin: 'Bộ nồi Inox 304 chính hãng từ Italy',
+					origin: 'Gia dụng bếp từ Italy',
 					eyebrow: 'Italia 1954',
-					titleLines: ['Bộ nồi', 'Inox 304', 'từ Italy'],
+					titleLines: ['Inoxpran', 'dấu ấn', 'Italy'],
 					description:
-						'Chuẩn bếp 70 năm từ Brescia, đáy 3-5 lớp dẫn nhiệt đều, bảo hành chính hãng và COD toàn quốc cho gia đình Việt.',
-					proofs: [
-						{ value: '1954', label: 'Di sản Brescia' },
-						{ value: '304', label: 'Inox an toàn thực phẩm' },
-						{ value: '12T', label: 'Bảo hành chính hãng' }
-					],
-					tags: ['70 năm Italy', 'Đáy 3-5 lớp', 'COD toàn quốc'],
+						'Inox sáng gương, đường nét tối giản kiểu Ý và trải nghiệm nấu bền bỉ cho nhịp sống gia đình Việt.',
+					tags: ['Di sản Italy', 'Inox 304', 'Bảo hành 12 tháng'],
 					cta: 'Khám phá bộ sưu tập',
 					storyCta: 'Câu chuyện Italy',
-					noteTitle: 'Chính hãng Việt Nam',
-					noteMeta: 'Bảo hành và tư vấn nhanh'
+					noteTitle: 'Italian homeware',
+					noteMeta: 'Tinh chỉnh cho bếp Việt'
 				}
 	);
-	let cookwareQuizAnswers = $state({});
-	let cookwareQuizStep = $state(0);
-	const enabledMarketplaceLinks = $derived.by(() =>
-		(Array.isArray(data?.siteMarketplaceLinks) ? data.siteMarketplaceLinks : [])
-			.filter((link) => link?.enabled && link?.url)
-			.map((link) => ({
-				id: String(link.id || link.label || link.url),
-				label: String(link.label || 'Marketplace').trim(),
-				url: String(link.url || '').trim()
-			}))
-	);
-	const cookwareQuizCopy = $derived.by(() =>
-		$locale === 'en'
-			? {
-					eyebrow: 'Product match',
-					title: 'Find the right Inoxpran line before browsing every SKU',
-					body: 'Answer four quick questions. The result points visitors to a tighter collection and gives the sales team useful lead context.',
-					progressLabel: 'Answered',
-					reset: 'Start over',
-					questions: [
-						{
-							id: 'cooktop',
-							label: 'What cooktop do you use most?',
-							options: [
-								{ value: 'induction', label: 'Induction', helper: 'Needs a stable magnetic base' },
-								{ value: 'gas', label: 'Gas stove', helper: 'Prioritizes heat control' },
-								{ value: 'mixed', label: 'Mixed setup', helper: 'Needs flexible cookware' }
-							]
-						},
-						{
-							id: 'household',
-							label: 'How many people do you usually cook for?',
-							options: [
-								{ value: 'small', label: '1-2 people', helper: 'Compact daily pieces' },
-								{ value: 'family', label: '3-4 people', helper: 'Balanced set size' },
-								{ value: 'large', label: '5+ people', helper: 'Larger pots and bundles' }
-							]
-						},
-						{
-							id: 'goal',
-							label: 'What cooking job matters most?',
-							options: [
-								{ value: 'daily', label: 'Daily meals', helper: 'Clean, quick, reliable' },
-								{ value: 'sear', label: 'Sear / stew', helper: 'High heat retention' },
-								{ value: 'speed', label: 'Fast prep', helper: 'Appliances and convenience' }
-							]
-						},
-						{
-							id: 'budget',
-							label: 'What budget style fits this purchase?',
-							options: [
-								{ value: 'entry', label: 'Starter', helper: 'One or two core items' },
-								{ value: 'balanced', label: 'Balanced', helper: 'Best fit for most homes' },
-								{ value: 'premium', label: 'Premium', helper: 'Long-term full setup' }
-							]
-						}
-					],
-					results: {
-						inox: {
-							title: 'Start with 304 stainless cookware',
-							body: 'Best for daily Vietnamese meals, easy cleaning, and broad cooktop compatibility.',
-							href: '/category/noi-inox',
-							cta: 'View stainless cookware',
-							lead: 'Interested in 304 stainless cookware recommendation'
-						},
-						castIron: {
-							title: 'Add cast iron for heat retention',
-							body: 'Best when searing, stewing, or serving hot dishes at the table matters more than speed.',
-							href: '/category/noi-gang',
-							cta: 'View cast iron',
-							lead: 'Interested in cast iron cookware recommendation'
-						},
-						electrical: {
-							title: 'Prioritize kitchen appliances',
-							body: 'Best when the shopper wants faster prep, repeatable cooking, or a practical gift.',
-							href: '/category/gia-dung-dien',
-							cta: 'View appliances',
-							lead: 'Interested in kitchen appliance recommendation'
-						}
-					},
-					sizeAdvice: {
-						small: 'Compact pieces keep storage and cleaning simple.',
-						family: 'A mid-size set covers daily soup, stir-fry, and boiling.',
-						large: 'Larger pots or bundled sets reduce repeated batches.'
-					},
-					budgetAdvice: {
-						entry: 'Start with the one pan or pot used most often.',
-						balanced: 'Choose the best-fit set before adding specialist pieces.',
-						premium: 'Build a full setup around the main cookware line.'
-					},
-					resultLabel: 'Suggested path',
-					reasonLabel: 'Why this fit',
-					leadCta: 'Get a tailored recommendation',
-					zaloCta: 'Ask via Zalo',
-					shopFallback: 'Shop all products'
-				}
-			: {
-					eyebrow: 'Chọn đúng sản phẩm',
-					title: 'Tìm dòng Inoxpran phù hợp trước khi xem quá nhiều SKU',
-					body: 'Trả lời 4 câu hỏi ngắn để khách được dẫn vào đúng nhóm sản phẩm, đồng thời đội tư vấn có ngữ cảnh rõ hơn khi chăm sóc lead.',
-					progressLabel: 'Đã trả lời',
-					reset: 'Làm lại',
-					questions: [
-						{
-							id: 'cooktop',
-							label: 'Nhà bạn dùng loại bếp nào nhiều nhất?',
-							options: [
-								{ value: 'induction', label: 'Bếp từ', helper: 'Cần đáy bắt từ ổn định' },
-								{ value: 'gas', label: 'Bếp gas', helper: 'Ưu tiên kiểm soát lửa' },
-								{ value: 'mixed', label: 'Nhiều loại bếp', helper: 'Cần bộ nồi linh hoạt' }
-							]
-						},
-						{
-							id: 'household',
-							label: 'Bạn thường nấu cho bao nhiêu người?',
-							options: [
-								{ value: 'small', label: '1-2 người', helper: 'Ít món, gọn tủ' },
-								{ value: 'family', label: '3-4 người', helper: 'Cỡ phổ biến cho gia đình' },
-								{ value: 'large', label: 'Từ 5 người', helper: 'Cần dung tích lớn hơn' }
-							]
-						},
-						{
-							id: 'goal',
-							label: 'Nhu cầu nấu nào quan trọng nhất?',
-							options: [
-								{ value: 'daily', label: 'Bữa cơm hằng ngày', helper: 'Dễ vệ sinh, dùng bền' },
-								{ value: 'sear', label: 'Áp chảo / hầm', helper: 'Giữ nhiệt tốt' },
-								{ value: 'speed', label: 'Chuẩn bị nhanh', helper: 'Thiết bị tiện dụng' }
-							]
-						},
-						{
-							id: 'budget',
-							label: 'Bạn muốn mua theo mức nào?',
-							options: [
-								{ value: 'entry', label: 'Mua thử trước', helper: 'Một món dùng thường xuyên' },
-								{ value: 'balanced', label: 'Cân bằng', helper: 'Phù hợp đa số gia đình' },
-								{ value: 'premium', label: 'Đầu tư lâu dài', helper: 'Bộ đầy đủ hơn' }
-							]
-						}
-					],
-					results: {
-						inox: {
-							title: 'Bắt đầu với dòng inox 304',
-							body: 'Phù hợp bữa cơm Việt hằng ngày, dễ vệ sinh và dùng linh hoạt trên nhiều loại bếp.',
-							href: '/category/noi-inox',
-							cta: 'Xem nồi inox',
-							lead: 'Quan tâm tư vấn dòng nồi inox 304'
-						},
-						castIron: {
-							title: 'Thêm dòng gang giữ nhiệt',
-							body: 'Phù hợp khi cần áp chảo, hầm hoặc giữ món nóng lâu hơn trên bàn ăn.',
-							href: '/category/noi-gang',
-							cta: 'Xem nồi gang',
-							lead: 'Quan tâm tư vấn dòng gang giữ nhiệt'
-						},
-						electrical: {
-							title: 'Ưu tiên thiết bị bếp tiện dụng',
-							body: 'Phù hợp khi khách cần chuẩn bị nhanh, nấu lặp lại dễ hơn hoặc mua làm quà.',
-							href: '/category/gia-dung-dien',
-							cta: 'Xem đồ gia dụng điện',
-							lead: 'Quan tâm tư vấn thiết bị bếp tiện dụng'
-						}
-					},
-					sizeAdvice: {
-						small: 'Nên ưu tiên món gọn, dễ cất và dễ rửa sau mỗi bữa.',
-						family: 'Một bộ cỡ vừa đủ cho canh, luộc, xào và món hằng ngày.',
-						large: 'Nên chọn dung tích lớn hoặc combo để giảm số lần nấu lặp.'
-					},
-					budgetAdvice: {
-						entry: 'Bắt đầu từ món bạn dùng nhiều nhất trước khi lên bộ đầy đủ.',
-						balanced: 'Chọn đúng bộ chính rồi mới thêm món chuyên dụng.',
-						premium: 'Có thể xây bộ bếp dài hạn quanh một dòng chủ lực.'
-					},
-					resultLabel: 'Gợi ý phù hợp',
-					reasonLabel: 'Vì sao nên chọn',
-					leadCta: 'Nhận tư vấn theo bếp nhà bạn',
-					zaloCta: 'Hỏi nhanh qua Zalo',
-					shopFallback: 'Xem tất cả sản phẩm'
-				}
-	);
-	const officialChannelCopy = $derived.by(() =>
-		$locale === 'en'
-			? {
-					eyebrow: 'Official channel',
-					title: 'Make the official purchase path obvious before price comparison starts',
-					body: 'The homepage now answers the buyer questions that usually happen off-site: origin, warranty, return support, and how to avoid unclear resellers.',
-					proofs: [
-						{ value: '1954', label: 'Italian brand heritage' },
-						{ value: '304', label: 'Food-safe stainless positioning' },
-						{ value: 'VN', label: 'Local advice and COD support' }
-					],
-					rows: [
-						{
-							label: 'Origin',
-							official: 'Italy 1954 story, official Vietnam support',
-							risk: 'Unclear source or reseller warranty'
-						},
-						{
-							label: 'Decision support',
-							official: 'Cooktop, household size, and budget advice',
-							risk: 'Only price and generic product photos'
-						},
-						{
-							label: 'After-sale',
-							official: 'Warranty, returns, COD confirmation',
-							risk: 'Harder to verify support after purchase'
-						}
-					],
-					shopCta: 'Shop official site',
-					leadCta: 'Ask for verification',
-					marketplaceTitle: 'Official marketplaces',
-					emptyMarketplace:
-						'Marketplace links can be enabled from admin when the official stores are ready.'
-				}
-			: {
-					eyebrow: 'Kênh chính hãng',
-					title: 'Làm rõ đường mua chính hãng trước khi khách so sánh giá ở nơi khác',
-					body: 'Trang chủ cần trả lời ngay các câu hỏi thường khiến khách rời site: nguồn gốc, bảo hành, đổi trả, COD và cách tránh mua nhầm kênh không rõ hỗ trợ.',
-					proofs: [
-						{ value: '1954', label: 'Di sản thương hiệu Italy' },
-						{ value: '304', label: 'Định vị inox an toàn thực phẩm' },
-						{ value: 'VN', label: 'Tư vấn và COD tại Việt Nam' }
-					],
-					rows: [
-						{
-							label: 'Nguồn gốc',
-							official: 'Câu chuyện Italy 1954, hỗ trợ chính hãng tại Việt Nam',
-							risk: 'Nguồn hàng hoặc bảo hành khó xác minh'
-						},
-						{
-							label: 'Hỗ trợ chọn mua',
-							official: 'Tư vấn theo loại bếp, số người ăn và ngân sách',
-							risk: 'Chỉ có giá và ảnh sản phẩm chung chung'
-						},
-						{
-							label: 'Sau bán',
-							official: 'Bảo hành, đổi trả, xác nhận COD trước giao',
-							risk: 'Khó biết ai chịu trách nhiệm sau khi mua'
-						}
-					],
-					shopCta: 'Mua tại website chính hãng',
-					leadCta: 'Xác minh kênh mua',
-					marketplaceTitle: 'Kênh sàn chính hãng',
-					emptyMarketplace:
-						'Có thể bật link Shopee, Lazada, TikTok Shop hoặc Zalo OA trong admin khi kênh chính hãng đã sẵn sàng.'
-				}
-	);
-	const currentCookwareQuizQuestion = $derived(
-		cookwareQuizCopy.questions[cookwareQuizStep] || cookwareQuizCopy.questions[0]
-	);
-	const answeredCookwareQuizCount = $derived.by(
-		() => cookwareQuizCopy.questions.filter((question) => cookwareQuizAnswers[question.id]).length
-	);
-	const cookwareQuizProgress = $derived(
-		Math.round((answeredCookwareQuizCount / cookwareQuizCopy.questions.length) * 100)
-	);
-	const cookwareQuizResult = $derived.by(() => {
-		const goal = cookwareQuizAnswers.goal;
-		let key = 'inox';
-		if (goal === 'speed') key = 'electrical';
-		if (goal === 'sear') key = 'castIron';
-		const base = cookwareQuizCopy.results[key] || cookwareQuizCopy.results.inox;
-		const sizeAdvice = cookwareQuizCopy.sizeAdvice[cookwareQuizAnswers.household] || '';
-		const budgetAdvice = cookwareQuizCopy.budgetAdvice[cookwareQuizAnswers.budget] || '';
-		return {
-			...base,
-			href: localizeInternalHref(base.href, $locale),
-			points: [sizeAdvice, budgetAdvice].filter(Boolean),
-			note: `${base.lead}; cooktop=${cookwareQuizAnswers.cooktop || 'unknown'}; household=${cookwareQuizAnswers.household || 'unknown'}; budget=${cookwareQuizAnswers.budget || 'unknown'}`
-		};
-	});
-	const selectCookwareQuizOption = (questionId, optionValue) => {
-		cookwareQuizAnswers = {
-			...cookwareQuizAnswers,
-			[questionId]: optionValue
-		};
-		const currentIndex = cookwareQuizCopy.questions.findIndex(
-			(question) => question.id === questionId
-		);
-		if (currentIndex >= 0 && currentIndex < cookwareQuizCopy.questions.length - 1) {
-			cookwareQuizStep = currentIndex + 1;
-		}
-	};
-	const resetCookwareQuiz = () => {
-		cookwareQuizAnswers = {};
-		cookwareQuizStep = 0;
-	};
-	const openHomeMarketingLead = (note = '') => {
-		if (typeof window === 'undefined') return;
-		window.dispatchEvent(
-			new CustomEvent('inoxpran:open-lead-capture', {
-				detail: {
-					campaign: HOME_MARKETING_LEAD_CAMPAIGN,
-					note
-				}
-			})
-		);
-	};
 	let activeInoxSlideIndex = $state(0);
 	let isInoxSliderPaused = $state(false);
 	let isInoxSliderNearViewport = $state(false);
@@ -1356,14 +1023,6 @@
 			<p class="panel-subtitle hero-intro-item" style="--hero-intro-delay: 210ms">
 				{heroFashionIntro.description}
 			</p>
-			<div class="hero-proof-stack hero-intro-item" style="--hero-intro-delay: 250ms">
-				{#each heroFashionIntro.proofs as proof}
-					<div class="hero-proof-item">
-						<strong>{proof.value}</strong>
-						<span>{proof.label}</span>
-					</div>
-				{/each}
-			</div>
 			<div class="tag-row tag-row-s1 hero-intro-item" style="--hero-intro-delay: 290ms">
 				{#each heroFashionIntro.tags as tag}
 					<a class="tag tag-link" href={HERO_TAG_SHOP_FILTER_HREF}>{tag}</a>
@@ -1410,158 +1069,6 @@
 						</a>
 					</div>
 				</div>
-			</div>
-		</div>
-	</section>
-
-	<section id="product-fit" class="home-decision-lab" aria-labelledby="home-decision-lab-title">
-		<div class="container">
-			<div class="home-decision-lab__layout">
-				<div class="home-decision-lab__intro">
-					<p class="home-decision-lab__eyebrow">{cookwareQuizCopy.eyebrow}</p>
-					<h2 id="home-decision-lab-title">{cookwareQuizCopy.title}</h2>
-					<p>{cookwareQuizCopy.body}</p>
-					<div class="home-decision-lab__meter" aria-hidden="true">
-						<span style={`width: ${cookwareQuizProgress}%`}></span>
-					</div>
-					<small>
-						{cookwareQuizCopy.progressLabel}: {answeredCookwareQuizCount}/{cookwareQuizCopy
-							.questions.length}
-					</small>
-				</div>
-
-				<div class="cookware-quiz" aria-label={cookwareQuizCopy.title}>
-					<div
-						class="cookware-quiz__steps"
-						role="tablist"
-						aria-label={cookwareQuizCopy.progressLabel}
-					>
-						{#each cookwareQuizCopy.questions as question, index}
-							<button
-								type="button"
-								class:is-active={index === cookwareQuizStep}
-								class:is-complete={Boolean(cookwareQuizAnswers[question.id])}
-								aria-label={`${index + 1}. ${question.label}`}
-								aria-selected={index === cookwareQuizStep ? 'true' : 'false'}
-								onclick={() => (cookwareQuizStep = index)}
-							>
-								{index + 1}
-							</button>
-						{/each}
-					</div>
-
-					<div class="cookware-quiz__question">
-						<h3>{currentCookwareQuizQuestion.label}</h3>
-						<div class="cookware-quiz__options">
-							{#each currentCookwareQuizQuestion.options as option}
-								<button
-									type="button"
-									class:is-selected={cookwareQuizAnswers[currentCookwareQuizQuestion.id] ===
-										option.value}
-									onclick={() =>
-										selectCookwareQuizOption(currentCookwareQuizQuestion.id, option.value)}
-								>
-									<strong>{option.label}</strong>
-									<span>{option.helper}</span>
-								</button>
-							{/each}
-						</div>
-					</div>
-				</div>
-
-				<aside class="cookware-result" aria-live="polite">
-					<p class="cookware-result__label">{cookwareQuizCopy.resultLabel}</p>
-					<h3>{cookwareQuizResult.title}</h3>
-					<p>{cookwareQuizResult.body}</p>
-					{#if cookwareQuizResult.points.length}
-						<div class="cookware-result__reasons">
-							<strong>{cookwareQuizCopy.reasonLabel}</strong>
-							<ul>
-								{#each cookwareQuizResult.points as point}
-									<li>{point}</li>
-								{/each}
-							</ul>
-						</div>
-					{/if}
-					<div class="cookware-result__actions">
-						<a href={cookwareQuizResult.href}>{cookwareQuizResult.cta}</a>
-						<button type="button" onclick={() => openHomeMarketingLead(cookwareQuizResult.note)}>
-							{cookwareQuizCopy.leadCta}
-						</button>
-						<a
-							class="cookware-result__zalo"
-							href={CHAT_SUPPORT_CONFIG.zaloUrl}
-							target="_blank"
-							rel="noreferrer"
-						>
-							{cookwareQuizCopy.zaloCta}
-						</a>
-					</div>
-					<button type="button" class="cookware-result__reset" onclick={resetCookwareQuiz}>
-						{cookwareQuizCopy.reset}
-					</button>
-				</aside>
-			</div>
-		</div>
-	</section>
-
-	<section
-		id="official-channel"
-		class="home-official-proof"
-		aria-labelledby="home-official-proof-title"
-	>
-		<div class="container">
-			<div class="home-official-proof__head">
-				<div>
-					<p>{officialChannelCopy.eyebrow}</p>
-					<h2 id="home-official-proof-title">{officialChannelCopy.title}</h2>
-				</div>
-				<div class="home-official-proof__copy">
-					<p>{officialChannelCopy.body}</p>
-					<div class="home-official-proof__actions">
-						<a href={localizeInternalHref('/shop', $locale)}>{officialChannelCopy.shopCta}</a>
-						<button
-							type="button"
-							onclick={() => openHomeMarketingLead(officialChannelCopy.leadCta)}
-						>
-							{officialChannelCopy.leadCta}
-						</button>
-					</div>
-				</div>
-			</div>
-
-			<div class="home-official-proof__stats">
-				{#each officialChannelCopy.proofs as proof}
-					<div>
-						<strong>{proof.value}</strong>
-						<span>{proof.label}</span>
-					</div>
-				{/each}
-			</div>
-
-			<div class="home-official-proof__grid">
-				<div class="home-official-proof__table">
-					{#each officialChannelCopy.rows as row}
-						<div class="home-official-proof__row">
-							<strong>{row.label}</strong>
-							<span>{row.official}</span>
-							<small>{row.risk}</small>
-						</div>
-					{/each}
-				</div>
-
-				<aside class="home-official-proof__channels">
-					<h3>{officialChannelCopy.marketplaceTitle}</h3>
-					{#if enabledMarketplaceLinks.length}
-						<div class="home-official-proof__channel-list">
-							{#each enabledMarketplaceLinks as link}
-								<a href={link.url} target="_blank" rel="noreferrer">{link.label}</a>
-							{/each}
-						</div>
-					{:else}
-						<p>{officialChannelCopy.emptyMarketplace}</p>
-					{/if}
-				</aside>
 			</div>
 		</div>
 	</section>
@@ -1897,18 +1404,10 @@
 											>
 											<span class="old-price fw-bold">{originalPrice}</span>
 										</div>
-										<div
-											class="product-rating-row"
-											class:product-rating-row--empty={ratingSummary.isFallback}
-											aria-label={ratingSummary.label}
-										>
-											{#if ratingSummary.isFallback}
-												<span class="review-prompt">{reviewPromptText}</span>
-											{:else}
-												<span aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
-												<strong>{ratingSummary.formattedAverage}</strong>
-												<small>({ratingSummary.count})</small>
-											{/if}
+										<div class="product-rating-row" aria-label={ratingSummary.label}>
+											<span aria-hidden="true">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+											<strong>{ratingSummary.formattedAverage}</strong>
+											<small>({ratingSummary.count})</small>
 										</div>
 										<div class="product-desc-box">
 											<p class="product-desc mb-0">
@@ -2271,7 +1770,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.75rem;
-		margin: 0 0 1.35rem;
+		margin: 0 0 1rem;
 		color: rgba(248, 250, 252, 0.82);
 		font-size: 0.82rem;
 		font-weight: 700;
@@ -2292,10 +1791,10 @@
 		margin: 0;
 		color: #ffffff;
 		font-family: Didot, 'Bodoni 72', 'Bodoni MT', 'Cormorant Garamond', Georgia, serif;
-		font-size: 4.65rem;
+		font-size: 6.6rem;
 		font-weight: 500;
 		letter-spacing: 0;
-		line-height: 0.94;
+		line-height: 0.86;
 		max-width: max-content;
 		text-transform: uppercase;
 		text-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
@@ -2304,8 +1803,8 @@
 	#hero .hero-title:lang(vi) {
 		font-family: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
 		font-weight: 700;
-		line-height: 1.14;
-		row-gap: 0.08em;
+		line-height: 1.02;
+		row-gap: 0.16em;
 	}
 
 	#hero .hero-title:lang(vi) span + span {
@@ -2345,40 +1844,6 @@
 		font-size: 1.05rem;
 		line-height: 1.75;
 		text-shadow: 0 10px 30px rgba(0, 0, 0, 0.36);
-	}
-
-	.hero-proof-stack {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 1px;
-		width: min(540px, 100%);
-		margin-top: 1rem;
-		border: 1px solid rgba(248, 250, 252, 0.28);
-		background: rgba(248, 250, 252, 0.18);
-	}
-
-	.hero-proof-item {
-		display: grid;
-		gap: 0.12rem;
-		min-width: 0;
-		padding: 0.8rem 0.9rem;
-		background: rgba(8, 12, 14, 0.34);
-	}
-
-	.hero-proof-item strong {
-		color: #ffffff;
-		font-size: 1.35rem;
-		line-height: 1;
-		font-weight: 800;
-	}
-
-	.hero-proof-item span {
-		color: rgba(248, 250, 252, 0.82);
-		font-size: 0.72rem;
-		font-weight: 700;
-		line-height: 1.25;
-		text-transform: uppercase;
-		overflow-wrap: anywhere;
 	}
 
 	#hero .tag-row {
@@ -2568,424 +2033,6 @@
 		outline-offset: 2px;
 	}
 
-	.home-decision-lab {
-		padding: clamp(3rem, 7vw, 5.5rem) 0;
-		background: #f5fbfa;
-		color: #102530;
-	}
-
-	.home-decision-lab__layout {
-		display: grid;
-		grid-template-columns: minmax(220px, 0.85fr) minmax(320px, 1.15fr) minmax(280px, 0.9fr);
-		gap: clamp(1rem, 2vw, 1.5rem);
-		align-items: stretch;
-	}
-
-	.home-decision-lab__intro,
-	.cookware-quiz,
-	.cookware-result {
-		border: 1px solid rgba(15, 37, 48, 0.12);
-		border-radius: 8px;
-		background: #ffffff;
-		box-shadow: 0 18px 42px rgba(16, 37, 48, 0.08);
-	}
-
-	.home-decision-lab__intro {
-		padding: clamp(1.25rem, 2.4vw, 1.75rem);
-		display: grid;
-		align-content: center;
-		gap: 0.8rem;
-	}
-
-	.home-decision-lab__eyebrow,
-	.cookware-result__label,
-	.home-official-proof__head p {
-		margin: 0;
-		color: #0f766e;
-		font-size: 0.76rem;
-		font-weight: 800;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-	}
-
-	.home-decision-lab h2,
-	.home-official-proof h2 {
-		margin: 0;
-		font-size: clamp(1.6rem, 3vw, 2.45rem);
-		line-height: 1.08;
-		letter-spacing: 0;
-		text-transform: none;
-		color: #102530;
-	}
-
-	.home-decision-lab__intro > p,
-	.home-official-proof__copy > p {
-		margin: 0;
-		color: #4b6270;
-		line-height: 1.65;
-	}
-
-	.home-decision-lab__intro small {
-		color: #607684;
-		font-weight: 700;
-	}
-
-	.home-decision-lab__meter {
-		height: 8px;
-		overflow: hidden;
-		border-radius: 999px;
-		background: #dbe8e6;
-	}
-
-	.home-decision-lab__meter span {
-		display: block;
-		height: 100%;
-		border-radius: inherit;
-		background: #f97316;
-		transition: width 0.22s ease;
-	}
-
-	.cookware-quiz {
-		padding: clamp(1rem, 2vw, 1.4rem);
-		display: grid;
-		gap: 1rem;
-	}
-
-	.cookware-quiz__steps {
-		display: grid;
-		grid-template-columns: repeat(4, minmax(0, 1fr));
-		gap: 0.5rem;
-	}
-
-	.cookware-quiz__steps button {
-		min-height: 40px;
-		border: 1px solid rgba(15, 37, 48, 0.12);
-		border-radius: 8px;
-		background: #f8fbfb;
-		color: #506571;
-		font-weight: 800;
-		cursor: pointer;
-		transition:
-			background-color 0.18s ease,
-			border-color 0.18s ease,
-			color 0.18s ease;
-	}
-
-	.cookware-quiz__steps button.is-active {
-		background: #102530;
-		border-color: #102530;
-		color: #ffffff;
-	}
-
-	.cookware-quiz__steps button.is-complete:not(.is-active) {
-		border-color: rgba(15, 118, 110, 0.34);
-		background: #ecfdf5;
-		color: #0f766e;
-	}
-
-	.cookware-quiz__question {
-		display: grid;
-		gap: 1rem;
-	}
-
-	.cookware-quiz__question h3,
-	.cookware-result h3,
-	.home-official-proof__channels h3 {
-		margin: 0;
-		font-size: clamp(1.1rem, 1.6vw, 1.35rem);
-		line-height: 1.2;
-		text-transform: none;
-		color: #102530;
-	}
-
-	.cookware-quiz__options {
-		display: grid;
-		gap: 0.75rem;
-	}
-
-	.cookware-quiz__options button {
-		width: 100%;
-		min-height: 82px;
-		padding: 1rem;
-		border: 1px solid rgba(15, 37, 48, 0.12);
-		border-radius: 8px;
-		background: #ffffff;
-		text-align: left;
-		cursor: pointer;
-		transition:
-			transform 0.18s ease,
-			border-color 0.18s ease,
-			box-shadow 0.18s ease,
-			background-color 0.18s ease;
-	}
-
-	.cookware-quiz__options button:hover,
-	.cookware-quiz__options button.is-selected {
-		transform: translateY(-1px);
-		border-color: rgba(249, 115, 22, 0.55);
-		background: #fff7ed;
-		box-shadow: 0 12px 28px rgba(249, 115, 22, 0.12);
-	}
-
-	.cookware-quiz__options strong,
-	.cookware-quiz__options span {
-		display: block;
-	}
-
-	.cookware-quiz__options strong {
-		color: #102530;
-		line-height: 1.2;
-	}
-
-	.cookware-quiz__options span {
-		margin-top: 0.35rem;
-		color: #5c7280;
-		font-size: 0.92rem;
-		line-height: 1.4;
-	}
-
-	.cookware-result {
-		padding: clamp(1.25rem, 2.4vw, 1.7rem);
-		display: grid;
-		gap: 0.9rem;
-		align-content: center;
-		border-top: 4px solid #f97316;
-	}
-
-	.cookware-result p {
-		margin: 0;
-		color: #4b6270;
-		line-height: 1.58;
-	}
-
-	.cookware-result__reasons {
-		padding: 0.9rem;
-		border-radius: 8px;
-		background: #f8fbfb;
-		border: 1px solid rgba(15, 37, 48, 0.08);
-	}
-
-	.cookware-result__reasons strong {
-		display: block;
-		margin-bottom: 0.5rem;
-		color: #102530;
-	}
-
-	.cookware-result__reasons ul {
-		margin: 0;
-		padding-left: 1.1rem;
-		color: #4b6270;
-		line-height: 1.5;
-	}
-
-	.cookware-result__actions {
-		display: grid;
-		gap: 0.55rem;
-	}
-
-	.cookware-result__actions a,
-	.cookware-result__actions button,
-	.cookware-result__reset,
-	.home-official-proof__actions a,
-	.home-official-proof__actions button,
-	.home-official-proof__channel-list a {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 44px;
-		border-radius: 8px;
-		border: 1px solid transparent;
-		padding: 0.72rem 1rem;
-		font-weight: 800;
-		line-height: 1.2;
-		text-decoration: none;
-		cursor: pointer;
-		transition:
-			transform 0.18s ease,
-			background-color 0.18s ease,
-			color 0.18s ease,
-			border-color 0.18s ease;
-	}
-
-	.cookware-result__actions a:first-child,
-	.home-official-proof__actions a {
-		background: #102530;
-		color: #ffffff;
-	}
-
-	.cookware-result__actions button,
-	.home-official-proof__actions button {
-		background: #f97316;
-		color: #ffffff;
-	}
-
-	.cookware-result__actions .cookware-result__zalo {
-		background: #e6f4ff;
-		color: #075985;
-		border-color: rgba(7, 89, 133, 0.2);
-	}
-
-	.cookware-result__reset {
-		min-height: auto;
-		justify-self: start;
-		padding: 0;
-		background: transparent;
-		color: #607684;
-		border: 0;
-	}
-
-	.cookware-result__actions a:hover,
-	.cookware-result__actions button:hover,
-	.home-official-proof__actions a:hover,
-	.home-official-proof__actions button:hover,
-	.home-official-proof__channel-list a:hover {
-		transform: translateY(-1px);
-	}
-
-	.cookware-result__actions a:focus-visible,
-	.cookware-result__actions button:focus-visible,
-	.cookware-result__reset:focus-visible,
-	.cookware-quiz__steps button:focus-visible,
-	.cookware-quiz__options button:focus-visible,
-	.home-official-proof__actions a:focus-visible,
-	.home-official-proof__actions button:focus-visible,
-	.home-official-proof__channel-list a:focus-visible {
-		outline: 2px solid #0f766e;
-		outline-offset: 2px;
-	}
-
-	.home-official-proof {
-		padding: clamp(3rem, 7vw, 5.5rem) 0;
-		background: #ffffff;
-		color: #102530;
-	}
-
-	.home-official-proof__head {
-		display: grid;
-		grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-		gap: clamp(1rem, 3vw, 2rem);
-		align-items: end;
-		margin-bottom: 1.5rem;
-	}
-
-	.home-official-proof__head > div:first-child {
-		display: grid;
-		gap: 0.65rem;
-	}
-
-	.home-official-proof__copy {
-		display: grid;
-		gap: 1rem;
-	}
-
-	.home-official-proof__actions {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.65rem;
-	}
-
-	.home-official-proof__stats {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 0.75rem;
-		margin-bottom: 1rem;
-	}
-
-	.home-official-proof__stats div {
-		min-height: 96px;
-		padding: 1rem;
-		border-radius: 8px;
-		background: #f8fbfb;
-		border: 1px solid rgba(15, 37, 48, 0.1);
-	}
-
-	.home-official-proof__stats strong,
-	.home-official-proof__stats span {
-		display: block;
-	}
-
-	.home-official-proof__stats strong {
-		color: #f97316;
-		font-size: clamp(1.6rem, 3vw, 2.2rem);
-		line-height: 1;
-	}
-
-	.home-official-proof__stats span {
-		margin-top: 0.45rem;
-		color: #4b6270;
-		line-height: 1.35;
-	}
-
-	.home-official-proof__grid {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) minmax(280px, 0.38fr);
-		gap: 1rem;
-	}
-
-	.home-official-proof__table,
-	.home-official-proof__channels {
-		border: 1px solid rgba(15, 37, 48, 0.12);
-		border-radius: 8px;
-		overflow: hidden;
-		background: #ffffff;
-	}
-
-	.home-official-proof__row {
-		display: grid;
-		grid-template-columns: minmax(120px, 0.35fr) minmax(220px, 1fr) minmax(200px, 0.8fr);
-		gap: 1rem;
-		padding: 1rem;
-		border-bottom: 1px solid rgba(15, 37, 48, 0.08);
-	}
-
-	.home-official-proof__row:last-child {
-		border-bottom: 0;
-	}
-
-	.home-official-proof__row strong {
-		color: #102530;
-	}
-
-	.home-official-proof__row span {
-		color: #0f766e;
-		font-weight: 700;
-		line-height: 1.45;
-	}
-
-	.home-official-proof__row small {
-		color: #6b7280;
-		line-height: 1.45;
-	}
-
-	.home-official-proof__channels {
-		padding: 1rem;
-		display: grid;
-		gap: 0.85rem;
-		align-content: start;
-		background: #102530;
-		color: #ffffff;
-	}
-
-	.home-official-proof__channels h3 {
-		color: #ffffff;
-	}
-
-	.home-official-proof__channels p {
-		margin: 0;
-		color: rgba(255, 255, 255, 0.78);
-		line-height: 1.55;
-	}
-
-	.home-official-proof__channel-list {
-		display: grid;
-		gap: 0.55rem;
-	}
-
-	.home-official-proof__channel-list a {
-		background: #ffffff;
-		color: #102530;
-	}
-
 	.tag-link:hover {
 		background: rgba(241, 245, 249, 0.96);
 	}
@@ -3033,21 +2080,11 @@
 	}
 
 	/* Below-the-fold sections: keep initial render lighter on mobile/slow CPUs. */
-	.home-decision-lab,
-	.home-official-proof,
 	#company-services,
 	#best-selling-items,
 	#categories,
 	#latest-posts {
 		content-visibility: auto;
-	}
-
-	.home-decision-lab {
-		contain-intrinsic-size: 520px;
-	}
-
-	.home-official-proof {
-		contain-intrinsic-size: 560px;
 	}
 
 	#company-services {
@@ -3064,80 +2101,6 @@
 
 	#latest-posts {
 		contain-intrinsic-size: 620px;
-	}
-
-	@media (max-width: 1180px) {
-		.home-decision-lab__layout,
-		.home-official-proof__head,
-		.home-official-proof__grid {
-			grid-template-columns: 1fr;
-		}
-
-		.cookware-result {
-			align-content: start;
-		}
-
-		.home-official-proof__row {
-			grid-template-columns: minmax(120px, 0.35fr) minmax(0, 1fr);
-		}
-
-		.home-official-proof__row small {
-			grid-column: 2;
-		}
-	}
-
-	@media (max-width: 768px) {
-		.home-official-proof {
-			padding: 2.5rem 0;
-		}
-
-		.home-decision-lab {
-			padding: 2.5rem 0 6rem;
-		}
-
-		.home-decision-lab__intro,
-		.cookware-quiz,
-		.cookware-result,
-		.home-official-proof__stats div,
-		.home-official-proof__table,
-		.home-official-proof__channels {
-			border-radius: 8px;
-		}
-
-		.home-official-proof__stats {
-			grid-template-columns: 1fr;
-		}
-
-		.home-official-proof__actions,
-		.cookware-result__actions {
-			display: grid;
-			grid-template-columns: 1fr;
-		}
-
-		.home-official-proof__row {
-			grid-template-columns: 1fr;
-			gap: 0.35rem;
-		}
-
-		.home-official-proof__row small {
-			grid-column: auto;
-		}
-	}
-
-	@media (max-width: 480px) {
-		.home-decision-lab__layout {
-			gap: 0.85rem;
-		}
-
-		.cookware-quiz__options button {
-			min-height: 76px;
-			padding: 0.85rem;
-		}
-
-		.home-decision-lab h2,
-		.home-official-proof h2 {
-			font-size: 1.55rem;
-		}
 	}
 
 	/* ===== Add to cart button ===== */
@@ -3191,7 +2154,7 @@
 		}
 
 		#hero .hero-title {
-			font-size: 3.5rem;
+			font-size: 5rem;
 		}
 
 		.hero-editorial-note {
@@ -3206,11 +2169,11 @@
 		}
 
 		#hero .hero-origin-label {
-			margin-bottom: 1.1rem;
+			margin-bottom: 0.7rem;
 		}
 
 		#hero .hero-title {
-			font-size: 3.75rem;
+			font-size: 5.35rem;
 		}
 
 		#hero .hero-italia-line {
@@ -3271,13 +2234,13 @@
 		}
 
 		#hero .hero-title {
-			font-size: 2.6rem;
-			line-height: 1;
+			font-size: 3.7rem;
+			line-height: 0.92;
 		}
 
 		#hero .hero-title:lang(vi) {
-			line-height: 1.14;
-			row-gap: 0.08em;
+			line-height: 1.04;
+			row-gap: 0.14em;
 		}
 
 		#hero .hero-title span:nth-child(2),
@@ -3289,10 +2252,6 @@
 		#hero .panel-subtitle {
 			max-width: 36rem;
 			font-size: 1rem;
-		}
-
-		.hero-proof-stack {
-			width: 100%;
 		}
 
 		.hero-editorial-note {
@@ -3403,25 +2362,10 @@
 		line-height: 1.2;
 	}
 
-	#best-selling-items .product-rating-row--empty {
-		color: #52606d;
-		font-weight: 700;
-	}
-
 	#best-selling-items .product-rating-row strong,
 	#best-selling-items .product-rating-row small {
 		color: #334155;
 		font-size: 0.76rem;
-	}
-
-	#best-selling-items .review-prompt {
-		display: -webkit-box;
-		-webkit-line-clamp: 1;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-		font-size: 0.75rem;
-		line-height: 1.25;
-		overflow-wrap: anywhere;
 	}
 
 	#best-selling-items .home-product-title {
@@ -3655,7 +2599,7 @@
 		}
 
 		#hero .hero-title {
-			font-size: 2rem;
+			font-size: 2.85rem;
 		}
 
 		#hero .tag-row {
@@ -3664,18 +2608,6 @@
 
 		#hero .tag {
 			padding: 0.35rem 0.72rem;
-		}
-
-		.hero-proof-item {
-			padding: 0.65rem 0.6rem;
-		}
-
-		.hero-proof-item strong {
-			font-size: 1.08rem;
-		}
-
-		.hero-proof-item span {
-			font-size: 0.62rem;
 		}
 
 		.hero-actions {

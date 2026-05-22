@@ -35,7 +35,7 @@
 					submit: 'Nhận ưu đãi',
 					success: 'Inoxpran đã nhận thông tin. Đội ngũ tư vấn sẽ liên hệ sớm.',
 					error: 'Chưa gửi được thông tin. Vui lòng thử lại hoặc gọi 0867 024 186.'
-				}
+			}
 	);
 	const campaign = $derived(activeCampaign || page.data?.siteMarketingCampaign || null);
 	const modalCopy = $derived.by(() => {
@@ -118,10 +118,6 @@
 	onMount(() => {
 		const handleOpen = (event) => {
 			activeCampaign = event?.detail?.campaign || page.data?.siteMarketingCampaign || null;
-			const nextNote = String(event?.detail?.note || event?.detail?.prefillNote || '').trim();
-			if (nextNote) {
-				note = nextNote;
-			}
 			open = true;
 			success = '';
 			error = '';

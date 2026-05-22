@@ -21,11 +21,7 @@
 	import { initClient } from '$lib/client/initClient.js';
 	import { markNavigationType } from '$lib/client/navigationState.js';
 	import { getTelemetryTracker } from '$lib/client/telemetry.js';
-	import {
-		cookieConsent,
-		canTrackTelemetry,
-		initCookieConsent
-	} from '$lib/stores/cookieConsent.js';
+	import { cookieConsent, canTrackTelemetry, initCookieConsent } from '$lib/stores/cookieConsent.js';
 	import { SITE_CONTACT } from '$lib/config/siteContact.js';
 	import {
 		FREE_SHIPPING_THRESHOLD,
@@ -58,20 +54,6 @@
 		'/register',
 		'/forgot-password',
 		'/verify'
-	];
-	const LEAD_CAPTURE_STORAGE_KEY = 'inoxpran.lead_capture.last_auto_opened_at';
-	const LEAD_CAPTURE_SESSION_VIEW_KEY = 'inoxpran.lead_capture.session_views';
-	const LEAD_CAPTURE_SESSION_PATH_KEY = 'inoxpran.lead_capture.last_path';
-	const LEAD_CAPTURE_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
-	const LEAD_CAPTURE_DWELL_MS = 20_000;
-	const LEAD_CAPTURE_SECOND_PAGE_DELAY_MS = 1_500;
-	const LEAD_CAPTURE_BLOCKED_PREFIXES = [
-		'/cart',
-		'/checkout',
-		'/account',
-		'/login',
-		'/register',
-		'/admin'
 	];
 
 	const normalizePathname = (value) => {
@@ -184,12 +166,11 @@
 	const hrefLangXDefault = $derived.by(() => {
 		return resolveAlternateHref(hreflangConfig?.xDefault, hrefLangVi);
 	});
-	const merchantReturnPolicyUrl = $derived.by(
-		() =>
-			`${siteUrl}${locale === 'en' ? '/en/policies/returns-policy' : '/policies/returns-policy'}`
+	const merchantReturnPolicyUrl = $derived.by(() =>
+		`${siteUrl}${locale === 'en' ? '/en/policies/returns-policy' : '/policies/returns-policy'}`
 	);
-	const websiteSearchUrlTemplate = $derived.by(
-		() => `${siteUrl}${locale === 'en' ? '/en/shop' : '/shop'}?q={search_term_string}`
+	const websiteSearchUrlTemplate = $derived.by(() =>
+		`${siteUrl}${locale === 'en' ? '/en/shop' : '/shop'}?q={search_term_string}`
 	);
 	const escapeJsonLd = (value) =>
 		String(value || '')
@@ -207,9 +188,9 @@
 	);
 	const logoUrl = $derived(`${siteUrl}/images/logo-inoxpran.png`);
 	const brandSameAs = $derived.by(() => {
-		const marketplaceUrls = (
-			Array.isArray(page.data?.siteMarketplaceLinks) ? page.data.siteMarketplaceLinks : []
-		)
+		const marketplaceUrls = (Array.isArray(page.data?.siteMarketplaceLinks)
+			? page.data.siteMarketplaceLinks
+			: [])
 			.filter((link) => link?.enabled && link?.url)
 			.map((link) => String(link.url));
 		return Array.from(new Set([...BRAND_SAME_AS, ...marketplaceUrls]));
@@ -220,8 +201,6 @@
 	let telemetryTracker = null;
 	let hasTelemetryConsent = false;
 	let isTelemetryRunning = false;
-	let leadCaptureTimer = null;
-	let hasAutoLeadCaptureOpened = false;
 	const organizationJsonLd = $derived.by(() =>
 		JSON.stringify({
 			'@context': 'https://schema.org',
@@ -256,7 +235,8 @@
 				url: merchantReturnPolicyUrl,
 				applicableCountry: 'VN',
 				returnPolicyCountry: 'VN',
-				returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
+				returnPolicyCategory:
+					'https://schema.org/MerchantReturnFiniteReturnWindow',
 				merchantReturnDays: MERCHANT_RETURN_DAYS,
 				returnMethod: 'https://schema.org/ReturnByMail',
 				returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
@@ -373,125 +353,6 @@
 		}
 	};
 
-	const readLeadCaptureTimestamp = () => {
-		if (typeof window === 'undefined') return 0;
-		try {
-			const value = Number(window.localStorage.getItem(LEAD_CAPTURE_STORAGE_KEY) || 0);
-			return Number.isFinite(value) ? value : 0;
-		} catch {
-			return 0;
-		}
-	};
-
-	const writeLeadCaptureTimestamp = () => {
-		if (typeof window === 'undefined') return;
-		try {
-			window.localStorage.setItem(LEAD_CAPTURE_STORAGE_KEY, String(Date.now()));
-		} catch {}
-	};
-
-	const getLeadCapturePathKey = () => stripLocalePrefix(page.url?.pathname || '/');
-
-	const isLeadCaptureBlockedPath = () => {
-		const pathKey = getLeadCapturePathKey();
-		return LEAD_CAPTURE_BLOCKED_PREFIXES.some(
-			(prefix) => pathKey === prefix || pathKey.startsWith(`${prefix}/`)
-		);
-	};
-
-	const recordMarketingPageView = () => {
-		if (typeof window === 'undefined') return 0;
-		if (hideSiteChrome || isLeadCaptureBlockedPath()) return 0;
-		const pathKey = getLeadCapturePathKey();
-		try {
-			const previousPath = window.sessionStorage.getItem(LEAD_CAPTURE_SESSION_PATH_KEY);
-			const currentViews = Number(
-				window.sessionStorage.getItem(LEAD_CAPTURE_SESSION_VIEW_KEY) || 0
-			);
-			if (previousPath === pathKey) return Number.isFinite(currentViews) ? currentViews : 0;
-			const nextViews = (Number.isFinite(currentViews) ? currentViews : 0) + 1;
-			window.sessionStorage.setItem(LEAD_CAPTURE_SESSION_PATH_KEY, pathKey);
-			window.sessionStorage.setItem(LEAD_CAPTURE_SESSION_VIEW_KEY, String(nextViews));
-			return nextViews;
-		} catch {
-			return 1;
-		}
-	};
-
-	const shouldOpenBehaviorLeadCapture = () => {
-		if (typeof window === 'undefined' || hideSiteChrome) return false;
-		if (hasAutoLeadCaptureOpened) return false;
-		if (page.data?.siteMarketingCampaign?.enabled === false) return false;
-		if (isLeadCaptureBlockedPath()) return false;
-		if (document.querySelector('.cookie-banner')) return false;
-		const lastOpenedAt = readLeadCaptureTimestamp();
-		if (lastOpenedAt && Date.now() - lastOpenedAt < LEAD_CAPTURE_COOLDOWN_MS) return false;
-		return true;
-	};
-
-	const buildBehaviorLeadCampaign = () => {
-		const configured = page.data?.siteMarketingCampaign || {};
-		return {
-			...configured,
-			enabled: true,
-			popupEnabled: true,
-			kickerVi: configured.kickerVi || 'Tư vấn chọn đúng sản phẩm',
-			kickerEn: configured.kickerEn || 'Product match advice',
-			titleVi: configured.titleVi || 'Nhận gợi ý bộ nồi phù hợp với bếp nhà bạn',
-			titleEn: configured.titleEn || 'Get the right Inoxpran recommendation for your kitchen',
-			descriptionVi:
-				configured.descriptionVi ||
-				'Để lại email hoặc Zalo. Inoxpran sẽ tư vấn theo loại bếp, số người ăn, ngân sách và xác nhận ưu đãi hiện tại.',
-			descriptionEn:
-				configured.descriptionEn ||
-				'Leave an email or Zalo number. Inoxpran will recommend by cooktop, household size, budget, and current offer.',
-			ctaVi: configured.ctaVi || 'Nhận tư vấn',
-			ctaEn: configured.ctaEn || 'Get advice',
-			successVi:
-				configured.successVi || 'Inoxpran đã nhận thông tin và sẽ phản hồi trong 2 giờ làm việc.',
-			successEn:
-				configured.successEn ||
-				'Inoxpran received your request and will reply within 2 business hours.',
-			offerCode: configured.offerCode || 'CONSULT',
-			minOrderValue: configured.minOrderValue || 0
-		};
-	};
-
-	const clearLeadCaptureTimer = () => {
-		if (typeof window === 'undefined' || leadCaptureTimer === null) return;
-		window.clearTimeout(leadCaptureTimer);
-		leadCaptureTimer = null;
-	};
-
-	const openBehaviorLeadCapture = (reason) => {
-		if (!shouldOpenBehaviorLeadCapture()) return;
-		hasAutoLeadCaptureOpened = true;
-		writeLeadCaptureTimestamp();
-		window.dispatchEvent(
-			new CustomEvent('inoxpran:open-lead-capture', {
-				detail: {
-					campaign: buildBehaviorLeadCampaign(),
-					note:
-						reason === 'second_page'
-							? 'Auto lead capture: second page view'
-							: 'Auto lead capture: 20s dwell'
-				}
-			})
-		);
-	};
-
-	const scheduleBehaviorLeadCapture = (views) => {
-		if (typeof window === 'undefined') return;
-		clearLeadCaptureTimer();
-		if (!shouldOpenBehaviorLeadCapture()) return;
-		const isSecondPage = Number(views) >= 2;
-		const delay = isSecondPage ? LEAD_CAPTURE_SECOND_PAGE_DELAY_MS : LEAD_CAPTURE_DWELL_MS;
-		leadCaptureTimer = window.setTimeout(
-			() => openBehaviorLeadCapture(isSecondPage ? 'second_page' : 'dwell'),
-			delay
-		);
-	};
-
 	$effect(() => {
 		syncI18nLocale(locale);
 	});
@@ -518,7 +379,6 @@
 			runClientInit();
 		}
 		trackTelemetryNavigation();
-		scheduleBehaviorLeadCapture(recordMarketingPageView());
 	});
 
 	onMount(() => {
@@ -585,7 +445,6 @@
 			window.removeEventListener('popstate', handleHistoryPopstate);
 			window.removeEventListener('pageshow', handlePageShow);
 			window.removeEventListener(CLIENT_UI_REFRESH_EVENT, handleClientUiRefresh);
-			clearLeadCaptureTimer();
 			clientInitCleanup();
 		};
 	});

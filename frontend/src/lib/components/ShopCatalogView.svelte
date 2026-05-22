@@ -178,11 +178,6 @@
 
 	const products = $derived(pageData?.products ?? []);
 	const filters = $derived(pageData?.filters || {});
-	const reviewPromptText = $derived(
-		$locale === 'en'
-			? 'New product - be the first to review'
-			: 'Sản phẩm mới - hãy là người đầu tiên đánh giá'
-	);
 	const facetCounts = $derived(
 		pageData?.facets?.counts ?? {
 			category: {},
@@ -513,66 +508,15 @@
 		categories.find((category) => category.value === activeCategory)?.label ?? activeCategory
 	);
 	const activeCategorySlug = $derived(activeCategory ? resolveCategorySlug(activeCategory) : '');
-	const categoryHeroCopy = $derived.by(() => {
-		const isEnglish = $locale === 'en';
-		if (!activeCategory) {
-			return isEnglish
-				? {
-						heading: 'Official Inoxpran cookware and kitchen appliances',
-						lede: 'Shop authentic Inoxpran cookware, pans, appliances, and kitchen tools with official warranty, COD support, and consultation for Vietnamese homes.'
-					}
-				: {
-						heading: 'Nồi, chảo và gia dụng Inoxpran chính hãng',
-						lede: 'Mua sắm sản phẩm Inoxpran chính hãng từ nồi chảo inox, gang đến thiết bị bếp, có bảo hành, COD toàn quốc và tư vấn chọn mẫu phù hợp.'
-					};
-		}
-
-		const copyByCategory = {
-			Inoxs: isEnglish
-				? {
-						heading: '304 stainless pots and pans - official Inoxpran Italy',
-						lede: 'Explore Inoxpran 304 stainless cookware with 3-5 layer bases, stable heat transfer, easy cleaning, and warranty-backed support in Vietnam.'
-					}
-				: {
-						heading: 'Nồi & chảo Inox 304 - Inoxpran Italy chính hãng',
-						lede: 'Bộ sưu tập nồi chảo inox 304 đáy 3-5 lớp, truyền nhiệt đều, dễ vệ sinh và được bảo hành chính hãng tại Việt Nam.'
-					},
-			CastIrons: isEnglish
-				? {
-						heading: 'Cast iron cookware for heat retention and searing',
-						lede: 'Choose Inoxpran cast iron cookware for steady heat, rich browning, and long-lasting family cooking.'
-					}
-				: {
-						heading: 'Nồi & chảo gang giữ nhiệt - Inoxpran chính hãng',
-						lede: 'Dòng nồi chảo gang phù hợp món áp chảo, hầm và giữ nhiệt lâu, hỗ trợ tư vấn cách dùng và bảo quản sau mua.'
-					},
-			Electronics: isEnglish
-				? {
-						heading: 'Kitchen appliances for faster daily cooking',
-						lede: 'Browse Inoxpran electric kitchen appliances with practical functions, clear warranty support, and COD confirmation.'
-					}
-				: {
-						heading: 'Thiết bị bếp Inoxpran - tiện ích cho nấu ăn hằng ngày',
-						lede: 'Các thiết bị điện gia dụng Inoxpran giúp chuẩn bị bữa ăn nhanh hơn, dễ dùng và có hỗ trợ bảo hành chính hãng.'
-					}
-		};
-
-		return (
-			copyByCategory[activeCategory] ||
-			(isEnglish
-				? {
-						heading: `${activeCategoryLabel} | Official Inoxpran collection`,
-						lede: 'Browse authentic Inoxpran products with official warranty, COD support, and product advice for home kitchens.'
-					}
-				: {
-						heading: `${activeCategoryLabel} - Bộ sưu tập Inoxpran chính hãng`,
-						lede: 'Khám phá sản phẩm Inoxpran chính hãng, có bảo hành, COD toàn quốc và tư vấn chọn mẫu theo nhu cầu sử dụng.'
-					})
-		);
-	});
-	const pageTitle = $derived(`${categoryHeroCopy.heading} | Inoxpran`);
+	const pageTitle = $derived(
+		activeCategoryLabel ? `${activeCategoryLabel} | Inoxpran` : `${$t('shop.title')} | Inoxpran`
+	);
 	const seoDescription = $derived.by(() => {
-		return truncateMeta(categoryHeroCopy.lede);
+		const baseDescription = $t('shop.lede');
+		if (activeCategoryLabel) {
+			return truncateMeta(`${activeCategoryLabel}. ${baseDescription}`);
+		}
+		return truncateMeta(baseDescription);
 	});
 	const ogUrl = $derived.by(() => {
 		const rawCanonical = String(pageData?.canonicalUrl || '').trim();
@@ -908,8 +852,8 @@
 <section class="shop-top">
 	<div class="container">
 		<p class="eyebrow">{$t('shop.eyebrow')}</p>
-		<h1 class="shop-title">{categoryHeroCopy.heading}</h1>
-		<p class="shop-lede">{categoryHeroCopy.lede}</p>
+		<h1 class="shop-title">{$t('shop.heading')}</h1>
+		<p class="shop-lede">{$t('shop.lede')}</p>
 		{#if activeSearch}
 			<p class="text-black-50">{$t('shop.filteringBy', { value: activeSearchLabel })}</p>
 		{/if}
@@ -1231,18 +1175,10 @@
 												</span>
 											{/if}
 										</div>
-										<div
-											class="product-rating-row"
-											class:product-rating-row--empty={ratingSummary.isFallback}
-											aria-label={ratingSummary.label}
-										>
-											{#if ratingSummary.isFallback}
-												<span class="review-prompt">{reviewPromptText}</span>
-											{:else}
-												<span aria-hidden="true">★★★★★</span>
-												<strong>{ratingSummary.formattedAverage}</strong>
-												<small>({ratingSummary.count})</small>
-											{/if}
+										<div class="product-rating-row" aria-label={ratingSummary.label}>
+											<span aria-hidden="true">★★★★★</span>
+											<strong>{ratingSummary.formattedAverage}</strong>
+											<small>({ratingSummary.count})</small>
 										</div>
 										<div class="product-desc-box">
 											<p class="product-desc mb-0">
@@ -2095,25 +2031,10 @@
 		line-height: 1.2;
 	}
 
-	.product-store .product-rating-row--empty {
-		color: #52606d;
-		font-weight: 700;
-	}
-
 	.product-store .product-rating-row strong,
 	.product-store .product-rating-row small {
 		color: #334155;
 		font-size: 0.76rem;
-	}
-
-	.product-store .review-prompt {
-		display: -webkit-box;
-		-webkit-line-clamp: 1;
-		-webkit-box-orient: vertical;
-		overflow: hidden;
-		font-size: 0.75rem;
-		line-height: 1.25;
-		overflow-wrap: anywhere;
 	}
 
 	.product-store .product-desc-box {
