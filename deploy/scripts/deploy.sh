@@ -14,15 +14,40 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ -f .env ]; then
-  set -a
-  . ./.env
-  set +a
-fi
+read_env_var() {
+  local key="$1"
+  [ -f .env ] || return 0
 
+  python3 - "$key" <<'PY'
+import sys
+from pathlib import Path
+
+key = sys.argv[1]
+try:
+    lines = Path(".env").read_text(encoding="utf-8-sig").splitlines()
+except FileNotFoundError:
+    raise SystemExit(0)
+
+for raw in lines:
+    line = raw.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    name, value = line.split("=", 1)
+    if name.strip() != key:
+        continue
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1]
+    print(value)
+    break
+PY
+}
+
+DOMAIN="${DOMAIN:-$(read_env_var DOMAIN)}"
 DOMAIN="${DOMAIN:-inoxpran.com}"
+WWW_DOMAIN="${WWW_DOMAIN:-$(read_env_var WWW_DOMAIN)}"
 WWW_DOMAIN="${WWW_DOMAIN:-www.inoxpran.com}"
-EMAIL="${LETSENCRYPT_EMAIL:-}"
+EMAIL="${LETSENCRYPT_EMAIL:-$(read_env_var LETSENCRYPT_EMAIL)}"
 CERT_DIR="deploy/nginx/ssl/live/${DOMAIN}"
 
 mkdir -p deploy/nginx/ssl deploy/nginx/www
