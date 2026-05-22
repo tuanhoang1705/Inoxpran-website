@@ -22,6 +22,8 @@ frontend/src/routes/dist/
 
 # n8n local runtime data
 deploy/n8n/data/
+deploy/nginx/www/
+deploy/openclaw-lab/
 
 # Manual inspection workspace
 tmp/manual-inspect/
@@ -31,4 +33,5 @@ output/playwright/
 .playwright-cli/
 .claude/
 *.log
+.local-secret-backups/
 
