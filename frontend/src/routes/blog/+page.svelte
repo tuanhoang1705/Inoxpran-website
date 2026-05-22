@@ -250,6 +250,27 @@
 		visibleCount += BLOG_LOAD_MORE_STEP;
 	};
 
+	const isInteractiveTarget = (target) =>
+		Boolean(target?.closest?.('a, button, input, textarea, select, summary, [role="button"]'));
+
+	const openBlogCard = (post) => {
+		const href = getBlogPostHref(post);
+		if (!href) return;
+		goto(href);
+	};
+
+	const handleBlogCardClick = (event, post) => {
+		if (isInteractiveTarget(event.target)) return;
+		openBlogCard(post);
+	};
+
+	const handleBlogCardKeydown = (event, post) => {
+		if (event.key !== 'Enter' && event.key !== ' ') return;
+		if (isInteractiveTarget(event.target)) return;
+		event.preventDefault();
+		openBlogCard(post);
+	};
+
 	$effect(() => {
 		if (newsletterSuccess) {
 			email = '';
@@ -346,7 +367,14 @@
 				<div class="posts-grid">
 					{#if currentBlogs.length}
 						{#each currentBlogs as post, index}
-							<article class="blog-card">
+							<div
+								class="blog-card"
+								role="link"
+								tabindex="0"
+								aria-label={truncateWords(post.title, 18)}
+								onclick={(event) => handleBlogCardClick(event, post)}
+								onkeydown={(event) => handleBlogCardKeydown(event, post)}
+							>
 								<div class="blog-card-image">
 									<img
 										src={normalizeBlogImage(post.image, index)}
@@ -417,7 +445,7 @@
 
 									<a href={getBlogPostHref(post)} class="blog-read-more">{$t('blog.readMore')}</a>
 								</div>
-							</article>
+							</div>
 						{/each}
 					{:else}
 						<div class="blog-empty">
@@ -829,6 +857,7 @@
 		transition: color 0.3s ease;
 	}
 
+	.blog-card:focus-visible .blog-card-title a,
 	.blog-card-title a:hover {
 		color: #6ea6b9;
 	}

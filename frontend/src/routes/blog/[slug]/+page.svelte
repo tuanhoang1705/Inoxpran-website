@@ -416,10 +416,10 @@
 		<div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0rem 1rem;">
 			<div class="blog-breadcrumb" bind:this={blogBreadcrumbEl}>
 				<a href={homeHref}>{$t('common.home')}</a>
-				<span>/</span>
+				<span class="breadcrumb-separator">/</span>
 				<a href={blogHref}>{$t('common.blog')}</a>
-				<span>/</span>
-				<span>{blogPost.title}</span>
+				<span class="breadcrumb-separator breadcrumb-title-separator">/</span>
+				<span class="breadcrumb-current">{blogPost.title}</span>
 			</div>
 
 			<h1 class="blog-post-title">{blogPost.title}</h1>
@@ -747,12 +747,17 @@
 		gap: 0.5rem;
 		margin-bottom: 0.4rem;
 		font-size: 0.9rem;
+		line-height: 1.35;
+		min-width: 0;
+		max-width: 100%;
+		overflow: hidden;
 	}
 
 	.blog-breadcrumb a {
 		color: #6ea6b9;
 		text-decoration: none;
 		transition: color 0.3s ease;
+		flex: 0 0 auto;
 	}
 
 	.blog-breadcrumb a:hover {
@@ -761,6 +766,19 @@
 
 	.blog-breadcrumb span {
 		color: #999;
+	}
+
+	.breadcrumb-separator {
+		flex: 0 0 auto;
+	}
+
+	.breadcrumb-current {
+		display: -webkit-box;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		-webkit-line-clamp: 1;
+		-webkit-box-orient: vertical;
 	}
 
 	.blog-post-title {
@@ -1581,6 +1599,28 @@
 	}
 
 	@media (max-width: 768px) {
+		.blog-post-header {
+			padding: 0.75rem 0;
+		}
+
+		.blog-breadcrumb {
+			gap: 0.35rem;
+			margin-bottom: 0.55rem;
+			font-size: 0.82rem;
+			white-space: nowrap;
+		}
+
+		.breadcrumb-title-separator,
+		.breadcrumb-current {
+			display: none;
+		}
+
+		.blog-post-title {
+			font-size: clamp(1.65rem, 6.8vw, 2rem);
+			line-height: 1.25;
+			margin-bottom: 0.65rem;
+		}
+
 		.blog-post-meta {
 			flex-direction: column;
 			gap: 1rem;

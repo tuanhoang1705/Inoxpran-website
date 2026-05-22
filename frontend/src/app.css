@@ -1934,6 +1934,11 @@ th {
 	stroke-width: 2;
 }
 
+.mobile-action-btn.menu-btn {
+	pointer-events: auto;
+	z-index: 2;
+}
+
 .cart-toggle {
 	position: relative;
 }
@@ -2045,6 +2050,8 @@ th {
 	background-color: rgba(0, 0, 0, 0.5);
 	z-index: var(--overlay-z);
 	animation: fadeIn 0.3s ease-out;
+	touch-action: none;
+	-webkit-tap-highlight-color: transparent;
 }
 
 @keyframes fadeIn {
@@ -2071,11 +2078,20 @@ th {
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	-webkit-overflow-scrolling: touch;
+	touch-action: pan-y;
 	display: flex;
 	flex-direction: column;
 	padding-bottom: calc(16px + env(safe-area-inset-bottom));
 	animation: slideInLeft 0.3s ease-out;
 	box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-menu-drawer a,
+.mobile-menu-drawer button,
+.mobile-action-btn {
+	-webkit-tap-highlight-color: rgba(110, 166, 185, 0.16);
+	-webkit-touch-callout: none;
+	user-select: none;
 }
 
 @keyframes slideInLeft {
@@ -2093,7 +2109,7 @@ th {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	padding: 18px 16px;
+	padding: 14px 16px;
 	border-bottom: 1px solid #e0e0e0;
 	flex-shrink: 0;
 }
@@ -2126,7 +2142,7 @@ th {
 
 /* Mobile Nav Sections */
 .mobile-nav-section {
-	padding: 18px 16px;
+	padding: 14px 16px;
 	border-bottom: 1px solid #f0f0f0;
 }
 
@@ -2136,7 +2152,7 @@ th {
 	text-transform: uppercase;
 	color: #999;
 	letter-spacing: 0.5px;
-	margin-bottom: 14px;
+	margin-bottom: 8px;
 	display: block;
 }
 
@@ -2152,8 +2168,10 @@ th {
 }
 
 .mobile-nav-list a {
-	display: block;
-	padding: 14px 0;
+	display: flex;
+	align-items: center;
+	min-height: 44px;
+	padding: 6px 0;
 	color: #333;
 	text-decoration: none;
 	font-size: 16px;
@@ -2165,12 +2183,12 @@ th {
 
 .mobile-nav-list a.active {
 	color: var(--primary-color);
-	padding-left: 8px;
+	transform: translateX(6px);
 }
 
 .mobile-nav-list a:active {
 	color: var(--primary-color);
-	padding-left: 8px;
+	transform: translateX(6px);
 }
 
 /* Categories List */
@@ -2188,8 +2206,11 @@ th {
 }
 
 .mobile-categories a {
-	display: block;
-	padding: 12px 12px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 46px;
+	padding: 8px 12px;
 	background-color: #f5f5f5;
 	color: #333;
 	text-decoration: none;
@@ -2224,7 +2245,8 @@ th {
 	display: flex;
 	align-items: center;
 	gap: 14px;
-	padding: 14px 0;
+	min-height: 46px;
+	padding: 6px 0;
 	color: #333;
 	text-decoration: none;
 	font-size: 16px;
@@ -2236,7 +2258,7 @@ th {
 
 .mobile-actions-list a:active {
 	color: var(--primary-color);
-	padding-left: 8px;
+	transform: translateX(6px);
 }
 
 .mobile-actions-list svg {
@@ -2323,7 +2345,7 @@ th {
 
 	.mobile-nav-list a:hover {
 		color: var(--primary-color);
-		padding-left: 8px;
+		transform: translateX(6px);
 	}
 
 	.mobile-categories a:hover {
@@ -2334,7 +2356,7 @@ th {
 
 	.mobile-actions-list a:hover {
 		color: var(--primary-color);
-		padding-left: 8px;
+		transform: translateX(6px);
 	}
 
 	.mobile-contact-info a:hover {
@@ -2390,7 +2412,8 @@ th {
 
 	.mobile-nav-list a {
 		font-size: 14px;
-		padding: 10px 0;
+		min-height: 44px;
+		padding: 6px 0;
 	}
 
 	.mobile-categories {
@@ -2399,13 +2422,15 @@ th {
 	}
 
 	.mobile-categories a {
-		padding: 8px 10px;
+		min-height: 44px;
+		padding: 7px 10px;
 		font-size: 12px;
 	}
 
 	.mobile-actions-list a {
 		font-size: 14px;
-		padding: 10px 0;
+		min-height: 46px;
+		padding: 6px 0;
 	}
 
 	.mobile-social-links {
@@ -2468,7 +2493,8 @@ th {
 
 	.mobile-nav-list a {
 		font-size: 13px;
-		padding: 8px 0;
+		min-height: 44px;
+		padding: 5px 0;
 	}
 
 	.mobile-categories {
@@ -2477,13 +2503,15 @@ th {
 	}
 
 	.mobile-categories a {
-		padding: 8px 6px;
+		min-height: 44px;
+		padding: 6px 6px;
 		font-size: 11px;
 	}
 
 	.mobile-actions-list a {
 		font-size: 13px;
-		padding: 8px 0;
+		min-height: 44px;
+		padding: 5px 0;
 		gap: 8px;
 	}
 
@@ -2566,6 +2594,7 @@ th {
 	.mobile-nav-list a,
 	.mobile-actions-list a {
 		font-size: 12px;
+		min-height: 44px;
 		padding: 6px 0;
 	}
 
@@ -2574,6 +2603,7 @@ th {
 	}
 
 	.mobile-categories a {
+		min-height: 42px;
 		padding: 6px 4px;
 		font-size: 10px;
 	}
@@ -5123,13 +5153,15 @@ footer a {
 	.mobile-nav-list a,
 	.mobile-actions-list a {
 		font-size: 14px;
-		padding: 10px 0;
+		min-height: 44px;
+		padding: 6px 0;
 	}
 
 	.mobile-categories a,
 	.mobile-social-links a {
 		font-size: 12px;
-		padding: 8px 6px;
+		min-height: 44px;
+		padding: 6px 6px;
 	}
 
 	.mobile-contact-info {
@@ -5168,6 +5200,7 @@ footer a {
 	.mobile-nav-list a,
 	.mobile-actions-list a {
 		font-size: 13px;
+		min-height: 44px;
 	}
 }
 

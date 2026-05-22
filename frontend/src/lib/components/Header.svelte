@@ -38,12 +38,9 @@
 	});
 
 	const isActive = (path) => page.url.pathname === path;
-	const toggleMobileMenu = () => {
-		const next = !mobileMenuOpen;
-		mobileMenuOpen = next;
-		if (next) {
-			mobileSearchOpen = false;
-		}
+	const openMobileMenu = () => {
+		mobileMenuOpen = true;
+		mobileSearchOpen = false;
 	};
 
 	const toggleMobileSearch = () => {
@@ -205,14 +202,11 @@
 		}
 	};
 
-	const handlePrimaryNavigationClick = (event, href) => {
+	const navigateInternalHref = (href) => {
 		if (typeof window === 'undefined') return;
-		if (isModifiedNavigationEvent(event)) return;
-		if (!isInternalHref(href)) return;
 
 		const nextHref = String(href || '').trim();
 		const basePath = getBasePathFromHref(nextHref);
-		event.preventDefault();
 		resetMobileTransientUi();
 
 		if (basePath === '/shop') {
@@ -221,6 +215,15 @@
 		}
 
 		window.location.assign(nextHref);
+	};
+
+	const handlePrimaryNavigationClick = (event, href) => {
+		if (typeof window === 'undefined') return;
+		if (isModifiedNavigationEvent(event)) return;
+		if (!isInternalHref(href)) return;
+
+		event.preventDefault();
+		navigateInternalHref(href);
 	};
 
 	const handleLocaleSwitch = async (value) => {
@@ -636,21 +639,16 @@
 				<button
 					type="button"
 					class="mobile-action-btn menu-btn"
-					onclick={toggleMobileMenu}
+					onclick={openMobileMenu}
 					aria-label={$t('mobileMenu.menu')}
+					aria-expanded={mobileMenuOpen}
+					aria-controls="mobile-menu-drawer"
 				>
-					{#if mobileMenuOpen}
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<line x1="18" y1="6" x2="6" y2="18"></line>
-							<line x1="6" y1="6" x2="18" y2="18"></line>
-						</svg>
-					{:else}
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-							<line x1="3" y1="6" x2="21" y2="6"></line>
-							<line x1="3" y1="12" x2="21" y2="12"></line>
-							<line x1="3" y1="18" x2="21" y2="18"></line>
-						</svg>
-					{/if}
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+						<line x1="3" y1="6" x2="21" y2="6"></line>
+						<line x1="3" y1="12" x2="21" y2="12"></line>
+						<line x1="3" y1="18" x2="21" y2="18"></line>
+					</svg>
 				</button>
 			</div>
 		</div>
@@ -698,7 +696,7 @@
 				onclick={closeMobileMenu}
 				onkeydown={(e) => e.key === 'Escape' && closeMobileMenu()}
 			></div>
-			<div class="mobile-menu-drawer">
+			<div class="mobile-menu-drawer" id="mobile-menu-drawer">
 				<!-- Menu Header -->
 				<div class="mobile-menu-header">
 					<h3>{$t('mobileMenu.menu')}</h3>
@@ -765,7 +763,8 @@
 								<a
 									href={localizeInternalHref('/account')}
 									class="mobile-account-card"
-									onclick={closeMobileMenu}
+									onclick={(event) =>
+										handlePrimaryNavigationClick(event, localizeInternalHref('/account'))}
 								>
 									{#if userAvatar}
 										<span class="account-avatar account-avatar-image" aria-hidden="true">
@@ -785,7 +784,14 @@
 								</a>
 							</li>
 							<li>
-								<a href={localizeInternalHref('/account/purchase')} onclick={closeMobileMenu}>
+								<a
+									href={localizeInternalHref('/account/purchase')}
+									onclick={(event) =>
+										handlePrimaryNavigationClick(
+											event,
+											localizeInternalHref('/account/purchase')
+										)}
+								>
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M3 7h18"></path>
 										<path d="M5 7l1.5 12h11L19 7"></path>
@@ -796,7 +802,11 @@
 							</li>
 						{:else}
 							<li>
-								<a href={localizeInternalHref('/login')} onclick={closeMobileMenu}>
+								<a
+									href={localizeInternalHref('/login')}
+									onclick={(event) =>
+										handlePrimaryNavigationClick(event, localizeInternalHref('/login'))}
+								>
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
 										<circle cx="12" cy="7" r="4"></circle>
@@ -807,7 +817,14 @@
 						{/if}
 						{#if !user}
 							<li>
-								<a href={localizeInternalHref('/account/purchase')} onclick={closeMobileMenu}>
+								<a
+									href={localizeInternalHref('/account/purchase')}
+									onclick={(event) =>
+										handlePrimaryNavigationClick(
+											event,
+											localizeInternalHref('/account/purchase')
+										)}
+								>
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
 										></path>
@@ -979,7 +996,8 @@
 	.language-switch button {
 		border: none;
 		background: transparent;
-		padding: 6px 10px;
+		min-height: 40px;
+		padding: 6px 12px;
 		border-radius: 999px;
 		display: inline-flex;
 		align-items: center;
@@ -989,6 +1007,9 @@
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		color: #1b1b1b;
+		cursor: pointer;
+		touch-action: manipulation;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.lang-flag {
@@ -1012,8 +1033,14 @@
 
 	.language-switch.mobile {
 		display: flex;
-		width: 200px;
+		width: min(100%, 260px);
 		justify-content: flex-start;
+	}
+
+	.language-switch.mobile button {
+		flex: 1 1 0;
+		justify-content: center;
+		min-height: 48px;
 	}
 
 	.account-popover {
