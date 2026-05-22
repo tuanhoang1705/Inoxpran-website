@@ -1,0 +1,5 @@
+Contact: mailto:support@inoxpran.vn
+Contact: https://inoxpran.com/contact
+Canonical: https://inoxpran.com/.well-known/security.txt
+Preferred-Languages: vi, en
+Expires: 2027-03-31T00:00:00.000Z

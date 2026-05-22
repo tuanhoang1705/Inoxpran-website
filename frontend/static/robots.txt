@@ -1,0 +1,6 @@
+# block admin area from crawlers
+User-agent: *
+Disallow: /admin
+Disallow: /admin/
+
+Sitemap: https://inoxpran.com/sitemap.xml

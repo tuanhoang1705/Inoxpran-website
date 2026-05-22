@@ -1,0 +1,2085 @@
+﻿export const defaultLocale = 'vi';
+export const locales = ['vi', 'en'];
+
+export const normalizeLocale = (value) => (locales.includes(value) ? value : defaultLocale);
+
+export const messages = {
+	vi: {
+		common: {
+			loading: 'Đang tải...',
+			customer: 'Khách hàng',
+			search: 'Tìm kiếm',
+			close: 'Đóng',
+			view: 'Xem',
+			save: 'Lưu',
+			reset: 'Đặt lại',
+			update: 'Cập nhật',
+			cancel: 'Hủy',
+			confirm: 'Xác nhận',
+			paginationPrev: 'Trang trước',
+			paginationNext: 'Trang sau',
+			pageLabel: 'Trang {page}',
+			today: 'Hôm nay',
+			yesterday: 'Hôm qua',
+			home: 'Trang chủ',
+			blog: 'Blog',
+			total: 'Tổng cộng',
+			addToCart: 'Thêm vào giỏ',
+			checkout: 'Thanh toán',
+			viewDetails: 'Xem chi tiết',
+			viewCart: 'Xem giỏ',
+			sampleProduct: 'Sản phẩm {index}',
+			discountNote: 'Giá ưu đãi.',
+			highQuality: 'Chất lượng cao.',
+			highQualityDeal: 'Chất lượng cao, giá tốt.',
+			stainlessPremium: 'Sản phẩm inox cao cấp.',
+			currency: 'đ',
+			viewAll: 'Xem tất cả',
+			readMore: 'Xem thêm',
+			scroll: 'Cuộn',
+			errors: {
+				productRequestFailed: 'Yêu cầu sản phẩm thất bại.',
+				productRequestFailedWithStatus: 'Yêu cầu sản phẩm thất bại ({status})'
+			}
+		},
+		admin: {
+			toast: {
+				title: 'Thông báo',
+				closeLabel: 'Đóng thông báo',
+				success: 'Thành công',
+				error: 'Lỗi',
+				info: 'Thông tin',
+				warning: 'Cảnh báo'
+			},
+			nav: {
+				dashboard: 'Tổng quan',
+				products: 'Sản phẩm',
+				reviews: 'Đánh giá',
+				blogs: 'Bài viết',
+				bestSelling: 'Sản phẩm bán chạy',
+				discounts: 'Mã giảm giá',
+				contacts: 'Liên hệ tư vấn',
+				approvals: 'Phê duyệt',
+				users: 'Người dùng',
+				orders: 'Đơn hàng',
+				profile: 'Hồ sơ'
+			},
+			layout: {
+				title: 'Quản trị Inoxpran',
+				logout: 'Đăng xuất',
+				language: 'Ngôn ngữ',
+				langVi: 'Tiếng Việt',
+				langEn: 'Tiếng Anh'
+			},
+			dashboard: {
+				title: 'Tổng quan',
+				recentUsers: 'Người dùng mới',
+				recentProducts: 'Sản phẩm mới',
+				latestUsers: 'Người dùng gần đây',
+				latestProducts: 'Sản phẩm gần đây',
+				view: 'Xem',
+				edit: 'Sửa',
+				noUsers: 'Chưa có người dùng mới.',
+				noProducts: 'Chưa có sản phẩm mới.',
+				siteSettings: {
+					title: 'Cấu hình hiển thị website',
+					description: 'Bật/tắt các tính năng giao diện website từ một nơi duy nhất.',
+					noFlags: 'Hiện chưa có feature flag nào.',
+					flagStatusEnabled: 'Trạng thái hiện tại: Đang bật.',
+					flagStatusDisabled: 'Trạng thái hiện tại: Đang tắt.',
+					saveButton: 'Lưu cấu hình',
+					flags: {
+						showDiscountBadge: {
+							label: 'Hiển thị discount badge',
+							description: 'Hiển thị phần trăm giảm giá trên danh sách và chi tiết sản phẩm.'
+						}
+					},
+					errors: {
+						update: 'Không thể cập nhật cấu hình hiển thị.',
+						noValidFlags: 'Không tìm thấy feature flag hợp lệ để cập nhật.'
+					},
+					success: {
+						updated: 'Đã cập nhật cấu hình hiển thị thành công.'
+					}
+				}
+			},
+			auth: {
+				loginTitle: 'Đăng nhập quản trị',
+				loginDesc: 'Đăng nhập để quản lý sản phẩm, đơn hàng và người dùng.',
+				email: 'Email',
+				password: 'Mật khẩu',
+				loginButton: 'Đăng nhập',
+				noAccount: 'Chưa có tài khoản?',
+				createAccount: 'Tạo tài khoản',
+				registerTitle: 'Tạo tài khoản quản trị',
+				registerDesc: 'Đăng ký tài khoản quản trị để được phê duyệt.',
+				name: 'Họ và tên',
+				phone: 'Số điện thoại',
+				redirecting: 'Đang chuyển...',
+				redirectingHint: 'Đang chuyển đến trang chờ duyệt.',
+				haveAccount: 'Đã có tài khoản?',
+				errors: {
+					missingCredentials: 'Vui lòng nhập email và mật khẩu.',
+					loginFailed: 'Đăng nhập thất bại.',
+					loginFailedWithReason: 'Đăng nhập thất bại: {reason}',
+					sessionInitFailed: 'Không thể khởi tạo phiên quản trị.',
+					registerMissingFields: 'Vui lòng nhập họ tên, email và mật khẩu.',
+					registerFailed: 'Đăng ký thất bại.',
+					registerFailedWithReason: 'Đăng ký thất bại: {reason}'
+				},
+				success: {
+					login: 'Đăng nhập quản trị thành công.',
+					registered: 'Tài khoản đã được tạo. Vui lòng chờ phê duyệt để kích hoạt.',
+					loggedOut: 'Đã đăng xuất khỏi hệ thống quản trị.'
+				}
+			},
+			pending: {
+				title: 'Đang chờ duyệt',
+				success: 'Tài khoản của bạn đã được tạo thành công.',
+				nextTitle: 'Bước tiếp theo',
+				nextDesc: 'Quản trị viên sẽ xem xét tài khoản của bạn.',
+				statusLabel: 'Trạng thái',
+				statusValue: 'Chờ phê duyệt',
+				emailLabel: 'Email',
+				notify: 'Chúng tôi sẽ thông báo khi tài khoản được duyệt.',
+				backToLogin: 'Quay lại đăng nhập',
+				loginHint: 'Bạn có thể đăng nhập sau khi tài khoản được kích hoạt.'
+			},
+			approvals: {
+				approvePrompt: 'Nhập ghi chú phê duyệt (tùy chọn)',
+				rejectPrompt: 'Nhập lý do từ chối (tùy chọn)',
+				pageTitle: 'Phê duyệt quản trị',
+				title: 'Phê duyệt quản trị',
+				lede: 'Duyệt hoặc từ chối các tài khoản quản trị mới.',
+				emptyTitle: 'Không có tài khoản chờ duyệt',
+				emptyDesc: 'Khi có yêu cầu, danh sách sẽ hiển thị tại đây.',
+				name: 'Họ tên',
+				email: 'Email',
+				phone: 'Số điện thoại',
+				created: 'Ngày tạo',
+				roles: 'Vai trò khi duyệt',
+				rolesHelp:
+					'Mặc định cấp quyền Quản trị. Chỉ thêm CHAT_MANAGER cho nhân sự phụ trách lịch sử chatbox.',
+				actions: 'Hành động',
+				approveTitle: 'Phê duyệt',
+				approve: 'Duyệt',
+				rejectTitle: 'Từ chối',
+				reject: 'Từ chối',
+				errors: {
+					load: 'Không thể tải danh sách tài khoản chờ duyệt.',
+					missingId: 'Vui lòng nhập ID admin.',
+					approveFailed: 'Không thể phê duyệt admin.',
+					rejectFailed: 'Không thể từ chối admin.'
+				},
+				success: {
+					approved: 'Đã phê duyệt admin.',
+					rejected: 'Đã từ chối admin.'
+				}
+			},
+			contacts: {
+				pageTitle: 'Liên hệ tư vấn',
+				title: 'Khách hàng cần tư vấn',
+				lede: 'Quản lý thông tin khách hàng gửi form liên hệ và cập nhật trạng thái xử lý.',
+				summaryLabel: 'Tổng yêu cầu',
+				summaryValue: '{count} liên hệ',
+				filters: {
+					search: 'Tìm kiếm',
+					searchPlaceholder: 'Tên, SĐT, email, nội dung...',
+					status: 'Trạng thái',
+					statusAll: 'Tất cả',
+					apply: 'Lọc',
+					reset: 'Xóa lọc'
+				},
+				emptyTitle: 'Chưa có yêu cầu liên hệ',
+				emptyDesc: 'Form liên hệ chưa có dữ liệu gửi về.',
+				status: {
+					new: 'Mới',
+					processing: 'Đang xử lý',
+					contacted: 'Đã liên hệ',
+					closed: 'Đã chốt/đóng'
+				},
+				fields: {
+					createdAt: 'Ngày gửi',
+					company: 'Công ty/Dự án',
+					city: 'Tỉnh/Thành',
+					assignedTo: 'Phụ trách',
+					email: 'Email',
+					address: 'Địa chỉ',
+					interest: 'Hạng mục',
+					budget: 'Ngân sách',
+					timeline: 'Tiến độ',
+					preferredContact: 'Liên hệ ưu tiên',
+					message: 'Nội dung',
+					sourcePage: 'Nguồn',
+					status: 'Trạng thái',
+					internalNote: 'Ghi chú nội bộ',
+					internalNotePlaceholder: 'Ghi chú cho đội tư vấn...',
+					assignToMe: 'Gán cho tôi'
+				},
+				actions: {
+					update: 'Cập nhật'
+				},
+				bulk: {
+					selectPage: 'Chọn tất cả trên trang',
+					selectItem: 'Chọn liên hệ',
+					selectedCount: 'Đã chọn: {count}',
+					clearSelection: 'Bỏ chọn',
+					deleteSelected: 'Xóa đã chọn',
+					deleteAllFiltered: 'Xóa tất cả theo bộ lọc',
+					confirmDeleteSelected: 'Xóa {count} liên hệ đã chọn?',
+					confirmDeleteAll: 'Xóa tất cả liên hệ theo bộ lọc hiện tại?'
+				},
+				pagination: {
+					prev: 'Trang trước',
+					next: 'Trang sau',
+					page: 'Trang {page} / {total}'
+				},
+				errors: {
+					missingId: 'Thiếu ID liên hệ.',
+					updateFailed: 'Không thể cập nhật liên hệ.',
+					updateFailedWithReason: 'Không thể cập nhật liên hệ: {reason}',
+					deleteSelectedMissing: 'Vui lòng chọn ít nhất một liên hệ để xóa.',
+					deleteFailed: 'Xóa liên hệ thất bại.',
+					deleteAllFailed: 'Xóa tất cả liên hệ theo bộ lọc thất bại.'
+				},
+				success: {
+					updated: 'Đã cập nhật liên hệ.',
+					deletedSelected: 'Đã xóa các liên hệ đã chọn.',
+					deletedAll: 'Đã xóa tất cả liên hệ theo bộ lọc.'
+				}
+			},
+			chatRooms: {
+				pageTitle: 'Phòng chat',
+				detailTitle: 'Console phòng chat',
+				lede: 'Lịch sử phòng chat cho quản lý. Theo dõi trạng thái khách hàng và tư vấn viên nào đã xử lý từng room từ live console.',
+				backToList: 'Quay lại danh sách phòng chat',
+				status: {
+					open: 'Đang mở',
+					handoff: 'Hỗ trợ trực tiếp',
+					closed: 'Đã đóng'
+				},
+				presence: {
+					active: 'Khách đang online',
+					left: 'Khách đã thoát',
+					leftWebsite: 'Khách đã thoát website'
+				},
+				filters: {
+					all: 'Tất cả',
+					mine: 'Phòng của tôi',
+					unreadOnly: 'Chỉ phòng chưa đọc',
+					onlyMine: 'Chỉ phòng của tôi',
+					unreadOnlyCheckbox: 'Chỉ chưa đọc',
+					search: 'Tìm kiếm',
+					searchPlaceholder: 'Session, số điện thoại, consultant, nguồn truy cập...',
+					status: 'Trạng thái',
+					limit: 'Số lượng',
+					apply: 'Lọc'
+				},
+				table: {
+					roomCode: 'Mã room',
+					sessionId: 'Session ID',
+					status: 'Trạng thái',
+					consultant: 'Tài khoản tư vấn',
+					customerPresence: 'Trạng thái khách',
+					latestLead: 'Lead gần nhất',
+					latestMessage: 'Tin nhắn gần nhất',
+					lastActive: 'Hoạt động cuối',
+					assignedToMe: 'Đang giao cho tôi',
+					noRooms: 'Chưa có phòng chat nào.',
+					detail: 'Chi tiết',
+					copied: 'Đã copy'
+				},
+				pagination: {
+					page: 'Trang',
+					previous: 'Trang trước',
+					next: 'Trang sau'
+				},
+				errors: {
+					listLoad: 'Không tải được danh sách phòng chat.',
+					roomLoad: 'Không tải được trạng thái phòng chat.',
+					roomUpdate: 'Không cập nhật được phòng chat.',
+					notFound: 'Không tìm thấy phòng chat.',
+					realtimeInterrupted: 'Kết nối realtime đang gián đoạn. Hệ thống sẽ tự kết nối lại.'
+				},
+				sla: {
+					warning: 'Cảnh báo',
+					critical: 'Nghiêm trọng',
+					waiting: 'Chờ nhận phòng {time}',
+					active: 'Đang xử lý {time}',
+					open: 'Đang mở {time}',
+					closed: 'Đã đóng'
+				},
+				detail: {
+					inboxTitle: 'Danh sách phòng chat',
+					inboxDesc: 'Chuyển nhanh giữa các room đang chờ xử lý giống giao diện chat.',
+					inboxSearchPlaceholder: 'Tìm theo mã room, số điện thoại hoặc nội dung...',
+					inboxAll: 'Tất cả',
+					inboxMine: 'Của tôi',
+					inboxUnread: 'Chưa đọc',
+					inboxEmpty: 'Không có phòng chat phù hợp.',
+					inboxShowMore: 'Xem thêm 10 phòng',
+					inboxOpenRoom: 'Mở phòng chat',
+					inboxCurrentRoom: 'Đang mở',
+					roomCode: 'Mã room',
+					copyRoomCode: 'Copy mã room',
+					copySessionId: 'Copy session ID',
+					copyCodeShort: 'Copy mã',
+					copySessionShort: 'Copy session',
+					claimRoom: 'Nhận phòng',
+					releaseRoom: 'Rời phòng',
+					closeRoom: 'Đóng phòng chat',
+					reopenRoom: 'Mở lại phòng chat',
+					liveConversation: 'Hội thoại trực tiếp',
+					liveConversationDesc:
+						'Trả lời khách ngay trong live console. Tin nhắn sẽ hiển thị trực tiếp trong chatbox của khách hàng.',
+					moreActions: 'Tác vụ nhanh',
+					settings: 'Thiết lập hội thoại',
+					customer: 'Khách hàng',
+					replyingAs: 'Đang trả lời với tư cách',
+					noConsultantAssigned: 'Chưa có tư vấn viên nhận phòng',
+					composerHelp: 'Nhấn Enter để xuống dòng, Ctrl+Enter để gửi ngay.',
+					messagesReturned: 'Tin nhắn phản hồi',
+					unreadCustomerMessages: 'Tin nhắn khách chưa đọc',
+					noMessages: 'Chưa có tin nhắn nào.',
+					cannedReplies: 'Mẫu trả lời nhanh',
+					roomClosedHint: 'Phòng chat đã đóng. Mở lại để tiếp tục hỗ trợ.',
+					otherConsultantBadge: 'Có CSKH đang hỗ trợ',
+					otherConsultantHint: 'Phòng này đang có tư vấn viên khác xử lý.',
+					autoClaimHint: 'Tin nhắn đầu tiên bạn gửi sẽ tự nhận phòng cho tài khoản hiện tại.',
+					ownedHint: 'Bạn đang phụ trách phòng chat này.',
+					composerPlaceholder: 'Nhập câu trả lời cho khách. Ctrl+Enter để gửi.',
+					typingOnState: 'Đã bật trạng thái đang nhập.',
+					typingOffState: 'Trạng thái đang nhập đang tắt.',
+					typingOn: 'Bật đang nhập',
+					typingOff: 'Tắt đang nhập',
+					sendMessage: 'Gửi tin nhắn',
+					roomSummary: 'Tóm tắt phòng chat',
+					roomHealth: 'Tình trạng phòng chat',
+					currentConsultant: 'Tư vấn viên hiện tại',
+					customerPresence: 'Trạng thái khách hàng',
+					handoffRequested: 'Thời điểm yêu cầu hỗ trợ trực tiếp',
+					claimedAt: 'Thời điểm nhận phòng',
+					lastConsultantReply: 'Phản hồi CSKH gần nhất',
+					sourcePath: 'Trang bắt đầu hội thoại',
+					latestLead: 'Lead gần nhất',
+					transferRoom: 'Chuyển phòng chat',
+					findConsultant: 'Tìm tư vấn viên',
+					findConsultantPlaceholder: 'Nhập email, username hoặc tên tư vấn viên',
+					findConsultantHelp:
+						'Dùng phím mũi tên để di chuyển trong danh sách và nhấn Enter để chọn nhanh.',
+					noConsultantAvailable: 'Chưa có tư vấn viên phù hợp.',
+					consultantTyping: 'Tư vấn viên đang nhập',
+					consultantOnShift: 'Đang trong ca',
+					consultantOffShift: 'Ngoài ca',
+					autoAssignOn: 'Auto-assign bật',
+					autoAssignOff: 'Auto-assign tắt'
+				},
+				roles: {
+					consultant: 'Tư vấn viên',
+					assistant: 'Agent',
+					system: 'Hệ thống',
+					user: 'Khách hàng'
+				},
+				success: {
+					roomClaimed: 'Đã nhận phòng chat.',
+					roomReleased: 'Đã rời phòng chat.',
+					roomClosed: 'Đã đóng phòng chat.',
+					roomReopened: 'Đã mở lại phòng chat.',
+					roomTransferred: 'Đã chuyển phòng chat.'
+				}
+			},
+			discounts: {
+				confirmDelete: 'Bạn chắc chắn muốn xóa mã giảm giá này?',
+				title: 'Mã giảm giá',
+				createTitle: 'Tạo mã giảm giá',
+				code: 'Mã',
+				name: 'Tên',
+				description: 'Mô tả',
+				type: 'Loại',
+				typeFixed: 'Giảm tiền cố định',
+				typePercent: 'Giảm theo phần trăm',
+				typeFreeShip: 'Miễn phí vận chuyển',
+				value: 'Giá trị',
+				maxValue: 'Giá trị tối đa',
+				minOrder: 'Giá trị đơn tối thiểu',
+				startDate: 'Ngày bắt đầu',
+				endDate: 'Ngày kết thúc',
+				maxUses: 'Số lần sử dụng tối đa',
+				maxUsesPerUser: 'Số lần sử dụng mỗi người',
+				appliesTo: 'Áp dụng cho',
+				appliesAll: 'Tất cả sản phẩm',
+				appliesSpecific: 'Sản phẩm cụ thể',
+				customerAppliesTo: 'Khách hàng áp dụng',
+				customerAll: 'Tất cả khách hàng',
+				customerSpecific: 'Khách hàng cụ thể',
+				customerIds: 'Danh sách ID khách hàng',
+				customerIdsPlaceholder: 'Mỗi ID trên một dòng hoặc phân tách bằng dấu phẩy',
+				productIds: 'Danh sách ID sản phẩm',
+				productIdsPlaceholder: 'Mỗi ID trên một dòng hoặc phân tách bằng dấu phẩy',
+				active: 'Đang hoạt động',
+				createButton: 'Tạo mã giảm giá',
+				status: 'Trạng thái',
+				delete: 'Xóa',
+				empty: 'Chưa có mã giảm giá.',
+				errors: {
+					load: 'Không thể tải danh sách mã giảm giá.',
+					missingFields: 'Vui lòng nhập đầy đủ thông tin mã giảm giá.',
+					missingProductIds: 'Vui lòng nhập danh sách sản phẩm áp dụng.',
+					missingCustomerIds: 'Vui lòng nhập danh sách khách hàng áp dụng.',
+					createFailed: 'Tạo mã giảm giá thất bại.',
+					deleteMissingId: 'Không tìm thấy mã giảm giá để xóa.',
+					deleteFailed: 'Xóa mã giảm giá thất bại.'
+				},
+				success: {
+					created: 'Tạo mã giảm giá thành công.',
+					deleted: 'Đã xóa mã giảm giá.'
+				}
+			},
+			orders: {
+				title: 'Quản lý đơn hàng',
+				heading: 'Quản lý đơn hàng',
+				lede: 'Theo dõi đơn mới, xử lý yêu cầu huỷ và cập nhật trạng thái giao hàng trong một màn hình.',
+				autoStatusHint:
+					'Một số trạng thái cuối sẽ được đồng bộ tự động theo luồng vận chuyển và xử lý hoàn/huỷ.',
+				updateStatus: 'Cập nhật',
+				detailsToggle: 'Chi tiết',
+				orderId: 'Mã đơn hàng',
+				statusLabel: 'Trạng thái',
+				noTracking: 'Chưa có mã',
+				noAddress: 'Chưa có địa chỉ',
+				noTransitions: 'Không còn bước chuyển',
+				emptyTitle: 'Không có đơn hàng phù hợp',
+				emptyDesc: 'Hãy thử đổi bộ lọc hoặc từ khóa để tìm đơn cần xử lý.',
+				tabs: {
+					label: 'Bộ lọc đơn hàng',
+					all: 'Tất cả',
+					waiting: 'Chờ xử lý',
+					shipping: 'Đang giao',
+					completed: 'Hoàn thành',
+					cancelRequested: 'Yêu cầu huỷ',
+					cancelled: 'Đã huỷ',
+					returned: 'Hoàn / Trả'
+				},
+				metrics: {
+					total: 'Tổng đơn',
+					waiting: 'Đang chờ',
+					shipping: 'Đang giao',
+					completed: 'Hoàn thành',
+					cancelRequested: 'Cần duyệt huỷ'
+				},
+				filters: {
+					search: 'Tìm đơn',
+					searchPlaceholder: 'Mã đơn, tên người nhận, SĐT, mã vận đơn...',
+					fromDate: 'Từ ngày',
+					toDate: 'Đến ngày',
+					apply: 'Áp dụng',
+					clear: 'Xoá lọc'
+				},
+				bulk: {
+					selectPage: 'Chọn tất cả trên trang',
+					selectItem: 'Chọn đơn hàng',
+					selectedCount: 'Đã chọn: {count}',
+					clearSelection: 'Bỏ chọn',
+					deleteSelected: 'Xóa đã chọn',
+					deleteAllFiltered: 'Xóa tất cả theo bộ lọc',
+					confirmDeleteSelected: 'Xóa {count} đơn hàng đã chọn?',
+					confirmDeleteAll: 'Xóa tất cả đơn hàng theo bộ lọc hiện tại?'
+				},
+				table: {
+					orderId: 'Mã đơn',
+					customer: 'Khách hàng',
+					items: 'Sản phẩm',
+					total: 'Tổng tiền',
+					placedAt: 'Ngày đặt',
+					tracking: 'Vận đơn',
+					status: 'Trạng thái',
+					details: 'Chi tiết'
+				},
+				details: {
+					receiver: 'Người nhận',
+					phone: 'Điện thoại',
+					email: 'Email',
+					address: 'Địa chỉ',
+					paymentStatus: 'Thanh toán',
+					shippingStatus: 'Vận chuyển',
+					codStatus: 'COD',
+					updatedAt: 'Cập nhật lần cuối',
+					cancelReason: 'Lý do huỷ'
+				},
+				pagination: {
+					label: 'Phân trang đơn hàng',
+					prev: 'Trang trước',
+					next: 'Trang sau',
+					page: 'Trang {page}/{total}'
+				},
+				status: {
+					pending: 'Chờ xử lý',
+					confirmed: 'Chờ giao hàng',
+					shipped: 'Vận chuyển',
+					cancelRequested: 'Yêu cầu hủy',
+					cancelled: 'Đã hủy',
+					delivered: 'Hoàn thành',
+					returned: 'Trả hàng/Hoàn tiền'
+				},
+				errors: {
+					load: 'Không thể tải danh sách đơn hàng.',
+					missingFields: 'Vui lòng nhập mã đơn hàng và trạng thái.',
+					invalidStatus: 'Trạng thái cập nhật không hợp lệ.',
+					updateFailed: 'Cập nhật trạng thái đơn hàng thất bại.',
+					deleteSelectedMissing: 'Vui lòng chọn ít nhất một đơn hàng để xóa.',
+					deleteFailed: 'Xóa đơn hàng thất bại.',
+					deleteAllFailed: 'Xóa tất cả đơn hàng theo bộ lọc thất bại.'
+				},
+				success: {
+					updated: 'Cập nhật trạng thái đơn hàng thành công.',
+					deletedSelected: 'Đã xóa các đơn hàng đã chọn.',
+					deletedAll: 'Đã xóa tất cả đơn hàng theo bộ lọc.'
+				}
+			},
+			users: {
+				title: 'Người dùng',
+				filter: 'Lọc',
+				statusAll: 'Tất cả trạng thái',
+				statusLabel: 'Trạng thái',
+				name: 'Tên',
+				email: 'Email',
+				roles: 'Vai trò',
+				view: 'Xem',
+				empty: 'Không tìm thấy người dùng.',
+				back: 'Quay lại danh sách',
+				detailTitle: 'Chi tiết người dùng',
+				updateStatus: 'Cập nhật trạng thái',
+				save: 'Lưu',
+				notFound: 'Không tìm thấy người dùng.',
+				status: {
+					active: 'Hoạt động',
+					inactive: 'Tạm ngưng',
+					blocked: 'Bị chặn'
+				},
+				errors: {
+					load: 'Không thể tải danh sách người dùng.',
+					notFound: 'Không tìm thấy người dùng.',
+					updateFailed: 'Cập nhật trạng thái người dùng thất bại.'
+				},
+				success: {
+					updated: 'Cập nhật trạng thái người dùng thành công.'
+				}
+			},
+			profile: {
+				title: 'Hồ sơ quản trị',
+				heading: 'Hồ sơ',
+				name: 'Họ và tên',
+				phone: 'Số điện thoại',
+				avatarUrl: 'URL ảnh đại diện',
+				avatarFile: 'Tệp ảnh đại diện',
+				update: 'Cập nhật hồ sơ',
+				errors: {
+					load: 'Tải hồ sơ thất bại.',
+					updateFailed: 'Cập nhật hồ sơ thất bại.'
+				},
+				success: {
+					updated: 'Cập nhật hồ sơ thành công.'
+				}
+			},
+			products: {
+				title: 'Sản phẩm',
+				drafts: 'Bản nháp',
+				newDraft: 'Tạo bản nháp',
+				name: 'Tên sản phẩm',
+				type: 'Loại',
+				price: 'Giá',
+				admin: 'Người tạo',
+				created: 'Ngày tạo',
+				updated: 'Ngày cập nhật',
+				status: 'Trạng thái',
+				active: 'Đang hoạt động',
+				published: 'Xuất bản',
+				draft: 'Bản nháp',
+				unknown: 'Không rõ',
+				edit: 'Sửa',
+				empty: 'Chưa có sản phẩm.',
+				errors: {
+					load: 'Không thể tải danh sách sản phẩm.'
+				}
+			},
+			bestSelling: {
+				title: 'Sản phẩm bán chạy',
+				lede: 'Sắp xếp thứ tự hiển thị sản phẩm bán chạy trên trang chủ.',
+				hint: 'Kéo sản phẩm từ danh sách bên phải vào đây để sắp xếp.',
+				listTitle: 'Danh sách bán chạy',
+				addTitle: 'Thêm sản phẩm',
+				searchPlaceholder: 'Tìm sản phẩm...',
+				add: 'Thêm',
+				remove: 'Xóa',
+				moveUp: 'Đưa lên',
+				moveDown: 'Đưa xuống',
+				save: 'Lưu thứ tự',
+				empty: 'Chưa có sản phẩm bán chạy.',
+				noResults: 'Không tìm thấy sản phẩm phù hợp.',
+				errors: {
+					load: 'Không thể tải danh sách sản phẩm bán chạy.',
+					save: 'Không thể lưu thứ tự sản phẩm bán chạy.'
+				},
+				success: {
+					saved: 'Đã lưu thứ tự sản phẩm bán chạy.'
+				}
+			},
+			productsDrafts: {
+				title: 'Bản nháp sản phẩm',
+				lede: 'Quản lý các bản nháp sản phẩm chưa xuất bản.',
+				backToList: 'Quay lại danh sách',
+				newDraft: 'Tạo bản nháp',
+				name: 'Tên sản phẩm',
+				type: 'Loại',
+				created: 'Ngày tạo',
+				creator: 'Người tạo',
+				status: 'Trạng thái',
+				draftStatus: 'Bản nháp',
+				publish: 'Xuất bản',
+				empty: 'Chưa có bản nháp.',
+				errors: {
+					load: 'Không thể tải danh sách bản nháp.',
+					missingId: 'Vui lòng chọn sản phẩm cần xuất bản.',
+					publishFailed: 'Xuất bản sản phẩm thất bại.'
+				},
+				success: {
+					publish: 'Đã xuất bản sản phẩm thành công.'
+				}
+			},
+			productsNew: {
+				title: 'Tạo sản phẩm',
+				back: 'Quay lại sản phẩm',
+				heading: 'Tạo sản phẩm mới',
+				name: 'Tên sản phẩm',
+				type: 'Loại sản phẩm',
+				typeInox: 'Đồ gia dụng Inox',
+				typeCastIron: 'Đồ gia dụng gang',
+				typeElectronics: 'Gia dụng điện',
+				originalPrice: 'Giá gốc',
+				salePrice: 'Giá khuyến mãi',
+				quantity: 'Số lượng',
+				weight: 'Khối lượng',
+				ratingAverage: 'Điểm trung bình',
+				ratingCount: 'Số lượt đánh giá',
+				ratingHelp:
+					'Chỉ nhập dữ liệu đánh giá thật. Nếu số lượt đánh giá bằng 0, hệ thống sẽ lưu điểm trung bình về 0.',
+				discountLabel: 'Giảm giá',
+				description: 'Mô tả',
+				descriptionPlaceholder: 'Nhập mô tả sản phẩm...',
+				thumb: 'Ảnh đại diện',
+				gallery: 'Ảnh chi tiết',
+				galleryHint: 'Kéo thả hoặc chọn ảnh chi tiết 300x300px và dung lượng tối đa 1MB.',
+				galleryPrompt: 'Kéo thả hoặc bấm để chọn ảnh',
+				galleryLimit: 'Tối đa {count} ảnh.',
+				removeImage: 'Xóa ảnh',
+				attributes: 'Thông số kỹ thuật',
+				manufacturer: 'Hãng sản xuất',
+				model: 'Model',
+				color: 'Màu sắc',
+				variantsTitle: 'Phân loại sản phẩm',
+				colors: 'Màu',
+				colorNamePlaceholder: 'Tên màu',
+				priceOverride: 'Giá riêng',
+				addColor: 'Thêm màu',
+				colorsEmpty: 'Chưa có màu.',
+				sizes: 'Kích thước',
+				sizePlaceholder: 'Nhập kích thước',
+				addSize: 'Thêm',
+				sizeEmpty: 'Chưa có kích thước.',
+				comboTitle: 'Giá theo màu + size',
+				comboHint: 'Thiết lập giá riêng cho từng tổ hợp màu và size.',
+				selectColor: 'Chọn màu',
+				selectSize: 'Chọn size',
+				addCombo: 'Thêm tổ hợp',
+				comboEmpty: 'Chưa có tổ hợp.',
+				create: 'Tạo bản nháp',
+				imageTooLarge: 'Ảnh quá lớn (tối đa {size}).',
+				imageDimensions: 'Kích thước ảnh phải là {width}x{height}px.',
+				imageInvalid: 'Tệp ảnh không hợp lệ.',
+				errors: {
+					missingFields: 'Vui lòng nhập đầy đủ thông tin sản phẩm.',
+					duplicateName: 'Tên sản phẩm đã tồn tại.',
+					attributesRequired: 'Vui lòng nhập hãng sản xuất, model và màu sắc.',
+					attributesIncomplete: 'Vui lòng nhập đầy đủ hãng sản xuất, model và màu sắc.',
+					missingOriginalPrice: 'Vui lòng nhập giá gốc sản phẩm.',
+					missingSalePrice: 'Vui lòng nhập giá khuyến mãi.',
+					thumbRequired: 'Vui lòng chọn ảnh đại diện.',
+					createFailed: 'Tạo bản nháp thất bại.'
+				},
+				success: {
+					created: 'Tạo bản nháp thành công.'
+				}
+			},
+			productEditor: {
+				title: 'Chỉnh sửa sản phẩm',
+				lede: 'Cập nhật thông tin, giá và nội dung.',
+				back: 'Quay lại sản phẩm',
+				slug: 'Slug',
+				updated: 'Cập nhật lần cuối',
+				sectionBasics: 'Thông tin cơ bản',
+				sectionBasicsDesc: 'Tên, loại và thông tin chính.',
+				productName: 'Tên sản phẩm',
+				productNamePlaceholder: 'Nhập tên sản phẩm',
+				productType: 'Loại sản phẩm',
+				sectionPricing: 'Giá & tồn kho',
+				sectionPricingDesc: 'Quản lý giá và tồn kho.',
+				originalPrice: 'Giá gốc',
+				salePrice: 'Giá khuyến mãi',
+				quantity: 'Số lượng',
+				weight: 'Khối lượng',
+				ratingAverage: 'Điểm trung bình',
+				ratingCount: 'Số lượt đánh giá',
+				ratingHelp:
+					'Chỉ dùng dữ liệu đánh giá thật. Nếu số lượt đánh giá bằng 0, hệ thống sẽ lưu điểm trung bình về 0.',
+				weightHelp: 'Đơn vị gram.',
+				discountLabel: 'Giảm giá',
+				sectionImages: 'Hình ảnh',
+				sectionImagesDesc: 'Tải ảnh đại diện đúng chuẩn.',
+				noImage: 'Chưa có ảnh',
+				uploadLabel: 'Tải ảnh đại diện',
+				uploadHelp: 'Kích thước 300x300px, tối đa 1MB.',
+				gallery: 'Ảnh chi tiết',
+				galleryHint: 'Kéo thả hoặc chọn ảnh chi tiết 300x300px, tối đa 1MB/ảnh.',
+				galleryPrompt: 'Kéo thả hoặc bấm để chọn ảnh',
+				galleryLimit: 'Tối đa {count} ảnh.',
+				removeImage: 'Xóa ảnh',
+				cropped: 'Đã cắt',
+				sectionDescription: 'Mô tả',
+				sectionDescriptionDesc: 'Cập nhật mô tả đầy đủ.',
+				descriptionPlaceholder: 'Nhập mô tả sản phẩm...',
+				advancedSummary: 'Tùy chọn nâng cao',
+				advancedNote: 'Chỉ điền khi cần thêm thông tin kỹ thuật.',
+				manufacturer: 'Hãng sản xuất',
+				model: 'Model',
+				color: 'Màu sắc',
+				variantsTitle: 'Phân loại',
+				colors: 'Màu',
+				colorNamePlaceholder: 'Tên màu',
+				priceOverride: 'Giá riêng',
+				addColor: 'Thêm màu',
+				colorsEmpty: 'Chưa có màu.',
+				sizes: 'Kích thước',
+				sizePlaceholder: 'Nhập kích thước',
+				addSize: 'Thêm',
+				sizeEmpty: 'Chưa có kích thước.',
+				comboTitle: 'Giá theo màu + size',
+				comboHint: 'Thiết lập giá riêng cho từng tổ hợp màu và size.',
+				selectColor: 'Chọn màu',
+				selectSize: 'Chọn size',
+				addCombo: 'Thêm tổ hợp',
+				comboEmpty: 'Chưa có tổ hợp.',
+				save: 'Lưu thay đổi',
+				saveHint: 'Lưu để cập nhật sản phẩm.',
+				preview: 'Xem trước',
+				stockLabel: 'Tồn kho: {count}',
+				admin: 'Quản trị',
+				weightLabel: 'Khối lượng',
+				quickActions: 'Thao tác nhanh',
+				quickActionsDesc: 'Xuất bản hoặc ẩn sản phẩm.',
+				published: 'Đã xuất bản',
+				publish: 'Xuất bản',
+				unpublished: 'Đã ẩn',
+				unpublish: 'Ẩn sản phẩm',
+				delete: 'Xóa sản phẩm',
+				tipsTitle: 'Gợi ý',
+				tip1: 'Dùng ảnh đại diện sắc nét, đúng kích thước.',
+				tip2: 'Cập nhật giá khuyến mãi khi cần.',
+				tip3: 'Mô tả rõ ràng giúp tăng chuyển đổi.',
+				notFound: 'Không tìm thấy sản phẩm.',
+				confirmDelete: 'Bạn có chắc muốn xóa sản phẩm này không?',
+				imageTooLarge: 'Ảnh quá lớn (tối đa {size}).',
+				imageDimensions: 'Ảnh phải là {width}x{height}px.',
+				imageInvalid: 'Tệp ảnh không hợp lệ.',
+				errors: {
+					load: 'Không tìm thấy sản phẩm.',
+					missingType: 'Vui lòng chọn loại sản phẩm.',
+					duplicateName: 'Tên sản phẩm đã tồn tại.',
+					attributesRequired: 'Vui lòng nhập hãng sản xuất, model và màu sắc.',
+					attributesIncomplete: 'Vui lòng nhập đầy đủ hãng sản xuất, model và màu sắc.',
+					updateFailed: 'Cập nhật sản phẩm thất bại.',
+					publishFailed: 'Xuất bản sản phẩm thất bại.',
+					unpublishFailed: 'Ẩn sản phẩm thất bại.',
+					deleteFailed: 'Xóa sản phẩm thất bại.'
+				},
+				success: {
+					updated: 'Đã cập nhật sản phẩm.',
+					published: 'Đã xuất bản sản phẩm.',
+					unpublished: 'Đã ẩn sản phẩm.',
+					deleted: 'Đã xóa sản phẩm.'
+				}
+			},
+			blogs: {
+				title: 'Bài viết',
+				lede: 'Quản lý danh sách bài viết, trạng thái xuất bản và hiệu suất đọc.',
+				newPost: 'Viết bài mới',
+				manageComments: 'Quản lý bình luận',
+				filters: {
+					searchPlaceholder: 'Tìm theo tiêu đề hoặc tóm tắt...',
+					statusAll: 'Tất cả trạng thái',
+					statusPublished: 'Đã xuất bản',
+					statusDraft: 'Bản nháp',
+					categoryAll: 'Tất cả danh mục',
+					apply: 'Lọc'
+				},
+				table: {
+					title: 'Tiêu đề',
+					category: 'Danh mục',
+					status: 'Trạng thái',
+					updated: 'Cập nhật',
+					views: 'Lượt xem',
+					readTime: 'Thời gian đọc',
+					actions: 'Thao tác'
+				},
+				status: {
+					published: 'Đã xuất bản',
+					draft: 'Bản nháp'
+				},
+				empty: 'Chưa có bài viết.',
+				edit: 'Sửa',
+				errors: {
+					load: 'Không thể tải danh sách bài viết.',
+					missingId: 'Thiếu ID bài viết.',
+					publishFailed: 'Xuất bản bài viết thất bại.',
+					unpublishFailed: 'Ẩn bài viết thất bại.'
+				},
+				success: {
+					published: 'Đã xuất bản bài viết.',
+					unpublished: 'Đã chuyển bài viết về bản nháp.'
+				}
+			},
+			blogsComments: {
+				title: 'Quản lý bình luận',
+				errors: {
+					load: 'Không thể tải bình luận.',
+					missingId: 'Thiếu mã bình luận.',
+					updateFailed: 'Cập nhật bình luận thất bại.',
+					deleteFailed: 'Xóa bình luận thất bại.'
+				},
+				success: {
+					approved: 'Đã duyệt bình luận.',
+					rejected: 'Đã ẩn bình luận.',
+					deleted: 'Đã xóa bình luận.'
+				}
+			},
+			productReviews: {
+				pageTitle: 'Đánh giá sản phẩm',
+				title: 'Đánh giá sản phẩm',
+				lede: 'Duyệt, thêm, ẩn hoặc xóa đánh giá trước khi hiển thị trên website.',
+				summaryLabel: 'Tổng đánh giá',
+				create: {
+					title: 'Thêm đánh giá lịch sử',
+					lede: 'Nhập lại đánh giá thật từ khách hàng đã thu thập offline hoặc từ kênh khác để trang sản phẩm có review schema đầy đủ hơn.',
+					productLookup: 'Slug / ID sản phẩm',
+					productLookupPlaceholder: 'Ví dụ: bep-tu-don-inoxpran-inp6103',
+					productLookupHint:
+						'Dùng slug sản phẩm ở danh sách ưu tiên bên phải hoặc dán trực tiếp product ID.',
+					authorName: 'Tên khách hàng',
+					authorEmail: 'Email khách hàng',
+					rating: 'Số sao',
+					status: 'Trạng thái hiển thị',
+					titleField: 'Tiêu đề đánh giá',
+					titlePlaceholder: 'Tóm tắt ngắn về trải nghiệm của khách',
+					content: 'Nội dung đánh giá',
+					contentPlaceholder: 'Nhập nội dung đánh giá thật của khách hàng...',
+					submittedAt: 'Ngày đánh giá gốc',
+					verifiedPurchase: 'Đánh dấu đã mua hàng',
+					submit: 'Tạo đánh giá'
+				},
+				targets: {
+					title: 'Sản phẩm cần bổ sung review',
+					lede: 'Ưu tiên những sản phẩm đã có aggregate rating nhưng chưa có review public để giảm warning schema.',
+					aggregateCount: 'Tổng lượt rating',
+					approvedReviewCount: 'Review public',
+					openProduct: 'Mở sản phẩm',
+					empty: 'Hiện không có sản phẩm ưu tiên cần bổ sung review.'
+				},
+				filters: {
+					search: 'Tìm kiếm',
+					searchPlaceholder: 'Tên sản phẩm, khách hàng, email, nội dung...',
+					status: 'Trạng thái',
+					statusAll: 'Tất cả',
+					apply: 'Lọc',
+					reset: 'Xóa lọc'
+				},
+				status: {
+					pending: 'Chờ duyệt',
+					approved: 'Đã duyệt',
+					rejected: 'Đã ẩn'
+				},
+				fields: {
+					product: 'Sản phẩm',
+					customer: 'Khách hàng',
+					rating: 'Số sao',
+					title: 'Tiêu đề',
+					content: 'Nội dung',
+					submitted: 'Ngày gửi',
+					reviewed: 'Ngày duyệt',
+					status: 'Trạng thái',
+					verified: 'Đã mua hàng'
+				},
+				actions: {
+					approve: 'Duyệt',
+					reject: 'Ẩn',
+					delete: 'Xóa'
+				},
+				emptyTitle: 'Chưa có đánh giá',
+				emptyDesc: 'Không tìm thấy đánh giá phù hợp với bộ lọc hiện tại.',
+				pagination: {
+					prev: 'Trang trước',
+					next: 'Trang sau',
+					page: 'Trang {page} / {total}'
+				},
+				errors: {
+					load: 'Không thể tải danh sách đánh giá.',
+					missingId: 'Thiếu mã đánh giá.',
+					createMissingRequired: 'Vui lòng nhập sản phẩm, tên khách, số sao và nội dung đánh giá.',
+					createFailed: 'Tạo đánh giá thất bại.',
+					updateFailed: 'Cập nhật trạng thái đánh giá thất bại.',
+					deleteFailed: 'Xóa đánh giá thất bại.'
+				},
+				success: {
+					created: 'Đã tạo đánh giá thành công.',
+					approved: 'Đã duyệt đánh giá.',
+					rejected: 'Đã ẩn đánh giá.',
+					deleted: 'Đã xóa đánh giá.'
+				}
+			},
+			blogEditor: {
+				createTitle: 'Viết bài mới',
+				editTitle: 'Chỉnh sửa bài viết',
+				lede: 'Soạn thảo nội dung blog với đầy đủ công cụ cho trang blog và chi tiết bài viết.',
+				back: 'Quay lại danh sách bài viết',
+				basicInfo: 'Thông tin cơ bản',
+				title: 'Tiêu đề bài viết',
+				slug: 'Slug URL',
+				regenerateSlug: 'Tạo lại slug',
+				excerpt: 'Tóm tắt ngắn',
+				category: 'Danh mục',
+				authorName: 'Tên tác giả',
+				authorAvatar: 'Ký tự avatar',
+				coverImage: 'Ảnh đại diện',
+				coverHint: 'Khuyến nghị ảnh ngang (ví dụ 1200x675), tối đa 5MB.',
+				replaceImage: 'Thay ảnh',
+				cropZoom: 'Thu phóng',
+				cropApply: 'Áp dụng crop',
+				cropHint: 'Kéo ảnh để chỉnh vùng hiển thị, sau đó nhấn lưu để áp dụng crop.',
+				cropPreviewAlt: 'Xem trước vùng cắt',
+				closeLabel: 'Đóng',
+				content: 'Nội dung chi tiết',
+				contentHint: 'Dùng thanh công cụ để định dạng, chèn ảnh và liên kết.',
+				tags: 'Từ khóa',
+				tagPlaceholder: 'Nhập tag và nhấn Enter',
+				tagsHint: 'Tag sẽ hiển thị ở cuối bài và hỗ trợ lọc.',
+				seo: 'SEO',
+				seoTitle: 'SEO title',
+				seoDescription: 'SEO description',
+				meta: 'Thông số hiển thị',
+				readTime: 'Thời gian đọc (phút)',
+				commentsCount: 'Số bình luận',
+				views: 'Lượt xem ban đầu',
+				status: 'Trạng thái',
+				statusDraft: 'Bản nháp',
+				statusPublished: 'Xuất bản',
+				sendNewsletterLabel: 'Gửi thông báo tới người đăng ký',
+				sendNewsletterHint: 'Gửi email thông báo khi xuất bản bài viết.',
+				relatedPosts: 'Bài viết liên quan',
+				relatedHint: 'Chọn tối đa 3 bài để hiển thị ở cuối trang chi tiết.',
+				relatedEmpty: 'Chưa có bài viết nào để liên kết.',
+				preview: 'Xem nhanh',
+				previewEmpty: 'Bài xem trước sẽ xuất hiện sau khi bạn nhập tiêu đề và tóm tắt.',
+				wordCount: '{count} từ',
+				autoReadTime: '~{minutes} phút đọc',
+				create: 'Tạo bài viết',
+				update: 'Lưu thay đổi',
+				publish: 'Xuất bản',
+				unpublish: 'Chuyển về nháp',
+				delete: 'Xóa bài viết',
+				confirmDelete: 'Bạn chắc chắn muốn xóa bài viết này?',
+				errors: {
+					load: 'Không thể tải dữ liệu bài viết.',
+					missingRequired: 'Vui lòng nhập tiêu đề, tóm tắt, nội dung và ảnh đại diện.',
+					createFailed: 'Tạo bài viết thất bại.',
+					updateFailed: 'Cập nhật bài viết thất bại.',
+					publishFailed: 'Xuất bản bài viết thất bại.',
+					unpublishFailed: 'Ẩn bài viết thất bại.',
+					deleteFailed: 'Xóa bài viết thất bại.',
+					imageTooLarge: 'Ảnh quá lớn (tối đa {size}).',
+					imageInvalid: 'Tệp ảnh không hợp lệ.'
+				},
+				success: {
+					created: 'Tạo bài viết thành công.',
+					updated: 'Cập nhật bài viết thành công.',
+					published: 'Đã xuất bản bài viết.',
+					unpublished: 'Đã chuyển bài viết về bản nháp.',
+					deleted: 'Đã xóa bài viết.'
+				}
+			},
+			editor: {
+				placeholder: 'Nhập nội dung...',
+				imageUploadFailed: 'Tải ảnh lên thất bại.',
+				uploadMissingUrl: 'Không tìm thấy URL sau khi tải ảnh.',
+				onlyImagesAllowed: 'Chỉ cho phép tải lên các tệp hình ảnh.',
+				imageAdded: 'Đã thêm hình ảnh.',
+				linkUrlRequired: 'Vui lòng nhập đường dẫn liên kết.',
+				linkAdded: 'Đã thêm liên kết.',
+				bold: 'Chữ đậm',
+				italic: 'Chữ nghiêng',
+				underline: 'Gạch chân',
+				strike: 'Gạch ngang',
+				bulletList: 'Danh sách dấu chấm',
+				numberedList: 'Danh sách số',
+				alignLeft: 'Căn trái',
+				alignCenter: 'Căn giữa',
+				alignRight: 'Căn phải',
+				textColor: 'Màu chữ',
+				insertImage: 'Chèn ảnh',
+				insertLink: 'Chèn liên kết',
+				linkUrlPlaceholder: 'Nhập URL',
+				linkTextPlaceholder: 'Nhập nội dung hiển thị của liên kết',
+				add: 'Thêm',
+				cancel: 'Hủy',
+				clearFormatting: 'Xóa định dạng'
+			}
+		}
+	},
+	en: {
+		common: {
+			loading: 'Loading...',
+			customer: 'Customer',
+			search: 'Search',
+			close: 'Close',
+			view: 'View',
+			save: 'Save',
+			reset: 'Reset',
+			update: 'Update',
+			cancel: 'Cancel',
+			confirm: 'Confirm',
+			paginationPrev: 'Previous',
+			paginationNext: 'Next',
+			pageLabel: 'Page {page}',
+			today: 'Today',
+			yesterday: 'Yesterday',
+			home: 'Home',
+			blog: 'Blog',
+			total: 'Total',
+			addToCart: 'Add to cart',
+			checkout: 'Checkout',
+			viewDetails: 'View details',
+			viewCart: 'View cart',
+			sampleProduct: 'Product {index}',
+			discountNote: 'Special offer.',
+			highQuality: 'High quality.',
+			highQualityDeal: 'High quality, great price.',
+			stainlessPremium: 'Premium stainless product.',
+			currency: 'đ',
+			viewAll: 'View all',
+			readMore: 'Read more',
+			scroll: 'Scroll',
+			errors: {
+				productRequestFailed: 'Product request failed.',
+				productRequestFailedWithStatus: 'Product request failed ({status}).'
+			}
+		},
+		admin: {
+			toast: {
+				title: 'Notification',
+				closeLabel: 'Dismiss notification',
+				success: 'Success',
+				error: 'Error',
+				info: 'Info',
+				warning: 'Warning'
+			},
+			nav: {
+				dashboard: 'Dashboard',
+				products: 'Products',
+				reviews: 'Reviews',
+				blogs: 'Blogs',
+				bestSelling: 'Best-selling',
+				discounts: 'Discounts',
+				contacts: 'Consultations',
+				approvals: 'Approvals',
+				users: 'Users',
+				orders: 'Orders',
+				profile: 'Profile'
+			},
+			layout: {
+				title: 'Inoxpran Admin',
+				logout: 'Log out',
+				language: 'Language',
+				langVi: 'Vietnamese',
+				langEn: 'English'
+			},
+			dashboard: {
+				title: 'Dashboard',
+				recentUsers: 'New users',
+				recentProducts: 'New products',
+				latestUsers: 'Latest users',
+				latestProducts: 'Latest products',
+				view: 'View',
+				edit: 'Edit',
+				noUsers: 'No recent users.',
+				noProducts: 'No recent products.',
+				siteSettings: {
+					title: 'Website display settings',
+					description: 'Enable or disable website UI features from one central place.',
+					noFlags: 'No feature flags are available yet.',
+					flagStatusEnabled: 'Current status: enabled.',
+					flagStatusDisabled: 'Current status: disabled.',
+					saveButton: 'Save settings',
+					flags: {
+						showDiscountBadge: {
+							label: 'Show discount badge',
+							description: 'Display discount percentage on product list and product detail pages.'
+						}
+					},
+					errors: {
+						update: 'Failed to update display settings.',
+						noValidFlags: 'No valid feature flags were found to update.'
+					},
+					success: {
+						updated: 'Display settings updated successfully.'
+					}
+				}
+			},
+			auth: {
+				loginTitle: 'Admin sign in',
+				loginDesc: 'Sign in to manage products, orders, and users.',
+				email: 'Email',
+				password: 'Password',
+				loginButton: 'Sign in',
+				noAccount: "Don't have an account?",
+				createAccount: 'Create account',
+				registerTitle: 'Create admin account',
+				registerDesc: 'Register an admin account for approval.',
+				name: 'Full name',
+				phone: 'Phone number',
+				redirecting: 'Redirecting...',
+				redirectingHint: 'Taking you to the approval waiting page.',
+				haveAccount: 'Already have an account?',
+				errors: {
+					missingCredentials: 'Please enter email and password.',
+					loginFailed: 'Sign in failed.',
+					loginFailedWithReason: 'Sign in failed: {reason}',
+					sessionInitFailed: 'Unable to start admin session.',
+					registerMissingFields: 'Please enter full name, email, and password.',
+					registerFailed: 'Registration failed.',
+					registerFailedWithReason: 'Registration failed: {reason}'
+				},
+				success: {
+					login: 'Admin sign-in successful.',
+					registered: 'Account created. Please wait for admin approval to activate.',
+					loggedOut: 'You have signed out of the admin console.'
+				}
+			},
+			pending: {
+				title: 'Pending approval',
+				success: 'Your account has been created successfully.',
+				nextTitle: 'Next step',
+				nextDesc: 'An administrator will review your request.',
+				statusLabel: 'Status',
+				statusValue: 'Pending approval',
+				emailLabel: 'Email',
+				notify: "We'll notify you once the account is approved.",
+				backToLogin: 'Back to sign in',
+				loginHint: 'You can sign in after your account is activated.'
+			},
+			approvals: {
+				approvePrompt: 'Add an approval note (optional)',
+				rejectPrompt: 'Add a rejection reason (optional)',
+				pageTitle: 'Admin approvals',
+				title: 'Admin approvals',
+				lede: 'Approve or reject new admin accounts.',
+				emptyTitle: 'No pending admins',
+				emptyDesc: 'Requests will appear here when available.',
+				name: 'Name',
+				email: 'Email',
+				phone: 'Phone',
+				created: 'Created',
+				roles: 'Roles on approval',
+				rolesHelp:
+					'Admin is selected by default. Add CHAT_MANAGER only for staff who manage chat room history.',
+				actions: 'Actions',
+				approveTitle: 'Approve',
+				approve: 'Approve',
+				rejectTitle: 'Reject',
+				reject: 'Reject',
+				errors: {
+					load: 'Failed to load pending admins.',
+					missingId: 'Admin id is required.',
+					approveFailed: 'Failed to approve admin.',
+					rejectFailed: 'Failed to reject admin.'
+				},
+				success: {
+					approved: 'Admin approved successfully.',
+					rejected: 'Admin rejected successfully.'
+				}
+			},
+			contacts: {
+				pageTitle: 'Consultation requests',
+				title: 'Consultation requests',
+				lede: 'Review contact form submissions and update their status.',
+				summaryLabel: 'Total requests',
+				summaryValue: '{count} contacts',
+				filters: {
+					search: 'Search',
+					searchPlaceholder: 'Name, phone, email, message...',
+					status: 'Status',
+					statusAll: 'All',
+					apply: 'Apply',
+					reset: 'Reset'
+				},
+				emptyTitle: 'No contact requests yet',
+				emptyDesc: 'Contact form submissions will appear here.',
+				status: {
+					new: 'New',
+					processing: 'In progress',
+					contacted: 'Contacted',
+					closed: 'Closed'
+				},
+				fields: {
+					createdAt: 'Submitted',
+					company: 'Company/Project',
+					city: 'City',
+					assignedTo: 'Assigned to',
+					email: 'Email',
+					address: 'Address',
+					interest: 'Project scope',
+					budget: 'Budget',
+					timeline: 'Timeline',
+					preferredContact: 'Preferred contact',
+					message: 'Message',
+					sourcePage: 'Source',
+					status: 'Status',
+					internalNote: 'Internal note',
+					internalNotePlaceholder: 'Leave a note for the team...',
+					assignToMe: 'Assign to me'
+				},
+				actions: {
+					update: 'Update'
+				},
+				bulk: {
+					selectPage: 'Select all on page',
+					selectItem: 'Select contact',
+					selectedCount: 'Selected: {count}',
+					clearSelection: 'Clear selection',
+					deleteSelected: 'Delete selected',
+					deleteAllFiltered: 'Delete all filtered',
+					confirmDeleteSelected: 'Delete {count} selected contacts?',
+					confirmDeleteAll: 'Delete all contacts matching the current filters?'
+				},
+				pagination: {
+					prev: 'Previous',
+					next: 'Next',
+					page: 'Page {page} / {total}'
+				},
+				errors: {
+					missingId: 'Contact id is required.',
+					updateFailed: 'Unable to update contact.',
+					updateFailedWithReason: 'Unable to update contact: {reason}',
+					deleteSelectedMissing: 'Please select at least one contact to delete.',
+					deleteFailed: 'Failed to delete contacts.',
+					deleteAllFailed: 'Failed to delete all filtered contacts.'
+				},
+				success: {
+					updated: 'Contact updated.',
+					deletedSelected: 'Selected contacts deleted.',
+					deletedAll: 'All filtered contacts deleted.'
+				}
+			},
+			chatRooms: {
+				pageTitle: 'Chat rooms',
+				detailTitle: 'Chat room console',
+				lede: 'Room history for managers. Review customer presence and which consultant handled each room from the live console.',
+				backToList: 'Back to chat rooms',
+				status: {
+					open: 'Open',
+					handoff: 'Live support',
+					closed: 'Closed'
+				},
+				presence: {
+					active: 'Customer active',
+					left: 'Customer left',
+					leftWebsite: 'Customer left website'
+				},
+				filters: {
+					all: 'All',
+					mine: 'Mine',
+					unreadOnly: 'Unread only',
+					onlyMine: 'Only mine',
+					unreadOnlyCheckbox: 'Unread only',
+					search: 'Search',
+					searchPlaceholder: 'Session, phone, consultant, source path...',
+					status: 'Status',
+					limit: 'Page size',
+					apply: 'Apply'
+				},
+				table: {
+					roomCode: 'Room code',
+					sessionId: 'Session ID',
+					status: 'Status',
+					consultant: 'Consultant',
+					customerPresence: 'Customer presence',
+					latestLead: 'Latest lead',
+					latestMessage: 'Latest message',
+					lastActive: 'Last active',
+					assignedToMe: 'Assigned to me',
+					noRooms: 'No chat rooms found.',
+					detail: 'Detail',
+					copied: 'Copied'
+				},
+				pagination: {
+					page: 'Page',
+					previous: 'Previous',
+					next: 'Next'
+				},
+				errors: {
+					listLoad: 'Failed to load chat rooms.',
+					roomLoad: 'Failed to load chat room state.',
+					roomUpdate: 'Failed to update chat room.',
+					notFound: 'Chat room not found.',
+					realtimeInterrupted: 'Realtime connection was interrupted. Reconnecting automatically.'
+				},
+				sla: {
+					warning: 'Warning',
+					critical: 'Critical',
+					waiting: 'Waiting {time}',
+					active: 'Active {time}',
+					open: 'Open {time}',
+					closed: 'Closed'
+				},
+				detail: {
+					inboxTitle: 'Conversation list',
+					inboxDesc: 'Switch between live rooms from a chat-style sidebar.',
+					inboxSearchPlaceholder: 'Search by room code, phone or message...',
+					inboxAll: 'All',
+					inboxMine: 'Mine',
+					inboxUnread: 'Unread',
+					inboxEmpty: 'No matching chat rooms.',
+					inboxShowMore: 'Show 10 more rooms',
+					inboxOpenRoom: 'Open room',
+					inboxCurrentRoom: 'Current room',
+					roomCode: 'Room code',
+					copyRoomCode: 'Copy room code',
+					copySessionId: 'Copy session ID',
+					copyCodeShort: 'Copy code',
+					copySessionShort: 'Copy session',
+					claimRoom: 'Claim room',
+					releaseRoom: 'Release room',
+					closeRoom: 'Close room',
+					reopenRoom: 'Reopen room',
+					liveConversation: 'Live conversation',
+					liveConversationDesc:
+						'Send consultant replies directly from this console. Messages appear in the customer chat box immediately.',
+					moreActions: 'Quick actions',
+					settings: 'Conversation settings',
+					customer: 'Customer',
+					replyingAs: 'Replying as',
+					noConsultantAssigned: 'No consultant assigned',
+					composerHelp: 'Press Enter for a new line, Ctrl+Enter to send immediately.',
+					messagesReturned: 'Messages returned',
+					unreadCustomerMessages: 'Unread customer messages',
+					noMessages: 'No messages found.',
+					cannedReplies: 'Canned replies',
+					roomClosedHint: 'Room is closed. Reopen it to continue.',
+					otherConsultantBadge: 'Consultant active',
+					otherConsultantHint: 'Another consultant is currently handling this room.',
+					autoClaimHint:
+						'The first message you send will claim the room for your account automatically.',
+					ownedHint: 'You are currently handling this room.',
+					composerPlaceholder: 'Type consultant reply. Press Ctrl+Enter to send.',
+					typingOnState: 'Typing indicator is on.',
+					typingOffState: 'Typing indicator is idle.',
+					typingOn: 'Typing on',
+					typingOff: 'Typing off',
+					sendMessage: 'Send message',
+					roomSummary: 'Room summary',
+					roomHealth: 'Room health',
+					currentConsultant: 'Current consultant',
+					customerPresence: 'Customer presence',
+					handoffRequested: 'Handoff requested',
+					claimedAt: 'Claimed at',
+					lastConsultantReply: 'Last consultant reply',
+					sourcePath: 'Source path',
+					latestLead: 'Latest lead',
+					transferRoom: 'Transfer room',
+					findConsultant: 'Find consultant',
+					findConsultantPlaceholder: 'Type email or consultant name',
+					findConsultantHelp:
+						'Use arrow keys to move through consultants and press Enter to pick one.',
+					noConsultantAvailable: 'No consultant available.',
+					consultantTyping: 'Consultant typing',
+					consultantOnShift: 'On shift',
+					consultantOffShift: 'Off shift',
+					autoAssignOn: 'Auto-assign on',
+					autoAssignOff: 'Auto-assign off'
+				},
+				roles: {
+					consultant: 'Consultant',
+					assistant: 'Agent',
+					system: 'System',
+					user: 'Customer'
+				},
+				success: {
+					roomClaimed: 'Room claimed.',
+					roomReleased: 'Room released.',
+					roomClosed: 'Room closed.',
+					roomReopened: 'Room reopened.',
+					roomTransferred: 'Room transferred.'
+				}
+			},
+			discounts: {
+				confirmDelete: 'Are you sure you want to delete this discount?',
+				title: 'Discounts',
+				createTitle: 'Create discount',
+				code: 'Code',
+				name: 'Name',
+				description: 'Description',
+				type: 'Type',
+				typeFixed: 'Fixed amount',
+				typePercent: 'Percentage',
+				typeFreeShip: 'Free shipping',
+				value: 'Value',
+				maxValue: 'Max value',
+				minOrder: 'Min order value',
+				startDate: 'Start date',
+				endDate: 'End date',
+				maxUses: 'Max uses',
+				maxUsesPerUser: 'Max uses per user',
+				appliesTo: 'Applies to',
+				appliesAll: 'All products',
+				appliesSpecific: 'Specific products',
+				customerAppliesTo: 'Customer eligibility',
+				customerAll: 'All customers',
+				customerSpecific: 'Specific customers',
+				customerIds: 'Customer IDs',
+				customerIdsPlaceholder: 'One ID per line or separated by commas',
+				productIds: 'Product IDs',
+				productIdsPlaceholder: 'One ID per line or separated by commas',
+				active: 'Active',
+				createButton: 'Create discount',
+				status: 'Status',
+				delete: 'Delete',
+				empty: 'No discounts yet.',
+				errors: {
+					load: 'Failed to load discounts.',
+					missingFields: 'Please fill in all discount fields.',
+					missingProductIds: 'Please provide product IDs for specific discounts.',
+					missingCustomerIds: 'Please provide customer IDs for specific discounts.',
+					createFailed: 'Failed to create discount.',
+					deleteMissingId: 'Discount id is required.',
+					deleteFailed: 'Failed to delete discount.'
+				},
+				success: {
+					created: 'Discount created successfully.',
+					deleted: 'Discount deleted.'
+				}
+			},
+			orders: {
+				title: 'Order management',
+				heading: 'Order management',
+				lede: 'Track new orders, review cancellation requests, and update fulfillment status from one workspace.',
+				autoStatusHint:
+					'Some final states are synchronized automatically from shipping and return/cancellation workflows.',
+				updateStatus: 'Update',
+				detailsToggle: 'Details',
+				orderId: 'Order ID',
+				statusLabel: 'Status',
+				noTracking: 'No tracking yet',
+				noAddress: 'No address',
+				noTransitions: 'No next transition',
+				emptyTitle: 'No matching orders',
+				emptyDesc: 'Try adjusting filters or search keywords.',
+				tabs: {
+					label: 'Order filters',
+					all: 'All',
+					waiting: 'Waiting',
+					shipping: 'Shipping',
+					completed: 'Completed',
+					cancelRequested: 'Cancel requests',
+					cancelled: 'Cancelled',
+					returned: 'Return / Refund'
+				},
+				metrics: {
+					total: 'Total orders',
+					waiting: 'Waiting',
+					shipping: 'Shipping',
+					completed: 'Completed',
+					cancelRequested: 'Needs cancel review'
+				},
+				filters: {
+					search: 'Search orders',
+					searchPlaceholder: 'Order ID, receiver, phone, tracking number...',
+					fromDate: 'From date',
+					toDate: 'To date',
+					apply: 'Apply',
+					clear: 'Clear'
+				},
+				bulk: {
+					selectPage: 'Select all on page',
+					selectItem: 'Select order',
+					selectedCount: 'Selected: {count}',
+					clearSelection: 'Clear selection',
+					deleteSelected: 'Delete selected',
+					deleteAllFiltered: 'Delete all filtered',
+					confirmDeleteSelected: 'Delete {count} selected orders?',
+					confirmDeleteAll: 'Delete all orders matching the current filters?'
+				},
+				table: {
+					orderId: 'Order ID',
+					customer: 'Customer',
+					items: 'Items',
+					total: 'Total',
+					placedAt: 'Placed at',
+					tracking: 'Tracking',
+					status: 'Status',
+					details: 'Details'
+				},
+				details: {
+					receiver: 'Receiver',
+					phone: 'Phone',
+					email: 'Email',
+					address: 'Address',
+					paymentStatus: 'Payment',
+					shippingStatus: 'Shipping',
+					codStatus: 'COD',
+					updatedAt: 'Last updated',
+					cancelReason: 'Cancel reason'
+				},
+				pagination: {
+					label: 'Order pagination',
+					prev: 'Previous',
+					next: 'Next',
+					page: 'Page {page}/{total}'
+				},
+				status: {
+					pending: 'Pending',
+					confirmed: 'Waiting for delivery',
+					shipped: 'Shipping',
+					cancelRequested: 'Cancel requested',
+					cancelled: 'Cancelled',
+					delivered: 'Completed',
+					returned: 'Return/Refund'
+				},
+				errors: {
+					load: 'Failed to load orders.',
+					missingFields: 'Please enter order id and status.',
+					invalidStatus: 'Invalid status update.',
+					updateFailed: 'Failed to update order status.',
+					deleteSelectedMissing: 'Please select at least one order to delete.',
+					deleteFailed: 'Failed to delete orders.',
+					deleteAllFailed: 'Failed to delete all filtered orders.'
+				},
+				success: {
+					updated: 'Order status updated.',
+					deletedSelected: 'Selected orders deleted.',
+					deletedAll: 'All filtered orders deleted.'
+				}
+			},
+			users: {
+				title: 'Users',
+				filter: 'Filter',
+				statusAll: 'All statuses',
+				statusLabel: 'Status',
+				name: 'Name',
+				email: 'Email',
+				roles: 'Roles',
+				view: 'View',
+				empty: 'No users found.',
+				back: 'Back to users',
+				detailTitle: 'User detail',
+				updateStatus: 'Update status',
+				save: 'Save',
+				notFound: 'User not found.',
+				status: {
+					active: 'Active',
+					inactive: 'Inactive',
+					blocked: 'Blocked'
+				},
+				errors: {
+					load: 'Failed to load users.',
+					notFound: 'User not found.',
+					updateFailed: 'Failed to update user status.'
+				},
+				success: {
+					updated: 'User status updated.'
+				}
+			},
+			profile: {
+				title: 'Admin profile',
+				heading: 'Profile',
+				name: 'Name',
+				phone: 'Phone',
+				avatarUrl: 'Avatar URL',
+				avatarFile: 'Avatar file',
+				update: 'Update profile',
+				errors: {
+					load: 'Failed to load profile.',
+					updateFailed: 'Profile update failed.'
+				},
+				success: {
+					updated: 'Profile updated successfully.'
+				}
+			},
+			products: {
+				title: 'Products',
+				drafts: 'Drafts',
+				newDraft: 'New draft',
+				name: 'Name',
+				type: 'Type',
+				price: 'Price',
+				admin: 'Admin',
+				created: 'Created',
+				updated: 'Updated',
+				status: 'Status',
+				active: 'Active',
+				published: 'Published',
+				draft: 'Draft',
+				unknown: 'Unknown',
+				edit: 'Edit',
+				empty: 'No products found.',
+				errors: {
+					load: 'Failed to load products.'
+				}
+			},
+			bestSelling: {
+				title: 'Best-selling products',
+				lede: 'Arrange the order of best-selling products on the homepage.',
+				hint: 'Drag products from the right list into this panel to reorder.',
+				listTitle: 'Best-selling list',
+				addTitle: 'Add products',
+				searchPlaceholder: 'Search products...',
+				add: 'Add',
+				remove: 'Remove',
+				moveUp: 'Move up',
+				moveDown: 'Move down',
+				save: 'Save order',
+				empty: 'No best-selling products yet.',
+				noResults: 'No matching products found.',
+				errors: {
+					load: 'Failed to load best-selling products.',
+					save: 'Failed to save best-selling order.'
+				},
+				success: {
+					saved: 'Best-selling order saved.'
+				}
+			},
+			productsDrafts: {
+				title: 'Product drafts',
+				lede: 'Manage drafts that are not published yet.',
+				backToList: 'Back to list',
+				newDraft: 'New draft',
+				name: 'Name',
+				type: 'Type',
+				created: 'Created',
+				creator: 'Created by',
+				status: 'Status',
+				draftStatus: 'Draft',
+				publish: 'Publish',
+				empty: 'No drafts available.',
+				errors: {
+					load: 'Failed to load drafts.',
+					missingId: 'Please select a product to publish.',
+					publishFailed: 'Failed to publish product.'
+				},
+				success: {
+					publish: 'Product published.'
+				}
+			},
+			productsNew: {
+				title: 'New product',
+				back: 'Back to products',
+				heading: 'Create new product',
+				name: 'Product name',
+				type: 'Product type',
+				typeInox: 'Stainless cookware',
+				typeCastIron: 'Cast iron cookware',
+				typeElectronics: 'Home appliances',
+				originalPrice: 'Original price',
+				salePrice: 'Sale price',
+				quantity: 'Quantity',
+				weight: 'Weight',
+				ratingAverage: 'Average rating',
+				ratingCount: 'Rating count',
+				ratingHelp:
+					'Only enter real rating data. If the rating count is 0, the average rating will be stored as 0.',
+				discountLabel: 'Discount',
+				description: 'Description',
+				descriptionPlaceholder: 'Enter product description...',
+				thumb: 'Thumbnail',
+				gallery: 'Detail images',
+				galleryHint: 'Drag & drop or select detail shots that are 300x300px and under 1MB each.',
+				galleryPrompt: 'Drag & drop or click to select files',
+				galleryLimit: 'You can select up to {count} images.',
+				removeImage: 'Remove image',
+				attributes: 'Attributes',
+				manufacturer: 'Manufacturer',
+				model: 'Model',
+				color: 'Color',
+				variantsTitle: 'Variants',
+				colors: 'Colors',
+				colorNamePlaceholder: 'Color name',
+				priceOverride: 'Price override',
+				addColor: 'Add color',
+				colorsEmpty: 'No colors added yet.',
+				sizes: 'Sizes',
+				sizePlaceholder: 'Enter size',
+				addSize: 'Add',
+				sizeEmpty: 'No sizes added yet.',
+				comboTitle: 'Color + size overrides',
+				comboHint: 'Set custom prices for specific color and size combinations.',
+				selectColor: 'Select color',
+				selectSize: 'Select size',
+				addCombo: 'Add combo',
+				comboEmpty: 'No overrides yet.',
+				create: 'Create draft',
+				imageTooLarge: 'Image is too large (max {size}).',
+				imageDimensions: 'Image must be {width}x{height}px.',
+				imageInvalid: 'Invalid image file.',
+				errors: {
+					missingFields: 'Please fill in all required product fields.',
+					duplicateName: 'This product name already exists.',
+					attributesRequired: 'Please enter manufacturer, model, and color.',
+					attributesIncomplete: 'Please complete manufacturer, model, and color.',
+					missingOriginalPrice: 'Please enter the original price.',
+					missingSalePrice: 'Please enter the sale price.',
+					thumbRequired: 'Please select a thumbnail image.',
+					createFailed: 'Failed to create draft.'
+				},
+				success: {
+					created: 'Draft created successfully.'
+				}
+			},
+			productEditor: {
+				title: 'Edit product',
+				lede: 'Update details, pricing, and content.',
+				back: 'Back to products',
+				slug: 'Slug',
+				updated: 'Last updated',
+				sectionBasics: 'Basics',
+				sectionBasicsDesc: 'Name, type, and core info.',
+				productName: 'Product name',
+				productNamePlaceholder: 'Enter product name',
+				productType: 'Product type',
+				sectionPricing: 'Pricing & stock',
+				sectionPricingDesc: 'Manage pricing and inventory.',
+				originalPrice: 'Original price',
+				salePrice: 'Sale price',
+				quantity: 'Quantity',
+				weight: 'Weight',
+				ratingAverage: 'Average rating',
+				ratingCount: 'Rating count',
+				ratingHelp:
+					'Use real rating data only. If the rating count is 0, the average rating will be stored as 0.',
+				weightHelp: 'Unit in grams.',
+				discountLabel: 'Discount',
+				sectionImages: 'Images',
+				sectionImagesDesc: 'Upload a compliant thumbnail.',
+				noImage: 'No image',
+				uploadLabel: 'Upload thumbnail',
+				uploadHelp: 'Size 300x300px, max 1MB.',
+				gallery: 'Detail images',
+				galleryHint: 'Drag & drop or select detail shots that are 300x300px and under 1MB each.',
+				galleryPrompt: 'Drag & drop or click to select files',
+				galleryLimit: 'You can select up to {count} images.',
+				removeImage: 'Remove image',
+				cropped: 'Cropped',
+				sectionDescription: 'Description',
+				sectionDescriptionDesc: 'Update the full description.',
+				descriptionPlaceholder: 'Enter product description...',
+				advancedSummary: 'Advanced options',
+				advancedNote: 'Fill in only if you have extra technical details.',
+				manufacturer: 'Manufacturer',
+				model: 'Model',
+				color: 'Color',
+				variantsTitle: 'Variants',
+				colors: 'Colors',
+				colorNamePlaceholder: 'Color name',
+				priceOverride: 'Price override',
+				addColor: 'Add color',
+				colorsEmpty: 'No colors added yet.',
+				sizes: 'Sizes',
+				sizePlaceholder: 'Enter size',
+				addSize: 'Add',
+				sizeEmpty: 'No sizes added yet.',
+				comboTitle: 'Color + size overrides',
+				comboHint: 'Set custom prices for specific color and size combinations.',
+				selectColor: 'Select color',
+				selectSize: 'Select size',
+				addCombo: 'Add combo',
+				comboEmpty: 'No overrides yet.',
+				save: 'Save changes',
+				saveHint: 'Save to update the product.',
+				preview: 'Preview',
+				stockLabel: 'In stock: {count}',
+				admin: 'Admin',
+				weightLabel: 'Weight',
+				quickActions: 'Quick actions',
+				quickActionsDesc: 'Publish or hide the product.',
+				published: 'Published',
+				publish: 'Publish',
+				unpublished: 'Hidden',
+				unpublish: 'Hide product',
+				delete: 'Delete product',
+				tipsTitle: 'Tips',
+				tip1: 'Use a sharp, properly sized thumbnail.',
+				tip2: 'Update sale price when needed.',
+				tip3: 'Clear descriptions improve conversion.',
+				notFound: 'Product not found.',
+				confirmDelete: 'Are you sure you want to delete this product?',
+				imageTooLarge: 'Image is too large (max {size}).',
+				imageDimensions: 'Image must be {width}x{height}px.',
+				imageInvalid: 'Invalid image file.',
+				errors: {
+					load: 'Product not found.',
+					missingType: 'Please select a product type.',
+					duplicateName: 'Product name already exists.',
+					attributesRequired: 'Please enter manufacturer, model, and color.',
+					attributesIncomplete: 'Please complete manufacturer, model, and color.',
+					updateFailed: 'Failed to update product.',
+					publishFailed: 'Failed to publish product.',
+					unpublishFailed: 'Failed to hide product.',
+					deleteFailed: 'Failed to delete product.'
+				},
+				success: {
+					updated: 'Product updated successfully.',
+					published: 'Product published.',
+					unpublished: 'Product hidden.',
+					deleted: 'Product deleted.'
+				}
+			},
+			blogs: {
+				title: 'Blogs',
+				lede: 'Manage blog articles, publishing status, and reading performance.',
+				newPost: 'Write new post',
+				manageComments: 'Manage comments',
+				filters: {
+					searchPlaceholder: 'Search by title or excerpt...',
+					statusAll: 'All statuses',
+					statusPublished: 'Published',
+					statusDraft: 'Draft',
+					categoryAll: 'All categories',
+					apply: 'Apply'
+				},
+				table: {
+					title: 'Title',
+					category: 'Category',
+					status: 'Status',
+					updated: 'Updated',
+					views: 'Views',
+					readTime: 'Read time',
+					actions: 'Actions'
+				},
+				status: {
+					published: 'Published',
+					draft: 'Draft'
+				},
+				empty: 'No blog posts found.',
+				edit: 'Edit',
+				errors: {
+					load: 'Unable to load blog posts.',
+					missingId: 'Missing blog post id.',
+					publishFailed: 'Failed to publish blog post.',
+					unpublishFailed: 'Failed to move blog post to draft.'
+				},
+				success: {
+					published: 'Blog post published.',
+					unpublished: 'Blog post moved to draft.'
+				}
+			},
+			blogsComments: {
+				title: 'Manage comments',
+				errors: {
+					load: 'Failed to load comments.',
+					missingId: 'Missing comment id.',
+					updateFailed: 'Failed to update comment.',
+					deleteFailed: 'Failed to delete comment.'
+				},
+				success: {
+					approved: 'Comment approved.',
+					rejected: 'Comment hidden.',
+					deleted: 'Comment deleted.'
+				}
+			},
+			productReviews: {
+				pageTitle: 'Product reviews',
+				title: 'Product reviews',
+				lede: 'Approve, add, hide, or delete product reviews before they appear publicly on the website.',
+				summaryLabel: 'Total reviews',
+				create: {
+					title: 'Add historical review',
+					lede: 'Re-enter real customer reviews collected offline or from another channel so product pages can expose complete review schema.',
+					productLookup: 'Product slug / ID',
+					productLookupPlaceholder: 'Example: bep-tu-don-inoxpran-inp6103',
+					productLookupHint:
+						'Use a product slug from the priority list or paste a product ID directly.',
+					authorName: 'Customer name',
+					authorEmail: 'Customer email',
+					rating: 'Rating',
+					status: 'Visibility status',
+					titleField: 'Review title',
+					titlePlaceholder: 'Short summary of the customer feedback',
+					content: 'Review content',
+					contentPlaceholder: 'Enter the real customer review here...',
+					submittedAt: 'Original review date',
+					verifiedPurchase: 'Mark as verified purchase',
+					submit: 'Create review'
+				},
+				targets: {
+					title: 'Products needing review coverage',
+					lede: 'Prioritize products that already have aggregate ratings but still lack a public review object for structured data.',
+					aggregateCount: 'Aggregate count',
+					approvedReviewCount: 'Public reviews',
+					openProduct: 'Open product',
+					empty: 'No priority products need review coverage right now.'
+				},
+				filters: {
+					search: 'Search',
+					searchPlaceholder: 'Product, customer, email, content...',
+					status: 'Status',
+					statusAll: 'All',
+					apply: 'Apply',
+					reset: 'Reset'
+				},
+				status: {
+					pending: 'Pending',
+					approved: 'Approved',
+					rejected: 'Hidden'
+				},
+				fields: {
+					product: 'Product',
+					customer: 'Customer',
+					rating: 'Rating',
+					title: 'Title',
+					content: 'Content',
+					submitted: 'Submitted',
+					reviewed: 'Reviewed',
+					status: 'Status',
+					verified: 'Verified purchase'
+				},
+				actions: {
+					approve: 'Approve',
+					reject: 'Hide',
+					delete: 'Delete'
+				},
+				emptyTitle: 'No reviews found',
+				emptyDesc: 'No reviews match the current filters.',
+				pagination: {
+					prev: 'Previous',
+					next: 'Next',
+					page: 'Page {page} / {total}'
+				},
+				errors: {
+					load: 'Failed to load product reviews.',
+					missingId: 'Missing review id.',
+					createMissingRequired:
+						'Please provide product, customer name, rating, and review content.',
+					createFailed: 'Failed to create product review.',
+					updateFailed: 'Failed to update review status.',
+					deleteFailed: 'Failed to delete review.'
+				},
+				success: {
+					created: 'Review created successfully.',
+					approved: 'Review approved.',
+					rejected: 'Review hidden.',
+					deleted: 'Review deleted.'
+				}
+			},
+			blogEditor: {
+				createTitle: 'Write new post',
+				editTitle: 'Edit blog post',
+				lede: 'Create blog content with all tools needed for blog list and detail pages.',
+				back: 'Back to blog list',
+				basicInfo: 'Basic information',
+				title: 'Post title',
+				slug: 'URL slug',
+				regenerateSlug: 'Regenerate slug',
+				excerpt: 'Short excerpt',
+				category: 'Category',
+				authorName: 'Author name',
+				authorAvatar: 'Avatar letter',
+				coverImage: 'Cover image',
+				coverHint: 'Recommended landscape image (e.g. 1200x675), max 5MB.',
+				replaceImage: 'Replace image',
+				cropZoom: 'Zoom',
+				cropApply: 'Apply crop',
+				cropHint: 'Drag the image to adjust the visible area, then save to apply the crop.',
+				cropPreviewAlt: 'Crop preview',
+				closeLabel: 'Close',
+				content: 'Article content',
+				contentHint: 'Use toolbar actions to format content, insert images, and links.',
+				tags: 'Tags',
+				tagPlaceholder: 'Type tag and press Enter',
+				tagsHint: 'Tags are shown in post details and used for filtering.',
+				seo: 'SEO',
+				seoTitle: 'SEO title',
+				seoDescription: 'SEO description',
+				meta: 'Display settings',
+				readTime: 'Read time (minutes)',
+				commentsCount: 'Comments count',
+				views: 'Initial views',
+				status: 'Status',
+				statusDraft: 'Draft',
+				statusPublished: 'Published',
+				sendNewsletterLabel: 'Send newsletter to subscribers',
+				sendNewsletterHint: 'Send an email notification when publishing.',
+				relatedPosts: 'Related posts',
+				relatedHint: 'Select up to 3 posts to show in the detail page.',
+				relatedEmpty: 'No posts available for linking.',
+				preview: 'Quick preview',
+				previewEmpty: 'Preview will appear after entering title and excerpt.',
+				wordCount: '{count} words',
+				autoReadTime: '~{minutes} min read',
+				create: 'Create post',
+				update: 'Save changes',
+				publish: 'Publish',
+				unpublish: 'Move to draft',
+				delete: 'Delete post',
+				confirmDelete: 'Are you sure you want to delete this post?',
+				errors: {
+					load: 'Unable to load blog post data.',
+					missingRequired: 'Please enter title, excerpt, content, and cover image.',
+					createFailed: 'Failed to create blog post.',
+					updateFailed: 'Failed to update blog post.',
+					publishFailed: 'Failed to publish blog post.',
+					unpublishFailed: 'Failed to move blog post to draft.',
+					deleteFailed: 'Failed to delete blog post.',
+					imageTooLarge: 'Image is too large (max {size}).',
+					imageInvalid: 'Invalid image file.'
+				},
+				success: {
+					created: 'Blog post created.',
+					updated: 'Blog post updated.',
+					published: 'Blog post published.',
+					unpublished: 'Blog post moved to draft.',
+					deleted: 'Blog post deleted.'
+				}
+			},
+			editor: {
+				placeholder: 'Write something...',
+				imageUploadFailed: 'Image upload failed.',
+				uploadMissingUrl: 'Upload URL is missing.',
+				onlyImagesAllowed: 'Only image files are allowed.',
+				imageAdded: 'Image added.',
+				linkUrlRequired: 'Please enter a URL.',
+				linkAdded: 'Link added.',
+				bold: 'Bold',
+				italic: 'Italic',
+				underline: 'Underline',
+				strike: 'Strikethrough',
+				bulletList: 'Bulleted list',
+				numberedList: 'Numbered list',
+				alignLeft: 'Align left',
+				alignCenter: 'Center',
+				alignRight: 'Align right',
+				textColor: 'Text color',
+				insertImage: 'Insert image',
+				insertLink: 'Insert link',
+				linkUrlPlaceholder: 'Enter URL',
+				linkTextPlaceholder: 'Link text',
+				add: 'Add',
+				cancel: 'Cancel',
+				clearFormatting: 'Clear formatting'
+			}
+		}
+	}
+};

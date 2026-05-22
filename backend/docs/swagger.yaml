@@ -1,0 +1,1712 @@
+openapi: 3.0.3
+info:
+  title: Inoxpran Backend API
+  version: 1.0.0
+  description: API documentation for the backend routes under /v1/api.
+servers:
+  - url: http://localhost:3056/v1/api
+security:
+  - ApiKeyAuth: []
+tags:
+  - name: User
+  - name: Admin
+  - name: Product
+  - name: Cart
+  - name: Shipping
+  - name: Checkout
+  - name: Discount
+  - name: Inventory
+paths:
+  /user/signup:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    post:
+      tags: [User]
+      summary: User signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthSignupRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /user/login:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    post:
+      tags: [User]
+      summary: User login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /user/logout:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [User]
+      summary: User logout
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /user/refresh-token:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/RefreshTokenHeader"
+    post:
+      tags: [User]
+      summary: User refresh token
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          RefreshTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /user/profile:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [User]
+      summary: Get user profile
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    patch:
+      tags: [User]
+      summary: Update user profile
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/UserProfileUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /admin/signup:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    post:
+      tags: [Admin]
+      summary: Admin signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthSignupRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /admin/login:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    post:
+      tags: [Admin]
+      summary: Admin login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthLoginRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /admin/logout:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Admin]
+      summary: Admin logout
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /admin/refresh-token:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/RefreshTokenHeader"
+    post:
+      tags: [Admin]
+      summary: Admin refresh token
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          RefreshTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /admin/profile:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Admin]
+      summary: Get admin profile
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    patch:
+      tags: [Admin]
+      summary: Update admin profile
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/AdminProfileUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /admin/users:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Admin]
+      summary: List users
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Status"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /admin/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Admin]
+      summary: Get user by id
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /admin/users/{userId}/status:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    patch:
+      tags: [Admin]
+      summary: Update user status
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/UserId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatusUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /product/search/{keySearch}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    get:
+      tags: [Product]
+      summary: Search products
+      parameters:
+        - name: keySearch
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /product:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    get:
+      tags: [Product]
+      summary: List products
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Sort"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    post:
+      tags: [Product]
+      summary: Create product
+      description: Admin system only.
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ClientIdHeader"
+        - $ref: "#/components/parameters/AuthorizationHeader"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ProductCreateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /product/{productId}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    get:
+      tags: [Product]
+      summary: Get product by id
+      parameters:
+        - $ref: "#/components/parameters/ProductId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    patch:
+      tags: [Product]
+      summary: Update product
+      description: Admin system only.
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ClientIdHeader"
+        - $ref: "#/components/parameters/AuthorizationHeader"
+        - $ref: "#/components/parameters/ProductId"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ProductUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /product/publish/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Product]
+      summary: Publish product
+      description: Admin system only.
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /product/unPublish/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Product]
+      summary: Unpublish product
+      description: Admin system only.
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /product/drafts/all:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Product]
+      summary: List draft products by shop
+      description: Admin system only.
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /product/published/all:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Product]
+      summary: List published products by shop
+      description: Admin system only.
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /cart:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Cart]
+      summary: Get user cart
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    post:
+      tags: [Cart]
+      summary: Add to cart
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartAddRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    delete:
+      tags: [Cart]
+      summary: Delete cart item
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartDeleteRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /cart/update:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Cart]
+      summary: Update cart item quantity
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CartUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /shipping:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Shipping]
+      summary: Create shipment
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShipmentCreateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /shipping/order/{orderId}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Shipping]
+      summary: Get shipments by order
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+        - name: shopId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /shipping/{shipmentId}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Shipping]
+      summary: Get shipment by id
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ShipmentId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /shipping/webhook/ghtk:
+    post:
+      tags: [Shipping]
+      summary: GHTK webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShipmentWebhookRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /inventory:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Inventory]
+      summary: Add stock to inventory
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InventoryAddStockRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /checkout/review:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Checkout]
+      summary: Review checkout
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutReviewRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /checkout/orders:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Checkout]
+      summary: Create order (COD)
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckoutOrderRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    get:
+      tags: [Checkout]
+      summary: Get orders by user
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Sort"
+        - $ref: "#/components/parameters/Status"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /checkout/orders/{orderId}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    get:
+      tags: [Checkout]
+      summary: Get order by id
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /checkout/orders/{orderId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Checkout]
+      summary: Cancel order (creates cancel request if confirmed)
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelOrderRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /checkout/admin/orders/{orderId}/status:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    patch:
+      tags: [Checkout]
+      summary: Update order status by admin
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/OrderId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderStatusUpdateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /discount/amount:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    post:
+      tags: [Discount]
+      summary: Get discount amount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountAmountRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /discount/list_product_code:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+    get:
+      tags: [Discount]
+      summary: List discount products
+      parameters:
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: shopId
+          in: query
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Page"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /discount/usage:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Discount]
+      summary: Record discount usage
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountUsageRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /discount/cancel:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Discount]
+      summary: Cancel discount usage
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountCancelRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /discount/{codeId}:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    delete:
+      tags: [Discount]
+      summary: Delete discount code
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - name: codeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountDeleteRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+  /discount:
+    parameters:
+      - $ref: "#/components/parameters/ApiKeyHeader"
+      - $ref: "#/components/parameters/ClientIdHeader"
+      - $ref: "#/components/parameters/AuthorizationHeader"
+    post:
+      tags: [Discount]
+      summary: Create discount code
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscountCreateRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+    get:
+      tags: [Discount]
+      summary: List discount codes by shop
+      security:
+        - ApiKeyAuth: []
+          ClientIdAuth: []
+          AccessTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/Page"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+    ClientIdAuth:
+      type: apiKey
+      in: header
+      name: x-client-id
+    AccessTokenAuth:
+      type: apiKey
+      in: header
+      name: authorization
+    RefreshTokenAuth:
+      type: apiKey
+      in: header
+      name: x-rtoken-id
+  parameters:
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+    ShipmentId:
+      name: shipmentId
+      in: path
+      required: true
+      schema:
+        type: string
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+    UserIdQuery:
+      name: userId
+      in: query
+      required: true
+      schema:
+        type: string
+    ApiKeyHeader:
+      name: x-api-key
+      in: header
+      required: true
+      schema:
+        type: string
+    ClientIdHeader:
+      name: x-client-id
+      in: header
+      required: true
+      schema:
+        type: string
+    AuthorizationHeader:
+      name: authorization
+      in: header
+      required: true
+      schema:
+        type: string
+      description: Bearer access token
+    RefreshTokenHeader:
+      name: x-rtoken-id
+      in: header
+      required: true
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+    Page:
+      name: page
+      in: query
+      required: false
+      schema:
+        type: integer
+    Sort:
+      name: sort
+      in: query
+      required: false
+      schema:
+        type: string
+    Status:
+      name: status
+      in: query
+      required: false
+      schema:
+        type: string
+  schemas:
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        status:
+          type: integer
+        metadata:
+          type: object
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        code:
+          type: integer
+        stack:
+          type: string
+        message:
+          type: string
+    AuthSignupRequest:
+      type: object
+      required: [name, email, password]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        password:
+          type: string
+        phone:
+          type: string
+      example:
+        name: Demo User
+        email: tuanhoang1705@gmail.com
+        password: "123456"
+        phone: "0900000000"
+    AuthLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+      example:
+        email: tuanhoang1705@gmail.com
+        password: "abc123"
+    UserProfileUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        avatar:
+          type: string
+          format: binary
+        addresses:
+          type: array
+          items:
+            type: object
+      example:
+        name: Demo User
+        phone: "0900000000"
+        addresses:
+          - label: Home
+            line1: 123 Main St
+            city: HCM
+    AdminProfileUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        avatar:
+          type: string
+          format: binary
+      example:
+        name: Admin
+        phone: "0900000000"
+    ProductCreateRequest:
+      type: object
+      required: [product_name, product_description, product_price, product_type, product_quantity]
+      properties:
+        product_name:
+          type: string
+        product_description:
+          type: string
+        product_price:
+          type: number
+        product_type:
+          type: string
+          enum: [Electronics, Inoxs, castIrons]
+        product_quantity:
+          type: integer
+        product_ratingsAverage:
+          type: number
+          minimum: 0
+          maximum: 5
+        product_ratingsCount:
+          type: integer
+          minimum: 0
+        product_weight:
+          type: number
+          description: Weight in grams, default 1000 if omitted.
+        product_thumb:
+          type: string
+          format: binary
+        product_attributes:
+          type: object
+          description: When using multipart/form-data, send JSON string; server will parse to object.
+        product_variations:
+          type: array
+          description: When using multipart/form-data, send JSON array string; server will parse to array.
+          items:
+            type: object
+      example:
+        product_name: Sample Product
+        product_description: Short description
+        product_price: 120000
+        product_type: Electronics
+        product_quantity: 5
+        product_ratingsAverage: 4.8
+        product_ratingsCount: 12
+        product_weight: 1000
+        product_attributes:
+          brand: ACME
+          model: X1
+        product_variations:
+          - sku: ACME-X1-BLK
+            price: 120000
+            quantity: 10
+            attributes:
+              color: Black
+              storage: 128GB
+    ProductUpdateRequest:
+      type: object
+      properties:
+        product_name:
+          type: string
+        product_description:
+          type: string
+        product_price:
+          type: number
+        product_quantity:
+          type: integer
+        product_ratingsAverage:
+          type: number
+          minimum: 0
+          maximum: 5
+        product_ratingsCount:
+          type: integer
+          minimum: 0
+        product_weight:
+          type: number
+          description: Weight in grams, default 1000 if omitted.
+        product_thumb:
+          type: string
+          format: binary
+        product_attributes:
+          type: object
+          description: When using multipart/form-data, send JSON string; server will parse to object.
+        product_variations:
+          type: array
+          description: When using multipart/form-data, send JSON array string; server will parse to array.
+          items:
+            type: object
+      example:
+        product_name: Sample Product v2
+        product_description: Updated description
+        product_price: 110000
+        product_quantity: 4
+        product_ratingsAverage: 4.9
+        product_ratingsCount: 24
+        product_weight: 900
+        product_attributes:
+          brand: ACME
+          model: X2
+        product_variations:
+          - sku: ACME-X2-BLK
+            price: 110000
+            quantity: 8
+            attributes:
+              color: Black
+              storage: 256GB
+    CartAddRequest:
+      type: object
+      required: [product]
+      properties:
+        product:
+          type: object
+          required: [productId, quantity]
+          properties:
+            productId:
+              type: string
+            quantity:
+              type: integer
+            shopId:
+              type: string
+      example:
+        product:
+          productId: 64fae19a75bcc634a753976
+          quantity: 2
+          shopId: 64fae19a75bcc634a753970
+    CartUpdateRequest:
+      type: object
+      required: [shop_order_ids]
+      properties:
+        shop_order_ids:
+          type: array
+          items:
+            type: object
+            properties:
+              shopId:
+                type: string
+              item_products:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    productId:
+                      type: string
+                    quantity:
+                      type: integer
+                    old_quantity:
+                      type: integer
+                    price:
+                      type: number
+      example:
+        shop_order_ids:
+          - shopId: 64fae19a75bcc634a753970
+            item_products:
+              - productId: 64fae19a75bcc634a753976
+                quantity: 2
+                old_quantity: 1
+                price: 200
+    CartDeleteRequest:
+      type: object
+      required: [productId]
+      properties:
+        productId:
+          type: string
+        reason:
+          type: string
+      example:
+        productId: 64fae19a75bcc634a753976
+        reason: No longer needed
+    InventoryAddStockRequest:
+      type: object
+      required: [stock, productId, shopId]
+      properties:
+        stock:
+          type: integer
+        productId:
+          type: string
+        shopId:
+          type: string
+        location:
+          type: string
+      example:
+        stock: 20
+        productId: 64fae19a75bcc634a753976
+        shopId: 64fae19a75bcc634a753970
+        location: warehouse-1
+    CheckoutReviewRequest:
+      type: object
+      required: [cartId, shop_order_ids]
+      properties:
+        cartId:
+          type: string
+        shop_order_ids:
+          type: array
+          items:
+            type: object
+            properties:
+              shopId:
+                type: string
+              shop_discounts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    shop_id:
+                      type: string
+                    discountId:
+                      type: string
+                    codeId:
+                      type: string
+              item_products:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    price:
+                      type: number
+                    quantity:
+                      type: integer
+                    productId:
+                      type: string
+      example:
+        cartId: 6960a0025eba4d412db23456
+        shop_order_ids:
+          - shopId: 694fae19a75bcc634a753976
+            shop_discounts:
+              - shop_id: 694fae19a75bcc634a753976
+                discountId: 69646365fdf7ff6dea03a69d
+                codeId: NY2026-P3
+            item_products:
+              - price: 3000000
+                quantity: 2
+                productId: 69646240fdf7ff6dea03a675
+          - shopId: 694fae19a75bcc634a753976
+            shop_discounts: []
+            item_products:
+              - price: 200
+                quantity: 2
+                productId: 695b55ea21f0097d56b31d43
+    CheckoutOrderRequest:
+      type: object
+      required: [cartId, shop_order_ids, user_address]
+      properties:
+        cartId:
+          type: string
+        shop_order_ids:
+          type: array
+          items:
+            type: object
+            properties:
+              shopId:
+                type: string
+              shop_discounts:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    shop_id:
+                      type: string
+                    discountId:
+                      type: string
+                    codeId:
+                      type: string
+              item_products:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    price:
+                      type: number
+                    quantity:
+                      type: integer
+                    productId:
+                      type: string
+        user_address:
+          type: object
+        user_payment:
+          type: object
+      example:
+        cartId: 6960a0025eba4d412db23456
+        shop_order_ids:
+          - shopId: 694fae19a75bcc634a753976
+            shop_discounts: []
+            item_products:
+              - price: 3000000
+                quantity: 1
+                productId: 69646240fdf7ff6dea03a675
+        user_address:
+          name: Demo User
+          phone: "0900000000"
+          address: 123 Main St
+          ward: Ward 1
+          district: District 1
+          province: HCM
+        user_payment:
+          method: COD
+          status: pending
+          shipping_provider: GHTK
+    ShipmentCreateRequest:
+      type: object
+      required: [orderId, pickup]
+      properties:
+        orderId:
+          type: string
+        shopId:
+          type: string
+        provider:
+          type: string
+          example: GHTK
+        service:
+          type: string
+          example: road
+        transport:
+          type: string
+          example: road
+        deliver_option:
+          type: string
+          example: none
+        note:
+          type: string
+        pickup:
+          type: object
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+            address:
+              type: string
+            ward:
+              type: string
+            district:
+              type: string
+            province:
+              type: string
+        package:
+          type: object
+          properties:
+            weight:
+              type: number
+        cod_amount:
+          type: number
+      example:
+        orderId: 6960a0025eba4d412db23456
+        shopId: 694fae19a75bcc634a753976
+        provider: GHTK
+        transport: road
+        deliver_option: none
+        note: Giao trong gio hanh chinh
+        pickup:
+          name: Shop Demo
+          phone: "0900000000"
+          address: 123 Pick St
+          ward: Ward 1
+          district: District 1
+          province: HCM
+        package:
+          weight: 1000
+        cod_amount: 3000000
+    ShipmentWebhookRequest:
+      type: object
+      properties:
+        label_id:
+          type: string
+        tracking_number:
+          type: string
+        status_id:
+          type: string
+        status:
+          type: string
+      example:
+        label_id: S123456789
+        status_id: "3"
+    CancelOrderRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      example:
+        reason: Changed my mind
+    OrderStatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, shipped, cancel_requested, cancelled, delivered]
+      example:
+        status: confirmed
+    DiscountAmountRequest:
+      type: object
+      required: [codeId, shopId, products]
+      properties:
+        codeId:
+          type: string
+        userId:
+          type: string
+        shopId:
+          type: string
+        products:
+          type: array
+          items:
+            type: object
+            properties:
+              price:
+                type: number
+              quantity:
+                type: integer
+              productId:
+                type: string
+      example:
+        codeId: NY2026-P3
+        userId: 507f1f77bcf86cd799439011
+        shopId: 694fae19a75bcc634a753976
+        products:
+          - price: 3000000
+            quantity: 2
+            productId: 69646240fdf7ff6dea03a675
+    DiscountCreateRequest:
+      type: object
+      required: [code, start_date, end_date, type, value, applies_to]
+      properties:
+        code:
+          type: string
+        start_date:
+          type: string
+        end_date:
+          type: string
+        is_active:
+          type: boolean
+        shopId:
+          type: string
+        min_order_value:
+          type: number
+        product_ids:
+          type: array
+          items:
+            type: string
+        applies_to:
+          type: string
+          enum: [all, specific]
+        name_discount:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+        value:
+          type: number
+        max_value:
+          type: number
+        max_uses:
+          type: integer
+        max_uses_per_user:
+          type: integer
+      example:
+        code: NY2026-P3
+        start_date: "2026-01-01T00:00:00.000Z"
+        end_date: "2026-12-31T23:59:59.000Z"
+        is_active: true
+        shopId: 694fae19a75bcc634a753976
+        min_order_value: 100000
+        product_ids:
+          - 69646240fdf7ff6dea03a675
+        applies_to: all
+        name_discount: New Year Sale
+        description: NY promotion
+        type: fixed_amount
+        value: 500000
+        max_value: 1000000
+        max_uses: 100
+        max_uses_per_user: 1
+    DiscountUsageRequest:
+      type: object
+      required: [discountId, shopId]
+      properties:
+        discountId:
+          type: string
+        shopId:
+          type: string
+      example:
+        discountId: 69646365fdf7ff6dea03a69d
+        shopId: 694fae19a75bcc634a753976
+    DiscountCancelRequest:
+      type: object
+      required: [codeId, shopId]
+      properties:
+        codeId:
+          type: string
+        shopId:
+          type: string
+      example:
+        codeId: NY2026-P3
+        shopId: 694fae19a75bcc634a753976
+    DiscountDeleteRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      example:
+        reason: Expired
+    StatusUpdateRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [active, inactive, blocked]
+      example:
+        status: active

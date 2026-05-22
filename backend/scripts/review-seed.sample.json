@@ -1,0 +1,23 @@
+[
+  {
+    "productLookup": "bep-tu-don-inoxpran-inp6103",
+    "authorName": "Nguyen Thi Lan",
+    "authorEmail": "lan@example.com",
+    "rating": 5,
+    "title": "Dung on dinh, nau nhanh",
+    "content": "Bep len nhiet nhanh, de lau va khong chiem nhieu dien tich. Minh dung hang ngay cho gia dinh nho.",
+    "verifiedPurchase": true,
+    "status": "approved",
+    "submittedAt": "2026-03-01"
+  },
+  {
+    "productLookup": "noi-com-dien-da-nang-giam-duong-inoxpran-inp6003",
+    "authorName": "Tran Minh Thu",
+    "rating": 4,
+    "title": "Tien cho nha co nguoi an kieng",
+    "content": "Noi nau deu, de thao ve sinh. Chuc nang giam duong phu hop cho gia dinh minh.",
+    "verifiedPurchase": false,
+    "status": "approved",
+    "submittedAt": "2026-03-02"
+  }
+]

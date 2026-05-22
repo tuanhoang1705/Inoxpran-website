@@ -1,0 +1,53 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Env & secrets
+# .env
+# .env.*
+# !.env.example
+credentials/file.json
+
+# Logs
+logs/
+*.log
+*.log.*
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage & tests
+coverage/
+.nyc_output/
+
+# Build artifacts (if any)
+dist/
+build/
+.tmp/
+.cache/
+
+# Runtime data
+*.sqlite
+tmp/
+temp/
+uploads/
+public/uploads/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# SvelteKit / Vite (frontend, if in monorepo)
+.svelte-kit/
+.vite/
+vite.config.ts.timestamp-*

@@ -1,0 +1,52 @@
+{
+  "name": "inoxpran",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "nodemon ./server.js",
+    "start": "node ./server.js",
+    "test": "vitest run",
+    "migrate:product-ratings": "node ./scripts/migrate-product-ratings.js",
+    "seed:product-reviews": "node ./scripts/seed-product-reviews.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.922.0",
+    "axios": "^1.13.1",
+    "bcrypt": "^6.0.0",
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.8.0",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "crypto": "^1.0.1",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-validator": "^7.3.0",
+    "firebase-admin": "^13.5.0",
+    "helmet": "^8.1.0",
+    "image-size": "^1.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
+    "mailtrap": "^4.4.0",
+    "mongoose": "^8.19.2",
+    "morgan": "^1.10.1",
+    "multer": "^2.0.2",
+    "nodemailer": "^7.0.13",
+    "rate-limiter-flexible": "^8.1.0",
+    "redis": "^5.10.0",
+    "sanitize-html": "^2.17.0",
+    "sharp": "^0.34.5",
+    "slugify": "^1.6.6",
+    "stripe": "^19.2.0",
+    "swagger-ui-express": "^5.0.1",
+    "web-push": "^3.6.7",
+    "yamljs": "^0.3.0"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0",
+    "eslint": "^9.39.0",
+    "nodemon": "^3.1.10",
+    "prettier": "^3.6.2",
+    "supertest": "^7.1.4",
+    "vitest": "^4.0.6"
+  }
+}

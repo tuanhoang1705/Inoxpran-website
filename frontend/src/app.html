@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="%html.lang%">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<link rel="preload" href="/vendor/bootstrap.min.css" as="style" />
+		<link
+			rel="stylesheet"
+			href="/vendor/bootstrap.min.css"
+			media="print"
+			onload="this.media='all'"
+		/>
+		<noscript><link rel="stylesheet" href="/vendor/bootstrap.min.css" /></noscript>
+		<link rel="dns-prefetch" href="//firebasestorage.googleapis.com" />
+		<link rel="preconnect" href="https://firebasestorage.googleapis.com" crossorigin />
+		<link rel="dns-prefetch" href="//fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="dns-prefetch" href="//fonts.gstatic.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link rel="dns-prefetch" href="//cdn.jsdelivr.net" />
+		<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+
+		%sveltekit.head%
+
+		<link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=2" />
+		<link rel="icon" type="image/png" sizes="48x48" href="/icons/favicon-48x48.png" />
+		<link rel="icon" type="image/png" sizes="96x96" href="/icons/favicon-96x96.png" />
+		<link rel="apple-touch-icon" sizes="144x144" href="/icons/apple-icon-144x144.png" />
+		<link rel="manifest" href="/site.webmanifest" />
+
+		<!-- Non-blocking Google Font -->
+		<link
+			href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap"
+			rel="stylesheet"
+			media="print"
+			onload="this.media = 'all'"
+		/>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap"
+			rel="stylesheet"
+			media="print"
+			onload="this.media = 'all'"
+		/>
+		<noscript>
+			<link
+				href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap"
+				rel="stylesheet"
+			/>
+			<link
+				href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap"
+				rel="stylesheet"
+			/>
+		</noscript>
+	</head>
+
+	<body class="project-inp" data-sveltekit-preload-data="hover" data-sveltekit-reload>
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>
