@@ -10,11 +10,12 @@
 		{ value: 'CastIrons', label: $t('admin.productsNew.typeCastIron') },
 		{ value: 'Electronics', label: $t('admin.productsNew.typeElectronics') }
 	]);
-	const MAX_IMAGE_BYTES = 1024 * 1024;
-	const GALLERY_REQUIRED_WIDTH = 300;
-	const GALLERY_REQUIRED_HEIGHT = 300;
-	const REQUIRED_WIDTH = 300;
-	const REQUIRED_HEIGHT = 300;
+	const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+	const GALLERY_MAX_WIDTH = 1920;
+	const GALLERY_MAX_HEIGHT = 1920;
+	const MAX_IMAGE_WIDTH = 1920;
+	const MAX_IMAGE_HEIGHT = 1920;
+	const IMAGE_SIZE_LABEL = '5MB';
 	const MAX_GALLERY_FILES = 7;
 	const computeDiscount = (original, sale) => {
 		const originalValue = Number(original);
@@ -36,7 +37,8 @@
 	let thumbFileName = $state('');
 	let thumbCropState = $state(null);
 	let galleryItems = $state([]);
-	let galleryInput;
+	let thumbInput = $state(null);
+	let galleryInput = $state(null);
 	let isGalleryDragActive = $state(false);
 	let galleryPreviewUrls = $derived(
 		galleryItems.map((item) => item.croppedUrl || item.previewUrl).filter(Boolean)
@@ -250,6 +252,11 @@
 	const reportGalleryError = (message, input) =>
 		reportFileError(message, input, (value) => (galleryError = value));
 
+	const openFileInput = (input) => {
+		if (!input || input.disabled) return;
+		input.click();
+	};
+
 	const clearGalleryItems = () => {
 		galleryItems.forEach((item) => {
 			if (item?.previewUrl && String(item.previewUrl).startsWith('blob:')) {
@@ -295,17 +302,21 @@
 		galleryInput.files = dt.files;
 	};
 
-	const validateImageFile = async (file) => {
+	const validateImageFile = async (
+		file,
+		maxWidth = MAX_IMAGE_WIDTH,
+		maxHeight = MAX_IMAGE_HEIGHT
+	) => {
 		if (!file) return null;
 		if (file.size > MAX_IMAGE_BYTES) {
-			return $t('admin.productsNew.imageTooLarge', { size: '1MB' });
+			return $t('admin.productsNew.imageTooLarge', { size: IMAGE_SIZE_LABEL });
 		}
 		try {
 			const { width, height } = await getImageDimensions(file);
-			if (width !== REQUIRED_WIDTH || height !== REQUIRED_HEIGHT) {
+			if (width > maxWidth || height > maxHeight) {
 				return $t('admin.productsNew.imageDimensions', {
-					width: REQUIRED_WIDTH,
-					height: REQUIRED_HEIGHT
+					width: maxWidth,
+					height: maxHeight
 				});
 			}
 		} catch {
@@ -432,9 +443,9 @@
 		const cropHeight = Math.min(imageHeight, frameHeight / scale);
 
 		const outputWidth =
-			cropMode === 'gallery' ? GALLERY_REQUIRED_WIDTH : REQUIRED_WIDTH;
+			cropMode === 'gallery' ? GALLERY_MAX_WIDTH : MAX_IMAGE_WIDTH;
 		const outputHeight =
-			cropMode === 'gallery' ? GALLERY_REQUIRED_HEIGHT : REQUIRED_HEIGHT;
+			cropMode === 'gallery' ? GALLERY_MAX_HEIGHT : MAX_IMAGE_HEIGHT;
 		const canvas = document.createElement('canvas');
 		canvas.width = outputWidth;
 		canvas.height = outputHeight;
@@ -533,8 +544,8 @@
 		for (const file of files) {
 			const validationMessage = await validateImageFile(
 				file,
-				GALLERY_REQUIRED_WIDTH,
-				GALLERY_REQUIRED_HEIGHT
+				GALLERY_MAX_WIDTH,
+				GALLERY_MAX_HEIGHT
 			);
 			if (validationMessage) {
 				reportGalleryError(validationMessage, input);
@@ -573,8 +584,8 @@
 		for (const file of files) {
 			const validationMessage = await validateImageFile(
 				file,
-				GALLERY_REQUIRED_WIDTH,
-				GALLERY_REQUIRED_HEIGHT
+				GALLERY_MAX_WIDTH,
+				GALLERY_MAX_HEIGHT
 			);
 			if (validationMessage) {
 				reportGalleryError(validationMessage, galleryInput);
@@ -795,17 +806,34 @@
 			/>
 		</div>
 		<div class="col-md-6">
-			<label class="form-label" for="product-thumb">{$t('admin.productsNew.thumb')}</label>
+			<div class="upload-field-header">
+				<label class="form-label" for="product-thumb">{$t('admin.productsNew.thumb')}</label>
+				<button
+					type="button"
+					class="upload-pick-button"
+					onclick={() => openFileInput(thumbInput)}
+					aria-controls="product-thumb"
+				>
+					{$t('admin.productsNew.chooseImage')}
+				</button>
+			</div>
 				<div class="thumb-upload-wrapper">
-					<input
-						class="form-control"
-						id="product-thumb"
-						name="product_thumb"
-						type="file"
-						accept="image/*"
-						onchange={handleThumbChange}
-						required
-					/>
+					<div class="thumb-upload-card">
+						<input
+							class="upload-file-input"
+							id="product-thumb"
+							name="product_thumb"
+							type="file"
+							accept="image/*"
+							onchange={handleThumbChange}
+							bind:this={thumbInput}
+							required
+						/>
+						<div class="upload-card-copy">
+							<strong>{$t('admin.productsNew.thumb')}</strong>
+							<span>{$t('admin.productsNew.thumbHint')}</span>
+						</div>
+					</div>
 					{#if imageError}
 						<div class="text-danger small mt-2">{imageError}</div>
 					{/if}
@@ -843,7 +871,18 @@
 				</div>
 			</div>
 		<div class="col-12">
-			<label class="form-label" for="product-gallery">{$t('admin.productsNew.gallery')}</label>
+			<div class="upload-field-header">
+				<label class="form-label" for="product-gallery">{$t('admin.productsNew.gallery')}</label>
+				<button
+					type="button"
+					class="upload-pick-button"
+					onclick={() => openFileInput(galleryInput)}
+					aria-controls="product-gallery"
+					disabled={galleryPreviewUrls.length >= MAX_GALLERY_FILES}
+				>
+					{$t('admin.productsNew.chooseImages')}
+				</button>
+			</div>
 			<div class="gallery-upload-wrapper">
 				<div
 					class="gallery-drop-zone"
@@ -1211,8 +1250,98 @@
 </section>
 
 <style>
+	.upload-field-header {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		margin-bottom: 8px;
+	}
+
+	.upload-field-header .form-label {
+		margin-bottom: 0;
+	}
+
 	.thumb-upload-wrapper {
 		position: relative;
+	}
+
+	.thumb-upload-card {
+		position: relative;
+		border: 2px dashed rgba(0, 0, 0, 0.15);
+		border-radius: 12px;
+		padding: 22px;
+		min-height: 140px;
+		display: grid;
+		place-items: center;
+		background: #fafafa;
+		text-align: center;
+		cursor: pointer;
+		transition:
+			border-color 0.2s ease,
+			background 0.2s ease;
+	}
+
+	.thumb-upload-card:hover {
+		border-color: #1f1a14;
+		background: #fff;
+	}
+
+	.upload-file-input {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		opacity: 0;
+		cursor: pointer;
+	}
+
+	.upload-card-copy {
+		pointer-events: none;
+		display: grid;
+		justify-items: center;
+		gap: 8px;
+		font-size: 0.95rem;
+		color: #3a3a3a;
+	}
+
+	.upload-card-copy strong {
+		font-weight: 600;
+	}
+
+	.upload-pick-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: fit-content;
+		flex-shrink: 0;
+		min-height: 34px;
+		border: 0;
+		border-radius: 8px;
+		padding: 7px 12px;
+		background: #1f1a14;
+		color: #fff;
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			background 0.2s ease,
+			box-shadow 0.2s ease,
+			transform 0.2s ease;
+	}
+
+	.upload-pick-button:hover:not(:disabled) {
+		background: #0f766e;
+		box-shadow: 0 8px 16px rgba(15, 118, 110, 0.18);
+		transform: translateY(-1px);
+	}
+
+	.upload-pick-button:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
+		box-shadow: none;
+		transform: none;
 	}
 
 	.gallery-upload-wrapper {
@@ -1303,6 +1432,7 @@
 		font-size: 0.95rem;
 		color: #3a3a3a;
 		display: grid;
+		justify-items: center;
 		gap: 6px;
 	}
 
@@ -1349,7 +1479,7 @@
 		overflow: hidden;
 		border: 1px solid rgba(0, 0, 0, 0.08);
 		background: #fff;
-		aspect-ratio: 1;
+		aspect-ratio: 1 / 1;
 		transition: all 0.2s ease;
 	}
 
@@ -1361,7 +1491,7 @@
 	.gallery-thumb-item img {
 		width: 100%;
 		height: 100%;
-		object-fit: cover;
+		object-fit: contain;
 		display: block;
 	}
 
@@ -1458,7 +1588,10 @@
 
 	.thumb-preview img {
 		width: 100%;
-		max-width: 240px;
+		max-width: 320px;
+		aspect-ratio: 1 / 1;
+		object-fit: contain;
+		background: #fff;
 		border-radius: 10px;
 		border: 1px solid rgba(0, 0, 0, 0.08);
 	}

@@ -25,7 +25,7 @@ COPY --from=build /app/build ./build
 
 ENV NODE_ENV=production
 ENV PORT=4173
-ENV BODY_SIZE_LIMIT=10M
+ENV BODY_SIZE_LIMIT=50M
 EXPOSE 4173
 
 CMD ["node", "build"]

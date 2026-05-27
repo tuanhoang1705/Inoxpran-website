@@ -46,7 +46,9 @@
 						sessionToOrderRate: 'Session -> order rate',
 						sessionToDeliveredRate: 'Session -> delivered rate',
 						avgPagesPerSession: 'Avg pages / session',
-						avgScrollDepth: 'Avg scroll depth'
+						avgScrollDepth: 'Avg scroll depth',
+						deepScrollSessions: 'Deep scroll sessions',
+						deepScrollHint: 'Sessions reaching 75%+ depth'
 					},
 					ops: {
 						title: 'Business Snapshot',
@@ -95,7 +97,9 @@
 						sessionToOrderRate: 'T\u1EF7 l\u1EC7 phi\u00EAn -> \u0111\u01A1n',
 						sessionToDeliveredRate: 'T\u1EF7 l\u1EC7 phi\u00EAn -> giao th\u00E0nh c\u00F4ng',
 						avgPagesPerSession: 'TB trang / phi\u00EAn',
-						avgScrollDepth: '\u0110\u1ED9 s\u00E2u cu\u1ED9n TB'
+						avgScrollDepth: '\u0110\u1ED9 s\u00E2u cu\u1ED9n TB',
+						deepScrollSessions: 'Phi\u00EAn cu\u1ED9n s\u00E2u',
+						deepScrollHint: 'Phi\u00EAn \u0111\u1EA1t \u0111\u1ED9 s\u00E2u 75%+'
 					},
 					ops: {
 						title: 'T\u1ED5ng quan v\u1EADn h\u00E0nh',
@@ -346,14 +350,20 @@
 						</div>
 						<div class="mt-3">
 							<div class="small text-black-50 mb-1">
-								{$locale === 'en' ? 'High scroll depth (P90)' : '\u0110\u1ED9 s\u00E2u cu\u1ED9n cao (P90)'}
+								{dashboardCopy.quality.deepScrollSessions}
 							</div>
-							<div class="progress" role="progressbar" aria-valuenow={selectedWindow.maxScrollDepthPercent} aria-valuemin="0" aria-valuemax="100">
+							<div
+								class="progress"
+								role="progressbar"
+								aria-valuenow={Math.round((selectedWindow.deepScrollRate || 0) * 100)}
+								aria-valuemin="0"
+								aria-valuemax="100"
+							>
 								<div
 									class="progress-bar bg-dark"
-									style={`width:${Math.min(100, Math.max(0, selectedWindow.maxScrollDepthPercent || 0))}%`}
+									style={`width:${Math.min(100, Math.max(0, (selectedWindow.deepScrollRate || 0) * 100))}%`}
 								>
-									{formatNumber(selectedWindow.maxScrollDepthPercent)}%
+									{formatPercent(selectedWindow.deepScrollRate)}
 								</div>
 							</div>
 						</div>

@@ -95,19 +95,36 @@ const resolveValidation = (validation = {}) => {
     const requiredHeight = Number.isFinite(validation.requiredHeight)
         ? validation.requiredHeight
         : REQUIRED_IMAGE_HEIGHT;
+    const minWidth = Number.isFinite(validation.minWidth) ? validation.minWidth : null;
+    const minHeight = Number.isFinite(validation.minHeight) ? validation.minHeight : null;
+    const maxWidth = Number.isFinite(validation.maxWidth) ? validation.maxWidth : null;
+    const maxHeight = Number.isFinite(validation.maxHeight) ? validation.maxHeight : null;
 
     return {
         maxSizeBytes,
         requireDimensions,
         requiredWidth,
-        requiredHeight
+        requiredHeight,
+        minWidth,
+        minHeight,
+        maxWidth,
+        maxHeight
     };
 };
 
 const formatSizeLimit = (bytes) => `${Math.ceil(bytes / (1024 * 1024))}MB`;
 
 const validateImageBuffer = (buffer, validation) => {
-    const { maxSizeBytes, requireDimensions, requiredWidth, requiredHeight } =
+    const {
+        maxSizeBytes,
+        requireDimensions,
+        requiredWidth,
+        requiredHeight,
+        minWidth,
+        minHeight,
+        maxWidth,
+        maxHeight
+    } =
         resolveValidation(validation);
     if (!buffer || !buffer.length) {
         throw new BadRequestError('File buffer is required');
@@ -132,6 +149,22 @@ const validateImageBuffer = (buffer, validation) => {
                 `Image dimensions must be ${requiredWidth}x${requiredHeight}px`
             );
         }
+    }
+    if (
+        (Number.isFinite(minWidth) && dimensions?.width < minWidth) ||
+        (Number.isFinite(minHeight) && dimensions?.height < minHeight)
+    ) {
+        throw new BadRequestError(
+            `Image dimensions must be at least ${minWidth || 0}x${minHeight || 0}px`
+        );
+    }
+    if (
+        (Number.isFinite(maxWidth) && dimensions?.width > maxWidth) ||
+        (Number.isFinite(maxHeight) && dimensions?.height > maxHeight)
+    ) {
+        throw new BadRequestError(
+            `Image dimensions must be at most ${maxWidth || 0}x${maxHeight || 0}px`
+        );
     }
 };
 

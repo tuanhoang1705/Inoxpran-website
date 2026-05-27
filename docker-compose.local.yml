@@ -57,7 +57,7 @@ services:
       PORT: 4173
       API_BASE_URL: http://backend:3056/v1/api
       API_KEY: ${API_KEY}
-      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-10M}
+      BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-50M}
       PUBLIC_SITE_URL: http://localhost:4173
       APP_BASE_URL: http://localhost:4173
       PUBLIC_WEB_BASE: http://localhost:4173

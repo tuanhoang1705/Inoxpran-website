@@ -2705,6 +2705,11 @@ th {
 
 .card-concern .btn {
 	padding: 1.125rem;
+	pointer-events: auto;
+}
+
+.card-concern form {
+	pointer-events: auto;
 }
 
 .card-concern svg {
@@ -2717,7 +2722,6 @@ th {
 	.card:hover .card-concern {
 		bottom: 160px;
 		opacity: 1;
-		pointer-events: auto;
 	}
 }
 

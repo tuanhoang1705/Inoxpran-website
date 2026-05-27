@@ -264,6 +264,9 @@ export const handle = async ({ event, resolve }) => {
 
 	if ((response.headers.get('content-type') || '').includes('text/html')) {
 		response.headers.set('content-language', htmlLang);
+		if (isAdminPath(pathname)) {
+			response.headers.delete('link');
+		}
 	}
 
 	for (const [name, value] of Object.entries(SECURITY_HEADERS)) {

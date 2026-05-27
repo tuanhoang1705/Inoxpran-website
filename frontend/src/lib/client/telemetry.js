@@ -408,8 +408,8 @@ class TelemetryTracker {
 			const scrollHeight = Math.max(doc?.scrollHeight || 0, body?.scrollHeight || 0);
 			const clientHeight = window.innerHeight || doc?.clientHeight || 0;
 			const maxScrollable = Math.max(scrollHeight - clientHeight, 0);
-			const percent =
-				maxScrollable <= 0 ? 100 : Math.round((Math.max(0, scrollTop) / maxScrollable) * 100);
+			if (maxScrollable < 200) return;
+			const percent = Math.round((Math.max(0, scrollTop) / maxScrollable) * 100);
 			const clampedPercent = Math.min(100, Math.max(0, percent));
 			this.currentPage.maxScrollDepth = Math.max(this.currentPage.maxScrollDepth || 0, clampedPercent);
 			for (const threshold of SCROLL_THRESHOLDS) {

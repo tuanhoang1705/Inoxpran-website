@@ -38,6 +38,15 @@ const toPercentile = (values = [], percentile = 0.9) => {
 	return normalized[Math.min(rank, normalized.length - 1)];
 };
 
+const toAverage = (values = []) => {
+	const normalized = ensureArray(values)
+		.map((value) => Number(value))
+		.filter((value) => Number.isFinite(value));
+
+	if (!normalized.length) return 0;
+	return normalized.reduce((total, value) => total + value, 0) / normalized.length;
+};
+
 const extractBlogSlug = (path) => {
 	const raw = typeof path === 'string' ? path.trim() : '';
 	if (!raw) return null;
@@ -238,6 +247,13 @@ class DashboardMetricsService {
 		const sessions = toNumber(traffic.sessions);
 		const bounceSessions = toNumber(traffic.bounceSessions);
 		const totalActiveMs = toNumber(traffic.totalActiveMs);
+		const scrollDepthSamples = ensureArray(traffic.scrollDepthSamples)
+			.map((value) => clamp(toNumber(value), 0, 100))
+			.filter((value) => value > 0);
+		const scrollTrackedSessionCount = scrollDepthSamples.length;
+		const deepScrollSessionCount = scrollDepthSamples.filter((value) => value >= 75).length;
+		const deepScrollRate =
+			scrollTrackedSessionCount > 0 ? deepScrollSessionCount / scrollTrackedSessionCount : 0;
 
 		return {
 			since: sinceDate,
@@ -265,8 +281,11 @@ class DashboardMetricsService {
 			avgActiveMsPerSession: Math.round(toNumber(traffic.avgActiveMsPerSession)),
 			avgActiveSecondsPerSession: Math.round(toNumber(traffic.avgActiveMsPerSession) / 1000),
 			avgPageViewsPerSession: Number(toNumber(traffic.avgPageViewsPerSession).toFixed(2)),
-			avgScrollDepthPercent: Math.round(toNumber(traffic.avgScrollDepthPercent)),
-			maxScrollDepthPercent: Math.round(toPercentile(traffic.scrollDepthSamples, 0.9)),
+			avgScrollDepthPercent: Math.round(toAverage(scrollDepthSamples)),
+			maxScrollDepthPercent: Math.round(toPercentile(scrollDepthSamples, 0.9)),
+			scrollTrackedSessionCount,
+			deepScrollSessionCount,
+			deepScrollRate,
 			absoluteMaxScrollDepthPercent: Math.round(toNumber(traffic.maxScrollDepthPercent))
 		};
 	}

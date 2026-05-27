@@ -125,6 +125,17 @@ const resolveErrorMessage = async (response, fallback) => {
 	return payload?.message || fallback;
 };
 
+const isUploadFile = (value) =>
+	value &&
+	typeof value !== 'string' &&
+	typeof value === 'object' &&
+	typeof value.size === 'number';
+
+const getFirstTextFormValue = (form, name) =>
+	form
+		.getAll(name)
+		.find((value) => typeof value === 'string' && value.trim());
+
 export const load = async ({ cookies, fetch, params }) => {
 	const session = getAdminSession(cookies);
 	const headers = buildAdminHeaders(session);
@@ -215,7 +226,7 @@ export const actions = {
 		if (thumbCropState) {
 			payload.set('product_thumb_crop_state', thumbCropState);
 		}
-		const galleryExisting = String(form.get('product_gallery') || '').trim();
+		const galleryExisting = String(getFirstTextFormValue(form, 'product_gallery') || '').trim();
 		if (galleryExisting) {
 			payload.set('product_gallery', galleryExisting);
 		}
@@ -229,7 +240,7 @@ export const actions = {
 		}
 		const galleryFiles = form.getAll('product_gallery');
 		galleryFiles.forEach((f) => {
-			if (f && f.size > 0) payload.append('product_gallery', f);
+			if (isUploadFile(f) && f.size > 0) payload.append('product_gallery', f);
 		});
 		const response = await fetch(`${API_BASE}/product/${params.productId}`, {
 			method: 'PATCH',

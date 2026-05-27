@@ -241,7 +241,7 @@
 					titleLines: ['Inoxpran', 'dấu ấn', 'Italy'],
 					description:
 						'Inox sáng gương, đường nét tối giản kiểu Ý và trải nghiệm nấu bền bỉ cho nhịp sống gia đình Việt.',
-					tags: ['Di sản Italy', 'Inox 304', 'Bảo hành 12 tháng'],
+					tags: ['Chính hãng', 'Vừa sang', 'Vừa tầm'],
 					cta: 'Khám phá bộ sưu tập',
 					storyCta: 'Câu chuyện Italy',
 					noteTitle: 'Italian homeware',

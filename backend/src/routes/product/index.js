@@ -4,7 +4,7 @@ const express = require('express');
 const productController = require('../../controllers/product.controller');
 const router = express.Router();
 const asyncHandler = require('../../helpers/asyncHandler');
-const { upload, uploadLarge } = require('../../middleware/upload');
+const { uploadLarge, uploadProduct } = require('../../middleware/upload');
 const {
     uploadSingleImage,
     uploadBase64Image,
@@ -13,6 +13,16 @@ const {
 } = require('../../middleware/firebaseUpload');
 const { authenticationAdmin, authenticationUser } = require('../../auth/authUtils');
 const { permission, PERMISSIONS } = require('../../auth/checkAuth');
+
+const PRODUCT_IMAGE_MAX_SIZE = Number(process.env.UPLOAD_PRODUCT_MAX_SIZE || 5 * 1024 * 1024);
+const PRODUCT_IMAGE_MAX_WIDTH = Number(process.env.PRODUCT_IMAGE_MAX_WIDTH || 1920);
+const PRODUCT_IMAGE_MAX_HEIGHT = Number(process.env.PRODUCT_IMAGE_MAX_HEIGHT || 1920);
+const productImageValidation = {
+    maxSizeBytes: PRODUCT_IMAGE_MAX_SIZE,
+    requireDimensions: false,
+    maxWidth: PRODUCT_IMAGE_MAX_WIDTH,
+    maxHeight: PRODUCT_IMAGE_MAX_HEIGHT
+};
 
 router.get('/search/:keySearch', asyncHandler(productController.getListSearchProduct));
 router.get('/best-selling', asyncHandler(productController.getBestSellingProducts));
@@ -47,38 +57,40 @@ router.get(`/admin/:productId`, asyncHandler(productController.findProductAdmin)
 
 router.post(
     '',
-    upload.fields([
+    uploadProduct.fields([
     { name: 'product_thumb', maxCount: 1 },
     { name: 'product_gallery', maxCount: 7 }
   ]),
-    uploadSingleImage({ field: 'product_thumb', folder: 'products', optimization: { profile: 'productThumb' } }),
-    uploadBase64Image({ field: 'product_thumb', folder: 'products', optimization: { profile: 'productThumb' } }),
-    uploadMultipleImages({ field: 'product_gallery', folder: 'products', optimization: { profile: 'productGallery' } }),
+    uploadSingleImage({ field: 'product_thumb', folder: 'products', validation: productImageValidation, optimization: { profile: 'productThumb' } }),
+    uploadBase64Image({ field: 'product_thumb', folder: 'products', validation: productImageValidation, optimization: { profile: 'productThumb' } }),
+    uploadMultipleImages({ field: 'product_gallery', folder: 'products', validation: productImageValidation, optimization: { profile: 'productGallery' } }),
     uploadBase64Images({
         field: 'product_gallery_cropped',
         nameField: 'product_gallery_cropped_names',
         stateField: 'product_gallery_cropped_states',
         outputField: 'product_gallery',
         folder: 'products',
+        validation: productImageValidation,
         optimization: { profile: 'productGallery' }
     }),
     asyncHandler(productController.createProduct)
 );
 router.patch(
     '/:productId',
-     upload.fields([
+     uploadProduct.fields([
     { name: 'product_thumb', maxCount: 1 },
     { name: 'product_gallery', maxCount: 7 }
   ]),
-    uploadSingleImage({ field: 'product_thumb', folder: 'products', optimization: { profile: 'productThumb' } }),
-    uploadBase64Image({ field: 'product_thumb', folder: 'products', optimization: { profile: 'productThumb' } }),
-    uploadMultipleImages({ field: 'product_gallery', folder: 'products', optimization: { profile: 'productGallery' } }),
+    uploadSingleImage({ field: 'product_thumb', folder: 'products', validation: productImageValidation, optimization: { profile: 'productThumb' } }),
+    uploadBase64Image({ field: 'product_thumb', folder: 'products', validation: productImageValidation, optimization: { profile: 'productThumb' } }),
+    uploadMultipleImages({ field: 'product_gallery', folder: 'products', validation: productImageValidation, optimization: { profile: 'productGallery' } }),
     uploadBase64Images({
         field: 'product_gallery_cropped',
         nameField: 'product_gallery_cropped_names',
         stateField: 'product_gallery_cropped_states',
         outputField: 'product_gallery',
         folder: 'products',
+        validation: productImageValidation,
         optimization: { profile: 'productGallery' }
     }),
     asyncHandler(productController.updateProduct)
