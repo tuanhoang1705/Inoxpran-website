@@ -75,7 +75,7 @@ if ! certificate_covers_domains; then
   docker compose up -d nginx
   docker exec app_nginx nginx -s reload >/dev/null 2>&1 || docker compose restart nginx
 
-  docker compose run --rm certbot certonly --webroot \
+  docker compose run --rm --entrypoint certbot certbot certonly --webroot \
     -w /var/www/certbot \
     --cert-name "$DOMAIN" --expand \
     -d "$DOMAIN" -d "$WWW_DOMAIN" -d "$ADMIN_DOMAIN" \
