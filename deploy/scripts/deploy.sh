@@ -54,6 +54,21 @@ CERT_DIR="deploy/nginx/ssl/live/${DOMAIN}"
 
 mkdir -p deploy/nginx/ssl deploy/nginx/www
 
+install_nginx_config() {
+  local source="$1"
+  local target="deploy/nginx/default.conf"
+  if [ -f "$target" ]; then
+    cat "$source" > "$target"
+  else
+    cp "$source" "$target"
+  fi
+}
+
+has_certificate_file() {
+  docker compose run --rm --no-deps --entrypoint sh certbot -c \
+    "test -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+}
+
 certificate_covers_domains() {
   docker compose run --rm --no-deps --entrypoint sh certbot -c \
     "test -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem &&
@@ -71,19 +86,24 @@ if ! certificate_covers_domains; then
     exit 1
   fi
 
-  cp deploy/nginx/http.conf deploy/nginx/default.conf
-  docker compose up -d nginx
+  if has_certificate_file; then
+    install_nginx_config deploy/nginx/https.conf
+  else
+    install_nginx_config deploy/nginx/http.conf
+  fi
+  docker compose up -d --force-recreate nginx
   docker exec app_nginx nginx -s reload >/dev/null 2>&1 || docker compose restart nginx
 
   docker compose run --rm --entrypoint certbot certbot certonly --webroot \
     -w /var/www/certbot \
     --cert-name "$DOMAIN" --expand \
     -d "$DOMAIN" -d "$WWW_DOMAIN" -d "$ADMIN_DOMAIN" \
-    --email "$EMAIL" --agree-tos --no-eff-email
+    --email "$EMAIL" --agree-tos --no-eff-email --non-interactive
 fi
 
-cp deploy/nginx/https.conf deploy/nginx/default.conf
+install_nginx_config deploy/nginx/https.conf
 docker compose up -d --build
+docker compose up -d --force-recreate nginx
 
 # `docker compose up` does not reload nginx when only a bind-mounted config file changes.
 # Force a reload (or restart as fallback) so nginx starts listening on 443 with https.conf.
