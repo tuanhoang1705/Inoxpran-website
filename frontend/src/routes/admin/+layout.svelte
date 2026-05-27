@@ -27,16 +27,17 @@
 				href: '/admin/home-slides',
 				label: $locale === 'en' ? 'Home slides' : 'Slide trang chủ'
 			},
-			{
-				href: '/admin/agent-knowledge',
-				label: $locale === 'en' ? 'AI knowledge' : 'Kho tri thức AI',
-				roles: ['ADMIN', 'SUPER_ADMIN']
-			},
-			{
-				href: '/admin/chat-rooms',
-				label: $locale === 'en' ? 'Chat rooms' : 'Phòng chat',
-				roles: ['CHAT_MANAGER', 'LEAD_MANAGER', 'ADMIN', 'SUPER_ADMIN']
-			},
+			// Hidden from the admin sidebar by request.
+			// {
+			// 	href: '/admin/agent-knowledge',
+			// 	label: $locale === 'en' ? 'AI knowledge' : 'Kho tri thức AI',
+			// 	roles: ['ADMIN', 'SUPER_ADMIN']
+			// },
+			// {
+			// 	href: '/admin/chat-rooms',
+			// 	label: $locale === 'en' ? 'Chat rooms' : 'Phòng chat',
+			// 	roles: ['CHAT_MANAGER', 'LEAD_MANAGER', 'ADMIN', 'SUPER_ADMIN']
+			// },
 			{ href: '/admin/discounts', label: $t('admin.nav.discounts') },
 			{ href: '/admin/contacts', label: $t('admin.nav.contacts') },
 			{ href: '/admin/approvals', label: $t('admin.nav.approvals') },

@@ -1882,7 +1882,8 @@
 	.editor-grid {
 		display: grid;
 		grid-template-columns: 1fr 380px;
-		gap: 32px;
+		gap: 24px;
+		align-items: start;
 		padding: 0 32px 40px;
 		max-width: 1600px;
 		margin: 0 auto;
@@ -1892,16 +1893,18 @@
 		background: #fff;
 		border-radius: 16px;
 		border: 1px solid var(--border-color);
-		padding: 32px;
+		padding: 26px;
 		box-shadow: var(--shadow-md);
 		display: grid;
-		gap: 32px;
+		gap: 22px;
 		animation: fadeInUp 0.6s ease both;
 	}
 
 	.editor-side {
 		display: grid;
-		gap: 20px;
+		gap: 16px;
+		align-content: start;
+		align-self: start;
 		animation: fadeInUp 0.6s ease 0.1s both;
 	}
 
@@ -1919,8 +1922,8 @@
 	/* ==================== FORM SECTIONS ==================== */
 	.form-section {
 		display: grid;
-		gap: 16px;
-		padding-bottom: 20px;
+		gap: 12px;
+		padding-bottom: 16px;
 		border-bottom: 1px solid var(--border-color);
 	}
 
@@ -1944,7 +1947,7 @@
 
 	.field-grid {
 		display: grid;
-		gap: 16px;
+		gap: 14px;
 		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 	}
 
@@ -1990,7 +1993,7 @@
 	.media-grid {
 		display: grid;
 		grid-template-columns: minmax(0, 0.45fr) minmax(0, 0.55fr);
-		gap: 20px;
+		gap: 16px;
 		align-items: start;
 	}
 
@@ -2068,7 +2071,7 @@
 		position: relative;
 		border: 2px dashed var(--border-color);
 		border-radius: 12px;
-		padding: 24px;
+		padding: 18px;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -2076,7 +2079,7 @@
 		background: var(--bg-light);
 		transition: all 0.3s ease;
 		cursor: pointer;
-		min-height: 140px;
+		min-height: 112px;
 	}
 
 	.gallery-drop-zone:hover {
@@ -2124,13 +2127,18 @@
 	/* ==================== GALLERY THUMBS ==================== */
 	.gallery-thumbs-wrapper {
 		display: grid;
-		gap: 12px;
+		gap: 10px;
+	}
+
+	.thumb-preview.mt-3,
+	.gallery-thumbs-wrapper.mt-3 {
+		margin-top: 0.75rem !important;
 	}
 
 	.gallery-thumbs {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-		gap: 12px;
+		gap: 10px;
 	}
 
 	.gallery-thumb-item {
@@ -2250,23 +2258,23 @@
 	/* ==================== VARIANT MANAGER ==================== */
 	.variant-manager {
 		display: grid;
-		gap: 16px;
-		padding-top: 8px;
+		gap: 12px;
+		padding-top: 4px;
 	}
 
 	.variant-grid {
 		display: grid;
-		gap: 16px;
+		gap: 12px;
 		grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 	}
 
 	.variant-card {
 		border: 1px solid var(--border-color);
 		border-radius: 10px;
-		padding: 16px;
+		padding: 14px;
 		background: var(--bg-light);
 		display: grid;
-		gap: 12px;
+		gap: 10px;
 	}
 
 	.variant-card h6 {
@@ -2414,10 +2422,10 @@
 		background: #fff;
 		border: 1px solid var(--border-color);
 		border-radius: 14px;
-		padding: 20px;
+		padding: 16px;
 		box-shadow: var(--shadow-sm);
 		display: grid;
-		gap: 14px;
+		gap: 10px;
 		transition: all 0.3s ease;
 	}
 
@@ -2426,7 +2434,7 @@
 	}
 
 	.side-card h3 {
-		margin: 0 0 8px 0;
+		margin: 0;
 		font-size: 1rem;
 		font-weight: 700;
 		color: var(--text-primary);
@@ -2440,14 +2448,14 @@
 
 	.preview-card {
 		display: grid;
-		gap: 12px;
+		gap: 8px;
 	}
 
 	.preview-card img {
 		width: 100%;
+		height: clamp(220px, 22vw, 260px);
 		border-radius: 10px;
 		object-fit: contain;
-		aspect-ratio: 1;
 		background: #fff;
 		border: 1px solid var(--border-color);
 		transition: all 0.3s ease;
@@ -2459,20 +2467,21 @@
 
 	.preview-info {
 		display: grid;
-		gap: 8px;
+		gap: 5px;
 	}
 
 	.preview-title {
 		font-weight: 700;
 		font-size: 0.95rem;
 		color: var(--text-primary);
-		line-height: 1.4;
+		line-height: 1.3;
 	}
 
 	.preview-price {
 		color: var(--primary-color);
 		font-weight: 700;
 		font-size: 1.1rem;
+		line-height: 1.2;
 	}
 
 	.preview-meta {
@@ -2485,8 +2494,8 @@
 
 	.stats-row {
 		display: grid;
-		gap: 10px;
-		padding-top: 12px;
+		gap: 8px;
+		padding-top: 10px;
 		border-top: 1px solid var(--border-color);
 	}
 
@@ -2508,7 +2517,7 @@
 	.action-row {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: 7px;
 	}
 
 	.action-row button {
@@ -2521,9 +2530,9 @@
 		margin: 0;
 		color: var(--text-secondary);
 		display: grid;
-		gap: 8px;
+		gap: 7px;
 		font-size: 0.85rem;
-		line-height: 1.5;
+		line-height: 1.42;
 	}
 
 	/* ==================== CROPPER ==================== */
@@ -2678,7 +2687,7 @@
 
 		.editor-card {
 			padding: 20px;
-			gap: 24px;
+			gap: 20px;
 		}
 
 		.header-title h1 {
@@ -2717,8 +2726,8 @@
 	/* ==================== ADVANCED SECTION ==================== */
 	.advanced {
 		border-top: 1px dashed var(--border-color);
-		padding-top: 16px;
-		margin-top: 8px;
+		padding-top: 12px;
+		margin-top: 0;
 	}
 
 	.advanced summary {
@@ -2740,7 +2749,7 @@
 
 	.advanced-note {
 		color: var(--text-secondary);
-		margin-top: 12px;
+		margin: 6px 0 0;
 		font-size: 0.9rem;
 	}
 
@@ -2750,9 +2759,9 @@
 		align-items: center;
 		gap: 16px;
 		flex-wrap: wrap;
-		padding-top: 16px;
+		padding-top: 14px;
 		border-top: 1px solid var(--border-color);
-		margin-top: 16px;
+		margin-top: 4px;
 	}
 
 	.action-note {
@@ -2782,8 +2791,8 @@
 		position: relative;
 		border: 2px dashed var(--border-color);
 		border-radius: 12px;
-		padding: 22px;
-		min-height: 140px;
+		padding: 18px;
+		min-height: 112px;
 		display: grid;
 		place-items: center;
 		background: var(--bg-light);

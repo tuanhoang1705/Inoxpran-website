@@ -8,7 +8,14 @@ const STREAM_HEADERS = {
 	'x-accel-buffering': 'no'
 };
 
+// Hidden from admin by request.
+const ADMIN_CHAT_ROOMS_ENABLED = false;
+
 export const GET = async ({ cookies, fetch, params, request }) => {
+	if (!ADMIN_CHAT_ROOMS_ENABLED) {
+		return new Response('chat_rooms_disabled', { status: 404 });
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	if (!session) {
 		return new Response('admin_auth_required', { status: 401 });

@@ -4,6 +4,9 @@ import { buildAdminHeaders, ensureAdminSession } from '$lib/server/adminAuth.js'
 
 const noStore = { 'cache-control': 'no-store' };
 
+// Hidden from admin by request.
+const ADMIN_CHAT_ROOMS_ENABLED = false;
+
 const readJson = async (response) => {
 	try {
 		return await response.json();
@@ -13,6 +16,10 @@ const readJson = async (response) => {
 };
 
 export const GET = async ({ cookies, fetch, url }) => {
+	if (!ADMIN_CHAT_ROOMS_ENABLED) {
+		return json({ ok: false, error: 'chat_rooms_disabled' }, { status: 404, headers: noStore });
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	if (!session) {
 		return json({ ok: false, error: 'admin_auth_required' }, { status: 401, headers: noStore });

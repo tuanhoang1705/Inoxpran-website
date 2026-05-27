@@ -11,13 +11,15 @@
 		$locale === 'en'
 			? [
 					{ value: 'ADMIN', label: 'Admin' },
-					{ value: 'CHAT_MANAGER', label: 'Chat manager' },
+					// Hidden with admin chat rooms by request.
+					// { value: 'CHAT_MANAGER', label: 'Chat manager' },
 					{ value: 'LEAD_MANAGER', label: 'Lead manager' },
 					{ value: 'CONTACT_MANAGER', label: 'Contact manager' }
 				]
 			: [
 					{ value: 'ADMIN', label: 'Quản trị' },
-					{ value: 'CHAT_MANAGER', label: 'Quản lý chatbox' },
+					// Hidden with admin chat rooms by request.
+					// { value: 'CHAT_MANAGER', label: 'Quản lý chatbox' },
 					{ value: 'LEAD_MANAGER', label: 'Quản lý lead' },
 					{ value: 'CONTACT_MANAGER', label: 'Quản lý liên hệ' }
 				]

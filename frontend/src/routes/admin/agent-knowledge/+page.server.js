@@ -19,6 +19,9 @@ const canManageKnowledge = (session) => {
 	return roles.includes('ADMIN') || roles.includes('SUPER_ADMIN');
 };
 
+// Hidden from admin by request.
+const ADMIN_AGENT_KNOWLEDGE_ENABLED = false;
+
 const buildCopy = (locale) => ({
 	pageTitle: locale === 'en' ? 'AI knowledge base' : 'Kho tri thức AI',
 	forbidden:
@@ -42,6 +45,10 @@ const buildCopy = (locale) => ({
 });
 
 export const load = async ({ cookies, fetch }) => {
+	if (!ADMIN_AGENT_KNOWLEDGE_ENABLED) {
+		throw redirect(303, '/admin');
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	if (!session) {
 		throw redirect(303, '/admin/login');
@@ -71,6 +78,10 @@ export const load = async ({ cookies, fetch }) => {
 
 export const actions = {
 	saveDocument: async ({ request, cookies, fetch }) => {
+		if (!ADMIN_AGENT_KNOWLEDGE_ENABLED) {
+			throw redirect(303, '/admin');
+		}
+
 		const session = await ensureAdminSession({ cookies, fetch });
 		if (!session) {
 			throw redirect(303, '/admin/login');
@@ -141,6 +152,10 @@ export const actions = {
 		throw redirect(303, '/admin/agent-knowledge');
 	},
 	deleteDocument: async ({ request, cookies, fetch }) => {
+		if (!ADMIN_AGENT_KNOWLEDGE_ENABLED) {
+			throw redirect(303, '/admin');
+		}
+
 		const session = await ensureAdminSession({ cookies, fetch });
 		if (!session) {
 			throw redirect(303, '/admin/login');

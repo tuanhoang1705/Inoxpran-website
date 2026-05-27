@@ -176,11 +176,12 @@
 		const translated = $t(path);
 		return translated === path ? '' : translated;
 	};
-	const knowledgeDocuments = $derived(
-		Array.isArray(data?.agentKnowledgeSettings?.documents)
-			? data.agentKnowledgeSettings.documents
-			: []
-	);
+	// Hidden with the admin AI knowledge shortcut by request.
+	// const knowledgeDocuments = $derived(
+	// 	Array.isArray(data?.agentKnowledgeSettings?.documents)
+	// 		? data.agentKnowledgeSettings.documents
+	// 		: []
+	// );
 	const siteMarketingCampaign = $derived(data?.siteMarketingCampaign ?? {});
 	const siteMarketplaceLinks = $derived(
 		Array.isArray(data?.siteMarketplaceLinks) ? data.siteMarketplaceLinks : []
@@ -775,24 +776,7 @@
 						</form>
 					</div>
 				</div>
-				<div class="row g-3 mt-1">
-					<div class="col-12">
-						<div class="border rounded-3 p-3 bg-light-subtle d-flex flex-wrap justify-content-between align-items-start gap-3">
-							<div>
-								<h6 class="mb-1">{$locale === 'en' ? 'AI knowledge base' : 'Kho tri thức AI'}</h6>
-								<p class="small text-black-50 mb-0">
-									{$locale === 'en'
-										? 'Manage the product documents, manuals, and policy data that are injected into the new ChatGPT support flow.'
-										: 'Quản lý tài liệu sản phẩm, hướng dẫn sử dụng và chính sách đang được bơm vào luồng hỗ trợ ChatGPT mới.'}
-								</p>
-							</div>
-							<div class="d-flex flex-column align-items-lg-end gap-2">
-								<div class="small text-black-50">{$locale === 'en' ? 'Current docs' : 'T\u00E0i li\u1EC7u hi\u1EC7n c\u00F3'}: {knowledgeDocuments.length}</div>
-								<a class="btn btn-dark" href="/admin/agent-knowledge">{$locale === 'en' ? 'Open knowledge workspace' : 'Mở kho tri thức'}</a>
-							</div>
-						</div>
-					</div>
-				</div>
+				<!-- Hidden by request: admin AI knowledge shortcut. -->
 				{#if form?.error}
 					<div class="alert alert-danger py-2 px-3 mb-0 mt-3">{form.error}</div>
 				{/if}

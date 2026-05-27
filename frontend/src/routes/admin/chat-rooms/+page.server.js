@@ -1,5 +1,9 @@
+import { redirect } from '@sveltejs/kit';
 import { API_BASE } from '$lib/server/api.js';
 import { buildAdminHeaders, ensureAdminSession } from '$lib/server/adminAuth.js';
+
+// Hidden from admin by request.
+const ADMIN_CHAT_ROOMS_ENABLED = false;
 
 const buildParams = (url) => {
 	const params = new URLSearchParams();
@@ -32,6 +36,10 @@ const buildReturnTo = (url) => {
 };
 
 export const load = async ({ fetch, cookies, url }) => {
+	if (!ADMIN_CHAT_ROOMS_ENABLED) {
+		throw redirect(303, '/admin');
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	const headers = buildAdminHeaders(session);
 	const params = buildParams(url);

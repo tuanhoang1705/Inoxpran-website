@@ -12,7 +12,14 @@ const readJson = async (response) => {
 
 const noStore = { 'cache-control': 'no-store' };
 
+// Hidden from admin by request.
+const ADMIN_CHAT_ROOMS_ENABLED = false;
+
 export const GET = async ({ cookies, fetch, params, url }) => {
+	if (!ADMIN_CHAT_ROOMS_ENABLED) {
+		return json({ ok: false, error: 'chat_rooms_disabled' }, { status: 404, headers: noStore });
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	if (!session) {
 		return json({ ok: false, error: 'admin_auth_required' }, { status: 401, headers: noStore });
@@ -46,6 +53,10 @@ export const GET = async ({ cookies, fetch, params, url }) => {
 };
 
 export const PATCH = async ({ cookies, fetch, params, request }) => {
+	if (!ADMIN_CHAT_ROOMS_ENABLED) {
+		return json({ ok: false, error: 'chat_rooms_disabled' }, { status: 404, headers: noStore });
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	if (!session) {
 		return json({ ok: false, error: 'admin_auth_required' }, { status: 401, headers: noStore });
@@ -77,6 +88,10 @@ export const PATCH = async ({ cookies, fetch, params, request }) => {
 };
 
 export const DELETE = async ({ cookies, fetch, params }) => {
+	if (!ADMIN_CHAT_ROOMS_ENABLED) {
+		return json({ ok: false, error: 'chat_rooms_disabled' }, { status: 404, headers: noStore });
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	if (!session) {
 		return json({ ok: false, error: 'admin_auth_required' }, { status: 401, headers: noStore });

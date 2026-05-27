@@ -112,22 +112,23 @@ const normalizeMarketplaceLinks = (payload) => {
 	});
 };
 
-const normalizeAgentKnowledgeSettings = (payload) => ({
-	documents: Array.isArray(payload?.metadata?.documents)
-		? payload.metadata.documents
-				.map((item) => ({
-					id: String(item?.id || '').trim(),
-					title: String(item?.title || '').trim(),
-					category: String(item?.category || 'general_policy').trim(),
-					sourceType: String(item?.sourceType || 'text').trim(),
-					sourceName: String(item?.sourceName || '').trim() || null,
-					content: String(item?.content || ''),
-					updatedAt: item?.updatedAt || null
-				}))
-				.filter((item) => item.id && item.title && item.content)
-		: [],
-	updatedAt: payload?.metadata?.updatedAt || null
-});
+// Hidden with the admin AI knowledge shortcut by request.
+// const normalizeAgentKnowledgeSettings = (payload) => ({
+// 	documents: Array.isArray(payload?.metadata?.documents)
+// 		? payload.metadata.documents
+// 				.map((item) => ({
+// 					id: String(item?.id || '').trim(),
+// 					title: String(item?.title || '').trim(),
+// 					category: String(item?.category || 'general_policy').trim(),
+// 					sourceType: String(item?.sourceType || 'text').trim(),
+// 					sourceName: String(item?.sourceName || '').trim() || null,
+// 					content: String(item?.content || ''),
+// 					updatedAt: item?.updatedAt || null
+// 				}))
+// 				.filter((item) => item.id && item.title && item.content)
+// 		: [],
+// 	updatedAt: payload?.metadata?.updatedAt || null
+// });
 
 const toTimestamp = (value) => {
 	const date = value ? new Date(value) : null;
@@ -163,13 +164,14 @@ export const load = async ({ cookies, fetch }) => {
 	const headers = buildAdminHeaders(session);
 	const publicHeaders = headers['x-api-key'] ? { 'x-api-key': headers['x-api-key'] } : {};
 
-	const [usersResult, productsResult, siteSettingsResult, dashboardSummaryResult, agentKnowledgeResult] =
+	const [usersResult, productsResult, siteSettingsResult, dashboardSummaryResult] =
 		await Promise.allSettled([
 			fetch(`${API_BASE}/admin/users?limit=5&page=1`, { headers }),
 			fetch(`${API_BASE}/product?limit=5&page=1`, { headers: publicHeaders }),
 			fetch(`${API_BASE}/site-settings`, { headers: publicHeaders }),
-			fetch(`${API_BASE}/admin/dashboard-summary`, { headers }),
-			fetch(`${API_BASE}/site-settings/agent-knowledge`, { headers: publicHeaders })
+			fetch(`${API_BASE}/admin/dashboard-summary`, { headers })
+			// Hidden with the admin AI knowledge shortcut by request.
+			// fetch(`${API_BASE}/site-settings/agent-knowledge`, { headers: publicHeaders })
 		]);
 
 	const usersRes = usersResult.status === 'fulfilled' ? usersResult.value : null;
@@ -177,14 +179,16 @@ export const load = async ({ cookies, fetch }) => {
 	const siteSettingsRes = siteSettingsResult.status === 'fulfilled' ? siteSettingsResult.value : null;
 	const dashboardSummaryRes =
 		dashboardSummaryResult.status === 'fulfilled' ? dashboardSummaryResult.value : null;
-	const agentKnowledgeRes =
-		agentKnowledgeResult.status === 'fulfilled' ? agentKnowledgeResult.value : null;
+	// Hidden with the admin AI knowledge shortcut by request.
+	// const agentKnowledgeRes =
+	// 	agentKnowledgeResult.status === 'fulfilled' ? agentKnowledgeResult.value : null;
 
 	const usersPayload = usersRes?.ok ? await safeJson(usersRes) : null;
 	const productsPayload = productsRes?.ok ? await safeJson(productsRes) : null;
 	const siteSettingsPayload = siteSettingsRes?.ok ? await safeJson(siteSettingsRes) : null;
 	const dashboardSummaryPayload = dashboardSummaryRes?.ok ? await safeJson(dashboardSummaryRes) : null;
-	const agentKnowledgePayload = agentKnowledgeRes?.ok ? await safeJson(agentKnowledgeRes) : null;
+	// Hidden with the admin AI knowledge shortcut by request.
+	// const agentKnowledgePayload = agentKnowledgeRes?.ok ? await safeJson(agentKnowledgeRes) : null;
 	const siteFeatureDefinitions = normalizeSiteFeatureDefinitions(siteSettingsPayload);
 	const siteFeatures = normalizeSiteFeatures(siteSettingsPayload, siteFeatureDefinitions);
 
@@ -195,8 +199,9 @@ export const load = async ({ cookies, fetch }) => {
 		siteFeatures,
 		siteFeatureDefinitions,
 		siteMarketingCampaign: normalizeMarketingCampaign(siteSettingsPayload),
-		siteMarketplaceLinks: normalizeMarketplaceLinks(siteSettingsPayload),
-		agentKnowledgeSettings: normalizeAgentKnowledgeSettings(agentKnowledgePayload)
+		siteMarketplaceLinks: normalizeMarketplaceLinks(siteSettingsPayload)
+		// Hidden with the admin AI knowledge shortcut by request.
+		// agentKnowledgeSettings: normalizeAgentKnowledgeSettings(agentKnowledgePayload)
 	};
 };
 

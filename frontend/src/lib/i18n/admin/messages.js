@@ -159,7 +159,7 @@ export const messages = {
 				created: 'Ngày tạo',
 				roles: 'Vai trò khi duyệt',
 				rolesHelp:
-					'Mặc định cấp quyền Quản trị. Chỉ thêm CHAT_MANAGER cho nhân sự phụ trách lịch sử chatbox.',
+					'Mặc định cấp quyền Quản trị. Vai trò chatbox đang được ẩn theo cấu hình hiện tại.',
 				actions: 'Hành động',
 				approveTitle: 'Phê duyệt',
 				approve: 'Duyệt',
@@ -1202,7 +1202,7 @@ export const messages = {
 				created: 'Created',
 				roles: 'Roles on approval',
 				rolesHelp:
-					'Admin is selected by default. Add CHAT_MANAGER only for staff who manage chat room history.',
+					'Admin is selected by default. Chatbox roles are hidden in the current configuration.',
 				actions: 'Actions',
 				approveTitle: 'Approve',
 				approve: 'Approve',

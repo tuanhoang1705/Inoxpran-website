@@ -2,6 +2,9 @@ import { fail, redirect } from '@sveltejs/kit';
 import { API_BASE } from '$lib/server/api.js';
 import { buildAdminHeaders, ensureAdminSession } from '$lib/server/adminAuth.js';
 
+// Hidden from admin by request.
+const ADMIN_CHAT_ROOMS_ENABLED = false;
+
 const parsePayload = async (response) => {
 	try {
 		return await response.json();
@@ -17,6 +20,10 @@ const sanitizeReturnTo = (value, fallback = '/admin/chat-rooms') => {
 };
 
 export const load = async ({ cookies, fetch, params, url }) => {
+	if (!ADMIN_CHAT_ROOMS_ENABLED) {
+		throw redirect(303, '/admin');
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	const headers = buildAdminHeaders(session);
 	const [roomResponse, consultantsResponse, roomListResponse] = await Promise.all([
@@ -67,6 +74,10 @@ export const load = async ({ cookies, fetch, params, url }) => {
 };
 
 const updateRoom = async ({ cookies, fetch, params, request, payload, returnToOverride }) => {
+	if (!ADMIN_CHAT_ROOMS_ENABLED) {
+		throw redirect(303, '/admin');
+	}
+
 	const session = await ensureAdminSession({ cookies, fetch });
 	if (!session) {
 		throw redirect(303, '/admin/login');
