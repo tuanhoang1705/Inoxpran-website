@@ -1,5 +1,6 @@
 <script>
 	import { browser } from '$app/environment';
+	import { enhance } from '$app/forms';
 	import { onDestroy } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { locale, t } from '$lib/i18n/admin/index.js';
@@ -89,6 +90,7 @@
 	let galleryInitialized = $state(false);
 	let hadExistingGallery = $state(false);
 	let isGalleryUploading = $state(false);
+	let isSavingProduct = $state(false);
 	let isCropperOpen = $state(false);
 	let cropMode = $state('');
 	let cropTargetIndex = $state(-1);
@@ -897,6 +899,18 @@
 		// Ensure gallery files are still in the input before submit
 		syncGalleryInputFiles();
 	};
+
+	const handleProductUpdateEnhance = () => {
+		handleFormSubmit();
+		isSavingProduct = true;
+		return async ({ update }) => {
+			try {
+				await update();
+			} finally {
+				isSavingProduct = false;
+			}
+		};
+	};
 </script>
 
 <svelte:head>
@@ -939,6 +953,7 @@
 				action="?/update"
 				class="editor-card"
 				onsubmit={handleFormSubmit}
+				use:enhance={handleProductUpdateEnhance}
 			>
 				{#if thumbCroppedUrl}
 					<input type="hidden" name="product_thumb_cropped" value={thumbCroppedUrl} />
@@ -1115,7 +1130,7 @@
 					<span class="field-help">{$t('admin.productEditor.ratingHelp')}</span>
 				</section>
 
-				<section class="form-section">
+				<section class="form-section media-section">
 					<div class="section-header">
 						<h3>{$t('admin.productEditor.sectionImages')}</h3>
 						<p>{$t('admin.productEditor.sectionImagesDesc')}</p>
@@ -1317,6 +1332,14 @@
 							</div>
 						</div>
 					</div>
+					{#if isSavingProduct}
+						<div class="gallery-saving-overlay" role="status" aria-live="polite">
+							<div class="gallery-saving-panel">
+								<span class="gallery-saving-spinner"></span>
+								<span>Đang cập nhật ảnh sản phẩm...</span>
+							</div>
+						</div>
+					{/if}
 				</section>
 
 				<section class="form-section">
@@ -1523,7 +1546,9 @@
 				</details>
 
 				<div class="form-actions">
-					<button class="btn-primary" type="submit">{$t('admin.productEditor.save')}</button>
+					<button class="btn-primary" type="submit" disabled={isSavingProduct}>
+						{isSavingProduct ? 'Đang lưu...' : $t('admin.productEditor.save')}
+					</button>
 					<span class="action-note">{$t('admin.productEditor.saveHint')}</span>
 				</div>
 			</form>
@@ -1958,11 +1983,54 @@
 	}
 
 	/* ==================== MEDIA SECTION ==================== */
+	.media-section {
+		position: relative;
+	}
+
 	.media-grid {
 		display: grid;
 		grid-template-columns: minmax(0, 0.45fr) minmax(0, 0.55fr);
 		gap: 20px;
 		align-items: start;
+	}
+
+	.gallery-saving-overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 8;
+		display: grid;
+		place-items: center;
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.72);
+		backdrop-filter: blur(3px);
+	}
+
+	.gallery-saving-panel {
+		display: inline-flex;
+		align-items: center;
+		gap: 10px;
+		padding: 12px 16px;
+		border: 1px solid rgba(15, 118, 110, 0.18);
+		border-radius: 10px;
+		background: #fff;
+		color: var(--text-primary);
+		font-weight: 700;
+		box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+	}
+
+	.gallery-saving-spinner {
+		width: 18px;
+		height: 18px;
+		border-radius: 999px;
+		border: 2px solid rgba(15, 118, 110, 0.18);
+		border-top-color: var(--primary-color);
+		animation: gallery-spin 0.75s linear infinite;
+	}
+
+	@keyframes gallery-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.media-preview {
@@ -2279,6 +2347,13 @@
 
 	.btn-primary:active {
 		transform: translateY(0);
+	}
+
+	.btn-primary:disabled {
+		opacity: 0.65;
+		cursor: wait;
+		transform: none;
+		box-shadow: none;
 	}
 
 	.btn-outline {

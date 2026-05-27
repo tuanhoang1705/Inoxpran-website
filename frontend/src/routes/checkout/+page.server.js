@@ -268,6 +268,26 @@ const buildRemainingCartProducts = ({ originalProducts, orderedProducts }) => {
 const sumCartQuantity = (products) =>
 	normalizeCartProducts(products).reduce((sum, entry) => sum + entry.quantity, 0);
 
+const getOrderId = (orderValue) =>
+	String(orderValue?._id || orderValue?.orderId || orderValue?.id || '').trim();
+
+const buildLocalizedPath = (url, path) => {
+	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+	return url?.pathname?.startsWith('/en/') ? `/en${normalizedPath}` : normalizedPath;
+};
+
+const buildCheckoutCompleteLocation = ({ url, orderValue, cartCount, mode }) => {
+	const params = new URLSearchParams();
+	const orderId = getOrderId(orderValue);
+	if (orderId) params.set('orderId', orderId);
+	const count = Number(cartCount);
+	if (Number.isFinite(count) && count >= 0) params.set('cartCount', String(Math.floor(count)));
+	if (mode) params.set('mode', mode);
+	const query = params.toString();
+	const path = buildLocalizedPath(url, '/checkout/complete');
+	return query ? `${path}?${query}` : path;
+};
+
 const syncCartToExpectedState = async ({ fetch, session, expectedProducts }) => {
 	const headers = {
 		...buildUserHeaders(session),
@@ -623,7 +643,7 @@ export const actions = {
 		};
 	},
 
-	placeOrder: async ({ request, fetch, cookies }) => {
+	placeOrder: async ({ request, fetch, cookies, url }) => {
 		const session = getUserSession(cookies);
 		const t = getTranslator(cookies);
 		if (!session) {
@@ -790,6 +810,10 @@ export const actions = {
 
 		const shippingFee = extractShippingFeeAmount(shippingFeeQuote);
 		const isBuyNowFlow = Boolean(buyNowProductId);
+		const isSelectedCartFlow = Boolean(selectedProductIds);
+		const isPartialCartFlow =
+			isSelectedCartFlow ||
+			normalizedEffectiveCartProducts.length !== originalCartProducts.length;
 		const orderPayloadBody = {
 			shop_order_ids: shopOrders,
 			user_address: shippingAddress,
@@ -803,7 +827,7 @@ export const actions = {
 				shipping_quote_rate: shippingFeeQuote?.rate || undefined
 			}
 		};
-		if (cart?._id && !isBuyNowFlow) {
+		if (cart?._id && !isBuyNowFlow && !isPartialCartFlow) {
 			orderPayloadBody.cartId = cart._id;
 		}
 
@@ -852,10 +876,14 @@ export const actions = {
 			// Keep expected count fallback when the final cart refresh is unavailable.
 		}
 
-		return {
-			success: true,
-			order: orderPayload?.metadata ?? null,
-			cartCount: finalCartCount
-		};
+		throw redirect(
+			303,
+			buildCheckoutCompleteLocation({
+				url,
+				orderValue: orderPayload?.metadata ?? null,
+				cartCount: finalCartCount,
+				mode: isBuyNowFlow ? 'buy-now' : isSelectedCartFlow ? 'selected' : 'cart'
+			})
+		);
 	}
 };
