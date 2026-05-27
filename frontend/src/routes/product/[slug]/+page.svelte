@@ -2492,7 +2492,7 @@
 </main>
 
 {#if product}
-	<section style="padding: 2rem 1rem; background: #f9f9f9;">
+	<section class="product-details-section">
 		<div class="container" style="max-width: 1200px; margin: 0 auto;">
 			<div class="tabs-wrapper">
 				<div class="tabs-nav">
@@ -4962,10 +4962,24 @@
 		hyphens: auto;
 	}
 
+	.product-details-section {
+		padding: 2rem 1rem;
+		background: #f9f9f9;
+	}
+
 	@media (max-width: 768px) {
+		.product-main > .container {
+			padding-bottom: 0.75rem;
+		}
+
 		.product-grid {
 			grid-template-columns: 1fr;
-			margin-bottom: 0px;
+			gap: 1rem;
+			margin-bottom: 0.75rem;
+		}
+
+		.product-info {
+			padding-bottom: 0.85rem;
 		}
 
 		.product-meta-row {
@@ -5067,6 +5081,20 @@
 
 		.product-meta {
 			grid-template-columns: 1fr;
+			gap: 0.65rem;
+			padding: 0.85rem;
+		}
+
+		.product-meta .meta-item {
+			gap: 2px;
+		}
+
+		.product-details-section {
+			padding: 0 1rem 1.25rem;
+		}
+
+		.tabs-wrapper {
+			margin-top: 0;
 		}
 
 		.action-buttons {

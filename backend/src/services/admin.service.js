@@ -8,6 +8,7 @@ const UserService = require("./user.service");
 const TelemetryService = require("./telemetry.service");
 const DashboardMetricsService = require("./dashboardMetrics.service");
 const SiteSettingService = require("./siteSetting.service");
+const { deleteImageFromStorage } = require("./storage.service");
 const { publishLiveSupportEvent } = require("./liveSupportEvent.service");
 const {
   getWebPushClientConfig,
@@ -1272,12 +1273,30 @@ class AdminService {
       throw new BadRequestError("No valid fields to update");
     }
 
+    const previousAdmin = Object.prototype.hasOwnProperty.call(updatePayload, "avatar")
+      ? await adminModel.findById(adminObjectId).select("avatar").lean()
+      : null;
+
     const updatedAdmin = await adminModel
       .findByIdAndUpdate(adminObjectId, updatePayload, { new: true })
       .select({ password: 0 })
       .lean();
 
     if (!updatedAdmin) throw new NotFoundError("Admin not found");
+    if (
+      previousAdmin?.avatar &&
+      updatedAdmin.avatar &&
+      previousAdmin.avatar !== updatedAdmin.avatar
+    ) {
+      try {
+        await deleteImageFromStorage({ url: previousAdmin.avatar });
+      } catch (error) {
+        console.error("Failed to delete old admin avatar", {
+          adminId,
+          error: error?.message || "delete-avatar-failed",
+        });
+      }
+    }
     return updatedAdmin;
   };
 

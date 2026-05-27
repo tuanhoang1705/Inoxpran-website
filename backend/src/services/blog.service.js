@@ -5,7 +5,14 @@ const slugify = require('slugify');
 const { blog, BLOG_CATEGORY_KEYS } = require('../models/blog.model');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { convertToObjectIdMongodb } = require('../utils');
-const { deleteImageFromStorage, deleteImageVariantsFromStorage } = require('./storage.service');
+const {
+    collectHtmlImageStorageKeys,
+    deleteHtmlImagesFromStorage,
+    deleteImageFromStorage,
+    deleteImageVariantsFromStorage,
+    deleteRemovedHtmlImagesFromStorage,
+    toStorageArtifactKey
+} = require('./storage.service');
 const NewsletterService = require('./newsletter.service');
 
 const MAX_LIMIT = 100;
@@ -261,6 +268,22 @@ const safeSendNewsletter = async ({ blogSummary, sendNewsletter }) => {
             error: error?.message || 'newsletter-failed'
         });
     }
+};
+
+const collectBlogMediaReferenceKeys = (blogItem = {}) => {
+    const keys = new Set();
+    const coverKey = toStorageArtifactKey({
+        path: blogItem?.blog_image_path,
+        url: blogItem?.blog_image
+    });
+    if (coverKey) keys.add(coverKey);
+    collectHtmlImageStorageKeys(blogItem?.blog_content).forEach((key) => keys.add(key));
+    return keys;
+};
+
+const isBlogMediaReferenced = (artifact, referenceKeys) => {
+    const key = toStorageArtifactKey(artifact);
+    return Boolean(key && referenceKeys?.has(key));
 };
 
 const buildSlug = (value) => {
@@ -610,8 +633,16 @@ class BlogService {
             Object.prototype.hasOwnProperty.call(updateDoc, 'blog_image') &&
             updateDoc.blog_image &&
             updateDoc.blog_image !== current.blog_image;
+        const hasContentUpdate = Object.prototype.hasOwnProperty.call(updateDoc, 'blog_content');
+        const updatedReferenceKeys = collectBlogMediaReferenceKeys(updated);
 
-        if (hasNewImage) {
+        if (
+            hasNewImage &&
+            !isBlogMediaReferenced(
+                { path: current.blog_image_path, url: current.blog_image },
+                updatedReferenceKeys
+            )
+        ) {
             try {
                 await deleteImageFromStorage({
                     path: current.blog_image_path,
@@ -624,6 +655,17 @@ class BlogService {
                     error: error?.message || 'delete-image-failed'
                 });
             }
+        }
+        if (hasContentUpdate && current.blog_content) {
+            await deleteRemovedHtmlImagesFromStorage({
+                previousHtml: current.blog_content,
+                nextHtml: updated.blog_content,
+                protectedKeys: updatedReferenceKeys,
+                context: {
+                    entity: 'blog',
+                    blogId
+                }
+            });
         }
 
         return mapBlogDetail(updated, []);
@@ -654,6 +696,12 @@ class BlogService {
                 error: error?.message || 'delete-image-failed'
             });
         }
+        await deleteHtmlImagesFromStorage(found.blog_content, {
+            context: {
+                entity: 'blog',
+                blogId
+            }
+        });
 
         return true;
     }

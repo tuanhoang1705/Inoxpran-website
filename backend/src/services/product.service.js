@@ -30,7 +30,14 @@ const {
     findInventoryByProductIds,
     setInventoryStock
 } = require('../models/repositories/inventory.repo');
-const { deleteImageFromStorage, deleteImageVariantsFromStorage } = require('./storage.service');
+const {
+    collectHtmlImageStorageKeys,
+    deleteHtmlImagesFromStorage,
+    deleteImageFromStorage,
+    deleteImageVariantsFromStorage,
+    deleteRemovedHtmlImagesFromStorage,
+    toStorageArtifactKey
+} = require('./storage.service');
 // define Factory class to create product
 
 const parseJsonField = (value, fieldName) => {
@@ -494,6 +501,29 @@ const deleteReviewImagesFromStorage = async (images = []) => {
     );
 };
 
+const collectProductMediaReferenceKeys = (productItem = {}) => {
+    const keys = new Set();
+    const addArtifact = (artifact) => {
+        const key = toStorageArtifactKey(artifact);
+        if (key) keys.add(key);
+    };
+
+    addArtifact({
+        path: productItem?.product_thumb_path,
+        url: productItem?.product_thumb
+    });
+    if (Array.isArray(productItem?.product_gallery)) {
+        productItem.product_gallery.forEach((item) => addArtifact(item));
+    }
+    collectHtmlImageStorageKeys(productItem?.product_description).forEach((key) => keys.add(key));
+    return keys;
+};
+
+const isProductMediaReferenced = (artifact, referenceKeys) => {
+    const key = toStorageArtifactKey(artifact);
+    return Boolean(key && referenceKeys?.has(key));
+};
+
 const normalizeProductGallery = (value) => {
     const parsed = parseJsonField(value, 'product_gallery');
     if (parsed === undefined) return undefined;
@@ -798,10 +828,20 @@ class ProductFactory {
              Object.prototype.hasOwnProperty.call(normalizedPayload, 'product_thumb') ||
              Object.prototype.hasOwnProperty.call(normalizedPayload, 'product_thumb_path');
           const hasNewGallery = Object.prototype.hasOwnProperty.call(normalizedPayload, 'product_gallery');
+          const hasDescriptionUpdate = Object.prototype.hasOwnProperty.call(
+              normalizedPayload,
+              'product_description'
+          );
           const previousProduct =
-             (hasNewThumb || hasNewGallery) ? await product.findById(productId).lean() : null;
+             (hasNewThumb || hasNewGallery || hasDescriptionUpdate)
+                 ? await product.findById(productId).lean()
+                 : null;
           const productInstance = new productClass(normalizedPayload);
           const updated = await productInstance.updateProduct(productId);
+          const updatedProduct = updated && typeof updated.toObject === 'function'
+              ? updated.toObject()
+              : updated;
+          const updatedReferenceKeys = collectProductMediaReferenceKeys(updatedProduct);
           if (Object.prototype.hasOwnProperty.call(normalizedPayload, 'product_quantity')) {
               const nextStock = parseNumber(normalizedPayload.product_quantity, undefined);
               if (Number.isFinite(nextStock)) {
@@ -817,7 +857,11 @@ class ProductFactory {
             const samePath = oldThumbPath && newThumbPath && oldThumbPath === newThumbPath;
             const sameUrl = oldThumbUrl && newThumbUrl && oldThumbUrl === newThumbUrl;
 
-            if (!samePath && !sameUrl) {
+            if (
+                !samePath &&
+                !sameUrl &&
+                !isProductMediaReferenced({ path: oldThumbPath, url: oldThumbUrl }, updatedReferenceKeys)
+            ) {
                 try {
                     await deleteImageFromStorage({ path: oldThumbPath, url: oldThumbUrl });
                     await deleteImageVariantsFromStorage(previousProduct.product_thumb_variants);
@@ -846,6 +890,7 @@ class ProductFactory {
               const samePath = image.path && keptPaths.has(image.path);
               const sameUrl = image.url && keptUrls.has(image.url);
               if (samePath || sameUrl) continue;
+              if (isProductMediaReferenced(image, updatedReferenceKeys)) continue;
               try {
                  await deleteImageFromStorage({ path: image.path, url: image.url });
                  await deleteImageVariantsFromStorage(image.variants);
@@ -856,6 +901,17 @@ class ProductFactory {
                  });
               }
            }
+        }
+        if (hasDescriptionUpdate && previousProduct?.product_description) {
+            await deleteRemovedHtmlImagesFromStorage({
+                previousHtml: previousProduct.product_description,
+                nextHtml: updatedProduct?.product_description || normalizedPayload.product_description,
+                protectedKeys: updatedReferenceKeys,
+                context: {
+                    entity: 'product',
+                    productId
+                }
+            });
         }
 
            return await attachInventoryStock(updated);
@@ -911,6 +967,12 @@ class ProductFactory {
                 }
             }
         }
+        await deleteHtmlImagesFromStorage(foundProduct.product_description, {
+            context: {
+                entity: 'product',
+                productId: String(foundProduct._id || product_id)
+            }
+        });
 
         switch (foundProduct.product_type) {
             case 'CastIrons':

@@ -489,6 +489,106 @@ const deleteImageFromStorage = async ({ path, url }) => {
     }
 };
 
+const decodeHtmlAttribute = (value) =>
+    String(value || '')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;|&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>');
+
+const collectImageUrlsFromHtml = (html) => {
+    const source = String(html || '');
+    if (!source || !source.toLowerCase().includes('<img')) return [];
+
+    const urls = [];
+    const seen = new Set();
+    const imageSrcPattern = /<img\b[^>]*\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+    let match;
+    while ((match = imageSrcPattern.exec(source)) !== null) {
+        const rawUrl = match[1] || match[2] || match[3] || '';
+        const url = decodeHtmlAttribute(rawUrl).trim();
+        if (!url || url.startsWith('data:') || seen.has(url)) continue;
+        seen.add(url);
+        urls.push(url);
+    }
+    return urls;
+};
+
+const toStorageArtifactKey = ({ path, url } = {}) => {
+    const normalizedPath = typeof path === 'string' ? path.trim() : '';
+    if (normalizedPath) return `path:${normalizedPath}`;
+
+    const normalizedUrl = typeof url === 'string' ? decodeHtmlAttribute(url).trim() : '';
+    if (!normalizedUrl) return '';
+    const storagePath = extractStoragePathFromUrl(normalizedUrl);
+    if (storagePath) return `path:${storagePath}`;
+    return `url:${normalizedUrl}`;
+};
+
+const normalizeStorageKeySet = (keys) => {
+    if (!keys) return new Set();
+    if (keys instanceof Set) return new Set([...keys].filter(Boolean));
+    if (Array.isArray(keys)) return new Set(keys.filter(Boolean));
+    return new Set();
+};
+
+const collectHtmlImageStorageKeys = (html) =>
+    new Set(
+        collectImageUrlsFromHtml(html)
+            .map((url) => toStorageArtifactKey({ url }))
+            .filter(Boolean)
+    );
+
+const deleteHtmlImageUrlsFromStorage = async (urls = [], { protectedKeys, context } = {}) => {
+    const protectedKeySet = normalizeStorageKeySet(protectedKeys);
+    const seen = new Set();
+    let deleted = 0;
+    let total = 0;
+
+    for (const url of urls) {
+        const key = toStorageArtifactKey({ url });
+        if (!key || protectedKeySet.has(key) || seen.has(key)) continue;
+        seen.add(key);
+        total += 1;
+        try {
+            const result = await deleteImageFromStorage({ url });
+            if (result) deleted += 1;
+        } catch (error) {
+            console.error('Failed to delete HTML image from storage', {
+                ...(context && typeof context === 'object' ? context : {}),
+                url,
+                error: error?.message || 'delete-html-image-failed'
+            });
+        }
+    }
+
+    return { deleted, total };
+};
+
+const deleteHtmlImagesFromStorage = async (html, options = {}) =>
+    deleteHtmlImageUrlsFromStorage(collectImageUrlsFromHtml(html), options);
+
+const deleteRemovedHtmlImagesFromStorage = async ({
+    previousHtml,
+    nextHtml,
+    protectedKeys,
+    context
+} = {}) => {
+    const previousUrls = collectImageUrlsFromHtml(previousHtml);
+    if (!previousUrls.length) return { deleted: 0, total: 0 };
+
+    const nextKeys = collectHtmlImageStorageKeys(nextHtml);
+    const protectedKeySet = normalizeStorageKeySet(protectedKeys);
+    const skipKeys = new Set([...nextKeys, ...protectedKeySet]);
+    const removedUrls = previousUrls.filter((url) => {
+        const key = toStorageArtifactKey({ url });
+        return key && !skipKeys.has(key);
+    });
+
+    return deleteHtmlImageUrlsFromStorage(removedUrls, { context });
+};
+
 const walkStorageArtifacts = (value, acc) => {
     if (!value) return acc;
     if (Array.isArray(value)) {
@@ -545,5 +645,10 @@ module.exports = {
     uploadBase64Image,
     deleteImageFromStorage,
     deleteImageVariantsFromStorage,
+    collectHtmlImageStorageKeys,
+    collectImageUrlsFromHtml,
+    deleteHtmlImagesFromStorage,
+    deleteRemovedHtmlImagesFromStorage,
+    toStorageArtifactKey,
     IMAGE_OPTIMIZATION_PROFILES
 };
