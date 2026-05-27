@@ -1,5 +1,6 @@
 const TOAST_COOKIE = 'admin_toast';
 const DEFAULT_MAX_AGE = 60;
+const COOKIE_PATH = '/';
 
 const normalizeToast = (toast) => {
 	if (!toast || !toast.message) return null;
@@ -16,7 +17,7 @@ export const setAdminToast = (cookies, toast) => {
 	if (!payload) return;
 
 	cookies.set(TOAST_COOKIE, JSON.stringify(payload), {
-		path: '/admin',
+		path: COOKIE_PATH,
 		maxAge: DEFAULT_MAX_AGE,
 		sameSite: 'lax'
 	});
@@ -26,6 +27,7 @@ export const consumeAdminToast = (cookies) => {
 	const raw = cookies.get(TOAST_COOKIE);
 	if (!raw) return null;
 
+	cookies.delete(TOAST_COOKIE, { path: COOKIE_PATH });
 	cookies.delete(TOAST_COOKIE, { path: '/admin' });
 
 	try {

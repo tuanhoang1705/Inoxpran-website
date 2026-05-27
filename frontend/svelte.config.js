@@ -8,6 +8,7 @@ const csrfTrustedOrigins = Array.from(
 		'http://127.0.0.1',
 		'http://127.0.0.1:4173',
 		'http://127.0.0.1:5173',
+		'https://admin.inoxpran.com',
 		'https://inoxpran.com',
 		'https://www.inoxpran.com'
 	])

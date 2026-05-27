@@ -13,8 +13,10 @@ This project now deploys the storefront chat through OpenAI only.
 
 ```env
 LETSENCRYPT_EMAIL=you@example.com
+ADMIN_DOMAIN=admin.inoxpran.com
 
 APP_BASE_URL=https://inoxpran.com
+ADMIN_BASE_URL=https://admin.inoxpran.com
 PUBLIC_WEB_BASE=https://inoxpran.com
 PUBLIC_SITE_URL=https://inoxpran.com
 
@@ -56,6 +58,8 @@ chmod +x deploy/scripts/deploy.sh
 ```bash
 docker compose ps
 curl -I https://inoxpran.com
+curl -I https://admin.inoxpran.com
+curl https://admin.inoxpran.com/robots.txt
 ```
 
 Expected core services:

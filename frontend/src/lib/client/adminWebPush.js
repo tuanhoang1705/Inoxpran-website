@@ -1,7 +1,13 @@
 const PUSH_PUBLIC_KEY_PATH = '/admin/api/push/public-key';
 const PUSH_SUBSCRIPTIONS_PATH = '/admin/api/push/subscriptions';
+const ADMIN_SUBDOMAIN = 'admin.inoxpran.com';
 
 const normalizeText = (value = '') => (typeof value === 'string' ? value.trim() : '');
+const resolveAdminPath = (path) => {
+	if (typeof window === 'undefined') return path;
+	if (window.location.hostname !== ADMIN_SUBDOMAIN) return path;
+	return path.replace(/^\/admin(?=\/|$)/, '') || '/';
+};
 
 const isSecureLocalhost = () => {
 	if (typeof window === 'undefined') return false;
@@ -20,7 +26,7 @@ export const fetchAdminWebPushConfig = async () => {
 		return { enabled: false, publicKey: null, supported: false };
 	}
 
-	const response = await fetch(PUSH_PUBLIC_KEY_PATH, {
+	const response = await fetch(resolveAdminPath(PUSH_PUBLIC_KEY_PATH), {
 		method: 'GET',
 		credentials: 'same-origin',
 		headers: { accept: 'application/json' }
@@ -105,7 +111,7 @@ export const ensureAdminWebPushSubscription = async ({
 		created = true;
 	}
 
-	const response = await fetch(PUSH_SUBSCRIPTIONS_PATH, {
+	const response = await fetch(resolveAdminPath(PUSH_SUBSCRIPTIONS_PATH), {
 		method: 'POST',
 		credentials: 'same-origin',
 		headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -151,7 +157,7 @@ export const disableAdminWebPushSubscription = async ({ serviceWorkerUrl, servic
 	}
 
 	const endpoint = normalizeText(subscription.endpoint);
-	await fetch(PUSH_SUBSCRIPTIONS_PATH, {
+	await fetch(resolveAdminPath(PUSH_SUBSCRIPTIONS_PATH), {
 		method: 'DELETE',
 		credentials: 'same-origin',
 		headers: { 'content-type': 'application/json', accept: 'application/json' },

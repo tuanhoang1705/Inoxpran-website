@@ -221,7 +221,8 @@ const buildLiveSupportPushPayload = (event = {}) => {
 
   const roomCode = buildRoomCode(sessionId);
   const action = normalizeText(event?.action).toLowerCase();
-  const url = `/admin/chat-rooms/${sessionId}`;
+  const adminBaseUrl = normalizeText(process.env.ADMIN_BASE_URL) || "https://admin.inoxpran.com";
+  const url = `${adminBaseUrl.replace(/\/+$/, "")}/chat-rooms/${sessionId}`;
   const occurredAt = event?.occurredAt
     ? Date.parse(event.occurredAt)
     : Date.now();

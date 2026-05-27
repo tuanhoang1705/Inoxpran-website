@@ -2,6 +2,7 @@
 	import '$lib/styles/admin.css';
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
 	import AdminToastHost from '$lib/components/AdminToastHost.svelte';
@@ -12,9 +13,13 @@
 	let lastToastKey = '';
 	let mobileSidebarOpen = $state(false);
 	let isMobileViewport = $state(false);
+	const ADMIN_SUBDOMAIN = 'admin.inoxpran.com';
 	const adminRoles = $derived(Array.isArray(data?.admin?.roles) ? data.admin.roles : []);
+	const isAdminSubdomain = $derived($page.url.hostname === ADMIN_SUBDOMAIN);
 	const hasAnyRole = (allowed = []) =>
 		!allowed.length || allowed.some((role) => adminRoles.includes(role));
+	const stripAdminPrefix = (path) => path.replace(/^\/admin(?=\/|$)/, '') || '/';
+	const resolveAdminHref = (href) => (isAdminSubdomain ? stripAdminPrefix(href) : href);
 
 	const navItems = $derived(
 		[
@@ -48,7 +53,8 @@
 	);
 
 	const isActive = (href) => {
-		const path = $page.url.pathname;
+		const routeId = String($page.route?.id || '');
+		const path = routeId === '/admin' || routeId.startsWith('/admin/') ? routeId : $page.url.pathname;
 		if (path === href) return true;
 		if (href === '/admin') return false;
 		return path.startsWith(`${href}/`);
@@ -66,7 +72,7 @@
 		if (!browser) return;
 		event.preventDefault();
 		closeMobileSidebar();
-		window.location.href = resolve('/admin/logout');
+		window.location.href = resolve(resolveAdminHref('/admin/logout'));
 	};
 
 	$effect(() => {
@@ -82,6 +88,16 @@
 	$effect(() => {
 		$page.url.pathname;
 		mobileSidebarOpen = false;
+		if (browser && window.location.hostname === ADMIN_SUBDOMAIN) {
+			const cleanPath = stripAdminPrefix(window.location.pathname);
+			if (cleanPath !== window.location.pathname) {
+				goto(`${cleanPath}${window.location.search}${window.location.hash}`, {
+					replaceState: true,
+					noScroll: true,
+					keepFocus: true
+				});
+			}
+		}
 	});
 
 	$effect(() => {
@@ -200,14 +216,14 @@
 						<a
 							class="admin-nav-link"
 							class:active={isActive(item.href)}
-							href={resolve(item.href)}
+							href={resolve(resolveAdminHref(item.href))}
 							aria-current={isActive(item.href) ? 'page' : undefined}
 							onclick={closeMobileSidebar}
 						>
 							<span>{item.label}</span>
 						</a>
 					{/each}
-					<a class="admin-nav-link danger" href={resolve('/admin/logout')} onclick={handleLogoutClick}>
+					<a class="admin-nav-link danger" href={resolve(resolveAdminHref('/admin/logout'))} onclick={handleLogoutClick}>
 						<span>{$t('admin.layout.logout')}</span>
 					</a>
 				</nav>

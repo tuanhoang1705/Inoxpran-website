@@ -43,6 +43,10 @@ const PROFILE_FETCH_TIMEOUT_MS = 900;
 const CART_FETCH_TIMEOUT_MS = 700;
 const isEnglishPath = (pathname) => pathname === '/en' || pathname.startsWith('/en/');
 const isAdminPath = (pathname) => pathname === '/admin' || pathname.startsWith('/admin/');
+const isAdminRoute = (event) => {
+	const routeId = String(event.route?.id || '');
+	return isAdminPath(event.url.pathname) || routeId === '/admin' || routeId.startsWith('/admin/');
+};
 const SITE_FEATURES_CACHE = createAsyncTtlCache({
 	ttlMs: 60_000,
 	maxEntries: 4
@@ -245,7 +249,8 @@ const getCartCountForSession = async ({ fetch, session }) => {
 export const load = async (event) => {
 	const { cookies, fetch, locals } = event;
 	const pathname = event.url.pathname;
-	const locale = isAdminPath(pathname)
+	const isAdminRequest = isAdminRoute(event);
+	const locale = isAdminRequest
 		? getLocaleFromCookies(cookies)
 		: isEnglishPath(pathname)
 			? 'en'

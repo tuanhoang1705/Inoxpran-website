@@ -113,8 +113,9 @@
 		return false;
 	};
 
-	const isAdminRoute = (path) => path.startsWith('/admin');
-	const hideSiteChrome = $derived(isAdminRoute(page.url.pathname));
+	const isAdminRoute = (path, routeId = '') =>
+		path.startsWith('/admin') || routeId === '/admin' || routeId.startsWith('/admin/');
+	const hideSiteChrome = $derived(isAdminRoute(page.url.pathname, page.route.id || ''));
 	const disableDefaultSeo = $derived(Boolean(page.data?.seo?.disableDefaults));
 	const hasUserSession = $derived(Boolean(page.data?.user?.userId));
 	const locale = $derived(page.data?.locale || 'vi');

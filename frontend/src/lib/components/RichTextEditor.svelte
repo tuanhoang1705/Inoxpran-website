@@ -24,6 +24,12 @@
 	let isUpdatingFromProp = false;
 	let detachEditorHandlers = null;
 	const editorPlaceholder = $derived(placeholder || $t('admin.editor.placeholder'));
+	const resolveAdminPath = (path) => {
+		if (typeof window === 'undefined' || window.location.hostname !== 'admin.inoxpran.com') {
+			return path;
+		}
+		return path.replace(/^\/admin(?=\/|$)/, '') || '/';
+	};
 
 	const emitChange = () => {
 		if (onChange) {
@@ -35,7 +41,7 @@
 		const payload = new FormData();
 		payload.set('image', file);
 
-		const response = await fetch('/admin/uploads/description-image', {
+		const response = await fetch(resolveAdminPath('/admin/uploads/description-image'), {
 			method: 'POST',
 			body: payload
 		});

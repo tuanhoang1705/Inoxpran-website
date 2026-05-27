@@ -5,17 +5,23 @@ import path from 'node:path';
 import { ensureAdminSession, clearAdminCookies } from '$lib/server/adminAuth.js';
 import { clearUserCookies } from '$lib/server/userAuth.js';
 
+const ADMIN_SUBDOMAIN = 'admin.inoxpran.com';
 const shouldSkipTrailingSlashRedirect = (pathname) =>
 	pathname.startsWith('/_app') || pathname.startsWith('/api');
 
 const isAdminPath = (pathname) => pathname.startsWith('/admin');
+const stripAdminPrefix = (pathname) => pathname.replace(/^\/admin(?=\/|$)/, '') || '/';
+const isAdminRouteId = (routeId) => routeId === '/admin' || routeId.startsWith('/admin/');
 const isAdminAuthRoute = (pathname) =>
 	pathname === '/admin/login' ||
 	pathname.startsWith('/admin/register') ||
 	pathname.startsWith('/admin/logout');
 const isAdminUploadRoute = (pathname) => pathname.startsWith('/admin/uploads');
-const isPublicSitePath = (pathname) =>
-	!pathname.startsWith('/admin') && !pathname.startsWith('/api') && !pathname.startsWith('/_app');
+const isPublicSitePath = (pathname, isAdminRequest = false) =>
+	!isAdminRequest &&
+	!pathname.startsWith('/admin') &&
+	!pathname.startsWith('/api') &&
+	!pathname.startsWith('/_app');
 const LEGACY_GARBAGE_QUERY_KEY_PREFIXES = ['new/', 'hyzx/', 'qydt/', 'zzzs/', 'dqjs/'];
 const LEGACY_GARBAGE_PATH_PREFIXES = ['/dqjs', '/zzzs', '/hyzx', '/qydt'];
 const KNOWN_PUBLIC_TOP_LEVEL_PATHS = new Set([
@@ -181,6 +187,21 @@ export const handle = async ({ event, resolve }) => {
 	const { url } = event;
 	const { pathname } = url;
 	const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
+	const routeId = String(event.route?.id || '');
+	const isAdminRequest = isAdminPath(pathname) || isAdminRouteId(routeId);
+	const adminPathname = isAdminPath(pathname) ? pathname : isAdminRouteId(routeId) ? routeId : pathname;
+	const adminLoginPath = url.hostname === ADMIN_SUBDOMAIN ? '/login' : '/admin/login';
+
+	if (url.hostname === ADMIN_SUBDOMAIN && isAdminPath(pathname)) {
+		const cleanPath = stripAdminPrefix(pathname);
+		return new Response(null, {
+			status: 308,
+			headers: {
+				location: `${cleanPath}${url.search}${url.hash}`,
+				'x-robots-tag': 'noindex, nofollow, noarchive'
+			}
+		});
+	}
 
 	if (normalizedPathname === '/categories' || normalizedPathname === '/en/categories') {
 		const targetPath = normalizedPathname === '/en/categories' ? '/en/shop' : '/shop';
@@ -191,7 +212,7 @@ export const handle = async ({ event, resolve }) => {
 	}
 
 	if (
-		isPublicSitePath(pathname) &&
+		isPublicSitePath(pathname, isAdminRequest) &&
 		(hasLegacyGarbagePath(pathname) || hasLegacyGarbageQuery(url.searchParams))
 	) {
 		return new Response('Gone', {
@@ -221,7 +242,7 @@ export const handle = async ({ event, resolve }) => {
 		});
 	}
 
-	const localeFromPath = isPublicSitePath(pathname)
+	const localeFromPath = isPublicSitePath(pathname, isAdminRequest)
 		? isEnglishPath(pathname)
 			? 'en'
 			: 'vi'
@@ -239,11 +260,11 @@ export const handle = async ({ event, resolve }) => {
 		});
 	}
 
-	if (isAdminPath(pathname) && !isAdminAuthRoute(pathname)) {
+	if (isAdminRequest && !isAdminAuthRoute(adminPathname)) {
 		const session = await ensureAdminSession({ cookies: event.cookies, fetch: event.fetch });
 		if (!session) {
 			clearAdminCookies(event.cookies);
-			if (isAdminUploadRoute(pathname)) {
+			if (isAdminUploadRoute(adminPathname)) {
 				return new Response(JSON.stringify({ error: 'Unauthorized' }), {
 					status: 401,
 					headers: { 'content-type': 'application/json' }
@@ -251,20 +272,20 @@ export const handle = async ({ event, resolve }) => {
 			}
 			return new Response(null, {
 				status: 303,
-				headers: { location: '/admin/login' }
+				headers: { location: adminLoginPath }
 			});
 		}
 		event.locals.admin = session;
 	}
 
-	const htmlLang = resolveHtmlLang(pathname);
+	const htmlLang = resolveHtmlLang(isAdminRequest ? '/admin' : pathname);
 	const response = await resolve(event, {
 		transformPageChunk: ({ html }) => html.replace(HTML_LANG_PLACEHOLDER, htmlLang)
 	});
 
 	if ((response.headers.get('content-type') || '').includes('text/html')) {
 		response.headers.set('content-language', htmlLang);
-		if (isAdminPath(pathname)) {
+		if (isAdminRequest) {
 			response.headers.delete('link');
 		}
 	}
@@ -277,7 +298,7 @@ export const handle = async ({ event, resolve }) => {
 		setHeaderIfMissing(response.headers, 'strict-transport-security', 'max-age=15552000');
 	}
 
-	if (isAdminPath(pathname)) {
+	if (isAdminRequest) {
 		setHeaderIfMissing(response.headers, 'x-robots-tag', 'noindex, nofollow, noarchive');
 	}
 

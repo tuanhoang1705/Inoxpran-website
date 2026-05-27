@@ -47,17 +47,25 @@ DOMAIN="${DOMAIN:-$(read_env_var DOMAIN)}"
 DOMAIN="${DOMAIN:-inoxpran.com}"
 WWW_DOMAIN="${WWW_DOMAIN:-$(read_env_var WWW_DOMAIN)}"
 WWW_DOMAIN="${WWW_DOMAIN:-www.inoxpran.com}"
+ADMIN_DOMAIN="${ADMIN_DOMAIN:-$(read_env_var ADMIN_DOMAIN)}"
+ADMIN_DOMAIN="${ADMIN_DOMAIN:-admin.${DOMAIN}}"
 EMAIL="${LETSENCRYPT_EMAIL:-$(read_env_var LETSENCRYPT_EMAIL)}"
 CERT_DIR="deploy/nginx/ssl/live/${DOMAIN}"
 
 mkdir -p deploy/nginx/ssl deploy/nginx/www
 
-has_certificate() {
+certificate_covers_domains() {
   docker compose run --rm --no-deps --entrypoint sh certbot -c \
-    "test -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
+    "test -f /etc/letsencrypt/live/${DOMAIN}/fullchain.pem &&
+     openssl x509 -in /etc/letsencrypt/live/${DOMAIN}/fullchain.pem -noout -text |
+       grep -q 'DNS:${DOMAIN}' &&
+     openssl x509 -in /etc/letsencrypt/live/${DOMAIN}/fullchain.pem -noout -text |
+       grep -q 'DNS:${WWW_DOMAIN}' &&
+     openssl x509 -in /etc/letsencrypt/live/${DOMAIN}/fullchain.pem -noout -text |
+       grep -q 'DNS:${ADMIN_DOMAIN}'"
 }
 
-if ! has_certificate; then
+if ! certificate_covers_domains; then
   if [ -z "$EMAIL" ]; then
     echo "Set LETSENCRYPT_EMAIL in .env or env before first deploy." >&2
     exit 1
@@ -65,10 +73,12 @@ if ! has_certificate; then
 
   cp deploy/nginx/http.conf deploy/nginx/default.conf
   docker compose up -d nginx
+  docker exec app_nginx nginx -s reload >/dev/null 2>&1 || docker compose restart nginx
 
   docker compose run --rm certbot certonly --webroot \
     -w /var/www/certbot \
-    -d "$DOMAIN" -d "$WWW_DOMAIN" \
+    --cert-name "$DOMAIN" --expand \
+    -d "$DOMAIN" -d "$WWW_DOMAIN" -d "$ADMIN_DOMAIN" \
     --email "$EMAIL" --agree-tos --no-eff-email
 fi
 
