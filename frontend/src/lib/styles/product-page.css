@@ -1299,8 +1299,8 @@ body {
 /* ===== Mobile: Product ===== */
 @media (max-width: 768px) {
 	.product-main .container {
-		padding: 1.5rem 1rem 6rem;
-		padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+		padding: 1.5rem 1rem 3rem;
+		padding-bottom: calc(3rem + env(safe-area-inset-bottom));
 	}
 
 	.product-main .product-grid {
@@ -1513,8 +1513,8 @@ body {
 
 @media (max-width: 480px) {
 	.product-main .container {
-		padding: 1.25rem 0.75rem 5.5rem !important;
-		padding-bottom: calc(5.5rem + env(safe-area-inset-bottom)) !important;
+		padding: 1.25rem 0.75rem 3rem !important;
+		padding-bottom: calc(3rem + env(safe-area-inset-bottom)) !important;
 	}
 
 	.product-main .product-hero,

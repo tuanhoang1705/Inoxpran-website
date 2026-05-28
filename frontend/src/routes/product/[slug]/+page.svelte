@@ -5186,7 +5186,8 @@
 
 	@media (max-width: 768px) {
 		.product-main > .container {
-			padding-bottom: 0.75rem;
+			padding-bottom: 3rem;
+			padding-bottom: calc(3rem + env(safe-area-inset-bottom));
 		}
 
 		.product-grid {
