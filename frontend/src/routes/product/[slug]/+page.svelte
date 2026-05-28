@@ -35,6 +35,10 @@
 	let galleryPanOriginX = $state(0);
 	let galleryPanOriginY = $state(0);
 	let galleryPanPointerId = $state(null);
+	let gallerySwipePointerId = null;
+	let gallerySwipeStartX = 0;
+	let gallerySwipeStartY = 0;
+	let gallerySwipeActive = false;
 	let galleryViewportEl = $state(null);
 	let galleryImageEl = $state(null);
 	let mainGalleryEl = $state(null);
@@ -353,6 +357,8 @@
 		galleryPanY = 0;
 		isGalleryPanning = false;
 		galleryPanPointerId = null;
+		gallerySwipePointerId = null;
+		gallerySwipeActive = false;
 	};
 
 	const setGalleryIndex = (nextIndex, options = {}) => {
@@ -494,8 +500,18 @@
 	};
 
 	const handleGalleryPanStart = (event) => {
-		if (galleryZoom <= 1) return;
 		if (event.button && event.button !== 0) return;
+		if (galleryZoom <= 1) {
+			if (!Array.isArray(galleryImages) || galleryImages.length <= 1) return;
+			gallerySwipePointerId = event.pointerId ?? null;
+			gallerySwipeStartX = event.clientX;
+			gallerySwipeStartY = event.clientY;
+			gallerySwipeActive = true;
+			if (galleryViewportEl?.setPointerCapture && event.pointerId != null) {
+				galleryViewportEl.setPointerCapture(event.pointerId);
+			}
+			return;
+		}
 		isGalleryPanning = true;
 		galleryPanPointerId = event.pointerId ?? null;
 		galleryPanStartX = event.clientX;
@@ -509,6 +525,15 @@
 	};
 
 	const handleGalleryPanMove = (event) => {
+		if (gallerySwipeActive) {
+			if (gallerySwipePointerId != null && event.pointerId !== gallerySwipePointerId) return;
+			const dx = event.clientX - gallerySwipeStartX;
+			const dy = event.clientY - gallerySwipeStartY;
+			if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+				event.preventDefault();
+			}
+			return;
+		}
 		if (!isGalleryPanning) return;
 		if (galleryPanPointerId != null && event.pointerId !== galleryPanPointerId) return;
 		const dx = event.clientX - galleryPanStartX;
@@ -517,6 +542,24 @@
 	};
 
 	const handleGalleryPanEnd = (event) => {
+		if (gallerySwipeActive) {
+			if (gallerySwipePointerId != null && event.pointerId !== gallerySwipePointerId) return;
+			const dx = event.clientX - gallerySwipeStartX;
+			const dy = event.clientY - gallerySwipeStartY;
+			if (galleryViewportEl?.releasePointerCapture && gallerySwipePointerId != null) {
+				galleryViewportEl.releasePointerCapture(gallerySwipePointerId);
+			}
+			gallerySwipePointerId = null;
+			gallerySwipeActive = false;
+			if (Math.abs(dx) >= 44 && Math.abs(dx) > Math.abs(dy) * 1.15) {
+				if (dx < 0) {
+					goGalleryNext();
+				} else {
+					goGalleryPrev();
+				}
+			}
+			return;
+		}
 		if (!isGalleryPanning) return;
 		if (galleryPanPointerId != null && event.pointerId !== galleryPanPointerId) return;
 		isGalleryPanning = false;
@@ -1895,7 +1938,12 @@
 		const updateThumbNavState = () => {
 			if (!thumbTrackEl) return;
 			const maxScroll = Math.max(0, thumbTrackEl.scrollWidth - thumbTrackEl.clientWidth);
-			const current = Math.max(0, thumbTrackEl.scrollLeft);
+			if (thumbTrackEl.scrollLeft < 0) {
+				thumbTrackEl.scrollLeft = 0;
+			} else if (thumbTrackEl.scrollLeft > maxScroll) {
+				thumbTrackEl.scrollLeft = maxScroll;
+			}
+			const current = Math.max(0, Math.min(maxScroll, thumbTrackEl.scrollLeft));
 			setButtonDisabled(thumbPrevEl, current <= 2 || maxScroll <= 2);
 			setButtonDisabled(thumbNextEl, current >= maxScroll - 2 || maxScroll <= 2);
 		};
@@ -1915,10 +1963,11 @@
 			const safeIndex = Math.max(0, Math.min(activeIndex, slides.length - 1));
 			const target = slides[safeIndex];
 			if (!target) return;
+			const maxScroll = Math.max(0, thumbTrackEl.scrollWidth - thumbTrackEl.clientWidth);
 			const targetLeft =
 				target.offsetLeft - Math.max(0, (thumbTrackEl.clientWidth - target.offsetWidth) / 2);
 			thumbTrackEl.scrollTo({
-				left: Math.max(0, targetLeft),
+				left: Math.max(0, Math.min(maxScroll, targetLeft)),
 				top: 0,
 				behavior: 'smooth'
 			});
@@ -1974,14 +2023,19 @@
 			event?.preventDefault?.();
 			if (!thumbTrackEl || thumbPrevEl?.disabled) return;
 			const step = Math.max(140, Math.round(thumbTrackEl.clientWidth * 0.7));
-			thumbTrackEl.scrollBy({ left: -step, top: 0, behavior: 'smooth' });
+			const target = Math.max(0, thumbTrackEl.scrollLeft - step);
+			thumbTrackEl.scrollTo({ left: target, top: 0, behavior: 'smooth' });
+			window.setTimeout(queueThumbNavUpdate, 260);
 		};
 
 		const handleThumbNextClick = (event) => {
 			event?.preventDefault?.();
 			if (!thumbTrackEl || thumbNextEl?.disabled) return;
 			const step = Math.max(140, Math.round(thumbTrackEl.clientWidth * 0.7));
-			thumbTrackEl.scrollBy({ left: step, top: 0, behavior: 'smooth' });
+			const maxScroll = Math.max(0, thumbTrackEl.scrollWidth - thumbTrackEl.clientWidth);
+			const target = Math.max(0, Math.min(maxScroll, thumbTrackEl.scrollLeft + step));
+			thumbTrackEl.scrollTo({ left: target, top: 0, behavior: 'smooth' });
+			window.setTimeout(queueThumbNavUpdate, 260);
 		};
 
 		const initNativeGallerySlider = () => {
@@ -3121,7 +3175,6 @@
 			class="gallery-overlay"
 			use:portalToBody
 			onwheel={preventGalleryOverlayScroll}
-			ontouchmove={preventGalleryOverlayScroll}
 		>
 			<button
 				type="button"
@@ -3291,7 +3344,7 @@
 		-webkit-backdrop-filter: blur(6px);
 		z-index: 2147483000;
 		overflow: hidden;
-		touch-action: none;
+		touch-action: pan-x pan-y;
 		overscroll-behavior: contain;
 	}
 
@@ -3318,6 +3371,10 @@
 
 	:global(body.gallery-zoom-open .site-header) {
 		z-index: 10 !important;
+	}
+
+	:global(body.gallery-zoom-open .support-chat) {
+		display: none !important;
 	}
 
 	/* Force mobile action bar visibility even after client-side navigation */
@@ -3393,7 +3450,8 @@
 		scroll-behavior: smooth;
 		-webkit-overflow-scrolling: touch;
 		scrollbar-width: none;
-		touch-action: pan-y pinch-zoom;
+		touch-action: pan-x pan-y pinch-zoom;
+		overscroll-behavior-x: contain;
 	}
 
 	.main-gallery .large-swiper::-webkit-scrollbar {
@@ -3646,6 +3704,8 @@
 		justify-content: center;
 		overflow: hidden;
 		cursor: zoom-in;
+		touch-action: pan-y;
+		overscroll-behavior: contain;
 	}
 
 	.gallery-modal-image.is-zoomed {
@@ -3782,6 +3842,8 @@
 			border-top: 1px solid rgba(255, 255, 255, 0.08);
 			-webkit-overflow-scrolling: touch;
 			scrollbar-width: none;
+			touch-action: pan-x;
+			overscroll-behavior-x: contain;
 		}
 
 		.gallery-modal-thumbs-mobile::-webkit-scrollbar {
@@ -3838,6 +3900,8 @@
 		scrollbar-width: none;
 		-webkit-overflow-scrolling: touch;
 		scroll-snap-type: x proximity;
+		touch-action: pan-x;
+		overscroll-behavior-x: contain;
 	}
 
 	.thumbnail-gallery .swiper-wrapper::-webkit-scrollbar {

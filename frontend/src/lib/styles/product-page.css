@@ -1051,7 +1051,8 @@ body {
 	scroll-snap-type: x mandatory;
 	-webkit-overflow-scrolling: touch;
 	scrollbar-width: none;
-	touch-action: pan-y;
+	touch-action: pan-x pan-y;
+	overscroll-behavior-x: contain;
 }
 
 .related-section .product-swiper::-webkit-scrollbar {

@@ -4638,7 +4638,8 @@ footer a {
 	scroll-behavior: smooth;
 	-webkit-overflow-scrolling: touch;
 	scrollbar-width: none;
-	touch-action: pan-y;
+	touch-action: pan-x pan-y;
+	overscroll-behavior-x: contain;
 }
 
 #best-selling-items .product-swiper[data-native-slider]::-webkit-scrollbar {

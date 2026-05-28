@@ -2274,6 +2274,8 @@
 		padding: 6px 2px 28px;
 		scroll-snap-type: x mandatory;
 		scrollbar-width: none;
+		touch-action: pan-x pan-y;
+		overscroll-behavior-x: contain;
 	}
 
 	#best-selling-items .product-swiper[data-native-slider]::-webkit-scrollbar {
