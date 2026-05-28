@@ -41,6 +41,13 @@
 	let gallerySwipeActive = false;
 	let galleryViewportEl = $state(null);
 	let galleryImageEl = $state(null);
+	let galleryModalThumbsMobileEl = $state(null);
+	let galleryThumbStripPointerId = null;
+	let galleryThumbStripStartX = 0;
+	let galleryThumbStripStartY = 0;
+	let galleryThumbStripStartScrollLeft = 0;
+	let galleryThumbStripDragging = false;
+	let suppressGalleryThumbClick = false;
 	let mainGalleryEl = $state(null);
 	let reviewImageInputEl = $state(null);
 	let reviewsSectionEl = $state(null);
@@ -359,6 +366,8 @@
 		galleryPanPointerId = null;
 		gallerySwipePointerId = null;
 		gallerySwipeActive = false;
+		galleryThumbStripPointerId = null;
+		galleryThumbStripDragging = false;
 	};
 
 	const setGalleryIndex = (nextIndex, options = {}) => {
@@ -431,6 +440,15 @@
 
 	const selectGalleryImage = (index) => {
 		setGalleryIndex(index, { syncMainSlider: true, resetTransform: true });
+	};
+
+	const handleGalleryThumbClick = (event, index) => {
+		if (suppressGalleryThumbClick) {
+			event?.preventDefault?.();
+			event?.stopPropagation?.();
+			return;
+		}
+		selectGalleryImage(index);
 	};
 
 	const goGalleryPrev = () => {
@@ -568,6 +586,120 @@
 		}
 		galleryPanPointerId = null;
 	};
+
+	const clampGalleryThumbScroll = (value, element = galleryModalThumbsMobileEl) => {
+		if (!element) return 0;
+		const maxScroll = Math.max(0, element.scrollWidth - element.clientWidth);
+		return Math.max(0, Math.min(maxScroll, value));
+	};
+
+	const startGalleryThumbStripDrag = (event, pointerId, clientX, clientY) => {
+		const element = event.currentTarget || galleryModalThumbsMobileEl;
+		if (!element || element.scrollWidth <= element.clientWidth + 2) return;
+		galleryThumbStripPointerId = pointerId;
+		galleryThumbStripStartX = clientX;
+		galleryThumbStripStartY = clientY;
+		galleryThumbStripStartScrollLeft = element.scrollLeft;
+		galleryThumbStripDragging = false;
+		if (element.setPointerCapture && pointerId != null) {
+			element.setPointerCapture(pointerId);
+		}
+	};
+
+	const moveGalleryThumbStripDrag = (event, pointerId, clientX, clientY) => {
+		if (galleryThumbStripPointerId !== pointerId) return;
+		const element = event.currentTarget || galleryModalThumbsMobileEl;
+		if (!element) return;
+		const dx = clientX - galleryThumbStripStartX;
+		const dy = clientY - galleryThumbStripStartY;
+		if (Math.abs(dx) <= 4 || Math.abs(dx) <= Math.abs(dy) * 1.05) return;
+		galleryThumbStripDragging = true;
+		event.preventDefault?.();
+		element.scrollLeft = clampGalleryThumbScroll(
+			galleryThumbStripStartScrollLeft - dx,
+			element
+		);
+	};
+
+	const endGalleryThumbStripDrag = (event, pointerId) => {
+		if (galleryThumbStripPointerId !== pointerId) return;
+		const element = event.currentTarget || galleryModalThumbsMobileEl;
+		if (element?.releasePointerCapture && pointerId != null) {
+			element.releasePointerCapture(pointerId);
+		}
+		if (galleryThumbStripDragging) {
+			suppressGalleryThumbClick = true;
+			if (typeof window !== 'undefined') {
+				window.setTimeout(() => {
+					suppressGalleryThumbClick = false;
+				}, 160);
+			}
+		}
+		galleryThumbStripPointerId = null;
+		galleryThumbStripDragging = false;
+	};
+
+	const handleGalleryThumbStripPointerDown = (event) => {
+		if (event.pointerType === 'touch') return;
+		if (event.button && event.button !== 0) return;
+		startGalleryThumbStripDrag(event, event.pointerId ?? 'mouse', event.clientX, event.clientY);
+	};
+
+	const handleGalleryThumbStripPointerMove = (event) => {
+		if (event.pointerType === 'touch') return;
+		moveGalleryThumbStripDrag(event, event.pointerId ?? 'mouse', event.clientX, event.clientY);
+	};
+
+	const handleGalleryThumbStripPointerEnd = (event) => {
+		if (event.pointerType === 'touch') return;
+		endGalleryThumbStripDrag(event, event.pointerId ?? 'mouse');
+	};
+
+	const handleGalleryThumbStripTouchStart = (event) => {
+		if (galleryThumbStripPointerId != null) return;
+		const touch = event.touches?.[0];
+		if (!touch) return;
+		startGalleryThumbStripDrag(event, `touch-${touch.identifier}`, touch.clientX, touch.clientY);
+	};
+
+	const handleGalleryThumbStripTouchMove = (event) => {
+		if (typeof galleryThumbStripPointerId !== 'string') return;
+		const touchId = Number(galleryThumbStripPointerId.replace('touch-', ''));
+		const touch = Array.from(event.touches || []).find((item) => item.identifier === touchId);
+		if (!touch) return;
+		moveGalleryThumbStripDrag(
+			event,
+			galleryThumbStripPointerId,
+			touch.clientX,
+			touch.clientY
+		);
+	};
+
+	const handleGalleryThumbStripTouchEnd = (event) => {
+		if (typeof galleryThumbStripPointerId !== 'string') return;
+		const touchId = Number(galleryThumbStripPointerId.replace('touch-', ''));
+		const touch = Array.from(event.changedTouches || []).find((item) => item.identifier === touchId);
+		if (!touch) return;
+		endGalleryThumbStripDrag(event, galleryThumbStripPointerId);
+	};
+
+	$effect(() => {
+		if (!isGalleryOpen || !galleryModalThumbsMobileEl) return;
+		const activeIndex = galleryIndex;
+		requestAnimationFrame(() => {
+			const element = galleryModalThumbsMobileEl;
+			if (!element) return;
+			const activeThumb = element.querySelectorAll('.gallery-modal-thumb')[activeIndex];
+			if (!activeThumb) return;
+			const targetLeft =
+				activeThumb.offsetLeft - Math.max(0, (element.clientWidth - activeThumb.offsetWidth) / 2);
+			element.scrollTo({
+				left: clampGalleryThumbScroll(targetLeft, element),
+				top: 0,
+				behavior: 'smooth'
+			});
+		});
+	});
 
 	const handleGalleryTriggerKeydown = (event, index) => {
 		if (event.key === 'Enter' || event.key === ' ') {
@@ -3301,20 +3433,32 @@
 					</div>
 				</div>
 
-				<div class="gallery-modal-thumbs gallery-modal-thumbs-mobile">
+				<div
+					class="gallery-modal-thumbs gallery-modal-thumbs-mobile"
+					bind:this={galleryModalThumbsMobileEl}
+					onpointerdown={handleGalleryThumbStripPointerDown}
+					onpointermove={handleGalleryThumbStripPointerMove}
+					onpointerup={handleGalleryThumbStripPointerEnd}
+					onpointercancel={handleGalleryThumbStripPointerEnd}
+					ontouchstart={handleGalleryThumbStripTouchStart}
+					ontouchmove={handleGalleryThumbStripTouchMove}
+					ontouchend={handleGalleryThumbStripTouchEnd}
+					ontouchcancel={handleGalleryThumbStripTouchEnd}
+				>
 					{#each galleryImages as image, index}
 						<button
 							type="button"
 							class="gallery-modal-thumb"
 							class:is-active={index === galleryIndex}
 							aria-label={`Xem ảnh ${index + 1}`}
-							onclick={() => selectGalleryImage(index)}
+							onclick={(event) => handleGalleryThumbClick(event, index)}
 						>
 							<img
 								src={image}
 								alt={`${product?.product_name || 'Product'} - ${index + 1}`}
 								width="120"
 								height="120"
+								draggable="false"
 							/>
 						</button>
 					{/each}
@@ -3836,14 +3980,22 @@
 		.gallery-modal-thumbs-mobile {
 			display: flex;
 			gap: 8px;
+			width: 100%;
+			max-width: 100%;
+			min-width: 0;
+			box-sizing: border-box;
 			overflow-x: auto;
 			padding: 10px 12px calc(12px + env(safe-area-inset-bottom));
 			background: rgba(13, 18, 24, 0.86);
 			border-top: 1px solid rgba(255, 255, 255, 0.08);
 			-webkit-overflow-scrolling: touch;
 			scrollbar-width: none;
-			touch-action: pan-x;
+			scroll-snap-type: x proximity;
+			touch-action: none;
 			overscroll-behavior-x: contain;
+			user-select: none;
+			-webkit-user-select: none;
+			cursor: grab;
 		}
 
 		.gallery-modal-thumbs-mobile::-webkit-scrollbar {
@@ -3855,6 +4007,7 @@
 			width: 58px;
 			height: 58px;
 			padding: 3px;
+			scroll-snap-align: start;
 		}
 
 		.gallery-nav-btn {
