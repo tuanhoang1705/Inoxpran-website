@@ -23,7 +23,13 @@ const isPublicSitePath = (pathname, isAdminRequest = false) =>
 	!pathname.startsWith('/api') &&
 	!pathname.startsWith('/_app');
 const LEGACY_GARBAGE_QUERY_KEY_PREFIXES = ['new/', 'hyzx/', 'qydt/', 'zzzs/', 'dqjs/'];
-const LEGACY_GARBAGE_PATH_PREFIXES = ['/dqjs', '/zzzs', '/hyzx', '/qydt'];
+const LEGACY_GARBAGE_PATH_PREFIXES = [
+	'/dqjs',
+	'/zzzs',
+	'/hyzx',
+	'/qydt',
+	'/cdn-cgi/l/email-protection'
+];
 const KNOWN_PUBLIC_TOP_LEVEL_PATHS = new Set([
 	'',
 	'404',

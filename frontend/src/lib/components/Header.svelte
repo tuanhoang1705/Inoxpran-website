@@ -905,7 +905,9 @@
 						</p>
 						<p>
 							<strong>{$t('footer.email')}:</strong>
-							<a href="mailto:info@inoxpran.com">info@inoxpran.com</a>
+							<a href="mailto:info%40inoxpran.com">
+								{@html '<!--email_off-->'}info@inoxpran.com{@html '<!--/email_off-->'}
+							</a>
 						</p>
 					</div>
 				</div>

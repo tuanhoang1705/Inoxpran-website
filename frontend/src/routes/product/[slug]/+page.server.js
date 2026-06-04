@@ -57,16 +57,6 @@ const normalizeBaseUrl = (requestUrl) => {
 const isEnglishPath = (pathname) => pathname === '/en' || pathname.startsWith('/en/');
 const buildLocaleRobots = (pathname) =>
 	isEnglishPath(pathname) ? UNTRANSLATED_ENGLISH_ROBOTS : null;
-const buildLocaleAlternates = ({ baseUrl, path }) => {
-	const normalizedPath = String(path || '').trim() || '/';
-	const basePath = normalizedPath.replace(/^\/en(?=\/|$)/, '') || '/';
-	return {
-		vi: `${baseUrl}${basePath}`,
-		en: `${baseUrl}/en${basePath === '/' ? '' : basePath}`,
-		xDefault: `${baseUrl}${basePath}`
-	};
-};
-
 const resolveCanonicalSlug = (product) =>
 	String(product?.product_slug || product?.slug || product?._id || '').trim();
 
@@ -200,7 +190,6 @@ export const load = async ({ params, fetch, cookies, url }) => {
 	const localePrefix = isEnglishPath(url.pathname) ? '/en' : '';
 	const useVietnameseCanonical = robots?.index === false;
 	const canonicalLocalePrefix = useVietnameseCanonical ? '' : localePrefix;
-	const includeEnglishAlternate = !useVietnameseCanonical;
 
 	try {
 		const [productPayload, relatedPayload, reviewMeta] = await Promise.all([
@@ -216,16 +205,11 @@ export const load = async ({ params, fetch, cookies, url }) => {
 		const requestedSlug = String(params.slug || '').trim();
 		const canonicalProductPath = `/product/${encodeURIComponent(canonicalSlug || requestedSlug)}`;
 		const canonicalPath = `${canonicalLocalePrefix}${canonicalProductPath}`;
-		const hreflang = includeEnglishAlternate
-			? buildLocaleAlternates({
-					baseUrl,
-					path: canonicalProductPath
-				})
-			: {
-					vi: `${baseUrl}${canonicalProductPath}`,
-					en: null,
-					xDefault: `${baseUrl}${canonicalProductPath}`
-				};
+		const hreflang = {
+			vi: `${baseUrl}${canonicalProductPath}`,
+			en: null,
+			xDefault: `${baseUrl}${canonicalProductPath}`
+		};
 
 		if (canonicalSlug && requestedSlug && canonicalSlug !== requestedSlug) {
 			const destination = `${localePrefix}/product/${encodeURIComponent(canonicalSlug)}${url.search || ''}`;

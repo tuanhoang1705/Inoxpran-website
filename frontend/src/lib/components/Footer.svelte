@@ -159,7 +159,7 @@
 				<ul>
 					<li>{$t('footer.address')}</li>
 					<li>{SITE_CONTACT.phone}</li>
-					<li>{SITE_CONTACT.email}</li>
+					<li>{@html '<!--email_off-->'}{SITE_CONTACT.email}{@html '<!--/email_off-->'}</li>
 				</ul>
 			</div>
 			<div class="footer-column">
