@@ -157,11 +157,12 @@ export const actions = {
 		const uploadSessionId = String(form.get('upload_session_id') || '').trim();
 
 		const thumbFile = form.get('product_thumb');
+		const thumbAssetRaw = String(form.get('product_thumb_asset') || '').trim();
 		const thumbCropped = String(form.get('product_thumb_cropped') || '').trim();
 		const thumbName = String(form.get('product_thumb_name') || '').trim();
 		const thumbCropState = String(form.get('product_thumb_crop_state') || '').trim();
 		const hasThumbCropped = thumbCropped.startsWith('data:image/');
-		if ((!thumbFile || !thumbFile.size) && !hasThumbCropped) {
+		if ((!thumbFile || !thumbFile.size) && !hasThumbCropped && !thumbAssetRaw) {
 			const message = t('admin.productsNew.errors.thumbRequired');
 			return fail(400, { error: message, toast: { tone: 'error', message } });
 		}
@@ -193,7 +194,14 @@ export const actions = {
 			payload.set('product_ratingsCount', String(productRatingsCount));
 		}
 		if (variationsResult.value) payload.set('product_variations', variationsResult.value);
-		if (hasThumbCropped) {
+		if (thumbAssetRaw) {
+			const thumbAsset = JSON.parse(thumbAssetRaw);
+			payload.set('product_thumb', thumbAsset.url);
+			if (thumbAsset.path) payload.set('product_thumb_path', thumbAsset.path);
+			if (thumbAsset.variants) {
+				payload.set('product_thumb_variants', JSON.stringify(thumbAsset.variants));
+			}
+		} else if (hasThumbCropped) {
 			payload.set('product_thumb', thumbCropped);
 			if (thumbName) payload.set('product_thumb_name', thumbName);
 		} else if (thumbFile && thumbFile.size > 0) {
@@ -204,6 +212,8 @@ export const actions = {
 		}
 
 		const galleryCropped = String(form.get('product_gallery_cropped') || '').trim();
+		const galleryAssets = String(form.get('product_gallery_assets') || '').trim();
+		if (galleryAssets) payload.set('product_gallery', galleryAssets);
 		const galleryNames = String(form.get('product_gallery_cropped_names') || '').trim();
 		const galleryStates = String(form.get('product_gallery_cropped_states') || '').trim();
 		if (galleryCropped) {

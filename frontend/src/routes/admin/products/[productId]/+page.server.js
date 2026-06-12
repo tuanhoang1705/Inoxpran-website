@@ -197,6 +197,7 @@ export const actions = {
 		const productRatingsCount = toNumber(form.get('product_ratingsCount'));
 
 		const thumbFile = form.get('product_thumb');
+		const thumbAssetRaw = String(form.get('product_thumb_asset') || '').trim();
 		const thumbCropped = String(form.get('product_thumb_cropped') || '').trim();
 		const thumbName = String(form.get('product_thumb_name') || '').trim();
 		const thumbCropState = String(form.get('product_thumb_crop_state') || '').trim();
@@ -220,7 +221,14 @@ export const actions = {
 		if (productRatingsCount !== undefined) {
 			payload.set('product_ratingsCount', String(productRatingsCount));
 		}
-		if (hasThumbCropped) {
+		if (thumbAssetRaw) {
+			const thumbAsset = JSON.parse(thumbAssetRaw);
+			payload.set('product_thumb', thumbAsset.url);
+			if (thumbAsset.path) payload.set('product_thumb_path', thumbAsset.path);
+			if (thumbAsset.variants) {
+				payload.set('product_thumb_variants', JSON.stringify(thumbAsset.variants));
+			}
+		} else if (hasThumbCropped) {
 			payload.set('product_thumb', thumbCropped);
 			if (thumbName) payload.set('product_thumb_name', thumbName);
 		} else if (thumbFile && thumbFile.size > 0) {
@@ -230,9 +238,11 @@ export const actions = {
 			payload.set('product_thumb_crop_state', thumbCropState);
 		}
 		const galleryExisting = String(getFirstTextFormValue(form, 'product_gallery') || '').trim();
+		const galleryAssets = String(form.get('product_gallery_assets') || '').trim();
 		if (galleryExisting) {
 			payload.set('product_gallery', galleryExisting);
 		}
+		if (galleryAssets) payload.set('product_gallery', galleryAssets);
 		const galleryCropped = String(form.get('product_gallery_cropped') || '').trim();
 		const galleryNames = String(form.get('product_gallery_cropped_names') || '').trim();
 		const galleryStates = String(form.get('product_gallery_cropped_states') || '').trim();

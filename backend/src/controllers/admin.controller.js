@@ -403,6 +403,29 @@ class AdminController {
     }).send(res);
   };
 
+  uploadProductImage = async (req, res, next) => {
+    const imageUrl = req.body?.image;
+    if (!imageUrl) {
+      return res.status(400).json({ message: "Product image upload failed" });
+    }
+    await registerPendingStorageUpload({
+      ownerId: req.user?.userId,
+      sessionId: req.body?.upload_session_id,
+      entityType: "product",
+      url: imageUrl,
+      path: req.body?.image_path,
+      variants: req.body?.image_variants,
+    });
+    new SuccessResponse({
+      message: "Upload product image success",
+      metadata: {
+        url: imageUrl,
+        path: req.body?.image_path,
+        variants: req.body?.image_variants || null,
+      },
+    }).send(res);
+  };
+
   cleanupPendingUploads = async (req, res, next) => {
     new SuccessResponse({
       message: "Pending uploads cleaned",

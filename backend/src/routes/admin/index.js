@@ -27,6 +27,12 @@ const HOME_SLIDE_IMAGE_VALIDATION = {
   requiredWidth: 940,
   requiredHeight: 788,
 };
+const PRODUCT_IMAGE_VALIDATION = {
+  maxSizeBytes: 5 * 1024 * 1024,
+  requireDimensions: false,
+  maxWidth: 1920,
+  maxHeight: 1920,
+};
 
 router.post("/signup", asyncHandler(adminController.signUp));
 router.post("/login", asyncHandler(adminController.login));
@@ -122,6 +128,22 @@ router.post(
   }),
   asyncHandler(adminController.uploadDescriptionImage),
 );
+const registerProductImageUpload = (path, profile) => {
+  router.post(
+    path,
+    uploadLarge.single("image"),
+    uploadSingleImage({
+      field: "image",
+      folder: "products",
+      validation: PRODUCT_IMAGE_VALIDATION,
+      optimization: { profile },
+    }),
+    asyncHandler(adminController.uploadProductImage),
+  );
+};
+
+registerProductImageUpload("/product-images/thumb", "productThumb");
+registerProductImageUpload("/product-images/gallery", "productGallery");
 router.delete(
   "/pending-uploads/:sessionId",
   asyncHandler(adminController.cleanupPendingUploads),

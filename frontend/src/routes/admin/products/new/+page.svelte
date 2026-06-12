@@ -102,6 +102,42 @@
 		}).catch(() => {});
 	};
 
+	const dataUrlToFile = async (dataUrl, fileName) => {
+		const blob = await fetch(dataUrl).then((response) => response.blob());
+		return new File([blob], fileName || 'cropped-product-image.jpg', {
+			type: blob.type || 'image/jpeg'
+		});
+	};
+
+	const uploadProductImage = async (file, kind) => {
+		const payload = new FormData();
+		payload.set('image', file);
+		payload.set('kind', kind);
+		payload.set('upload_session_id', uploadSessionId);
+		const response = await fetch(resolveAdminPath('/admin/uploads/product-image'), {
+			method: 'POST',
+			body: payload
+		});
+		const result = await response.json().catch(() => null);
+		if (!response.ok || !result?.url) {
+			throw new Error(result?.error || 'Không thể tải ảnh sản phẩm lên storage.');
+		}
+		return result;
+	};
+
+	const mapWithConcurrency = async (items, limit, mapper) => {
+		const results = new Array(items.length);
+		let nextIndex = 0;
+		const worker = async () => {
+			while (nextIndex < items.length) {
+				const index = nextIndex++;
+				results[index] = await mapper(items[index], index);
+			}
+		};
+		await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+		return results;
+	};
+
 	const normalizeOption = (value) => String(value || '').trim();
 	const normalizePrice = (value) => {
 		const parsed = Number(value);
@@ -672,9 +708,43 @@
 		syncGalleryInputFiles();
 	};
 
-	const handleCreateEnhance = () => {
+	const handleCreateEnhance = async ({ formData, cancel }) => {
 		handleFormSubmit();
 		isSavingProduct = true;
+		try {
+			const thumbFile = thumbCroppedUrl
+				? await dataUrlToFile(thumbCroppedUrl, thumbFileName)
+				: thumbInput?.files?.[0];
+			if (thumbFile) {
+				const thumbAsset = await uploadProductImage(thumbFile, 'thumb');
+				formData.set('product_thumb_asset', JSON.stringify(thumbAsset));
+				formData.delete('product_thumb');
+				formData.delete('product_thumb_cropped');
+			}
+
+			const galleryAssets = await mapWithConcurrency(
+				galleryItems,
+				3,
+				async (item) => {
+					const file = item?.croppedUrl
+						? await dataUrlToFile(item.croppedUrl, item.fileName)
+						: item?.file;
+					if (!file) return null;
+					const asset = await uploadProductImage(file, 'gallery');
+					return item?.cropState ? { ...asset, crop_state: item.cropState } : asset;
+				}
+			);
+			formData.set('product_gallery_assets', JSON.stringify(galleryAssets.filter(Boolean)));
+			formData.delete('product_gallery');
+			formData.delete('product_gallery_cropped');
+			formData.delete('product_gallery_cropped_names');
+			formData.delete('product_gallery_cropped_states');
+		} catch (error) {
+			cancel();
+			isSavingProduct = false;
+			pushToast({ tone: 'error', message: error?.message || 'Không thể tải ảnh sản phẩm.' });
+			return;
+		}
 		return async ({ update }) => {
 			try {
 				await update();
