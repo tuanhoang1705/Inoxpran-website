@@ -5,6 +5,10 @@ const { SuccessResponse, CREATED } = require("../core/success.response");
 const {
   registerLiveSupportListener,
 } = require("../services/liveSupportEvent.service");
+const {
+  cleanupPendingStorageSession,
+  registerPendingStorageUpload,
+} = require("../services/pendingStorageUpload.service");
 
 const SSE_HEADERS = {
   "content-type": "text/event-stream; charset=utf-8",
@@ -382,12 +386,30 @@ class AdminController {
         message: "Image upload failed",
       });
     }
+    await registerPendingStorageUpload({
+      ownerId: req.user?.userId,
+      sessionId: req.body?.upload_session_id,
+      entityType: req.body?.entity_type,
+      url: imageUrl,
+      path: req.body?.image_path,
+      variants: req.body?.image_variants,
+    });
     new SuccessResponse({
       message: "Upload description image success",
       metadata: {
         url: imageUrl,
         path: req.body?.image_path,
       },
+    }).send(res);
+  };
+
+  cleanupPendingUploads = async (req, res, next) => {
+    new SuccessResponse({
+      message: "Pending uploads cleaned",
+      metadata: await cleanupPendingStorageSession({
+        ownerId: req.user?.userId,
+        sessionId: req.params.sessionId,
+      }),
     }).send(res);
   };
 

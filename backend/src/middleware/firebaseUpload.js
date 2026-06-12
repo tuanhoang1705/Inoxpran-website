@@ -1,6 +1,54 @@
 'use strict'
 
-const { uploadImage, uploadBase64Image: uploadBase64ImageToStorage } = require('../services/storage.service');
+const {
+  deleteImageFromStorage,
+  deleteImageVariantsFromStorage,
+  uploadImage,
+  uploadBase64Image: uploadBase64ImageToStorage
+} = require('../services/storage.service');
+const { isStorageArtifactReferenced } = require('../services/pendingStorageUpload.service');
+
+const trackUploadedArtifact = (req, result) => {
+  if (!result?.url && !result?.path) return;
+  if (!Array.isArray(req.uploadedStorageArtifacts)) req.uploadedStorageArtifacts = [];
+  req.uploadedStorageArtifacts.push(result);
+};
+
+const cleanupUploadedArtifacts = async (req) => {
+  const artifacts = Array.isArray(req?.uploadedStorageArtifacts)
+    ? req.uploadedStorageArtifacts
+    : [];
+  for (const artifact of artifacts) {
+    try {
+      if (await isStorageArtifactReferenced(artifact)) continue;
+    } catch (error) {
+      console.error('Failed to verify uploaded artifact references', {
+        path: artifact?.path || null,
+        error: error?.message || 'storage-reference-check-failed'
+      });
+      continue;
+    }
+    await Promise.allSettled([
+      deleteImageFromStorage({ path: artifact?.path, url: artifact?.url }),
+      artifact?.variants
+        ? deleteImageVariantsFromStorage(artifact.variants)
+        : Promise.resolve(null)
+    ]);
+  }
+  req.uploadedStorageArtifacts = [];
+};
+
+const uploadAllAndTrack = async (req, tasks) => {
+  const settled = await Promise.allSettled(tasks);
+  const uploaded = settled
+    .filter((item) => item.status === 'fulfilled')
+    .map((item) => item.value)
+    .filter(Boolean);
+  uploaded.forEach((result) => trackUploadedArtifact(req, result));
+  const failed = settled.find((item) => item.status === 'rejected');
+  if (failed) throw failed.reason;
+  return uploaded;
+};
 
 const extractFilesForField = (req, field) => {
   if (!req) return [];
@@ -29,6 +77,7 @@ const uploadSingleImage = ({ field, folder, validation, optimization }) => {
 
         try {
             const result = await uploadImage({ file, folder, validation, optimization });
+            trackUploadedArtifact(req, result);
             req.body[field] = result.url;
             req.body[`${field}_path`] = result.path;
             if (result.variants) {
@@ -56,6 +105,7 @@ const uploadBase64Image = ({ field, folder, validation, optimization }) => {
                 validation,
                 optimization
             });
+            trackUploadedArtifact(req, result);
             req.body[field] = result.url;
             req.body[`${field}_path`] = result.path;
             if (result.variants) {
@@ -134,7 +184,8 @@ const uploadBase64Images = ({
             : req?.body?.[`${field}_states`];
         const states = parseJsonArrayField(rawStates);
         try {
-            const uploads = await Promise.all(
+            const uploads = await uploadAllAndTrack(
+                req,
                 dataUrls.map((dataUrl, index) =>
                     uploadBase64ImageToStorage({
                         dataUrl,
@@ -173,7 +224,8 @@ const uploadMultipleImages = ({ field, folder, validation, optimization }) => {
         if (!files.length) return next();
 
         try {
-            const uploads = await Promise.all(
+            const uploads = await uploadAllAndTrack(
+                req,
                 files.map((file) => uploadImage({ file, folder, validation, optimization }))
             );
             const existing = parseJsonArrayField(req.body?.[field]);
@@ -194,6 +246,7 @@ const uploadMultipleImages = ({ field, folder, validation, optimization }) => {
 };
 
 module.exports = {
+    cleanupUploadedArtifacts,
     uploadSingleImage,
     uploadBase64Image,
     uploadMultipleImages,

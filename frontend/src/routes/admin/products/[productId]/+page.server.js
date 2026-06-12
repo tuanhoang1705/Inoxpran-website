@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { API_BASE } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/admin/server.js';
 import { buildAdminHeaders, getAdminSession } from '$lib/server/adminAuth.js';
+import { adminApiFetch } from '$lib/server/adminApi.js';
 import { setAdminToast } from '$lib/server/adminToast.js';
 
 const toNumber = (value) => {
@@ -170,6 +171,7 @@ export const actions = {
 		const description = String(form.get('product_description') || '').trim();
 		const attributesResult = buildAttributesPayload(form, t);
 		const variationsResult = buildVariationsPayload(form, { allowEmpty: true });
+		const uploadSessionId = String(form.get('upload_session_id') || '').trim();
 
 		if (attributesResult.error) {
 			const message = attributesResult.error;
@@ -202,6 +204,7 @@ export const actions = {
 
 		const payload = new FormData();
 		payload.set('product_type', productType);
+		if (uploadSessionId) payload.set('upload_session_id', uploadSessionId);
 
 		if (name) payload.set('product_name', name);
 		if (description) payload.set('product_description', description);
@@ -242,10 +245,14 @@ export const actions = {
 		galleryFiles.forEach((f) => {
 			if (isUploadFile(f) && f.size > 0) payload.append('product_gallery', f);
 		});
-		const response = await fetch(`${API_BASE}/product/${params.productId}`, {
-			method: 'PATCH',
-			headers,
-			body: payload
+		const response = await adminApiFetch({
+			cookies,
+			fetch,
+			path: `/product/${params.productId}`,
+			options: {
+				method: 'PATCH',
+				body: payload
+			}
 		});
 		if (!response.ok) {
 			const message = await resolveErrorMessage(response, t('admin.productEditor.errors.updateFailed'));

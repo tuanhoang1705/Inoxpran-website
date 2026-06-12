@@ -2,25 +2,44 @@
  
 const ProductService = require('../services/product.service');
 const { SuccessResponse } = require('../core/success.response');
+const { commitPendingStorageUploads } = require('../services/pendingStorageUpload.service');
+
+const commitDescriptionUploads = async (req, html) => {
+    try {
+        await commitPendingStorageUploads({
+            ownerId: req.user?.userId,
+            sessionId: req.body?.upload_session_id,
+            html
+        });
+    } catch (error) {
+        console.error('Failed to commit product description uploads', {
+            error: error?.message || 'commit-pending-upload-failed'
+        });
+    }
+};
 
 class ProductController {
     createProduct = async (req, res, next) => {
+        const created = await ProductService.createProduct(req.body.product_type, {
+            ...req.body,
+            product_shop: req.user.userId
+        });
+        await commitDescriptionUploads(req, created?.product_description || req.body?.product_description);
         new SuccessResponse({
             message: 'Create new product success',
-            metadata: await ProductService.createProduct(req.body.product_type, {
-                ...req.body,
-                product_shop: req.user.userId
-            })
+            metadata: created
         }).send(res);
     }
     // update product
-    updateProduct = async (req, res, next) => { 
+    updateProduct = async (req, res, next) => {
+         const updated = await ProductService.updateProduct(req.body.product_type, req.params.productId, {
+             ...req.body,
+             product_shop: req.user.userId,
+        });
+         await commitDescriptionUploads(req, updated?.product_description || req.body?.product_description);
          new SuccessResponse({
             message: 'Update product success',
-             metadata: await ProductService.updateProduct(req.body.product_type, req.params.productId, {
-                 ...req.body,
-                 product_shop: req.user.userId,
-            })
+             metadata: updated
         }).send(res);
     };
     deleteProduct = async (req, res, next) => {

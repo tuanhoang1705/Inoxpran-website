@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import { API_BASE } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/admin/server.js';
 import { buildAdminHeaders, getAdminSession } from '$lib/server/adminAuth.js';
+import { adminApiFetch } from '$lib/server/adminApi.js';
 import { setAdminToast } from '$lib/server/adminToast.js';
 
 const toNumber = (value) => {
@@ -153,6 +154,7 @@ export const actions = {
 		const productRatingsAverage = toNumber(form.get('product_ratingsAverage'));
 		const productRatingsCount = toNumber(form.get('product_ratingsCount'));
 		const variationsResult = buildVariationsPayload(form);
+		const uploadSessionId = String(form.get('upload_session_id') || '').trim();
 
 		const thumbFile = form.get('product_thumb');
 		const thumbCropped = String(form.get('product_thumb_cropped') || '').trim();
@@ -180,6 +182,7 @@ export const actions = {
 		payload.set('product_attributes', attributesResult.value);
 		payload.set('product_original_price', String(productOriginalPrice));
 		payload.set('product_price', String(productPrice));
+		if (uploadSessionId) payload.set('upload_session_id', uploadSessionId);
 
 		if (productQuantity !== undefined) payload.set('product_quantity', String(productQuantity));
 		if (productWeight !== undefined) payload.set('product_weight', String(productWeight));
@@ -216,10 +219,14 @@ export const actions = {
 				}
 			});
 		}
-		const response = await fetch(`${API_BASE}/product`, {
-			method: 'POST',
-			headers,
-			body: payload
+		const response = await adminApiFetch({
+			cookies,
+			fetch,
+			path: '/product',
+			options: {
+				method: 'POST',
+				body: payload
+			}
 		});
 
 		if (!response.ok) {

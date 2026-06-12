@@ -13,8 +13,9 @@ const REQUIRED_IMAGE_WIDTH = Number(process.env.IMAGE_REQUIRED_WIDTH || 300);
 const REQUIRED_IMAGE_HEIGHT = Number(process.env.IMAGE_REQUIRED_HEIGHT || 300);
 const WEBP_QUALITY = Number(process.env.IMAGE_WEBP_QUALITY || 80);
 const AVIF_QUALITY = Number(process.env.IMAGE_AVIF_QUALITY || 55);
-const AVIF_EFFORT = Number(process.env.IMAGE_AVIF_EFFORT || 6);
+const AVIF_EFFORT = Number(process.env.IMAGE_AVIF_EFFORT || 3);
 const WEBP_EFFORT = Number(process.env.IMAGE_WEBP_EFFORT || 4);
+const IMAGE_VARIANT_CONCURRENCY = Math.max(1, Number(process.env.IMAGE_VARIANT_CONCURRENCY || 4));
 
 const IMAGE_OPTIMIZATION_PROFILES = Object.freeze({
     homeSlide: Object.freeze({
@@ -192,6 +193,29 @@ const saveBufferToBucket = async ({ bucket, destination, buffer, mimetype }) => 
     };
 };
 
+const mapWithConcurrency = async (items, concurrency, mapper) => {
+    const results = new Array(items.length);
+    let nextIndex = 0;
+    let firstError = null;
+    const workers = Array.from(
+        { length: Math.min(Math.max(1, concurrency), items.length) },
+        async () => {
+            while (nextIndex < items.length && !firstError) {
+                const index = nextIndex;
+                nextIndex += 1;
+                try {
+                    results[index] = await mapper(items[index], index);
+                } catch (error) {
+                    firstError = error;
+                }
+            }
+        }
+    );
+    await Promise.all(workers);
+    if (firstError) throw firstError;
+    return results;
+};
+
 const saveImageBuffer = async ({ buffer, mimetype, fileName, folder, validation }) => {
     validateImageBuffer(buffer, validation);
     const bucket = getBucket();
@@ -312,44 +336,62 @@ const optimizeAndUploadImageBuffer = async ({
     const bucket = getBucket();
     const basePath = buildStorageBasePath({ folder, fileName });
     const variantsByFormat = {};
+    const uploadedPaths = [];
+    const tasks = profile.formats.flatMap((format) =>
+        widths.map((width) => ({ format, width }))
+    );
 
-    for (const format of profile.formats) {
-        const items = [];
-        for (const width of widths) {
-            const pipeline = sharp(buffer, { failOn: 'none' }).rotate().resize({
-                width,
-                fit: profile.fit,
-                withoutEnlargement: profile.withoutEnlargement
-            });
-            if (format === 'avif') {
-                pipeline.avif(getSharpFormatOptions('avif'));
-            } else {
-                pipeline.webp(getSharpFormatOptions('webp'));
+    try {
+        const uploaded = await mapWithConcurrency(
+            tasks,
+            IMAGE_VARIANT_CONCURRENCY,
+            async ({ format, width }) => {
+                const pipeline = sharp(buffer, { failOn: 'none' }).rotate().resize({
+                    width,
+                    fit: profile.fit,
+                    withoutEnlargement: profile.withoutEnlargement
+                });
+                if (format === 'avif') {
+                    pipeline.avif(getSharpFormatOptions('avif'));
+                } else {
+                    pipeline.webp(getSharpFormatOptions('webp'));
+                }
+                const output = await pipeline.toBuffer({ resolveWithObject: true });
+                const destination = buildVariantStoragePath({
+                    basePath,
+                    suffix: `${width}w`,
+                    extension: format
+                });
+                const saved = await saveBufferToBucket({
+                    bucket,
+                    destination,
+                    buffer: output.data,
+                    mimetype: format === 'avif' ? 'image/avif' : 'image/webp'
+                });
+                uploadedPaths.push(saved.path);
+                const outputWidth = Number(output.info?.width) || width;
+                const outputHeight =
+                    Number(output.info?.height) ||
+                    Math.round((sourceHeight / sourceWidth) * outputWidth);
+                return {
+                    url: saved.url,
+                    path: saved.path,
+                    width: outputWidth,
+                    height: outputHeight,
+                    format,
+                    bytes: saved.bytes
+                };
             }
-            const output = await pipeline.toBuffer({ resolveWithObject: true });
-            const destination = buildVariantStoragePath({
-                basePath,
-                suffix: `${width}w`,
-                extension: format
-            });
-            const saved = await saveBufferToBucket({
-                bucket,
-                destination,
-                buffer: output.data,
-                mimetype: format === 'avif' ? 'image/avif' : 'image/webp'
-            });
-            const outputWidth = Number(output.info?.width) || width;
-            const outputHeight = Number(output.info?.height) || Math.round((sourceHeight / sourceWidth) * outputWidth);
-            items.push({
-                url: saved.url,
-                path: saved.path,
-                width: outputWidth,
-                height: outputHeight,
-                format,
-                bytes: saved.bytes
-            });
-        }
-        variantsByFormat[format] = items;
+        );
+        tasks.forEach((task, index) => {
+            if (!variantsByFormat[task.format]) variantsByFormat[task.format] = [];
+            variantsByFormat[task.format].push(uploaded[index]);
+        });
+    } catch (error) {
+        await Promise.allSettled(
+            uploadedPaths.map((uploadedPath) => bucket.file(uploadedPath).delete())
+        );
+        throw error;
     }
 
     const canonicalList = variantsByFormat[profile.canonicalFormat] || [];

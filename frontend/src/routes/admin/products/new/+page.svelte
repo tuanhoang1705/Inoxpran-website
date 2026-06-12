@@ -1,4 +1,5 @@
 <script>
+	import { enhance } from '$app/forms';
 	import { onDestroy, onMount } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { t } from '$lib/i18n/admin/index.js';
@@ -83,6 +84,23 @@
 	let comboPriceInput = $state('');
 	let combos = $state([]);
 	let descriptionValue = $state('');
+	let uploadSessionId = $state('');
+	let isSavingProduct = $state(false);
+
+	const resolveAdminPath = (path) => {
+		if (typeof window === 'undefined' || window.location.hostname !== 'admin.inoxpran.com') {
+			return path;
+		}
+		return path.replace(/^\/admin(?=\/|$)/, '') || '/';
+	};
+
+	const cleanupPendingUploads = () => {
+		if (!uploadSessionId || isSavingProduct || typeof window === 'undefined') return;
+		fetch(resolveAdminPath(`/admin/uploads/pending/${encodeURIComponent(uploadSessionId)}`), {
+			method: 'DELETE',
+			keepalive: true
+		}).catch(() => {});
+	};
 
 	const normalizeOption = (value) => String(value || '').trim();
 	const normalizePrice = (value) => {
@@ -630,6 +648,7 @@
 	};
 
 	onDestroy(() => {
+		cleanupPendingUploads();
 		clearGalleryItems();
 		if (thumbPreviewUrl) {
 			URL.revokeObjectURL(thumbPreviewUrl);
@@ -637,6 +656,9 @@
 	});
 
 	onMount(() => {
+		uploadSessionId =
+			window.crypto?.randomUUID?.() ||
+			`product-new-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 		if (form?.toast) {
 			pushToast(form.toast);
 		}
@@ -648,6 +670,18 @@
 
 	const handleFormSubmit = () => {
 		syncGalleryInputFiles();
+	};
+
+	const handleCreateEnhance = () => {
+		handleFormSubmit();
+		isSavingProduct = true;
+		return async ({ update }) => {
+			try {
+				await update();
+			} finally {
+				isSavingProduct = false;
+			}
+		};
 	};
 </script>
 
@@ -664,7 +698,9 @@
 		enctype="multipart/form-data"
 		class="border rounded-3 p-4 bg-white row g-3"
 		onsubmit={handleFormSubmit}
+		use:enhance={handleCreateEnhance}
 	>
+		<input type="hidden" name="upload_session_id" value={uploadSessionId} />
 		{#if thumbCroppedUrl}
 			<input type="hidden" name="product_thumb_cropped" value={thumbCroppedUrl} />
 			<input type="hidden" name="product_thumb_name" value={thumbFileName} />
@@ -793,6 +829,8 @@
 			</label>
 			<RichTextEditor
 				value={descriptionValue}
+				uploadSessionId={uploadSessionId}
+				uploadEntityType="product"
 				onChange={(content) => {
 					descriptionValue = content;
 				}}
@@ -1162,8 +1200,17 @@
 			<input type="hidden" name="product_attribute_colors" value={buildColorListPayload()} />
 		</div>
 		<div class="col-12">
-			<button class="btn btn-dark" type="submit">{$t('admin.productsNew.create')}</button>
+			<button class="btn btn-dark" type="submit" disabled={isSavingProduct}>
+				{isSavingProduct ? 'Đang tạo bản nháp...' : $t('admin.productsNew.create')}
+			</button>
 		</div>
+		{#if isSavingProduct}
+			<div class="product-saving-overlay" role="status" aria-live="polite">
+				<div class="product-saving-spinner"></div>
+				<strong>Đang tối ưu ảnh và tạo bản nháp...</strong>
+				<span>Vui lòng giữ nguyên trang cho đến khi hoàn tất.</span>
+			</div>
+		{/if}
 	</form>
 
 	{#if isCropperOpen}
@@ -1741,6 +1788,39 @@
 
 	.variant-pill input {
 		max-width: 120px;
+	}
+
+	.product-saving-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 1200;
+		display: grid;
+		place-content: center;
+		justify-items: center;
+		gap: 10px;
+		padding: 24px;
+		text-align: center;
+		background: rgba(255, 255, 255, 0.9);
+		color: #1f2937;
+	}
+
+	.product-saving-overlay span {
+		color: #6b7280;
+	}
+
+	.product-saving-spinner {
+		width: 42px;
+		height: 42px;
+		border: 4px solid #d1d5db;
+		border-top-color: #0f8578;
+		border-radius: 50%;
+		animation: product-saving-spin 0.8s linear infinite;
+	}
+
+	@keyframes product-saving-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 </style>
 

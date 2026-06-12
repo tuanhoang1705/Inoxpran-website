@@ -4,7 +4,11 @@ const express = require('express');
 const blogController = require('../../controllers/blog.controller');
 const asyncHandler = require('../../helpers/asyncHandler');
 const { uploadLarge } = require('../../middleware/upload');
-const { uploadSingleImage, uploadBase64Image } = require('../../middleware/firebaseUpload');
+const {
+    cleanupUploadedArtifacts,
+    uploadSingleImage,
+    uploadBase64Image
+} = require('../../middleware/firebaseUpload');
 const { authenticationAdmin } = require('../../auth/authUtils');
 const { permission, PERMISSIONS } = require('../../auth/checkAuth');
 
@@ -78,5 +82,10 @@ router.patch(
 router.delete('/:blogId', requireAdmin, asyncHandler(blogController.deleteBlog));
 router.post('/publish/:blogId', requireAdmin, asyncHandler(blogController.publishBlog));
 router.post('/unpublish/:blogId', requireAdmin, asyncHandler(blogController.unPublishBlog));
+
+router.use(async (error, req, res, next) => {
+    await cleanupUploadedArtifacts(req);
+    next(error);
+});
 
 module.exports = router;

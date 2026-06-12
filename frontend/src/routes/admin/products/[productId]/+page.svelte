@@ -91,6 +91,7 @@
 	let hadExistingGallery = $state(false);
 	let isGalleryUploading = $state(false);
 	let isSavingProduct = $state(false);
+	let uploadSessionId = $state('');
 	let isCropperOpen = $state(false);
 	let cropMode = $state('');
 	let cropTargetIndex = $state(-1);
@@ -108,6 +109,21 @@
 	let dragStartOffsetX = $state(0);
 	let dragStartOffsetY = $state(0);
 	const previewThumbUrl = $derived(thumbCroppedUrl || thumbPreviewUrl || thumbUrl);
+
+	const resolveAdminPath = (path) => {
+		if (typeof window === 'undefined' || window.location.hostname !== 'admin.inoxpran.com') {
+			return path;
+		}
+		return path.replace(/^\/admin(?=\/|$)/, '') || '/';
+	};
+
+	const cleanupPendingUploads = () => {
+		if (!uploadSessionId || isSavingProduct || typeof window === 'undefined') return;
+		fetch(resolveAdminPath(`/admin/uploads/pending/${encodeURIComponent(uploadSessionId)}`), {
+			method: 'DELETE',
+			keepalive: true
+		}).catch(() => {});
+	};
 	let galleryExistingPayload = $derived(
 		galleryItems
 			.filter((item) => item?.isExisting && item?.url && !item?.croppedUrl)
@@ -635,6 +651,7 @@
 	};
 
 	onDestroy(() => {
+		cleanupPendingUploads();
 		clearGalleryItems();
 		if (thumbPreviewUrl) {
 			URL.revokeObjectURL(thumbPreviewUrl);
@@ -773,6 +790,13 @@
 		const list = colors.map((item) => item.name).filter(Boolean);
 		return JSON.stringify(list);
 	};
+
+	$effect(() => {
+		if (!browser || uploadSessionId) return;
+		uploadSessionId =
+			window.crypto?.randomUUID?.() ||
+			`product-update-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+	});
 
 	$effect(() => {
 		if (product) {
@@ -955,6 +979,7 @@
 				onsubmit={handleFormSubmit}
 				use:enhance={handleProductUpdateEnhance}
 			>
+				<input type="hidden" name="upload_session_id" value={uploadSessionId} />
 				{#if thumbCroppedUrl}
 					<input type="hidden" name="product_thumb_cropped" value={thumbCroppedUrl} />
 					<input type="hidden" name="product_thumb_name" value={thumbFileName} />
@@ -1350,6 +1375,8 @@
 					<div style="margin-bottom: 16px;">
 						<RichTextEditor
 							value={descriptionValue}
+							uploadSessionId={uploadSessionId}
+							uploadEntityType="product"
 							onChange={(content) => {
 								descriptionValue = content;
 							}}

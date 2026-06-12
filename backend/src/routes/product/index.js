@@ -9,7 +9,8 @@ const {
     uploadSingleImage,
     uploadBase64Image,
     uploadMultipleImages,
-    uploadBase64Images
+    uploadBase64Images,
+    cleanupUploadedArtifacts
 } = require('../../middleware/firebaseUpload');
 const { authenticationAdmin, authenticationUser } = require('../../auth/authUtils');
 const { permission, PERMISSIONS } = require('../../auth/checkAuth');
@@ -103,4 +104,9 @@ router.post('/unPublish/:id', asyncHandler(productController.unPublishProductByS
 
 router.get('/drafts/all', asyncHandler(productController.getAllDraftsForShop));
 router.get('/published/all', asyncHandler(productController.getAllPublishForShop));
+
+router.use(async (error, req, res, next) => {
+    await cleanupUploadedArtifacts(req);
+    next(error);
+});
 module.exports = router;

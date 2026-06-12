@@ -3,6 +3,21 @@
 const BlogService = require('../services/blog.service');
 const BlogCommentService = require('../services/blogComment.service');
 const { SuccessResponse } = require('../core/success.response');
+const { commitPendingStorageUploads } = require('../services/pendingStorageUpload.service');
+
+const commitContentUploads = async (req, html) => {
+    try {
+        await commitPendingStorageUploads({
+            ownerId: req.user?.userId,
+            sessionId: req.body?.upload_session_id,
+            html
+        });
+    } catch (error) {
+        console.error('Failed to commit blog content uploads', {
+            error: error?.message || 'commit-pending-upload-failed'
+        });
+    }
+};
 
 const parseBoolean = (value, fallback = false) => {
     if (typeof value === 'boolean') return value;
@@ -98,24 +113,28 @@ class BlogController {
     }
 
     createBlog = async (req, res, next) => {
+        const created = await BlogService.createBlog({
+            payload: req.body,
+            shopId: req.user?.userId,
+            sendNewsletter: resolveSendNewsletter(req)
+        });
+        await commitContentUploads(req, created?.content || req.body?.blog_content);
         new SuccessResponse({
             message: 'Create blog success',
-            metadata: await BlogService.createBlog({
-                payload: req.body,
-                shopId: req.user?.userId,
-                sendNewsletter: resolveSendNewsletter(req)
-            })
+            metadata: created
         }).send(res);
     }
 
     updateBlog = async (req, res, next) => {
+        const updated = await BlogService.updateBlog({
+            blogId: req.params.blogId,
+            payload: req.body,
+            sendNewsletter: resolveSendNewsletter(req)
+        });
+        await commitContentUploads(req, updated?.content || req.body?.blog_content);
         new SuccessResponse({
             message: 'Update blog success',
-            metadata: await BlogService.updateBlog({
-                blogId: req.params.blogId,
-                payload: req.body,
-                sendNewsletter: resolveSendNewsletter(req)
-            })
+            metadata: updated
         }).send(res);
     }
 

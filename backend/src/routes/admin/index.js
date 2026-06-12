@@ -6,7 +6,10 @@ const contactController = require("../../controllers/contact.controller");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
 const { upload, uploadLarge } = require("../../middleware/upload");
-const { uploadSingleImage } = require("../../middleware/firebaseUpload");
+const {
+  cleanupUploadedArtifacts,
+  uploadSingleImage,
+} = require("../../middleware/firebaseUpload");
 const { requireAdminRole } = require("../../middleware/requireAdminRole");
 
 const router = express.Router();
@@ -119,6 +122,10 @@ router.post(
   }),
   asyncHandler(adminController.uploadDescriptionImage),
 );
+router.delete(
+  "/pending-uploads/:sessionId",
+  asyncHandler(adminController.cleanupPendingUploads),
+);
 
 router.get("/users", asyncHandler(adminController.listUsers));
 router.get(
@@ -220,5 +227,12 @@ router.delete(
   requireAdminRole(["CONTACT_MANAGER", "ADMIN", "SUPER_ADMIN"]),
   asyncHandler(contactController.deleteAdmin),
 );
+
+router.use(async (error, req, res, next) => {
+  if (String(req.originalUrl || "").includes("/description-images")) {
+    await cleanupUploadedArtifacts(req);
+  }
+  next(error);
+});
 
 module.exports = router;

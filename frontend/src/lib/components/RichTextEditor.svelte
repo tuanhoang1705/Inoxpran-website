@@ -12,7 +12,13 @@
 	import Color from '@tiptap/extension-color';
 	import Placeholder from '@tiptap/extension-placeholder';
 
-	let { value = '', onChange = null, placeholder = '' } = $props();
+	let {
+		value = '',
+		onChange = null,
+		placeholder = '',
+		uploadSessionId = '',
+		uploadEntityType = 'product'
+	} = $props();
 
 	let editor;
 	let editorElement;
@@ -40,6 +46,8 @@
 	const uploadImage = async (file) => {
 		const payload = new FormData();
 		payload.set('image', file);
+		if (uploadSessionId) payload.set('upload_session_id', uploadSessionId);
+		payload.set('entity_type', uploadEntityType === 'blog' ? 'blog' : 'product');
 
 		const response = await fetch(resolveAdminPath('/admin/uploads/description-image'), {
 			method: 'POST',

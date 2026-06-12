@@ -1,6 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { API_BASE } from '$lib/server/api.js';
-import { buildAdminHeaders, getAdminSession } from '$lib/server/adminAuth.js';
+import { adminApiFetch } from '$lib/server/adminApi.js';
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -14,11 +13,6 @@ const isFileLike = (value) =>
 	);
 
 export const POST = async ({ request, cookies, fetch }) => {
-	const session = getAdminSession(cookies);
-	if (!session) {
-		return json({ error: 'Unauthorized' }, { status: 401 });
-	}
-
 	let form;
 	try {
 		form = await request.formData();
@@ -40,16 +34,23 @@ export const POST = async ({ request, cookies, fetch }) => {
 		return json({ error: 'Only image files are allowed' }, { status: 400 });
 	}
 
-	const headers = buildAdminHeaders(session);
 	const payload = new FormData();
 	payload.set('image', file);
+	const uploadSessionId = String(form.get('upload_session_id') || '').trim();
+	const entityType = String(form.get('entity_type') || 'product').trim();
+	if (uploadSessionId) payload.set('upload_session_id', uploadSessionId);
+	payload.set('entity_type', entityType === 'blog' ? 'blog' : 'product');
 
 	let response;
 	try {
-		response = await fetch(`${API_BASE}/admin/description-images`, {
-			method: 'POST',
-			headers,
-			body: payload
+		response = await adminApiFetch({
+			cookies,
+			fetch,
+			path: '/admin/description-images',
+			options: {
+				method: 'POST',
+				body: payload
+			}
 		});
 	} catch {
 		return json({ error: 'Cannot connect to backend API' }, { status: 502 });
