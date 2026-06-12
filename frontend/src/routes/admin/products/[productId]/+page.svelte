@@ -1004,9 +1004,19 @@
 			pushToast({ tone: 'error', message: error?.message || 'Không thể tải ảnh sản phẩm.' });
 			return;
 		}
-		return async ({ update }) => {
+		return async ({ result, update }) => {
 			try {
-				await update();
+				if (result?.type === 'failure') {
+					pushToast(
+						result?.data?.toast || {
+							tone: 'error',
+							message: result?.data?.error || 'Không thể cập nhật sản phẩm.'
+						}
+					);
+				} else if (result?.type === 'error') {
+					pushToast({ tone: 'error', message: 'Không thể cập nhật sản phẩm.' });
+				}
+				await update({ reset: result?.type === 'success' });
 			} finally {
 				isSavingProduct = false;
 			}
