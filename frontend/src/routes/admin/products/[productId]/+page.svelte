@@ -1260,7 +1260,6 @@
 				if (result?.type === 'success') {
 					try {
 						await syncProductMedia(mediaPayload);
-						pushToast(result?.data?.toast);
 					} catch (error) {
 						pushToast({
 							tone: 'error',
