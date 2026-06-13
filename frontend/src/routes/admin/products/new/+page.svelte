@@ -169,6 +169,26 @@
 		return results;
 	};
 
+	const preUploadProductImage = (file, kind, cacheKey = file) => {
+		if (!file || !uploadSessionId) return;
+		void uploadProductImageCached(file, kind, cacheKey).catch(() => {});
+	};
+
+	const preUploadGalleryItems = (items) => {
+		if (!items?.length || !uploadSessionId) return;
+		void mapWithConcurrency(items, 3, async (item) => {
+			if (!item?.file) return null;
+			return await uploadProductImageCached(item.file, 'gallery', item);
+		}).catch(() => {});
+	};
+
+	const preUploadCroppedProductImage = (dataUrl, fileName, kind, cacheKey) => {
+		if (!dataUrl || !uploadSessionId) return;
+		void dataUrlToFile(dataUrl, fileName)
+			.then((file) => uploadProductImageCached(file, kind, cacheKey))
+			.catch(() => {});
+	};
+
 	const normalizeOption = (value) => String(value || '').trim();
 	const normalizePrice = (value) => {
 		const parsed = Number(value);
@@ -557,10 +577,12 @@
 				offsetX: cropOffsetX,
 				offsetY: cropOffsetY
 			};
+			preUploadCroppedProductImage(croppedDataUrl, thumbFileName, 'thumb', croppedDataUrl);
 		} else if (cropMode === 'gallery' && cropTargetIndex >= 0) {
+			let croppedGalleryItem = null;
 			galleryItems = galleryItems.map((item, index) =>
 				index === cropTargetIndex
-					? {
+					? (croppedGalleryItem = {
 							...item,
 							croppedUrl: croppedDataUrl,
 							cropState: {
@@ -568,8 +590,14 @@
 								offsetX: cropOffsetX,
 								offsetY: cropOffsetY
 							}
-						}
+						})
 					: item
+			);
+			preUploadCroppedProductImage(
+				croppedDataUrl,
+				croppedGalleryItem?.fileName,
+				'gallery',
+				croppedGalleryItem
 			);
 			syncGalleryInputFiles();
 		}
@@ -609,6 +637,7 @@
 		} catch {
 			thumbDataUrl = '';
 		}
+		preUploadProductImage(file, 'thumb', file);
 	};
 
 	const handleGalleryChange = async (event) => {
@@ -642,6 +671,7 @@
 		// All valid, update previews and input
 		const items = await buildGalleryItems(validFiles);
 		updateGalleryItems(items);
+		preUploadGalleryItems(items);
 		const dt = new DataTransfer();
 		validFiles.forEach((file) => dt.items.add(file));
 		galleryInput.files = dt.files;
@@ -682,6 +712,7 @@
 		// All valid, update previews and input
 		const items = await buildGalleryItems(validFiles);
 		updateGalleryItems(items);
+		preUploadGalleryItems(items);
 		const dt = new DataTransfer();
 		validFiles.forEach((file) => dt.items.add(file));
 		galleryInput.files = dt.files;

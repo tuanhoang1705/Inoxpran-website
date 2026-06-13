@@ -194,6 +194,27 @@
 		await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
 		return results;
 	};
+
+	const preUploadProductImage = (file, kind, cacheKey = file) => {
+		if (!file || !uploadSessionId) return;
+		void uploadProductImageCached(file, kind, cacheKey).catch(() => {});
+	};
+
+	const preUploadGalleryItems = (items) => {
+		if (!items?.length || !uploadSessionId) return;
+		void mapWithConcurrency(items, 3, async (item) => {
+			if (!item?.file) return null;
+			return await uploadProductImageCached(item.file, 'gallery', item);
+		}).catch(() => {});
+	};
+
+	const preUploadCroppedProductImage = (dataUrl, fileName, kind, cacheKey) => {
+		if (!dataUrl || !uploadSessionId) return;
+		void dataUrlToFile(dataUrl, fileName)
+			.then((file) => uploadProductImageCached(file, kind, cacheKey))
+			.catch(() => {});
+	};
+
 	let galleryExistingPayload = $derived(
 		galleryItems
 			.filter((item) => item?.isExisting && item?.url && !item?.croppedUrl)
@@ -547,10 +568,12 @@
 				offsetX: cropOffsetX,
 				offsetY: cropOffsetY
 			};
+			preUploadCroppedProductImage(croppedDataUrl, thumbFileName, 'thumb', croppedDataUrl);
 		} else if (cropMode === 'gallery' && cropTargetIndex >= 0) {
+			let croppedGalleryItem = null;
 			galleryItems = galleryItems.map((item, index) =>
 				index === cropTargetIndex
-					? {
+					? (croppedGalleryItem = {
 							...item,
 							croppedUrl: croppedDataUrl,
 							cropState: {
@@ -558,8 +581,14 @@
 								offsetX: cropOffsetX,
 								offsetY: cropOffsetY
 							}
-						}
+						})
 					: item
+			);
+			preUploadCroppedProductImage(
+				croppedDataUrl,
+				croppedGalleryItem?.fileName,
+				'gallery',
+				croppedGalleryItem
 			);
 			syncGalleryInputFiles();
 		}
@@ -599,6 +628,7 @@
 		} catch {
 			thumbDataUrl = '';
 		}
+		preUploadProductImage(file, 'thumb', file);
 	};
 
 	const handleGalleryChange = async (event) => {
@@ -644,6 +674,7 @@
 		// All valid, update previews and input
 		const items = await buildGalleryItems(validFiles);
 		appendGalleryItems(items);
+		preUploadGalleryItems(items);
 		syncGalleryInputFiles();
 	};
 
@@ -690,6 +721,7 @@
 		// All valid, update previews and input
 		const items = await buildGalleryItems(validFiles);
 		appendGalleryItems(items);
+		preUploadGalleryItems(items);
 		syncGalleryInputFiles();
 	};
 
