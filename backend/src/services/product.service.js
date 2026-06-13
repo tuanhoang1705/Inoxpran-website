@@ -642,6 +642,10 @@ const normalizeProductPayload = (payload, { requireAttributes = false } = {}) =>
         throw new BadRequestError('Payload is required');
     }
     const normalized = { ...payload };
+    if (Object.prototype.hasOwnProperty.call(normalized, 'product_name')) {
+        normalized.product_name = String(normalized.product_name || '').trim().replace(/\s+/g, ' ');
+        normalized.product_name_normalized = normalized.product_name.toLocaleLowerCase('vi');
+    }
     if (Object.prototype.hasOwnProperty.call(normalized, 'product_description')) {
         normalized.product_description = sanitizeProductDescription(normalized.product_description);
     }
@@ -824,6 +828,36 @@ class ProductFactory {
          return await productInstance.createProduct();
     }
 
+    static async createDraft(type, payload) {
+       const productClass = ProductFactory.productRegistry[type];
+       if (!productClass) {
+        throw new BadRequestError(`Invalid product type: ${type}`);
+       }
+       const normalizedPayload = normalizeProductPayload(payload);
+       if (!normalizedPayload.product_name) {
+           throw new BadRequestError('product_name is required');
+       }
+       const duplicate = await ProductFactory.findDuplicateProductName({
+           name: normalizedPayload.product_name
+       });
+       if (duplicate) {
+           throw new BadRequestError('Product name already exists');
+       }
+       const draftPayload = {
+           product_thumb: '',
+           product_description: '',
+           product_original_price: 0,
+           product_price: 0,
+           product_quantity: 0,
+           product_attributes: {},
+           product_variations: [],
+           product_gallery: [],
+           ...normalizedPayload
+       };
+       const productInstance = new productClass(draftPayload);
+       return await productInstance.createProduct();
+    }
+
     static async updateProduct(type, productId, payload) {
        const productClass = ProductFactory.productRegistry[type];
        if (!productClass) {
@@ -929,13 +963,37 @@ class ProductFactory {
                 }
             }));
           }
-          await Promise.allSettled(mediaCleanupTasks);
+          void Promise.allSettled(mediaCleanupTasks);
 
            return await attachInventoryStock(updated);
       }
 
     static async findDuplicateProductName({ name, excludeId } = {}) {
         return await findProductByNormalizedName({ name, excludeId });
+    }
+
+    static async updateProductMedia({ productId, payload }) {
+        const foundProduct = await product.findById(productId).lean();
+        if (!foundProduct) {
+            throw new BadRequestError('Product not found');
+        }
+        const mediaPayload = {};
+        const mediaFields = [
+            'product_thumb',
+            'product_thumb_path',
+            'product_thumb_variants',
+            'product_thumb_crop_state',
+            'product_gallery'
+        ];
+        for (const field of mediaFields) {
+            if (Object.prototype.hasOwnProperty.call(payload || {}, field)) {
+                mediaPayload[field] = payload[field];
+            }
+        }
+        if (!Object.keys(mediaPayload).length) {
+            return await attachInventoryStock(foundProduct);
+        }
+        return await ProductFactory.updateProduct(foundProduct.product_type, productId, mediaPayload);
     }
 
     static async deleteProduct({ product_id, product_shop }) {
@@ -1019,7 +1077,33 @@ class ProductFactory {
     }
 
     // PUT //
-    static async publishProductByShop({ product_shop, product_id }) { 
+    static async publishProductByShop({ product_shop, product_id }) {
+        const foundProduct = await product.findById(product_id).lean();
+        if (!foundProduct) {
+            throw new BadRequestError('Product not found');
+        }
+        const attributes = foundProduct.product_attributes || {};
+        const missingFields = [
+            !normalizeString(foundProduct.product_name) ? 'product_name' : '',
+            !normalizeString(foundProduct.product_thumb) ? 'product_thumb' : '',
+            !normalizeString(foundProduct.product_description) ? 'product_description' : '',
+            !normalizeString(foundProduct.product_type) ? 'product_type' : '',
+            !normalizeString(attributes.manufacturer) ? 'manufacturer' : '',
+            !normalizeString(attributes.model) ? 'model' : '',
+            !normalizeString(attributes.color) ? 'color' : '',
+            !Number.isFinite(Number(foundProduct.product_original_price)) ||
+            Number(foundProduct.product_original_price) <= 0
+                ? 'product_original_price'
+                : '',
+            !Number.isFinite(Number(foundProduct.product_price)) || Number(foundProduct.product_price) <= 0
+                ? 'product_price'
+                : ''
+        ].filter(Boolean);
+        if (missingFields.length) {
+            throw new BadRequestError(
+                `Product draft is incomplete: ${missingFields.join(', ')}`
+            );
+        }
         return await publishProductByShop({ product_shop, product_id });
     
     }
@@ -1657,12 +1741,13 @@ class ProductFactory {
 // define base product class
 class Product {
     constructor({
-        product_name, product_thumb, product_thumb_path, product_thumb_variants, product_description, product_original_price, product_price,
+        product_name, product_name_normalized, product_thumb, product_thumb_path, product_thumb_variants, product_description, product_original_price, product_price,
         product_type, product_shop, product_attributes, product_quantity,
         product_variations, product_weight, product_gallery, product_thumb_crop_state,
         product_ratingsAverage, product_ratingsCount
     }){
         this.product_name = product_name;
+        this.product_name_normalized = product_name_normalized;
         this.product_thumb = product_thumb;
         this.product_thumb_path = product_thumb_path;
         this.product_thumb_variants = product_thumb_variants;

@@ -1,5 +1,6 @@
 <script>
 	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
 	import { onDestroy, onMount } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { t } from '$lib/i18n/admin/index.js';
@@ -137,22 +138,6 @@
 		} catch (error) {
 			uploadAssetCache.delete(cacheKey);
 			throw error;
-		}
-	};
-
-	const ensureProductNameAvailable = async (formData) => {
-		const name = String(formData.get('product_name') || '').trim();
-		if (!name) return;
-		const params = new URLSearchParams({ name });
-		const response = await fetch(
-			resolveAdminPath(`/admin/api/products/name-exists?${params.toString()}`)
-		);
-		const result = await response.json().catch(() => null);
-		if (!response.ok) {
-			throw new Error(result?.error || 'Không thể kiểm tra tên sản phẩm.');
-		}
-		if (result?.exists) {
-			throw new Error($t('admin.productsNew.errors.duplicateName'));
 		}
 	};
 
@@ -770,57 +755,94 @@
 		syncGalleryInputFiles();
 	};
 
+	const stripProductMediaFields = (formData) => {
+		[
+			'product_thumb',
+			'product_thumb_asset',
+			'product_thumb_cropped',
+			'product_thumb_name',
+			'product_thumb_crop_state',
+			'product_gallery',
+			'product_gallery_assets',
+			'product_gallery_cropped',
+			'product_gallery_cropped_names',
+			'product_gallery_cropped_states'
+		].forEach((field) => formData.delete(field));
+	};
+
+	const collectUploadedProductMedia = async () => {
+		const thumbFile = thumbCroppedUrl
+			? await dataUrlToFile(thumbCroppedUrl, thumbFileName)
+			: thumbInput?.files?.[0];
+		const uploadTasks = [];
+		if (thumbFile) {
+			uploadTasks.push({
+				type: 'thumb',
+				file: thumbFile,
+				cacheKey: thumbCroppedUrl || thumbFile
+			});
+		}
+		galleryItems.forEach((item) => uploadTasks.push({ type: 'gallery', item, cacheKey: item }));
+		const uploadedAssets = await mapWithConcurrency(uploadTasks, 3, async (task) => {
+			if (task.type === 'thumb') {
+				return {
+					type: 'thumb',
+					asset: await uploadProductImageCached(task.file, 'thumb', task.cacheKey)
+				};
+			}
+			const file = task.item?.croppedUrl
+				? await dataUrlToFile(task.item.croppedUrl, task.item.fileName)
+				: task.item?.file;
+			if (!file) return null;
+			const asset = await uploadProductImageCached(file, 'gallery', task.cacheKey);
+			return {
+				type: 'gallery',
+				asset: task.item?.cropState ? { ...asset, crop_state: task.item.cropState } : asset
+			};
+		});
+		const thumbAsset = uploadedAssets.find((entry) => entry?.type === 'thumb')?.asset;
+		return {
+			upload_session_id: uploadSessionId,
+			...(thumbAsset
+				? {
+						product_thumb: thumbAsset.url,
+						...(thumbAsset.path ? { product_thumb_path: thumbAsset.path } : {}),
+						...(thumbAsset.variants
+							? { product_thumb_variants: thumbAsset.variants }
+							: {}),
+						...(thumbCropState ? { product_thumb_crop_state: thumbCropState } : {})
+					}
+				: {}),
+			product_gallery: uploadedAssets
+				.filter((entry) => entry?.type === 'gallery')
+				.map((entry) => entry.asset)
+		};
+	};
+
+	const syncProductMedia = async (productId, mediaPayload) => {
+		const response = await fetch(
+			resolveAdminPath(`/admin/api/products/${encodeURIComponent(productId)}/media`),
+			{
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(mediaPayload)
+			}
+		);
+		const result = await response.json().catch(() => null);
+		if (!response.ok) {
+			throw new Error(result?.error || 'Không thể đồng bộ ảnh cho bản nháp.');
+		}
+		return result;
+	};
+
 	const handleCreateEnhance = async ({ formData, cancel }) => {
 		handleFormSubmit();
 		isSavingProduct = true;
+		let mediaSyncPromise;
 		try {
-			await ensureProductNameAvailable(formData);
-			const thumbFile = thumbCroppedUrl
-				? await dataUrlToFile(thumbCroppedUrl, thumbFileName)
-				: thumbInput?.files?.[0];
-			const uploadTasks = [];
-			if (thumbFile) {
-				uploadTasks.push({
-					type: 'thumb',
-					file: thumbFile,
-					cacheKey: thumbCroppedUrl || thumbFile
-				});
-			}
-			galleryItems.forEach((item) => {
-				uploadTasks.push({ type: 'gallery', item, cacheKey: item });
-			});
-			const uploadedAssets = await mapWithConcurrency(uploadTasks, 3, async (task) => {
-				if (task.type === 'thumb') {
-					return {
-						type: 'thumb',
-						asset: await uploadProductImageCached(task.file, 'thumb', task.cacheKey)
-					};
-				}
-				const file = task.item?.croppedUrl
-					? await dataUrlToFile(task.item.croppedUrl, task.item.fileName)
-					: task.item?.file;
-				if (!file) return null;
-				const asset = await uploadProductImageCached(file, 'gallery', task.cacheKey);
-				return {
-					type: 'gallery',
-					asset: task.item?.cropState ? { ...asset, crop_state: task.item.cropState } : asset
-				};
-			});
-			const thumbAsset = uploadedAssets.find((entry) => entry?.type === 'thumb')?.asset;
-			if (thumbAsset) {
-				formData.set('product_thumb_asset', JSON.stringify(thumbAsset));
-				formData.delete('product_thumb');
-				formData.delete('product_thumb_cropped');
-			}
-
-			const galleryAssets = uploadedAssets
-				.filter((entry) => entry?.type === 'gallery')
-				.map((entry) => entry.asset);
-			formData.set('product_gallery_assets', JSON.stringify(galleryAssets));
-			formData.delete('product_gallery');
-			formData.delete('product_gallery_cropped');
-			formData.delete('product_gallery_cropped_names');
-			formData.delete('product_gallery_cropped_states');
+			mediaSyncPromise = collectUploadedProductMedia();
+			void mediaSyncPromise.catch(() => {});
+			stripProductMediaFields(formData);
 		} catch (error) {
 			cancel();
 			isSavingProduct = false;
@@ -829,6 +851,22 @@
 		}
 		return async ({ result, update }) => {
 			try {
+				if (result?.type === 'success' && result?.data?.productId) {
+					const productId = result.data.productId;
+					try {
+						await syncProductMedia(productId, await mediaSyncPromise);
+						pushToast(result?.data?.toast);
+					} catch (error) {
+						pushToast({
+							tone: 'error',
+							message:
+								error?.message ||
+								'Bản nháp đã được tạo nhưng chưa thể đồng bộ ảnh. Bạn có thể thử lưu lại.'
+						});
+					}
+					await goto(resolveAdminPath(`/admin/products/${productId}`));
+					return;
+				}
 				if (result?.type === 'failure') {
 					pushToast(
 						result?.data?.toast || {
@@ -915,7 +953,6 @@
 				min="0"
 				step="1"
 				bind:value={originalPrice}
-				required
 			/>
 		</div>
 		<div class="col-md-3">
@@ -928,7 +965,6 @@
 				min="0"
 				step="1"
 				bind:value={salePrice}
-				required
 			/>
 		</div>
 		<div class="col-md-3">
@@ -938,7 +974,6 @@
 				id="product-quantity"
 				type="number"
 				name="product_quantity"
-				required
 			/>
 		</div>
 
@@ -1027,7 +1062,6 @@
 							accept="image/*"
 							onchange={handleThumbChange}
 							bind:this={thumbInput}
-							required
 						/>
 						<div class="upload-card-copy">
 							<strong>{$t('admin.productsNew.thumb')}</strong>
@@ -1179,7 +1213,6 @@
 						id="product-attribute-manufacturer"
 						name="product_attribute_manufacturer"
 						placeholder={$t('admin.productsNew.manufacturer')}
-						required
 					/>
 				</div>
 				<div class="col-md-4">
@@ -1188,7 +1221,6 @@
 						id="product-attribute-model"
 						name="product_attribute_model"
 						placeholder={$t('admin.productsNew.model')}
-						required
 					/>
 				</div>
 				<div class="col-md-4">
@@ -1197,7 +1229,6 @@
 						id="product-attribute-color"
 						name="product_attribute_color"
 						placeholder={$t('admin.productsNew.color')}
-						required
 					/>
 				</div>
 			</div>

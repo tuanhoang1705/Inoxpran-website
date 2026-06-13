@@ -98,7 +98,8 @@ const productReviewSchema = new Schema(
 
 const productSchema = new Schema({
     product_name: { type: String, required: true },
-    product_thumb: { type: String, required: true },
+    product_name_normalized: { type: String, default: '', index: true },
+    product_thumb: { type: String, default: '' },
     product_thumb_path: { type: String },
     product_thumb_variants: { type: Schema.Types.Mixed, default: null },
     product_thumb_crop_state: {
@@ -121,15 +122,15 @@ const productSchema = new Schema({
         ],
         default: []
     },
-    product_description: { type: String, required: true },
+    product_description: { type: String, default: '' },
     product_slug: String,
-    product_original_price:{ type: Number, required: true },
-    product_price: { type: Number, required: true },
-    product_quantity: { type: Number, required: true },
+    product_original_price:{ type: Number, default: 0 },
+    product_price: { type: Number, default: 0 },
+    product_quantity: { type: Number, default: 0 },
     product_weight: { type: Number, default: 1000 },
     product_type: { type: String, required: true, enum: ['CastIrons', 'Electronics', 'Inoxs'] },
     product_shop: String,
-    product_attributes: { type: Object, required: true },
+    product_attributes: { type: Object, default: {} },
     product_ratingsAverage: {
         type: Number,
         default: 0,
@@ -172,6 +173,10 @@ productSchema.pre('save', function (next) {
         strict: true,
         trim: true
     });
+    this.product_name_normalized = String(this.product_name || '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLocaleLowerCase('vi');
     next();
 });
 

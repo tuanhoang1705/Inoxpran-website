@@ -1,8 +1,6 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import { getTranslator } from '$lib/i18n/admin/server.js';
 import { adminApiFetch } from '$lib/server/adminApi.js';
-import { getAdminProductNameStatus } from '$lib/server/adminProduct.js';
-import { setAdminToast } from '$lib/server/adminToast.js';
 
 const toNumber = (value) => {
 	if (value === null || value === undefined || value === '') return undefined;
@@ -28,14 +26,13 @@ const buildAttributesPayload = (form, t, { requireAll = false } = {}) => {
 	if (requireAll && !hasAny) {
 		return { error: t('admin.productsNew.errors.attributesRequired') };
 	}
-	if (hasAny && (!manufacturer || !model || !color)) {
-		return { error: t('admin.productsNew.errors.attributesIncomplete') };
-	}
 	if (!hasAny) {
 		return { value: undefined, parsed: undefined };
 	}
 
-	const parsed = { manufacturer, model, color };
+	const parsed = Object.fromEntries(
+		Object.entries({ manufacturer, model, color }).filter(([, value]) => Boolean(value))
+	);
 	if (rawColors) {
 		try {
 			const parsedColors = JSON.parse(rawColors);
@@ -89,21 +86,15 @@ export const actions = {
 		const productName = String(form.get('product_name') || '').trim();
 		const productDescription = String(form.get('product_description') || '').trim();
 		const productType = String(form.get('product_type') || '').trim();
-		const attributesResult = buildAttributesPayload(form, t, { requireAll: true });
+		const attributesResult = buildAttributesPayload(form, t);
 
-		if (!productName || !productDescription || !productType) {
+		if (!productName || !productType) {
 			const message = t('admin.productsNew.errors.missingFields');
 			return fail(400, { error: message, toast: { tone: 'error', message } });
 		}
 
 		if (attributesResult.error) {
 			const message = attributesResult.error;
-			return fail(400, { error: message, toast: { tone: 'error', message } });
-		}
-
-		const nameStatus = await getAdminProductNameStatus({ cookies, fetch, name: productName });
-		if (nameStatus.exists) {
-			const message = t('admin.productsNew.errors.duplicateName');
 			return fail(400, { error: message, toast: { tone: 'error', message } });
 		}
 
@@ -116,86 +107,32 @@ export const actions = {
 		const variationsResult = buildVariationsPayload(form);
 		const uploadSessionId = String(form.get('upload_session_id') || '').trim();
 
-		const thumbFile = form.get('product_thumb');
-		const thumbAssetRaw = String(form.get('product_thumb_asset') || '').trim();
-		const thumbCropped = String(form.get('product_thumb_cropped') || '').trim();
-		const thumbName = String(form.get('product_thumb_name') || '').trim();
-		const thumbCropState = String(form.get('product_thumb_crop_state') || '').trim();
-		const hasThumbCropped = thumbCropped.startsWith('data:image/');
-		if ((!thumbFile || !thumbFile.size) && !hasThumbCropped && !thumbAssetRaw) {
-			const message = t('admin.productsNew.errors.thumbRequired');
-			return fail(400, { error: message, toast: { tone: 'error', message } });
-		}
-
-		if (productOriginalPrice === undefined) {
-			const message = t('admin.productsNew.errors.missingOriginalPrice');
-			return fail(400, { error: message, toast: { tone: 'error', message } });
-		}
-		if (productPrice === undefined) {
-			const message = t('admin.productsNew.errors.missingSalePrice');
-			return fail(400, { error: message, toast: { tone: 'error', message } });
-		}
-
-		const payload = new FormData();
-		payload.set('product_name', productName);
-		payload.set('product_description', productDescription);
-		payload.set('product_type', productType);
-		payload.set('product_attributes', attributesResult.value);
-		payload.set('product_original_price', String(productOriginalPrice));
-		payload.set('product_price', String(productPrice));
-		if (uploadSessionId) payload.set('upload_session_id', uploadSessionId);
-
-		if (productQuantity !== undefined) payload.set('product_quantity', String(productQuantity));
-		if (productWeight !== undefined) payload.set('product_weight', String(productWeight));
-		if (productRatingsAverage !== undefined) {
-			payload.set('product_ratingsAverage', String(productRatingsAverage));
-		}
-		if (productRatingsCount !== undefined) {
-			payload.set('product_ratingsCount', String(productRatingsCount));
-		}
-		if (variationsResult.value) payload.set('product_variations', variationsResult.value);
-		if (thumbAssetRaw) {
-			const thumbAsset = JSON.parse(thumbAssetRaw);
-			payload.set('product_thumb', thumbAsset.url);
-			if (thumbAsset.path) payload.set('product_thumb_path', thumbAsset.path);
-			if (thumbAsset.variants) {
-				payload.set('product_thumb_variants', JSON.stringify(thumbAsset.variants));
-			}
-		} else if (hasThumbCropped) {
-			payload.set('product_thumb', thumbCropped);
-			if (thumbName) payload.set('product_thumb_name', thumbName);
-		} else if (thumbFile && thumbFile.size > 0) {
-			payload.set('product_thumb', thumbFile);
-		}
-		if (thumbCropState) {
-			payload.set('product_thumb_crop_state', thumbCropState);
-		}
-
-		const galleryCropped = String(form.get('product_gallery_cropped') || '').trim();
-		const galleryAssets = String(form.get('product_gallery_assets') || '').trim();
-		if (galleryAssets) payload.set('product_gallery', galleryAssets);
-		const galleryNames = String(form.get('product_gallery_cropped_names') || '').trim();
-		const galleryStates = String(form.get('product_gallery_cropped_states') || '').trim();
-		if (galleryCropped) {
-			payload.set('product_gallery_cropped', galleryCropped);
-			if (galleryNames) payload.set('product_gallery_cropped_names', galleryNames);
-			if (galleryStates) payload.set('product_gallery_cropped_states', galleryStates);
-		}
-		const galleryFiles = form.getAll('product_gallery');
-		if (galleryFiles && galleryFiles.length > 0) {
-			galleryFiles.forEach((file) => {
-				if (file && file.size > 0) {
-					payload.append('product_gallery', file);
-				}
-			});
-		}
+		const payload = {
+			product_name: productName,
+			product_description: productDescription,
+			product_type: productType,
+			product_attributes: attributesResult.parsed || {},
+			product_variations: variationsResult.parsed || [],
+			...(uploadSessionId ? { upload_session_id: uploadSessionId } : {}),
+			...(productOriginalPrice !== undefined
+				? { product_original_price: productOriginalPrice }
+				: {}),
+			...(productPrice !== undefined ? { product_price: productPrice } : {}),
+			...(productQuantity !== undefined ? { product_quantity: productQuantity } : {}),
+			...(productWeight !== undefined ? { product_weight: productWeight } : {}),
+			...(productRatingsAverage !== undefined
+				? { product_ratingsAverage }
+				: {}),
+			...(productRatingsCount !== undefined ? { product_ratingsCount } : {})
+		};
 		const response = await adminApiFetch({
 			cookies,
 			fetch,
-			path: '/product',
+			path: '/product/drafts',
 			options: {
 				method: 'POST',
-				body: payload
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(payload)
 			}
 		});
 
@@ -205,10 +142,12 @@ export const actions = {
 			return fail(response.status, { error: message, toast: { tone: 'error', message } });
 		}
 
-		setAdminToast(cookies, {
-			tone: 'success',
-			message: t('admin.productsNew.success.created')
-		});
-		throw redirect(303, '/admin/products/drafts');
+		const created = await parsePayload(response);
+		return {
+			success: true,
+			productId: created?.metadata?._id,
+			product: created?.metadata,
+			toast: { tone: 'success', message: t('admin.productsNew.success.created') }
+		};
 	}
 };

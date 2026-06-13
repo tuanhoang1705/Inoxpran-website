@@ -88,11 +88,15 @@ const registerPendingStorageUpload = async ({
     });
 };
 
-const commitPendingStorageUploads = async ({ ownerId, sessionId, html }) => {
+const commitPendingStorageUploads = async ({ ownerId, sessionId, html, artifacts = [] }) => {
     const normalizedSessionId = normalizeSessionId(sessionId);
     if (!ownerId || !normalizedSessionId) return { committed: 0 };
 
     const referencedKeys = collectHtmlImageStorageKeys(html);
+    for (const artifact of Array.isArray(artifacts) ? artifacts : []) {
+        const key = toStorageArtifactKey(artifact);
+        if (key) referencedKeys.add(key);
+    }
     if (!referencedKeys.size) return { committed: 0 };
 
     const pending = await pendingStorageUpload

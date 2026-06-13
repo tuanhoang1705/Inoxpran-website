@@ -56,6 +56,8 @@ router.patch('/admin/reviews/:reviewId/status', asyncHandler(productController.u
 router.delete('/admin/reviews/:reviewId', asyncHandler(productController.deleteAdminReview));
 router.post('/best-selling/order', asyncHandler(productController.updateBestSellingOrder));
 router.get(`/admin/:productId`, asyncHandler(productController.findProductAdmin));
+router.post('/drafts', asyncHandler(productController.createDraft));
+router.patch('/:productId/media', asyncHandler(productController.updateProductMedia));
 
 router.post(
     '',

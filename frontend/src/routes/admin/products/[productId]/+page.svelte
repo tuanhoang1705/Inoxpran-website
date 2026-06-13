@@ -163,25 +163,6 @@
 		}
 	};
 
-	const ensureProductNameAvailable = async (formData) => {
-		const name = String(formData.get('product_name') || '').trim();
-		if (!name) return;
-		const params = new URLSearchParams({
-			name,
-			excludeId: String(product?._id || '')
-		});
-		const response = await fetch(
-			resolveAdminPath(`/admin/api/products/name-exists?${params.toString()}`)
-		);
-		const result = await response.json().catch(() => null);
-		if (!response.ok) {
-			throw new Error(result?.error || 'Không thể kiểm tra tên sản phẩm.');
-		}
-		if (result?.exists) {
-			throw new Error($t('admin.productEditor.errors.duplicateName'));
-		}
-	};
-
 	const mapWithConcurrency = async (items, limit, mapper) => {
 		const results = new Array(items.length);
 		let nextIndex = 0;
@@ -350,6 +331,7 @@
 						isExisting: true,
 						url,
 						path,
+						variants: entry?.variants || entry?.imageVariants || null,
 						previewUrl: url,
 						dataUrl: '',
 						croppedUrl: '',
@@ -1026,67 +1008,105 @@
 		syncGalleryInputFiles();
 	};
 
+	const stripProductMediaFields = (formData) => {
+		[
+			'product_thumb',
+			'product_thumb_asset',
+			'product_thumb_cropped',
+			'product_thumb_name',
+			'product_thumb_crop_state',
+			'product_gallery',
+			'product_gallery_assets',
+			'product_gallery_cropped',
+			'product_gallery_cropped_names',
+			'product_gallery_cropped_states'
+		].forEach((field) => formData.delete(field));
+	};
+
+	const collectUploadedProductMedia = async () => {
+		const thumbFile = thumbCroppedUrl
+			? await dataUrlToFile(thumbCroppedUrl, thumbFileName)
+			: thumbInput?.files?.[0];
+		const uploadTasks = [];
+		if (thumbFile) {
+			uploadTasks.push({
+				type: 'thumb',
+				file: thumbFile,
+				cacheKey: thumbCroppedUrl || thumbFile
+			});
+		}
+		galleryItems.forEach((item) => uploadTasks.push({ type: 'gallery', item, cacheKey: item }));
+		const uploadedAssets = await mapWithConcurrency(uploadTasks, 3, async (task) => {
+			if (task.type === 'thumb') {
+				return {
+					type: 'thumb',
+					asset: await uploadProductImageCached(task.file, 'thumb', task.cacheKey)
+				};
+			}
+			if (task.item?.isExisting && !task.item?.croppedUrl) {
+				return {
+					type: 'gallery',
+					asset: {
+						url: task.item.url,
+						...(task.item.path ? { path: task.item.path } : {}),
+						...(task.item.variants ? { variants: task.item.variants } : {}),
+						...(task.item.cropState ? { crop_state: task.item.cropState } : {})
+					}
+				};
+			}
+			const file = task.item?.croppedUrl
+				? await dataUrlToFile(task.item.croppedUrl, task.item.fileName)
+				: task.item?.file;
+			if (!file) return null;
+			const asset = await uploadProductImageCached(file, 'gallery', task.cacheKey);
+			return {
+				type: 'gallery',
+				asset: task.item?.cropState ? { ...asset, crop_state: task.item.cropState } : asset
+			};
+		});
+		const thumbAsset = uploadedAssets.find((entry) => entry?.type === 'thumb')?.asset;
+		return {
+			upload_session_id: uploadSessionId,
+			...(thumbAsset
+				? {
+						product_thumb: thumbAsset.url,
+						...(thumbAsset.path ? { product_thumb_path: thumbAsset.path } : {}),
+						...(thumbAsset.variants
+							? { product_thumb_variants: thumbAsset.variants }
+							: {}),
+						...(thumbCropState ? { product_thumb_crop_state: thumbCropState } : {})
+					}
+				: {}),
+			product_gallery: uploadedAssets
+				.filter((entry) => entry?.type === 'gallery')
+				.map((entry) => entry.asset)
+		};
+	};
+
+	const syncProductMedia = async (mediaPayload) => {
+		const response = await fetch(
+			resolveAdminPath(`/admin/api/products/${encodeURIComponent(product?._id)}/media`),
+			{
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(mediaPayload)
+			}
+		);
+		const result = await response.json().catch(() => null);
+		if (!response.ok) {
+			throw new Error(result?.error || 'Không thể đồng bộ ảnh sản phẩm.');
+		}
+		return result;
+	};
+
 	const handleProductUpdateEnhance = async ({ formData, cancel }) => {
 		handleFormSubmit();
 		isSavingProduct = true;
+		let mediaSyncPromise;
 		try {
-			await ensureProductNameAvailable(formData);
-			const thumbFile = thumbCroppedUrl
-				? await dataUrlToFile(thumbCroppedUrl, thumbFileName)
-				: thumbInput?.files?.[0];
-			const uploadTasks = [];
-			if (thumbFile) {
-				uploadTasks.push({
-					type: 'thumb',
-					file: thumbFile,
-					cacheKey: thumbCroppedUrl || thumbFile
-				});
-			}
-			galleryItems.forEach((item) => {
-				uploadTasks.push({ type: 'gallery', item, cacheKey: item });
-			});
-			const uploadedAssets = await mapWithConcurrency(uploadTasks, 3, async (task) => {
-				if (task.type === 'thumb') {
-					return {
-						type: 'thumb',
-						asset: await uploadProductImageCached(task.file, 'thumb', task.cacheKey)
-					};
-				}
-				if (task.item?.isExisting && !task.item?.croppedUrl) {
-					return {
-						type: 'gallery',
-						asset: {
-							url: task.item.url,
-							...(task.item.path ? { path: task.item.path } : {}),
-							...(task.item.cropState ? { crop_state: task.item.cropState } : {})
-						}
-					};
-				}
-				const file = task.item?.croppedUrl
-					? await dataUrlToFile(task.item.croppedUrl, task.item.fileName)
-					: task.item?.file;
-				if (!file) return null;
-				const asset = await uploadProductImageCached(file, 'gallery', task.cacheKey);
-				return {
-					type: 'gallery',
-					asset: task.item?.cropState ? { ...asset, crop_state: task.item.cropState } : asset
-				};
-			});
-			const thumbAsset = uploadedAssets.find((entry) => entry?.type === 'thumb')?.asset;
-			if (thumbAsset) {
-				formData.set('product_thumb_asset', JSON.stringify(thumbAsset));
-				formData.delete('product_thumb');
-				formData.delete('product_thumb_cropped');
-			}
-
-			const galleryAssets = uploadedAssets
-				.filter((entry) => entry?.type === 'gallery')
-				.map((entry) => entry.asset);
-			formData.set('product_gallery_assets', JSON.stringify(galleryAssets));
-			formData.delete('product_gallery');
-			formData.delete('product_gallery_cropped');
-			formData.delete('product_gallery_cropped_names');
-			formData.delete('product_gallery_cropped_states');
+			mediaSyncPromise = collectUploadedProductMedia();
+			void mediaSyncPromise.catch(() => {});
+			stripProductMediaFields(formData);
 		} catch (error) {
 			cancel();
 			isSavingProduct = false;
@@ -1095,6 +1115,21 @@
 		}
 		return async ({ result, update }) => {
 			try {
+				if (result?.type === 'success') {
+					try {
+						await syncProductMedia(await mediaSyncPromise);
+						pushToast(result?.data?.toast);
+					} catch (error) {
+						pushToast({
+							tone: 'error',
+							message:
+								error?.message ||
+								'Thông tin đã được cập nhật nhưng chưa thể đồng bộ ảnh. Hãy thử lưu lại.'
+						});
+					}
+					await update({ reset: false });
+					return;
+				}
 				if (result?.type === 'failure') {
 					pushToast(
 						result?.data?.toast || {

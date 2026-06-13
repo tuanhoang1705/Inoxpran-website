@@ -9,20 +9,31 @@ const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g,
 const findProductByNormalizedName = async ({ name, excludeId } = {}) => {
     const normalizedName = String(name || '').trim().replace(/\s+/g, ' ');
     if (!normalizedName) return null;
+    const normalizedNameKey = normalizedName.toLocaleLowerCase('vi');
 
     const exactNamePattern = normalizedName
         .split(' ')
         .map((part) => escapeRegex(part))
         .join('\\s+');
-    const filter = {
-        product_name: { $regex: `^${exactNamePattern}$`, $options: 'i' }
-    };
+    const exclusionFilter = {};
     const excludedObjectId = convertToObjectIdMongodb(excludeId);
     if (excludedObjectId) {
-        filter._id = { $ne: excludedObjectId };
+        exclusionFilter._id = { $ne: excludedObjectId };
     }
 
-    return await product.findOne(filter)
+    const normalizedMatch = await product.findOne({
+        product_name_normalized: normalizedNameKey,
+        ...exclusionFilter
+    })
+        .select('_id product_name product_slug isDraft isPublished')
+        .lean()
+        .exec();
+    if (normalizedMatch) return normalizedMatch;
+
+    return await product.findOne({
+        product_name: { $regex: `^${exactNamePattern}$`, $options: 'i' },
+        ...exclusionFilter
+    })
         .select('_id product_name product_slug isDraft isPublished')
         .lean()
         .exec();
@@ -256,14 +267,22 @@ const findProduct = async ({ product_id, unSelect, includeStatus = false }) => {
 
     const objectId = convertToObjectIdMongodb(lookupValue);
     if (objectId) {
-        const foundById = await executeQuery({ filter: { _id: objectId } });
+        const foundById = await executeQuery({
+            filter: {
+                _id: objectId,
+                ...(!includeStatus ? { isPublished: true, isDraft: false } : {})
+            }
+        });
         if (foundById) return foundById;
     }
 
     const slugCandidates = buildSlugCandidates(lookupValue);
     if (!slugCandidates.length) return null;
     return await executeQuery({
-        filter: { product_slug: { $in: slugCandidates } },
+        filter: {
+            product_slug: { $in: slugCandidates },
+            ...(!includeStatus ? { isPublished: true, isDraft: false } : {})
+        },
         sort: { isPublished: -1, updatedAt: -1, createdAt: -1 }
     });
 }

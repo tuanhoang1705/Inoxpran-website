@@ -4,18 +4,28 @@ const ProductService = require('../services/product.service');
 const { SuccessResponse } = require('../core/success.response');
 const { commitPendingStorageUploads } = require('../services/pendingStorageUpload.service');
 
-const commitDescriptionUploads = async (req, html) => {
-    try {
-        await commitPendingStorageUploads({
+const collectProductArtifacts = (productItem = {}) => [
+    ...(productItem?.product_thumb
+        ? [{
+              url: productItem.product_thumb,
+              path: productItem.product_thumb_path,
+              variants: productItem.product_thumb_variants
+          }]
+        : []),
+    ...(Array.isArray(productItem?.product_gallery) ? productItem.product_gallery : [])
+];
+
+const commitProductUploads = (req, productItem = {}) => {
+    void commitPendingStorageUploads({
             ownerId: req.user?.userId,
             sessionId: req.body?.upload_session_id,
-            html
-        });
-    } catch (error) {
+            html: productItem?.product_description || req.body?.product_description,
+            artifacts: collectProductArtifacts(productItem)
+        }).catch((error) => {
         console.error('Failed to commit product description uploads', {
             error: error?.message || 'commit-pending-upload-failed'
         });
-    }
+    });
 };
 
 class ProductController {
@@ -24,9 +34,20 @@ class ProductController {
             ...req.body,
             product_shop: req.user.userId
         });
-        await commitDescriptionUploads(req, created?.product_description || req.body?.product_description);
+        commitProductUploads(req, created);
         new SuccessResponse({
             message: 'Create new product success',
+            metadata: created
+        }).send(res);
+    }
+    createDraft = async (req, res, next) => {
+        const created = await ProductService.createDraft(req.body.product_type, {
+            ...req.body,
+            product_shop: req.user.userId
+        });
+        commitProductUploads(req, created);
+        new SuccessResponse({
+            message: 'Create product draft success',
             metadata: created
         }).send(res);
     }
@@ -36,10 +57,21 @@ class ProductController {
              ...req.body,
              product_shop: req.user.userId,
         });
-         await commitDescriptionUploads(req, updated?.product_description || req.body?.product_description);
+         commitProductUploads(req, updated);
          new SuccessResponse({
             message: 'Update product success',
              metadata: updated
+        }).send(res);
+    };
+    updateProductMedia = async (req, res, next) => {
+        const updated = await ProductService.updateProductMedia({
+            productId: req.params.productId,
+            payload: req.body
+        });
+        commitProductUploads(req, updated);
+        new SuccessResponse({
+            message: 'Update product media success',
+            metadata: updated
         }).send(res);
     };
     deleteProduct = async (req, res, next) => {
