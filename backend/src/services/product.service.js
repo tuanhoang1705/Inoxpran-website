@@ -684,6 +684,28 @@ const normalizeProductPayload = (payload, { requireAttributes = false } = {}) =>
     return normalized;
 };
 
+const buildProductUpdateDocument = (payload) => {
+    const updateDocument = updateNestedObject(payload);
+    const atomicMediaFields = [
+        'product_thumb_variants',
+        'product_thumb_crop_state'
+    ];
+
+    // Media objects must be replaced atomically. Flattened child paths fail
+    // when a legacy or newly-created product stores the parent field as null.
+    atomicMediaFields.forEach((field) => {
+        if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+        Object.keys(updateDocument).forEach((key) => {
+            if (key.startsWith(`${field}.`)) {
+                delete updateDocument[key];
+            }
+        });
+        updateDocument[field] = payload[field];
+    });
+
+    return updateDocument;
+};
+
 const parseNumber = (value, fallback) => {
     if (value === undefined || value === null || value === '') return fallback;
     const parsed = Number(value);
@@ -1817,7 +1839,7 @@ class CastIron extends Product {
         }
 
 
-        const updateProduct = await super.updateProduct(productId, updateNestedObject(objectParams));
+        const updateProduct = await super.updateProduct(productId, buildProductUpdateDocument(objectParams));
         return updateProduct;
 
     }
@@ -1853,7 +1875,7 @@ class Electronics extends Product {
             await updateProductById({productId, bodyUpdate: updateNestedObject(objectParams.product_attributes), model: electronic });
             // delete objectParams.product_attributes;
         }
-        const updateProduct = await super.updateProduct(productId, updateNestedObject(objectParams));
+        const updateProduct = await super.updateProduct(productId, buildProductUpdateDocument(objectParams));
         return updateProduct;
 
     }
@@ -1888,7 +1910,7 @@ class Inox extends Product {
             await updateProductById({productId, bodyUpdate: updateNestedObject(objectParams.product_attributes), model: inox });
             // delete objectParams.product_attributes;
         }
-        const updateProduct = await super.updateProduct(productId, updateNestedObject(objectParams));
+        const updateProduct = await super.updateProduct(productId, buildProductUpdateDocument(objectParams));
         return updateProduct;
         
          
