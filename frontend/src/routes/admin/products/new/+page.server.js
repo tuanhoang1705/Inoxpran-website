@@ -121,9 +121,11 @@ export const actions = {
 			...(productQuantity !== undefined ? { product_quantity: productQuantity } : {}),
 			...(productWeight !== undefined ? { product_weight: productWeight } : {}),
 			...(productRatingsAverage !== undefined
-				? { product_ratingsAverage }
+				? { product_ratingsAverage: productRatingsAverage }
 				: {}),
-			...(productRatingsCount !== undefined ? { product_ratingsCount } : {})
+			...(productRatingsCount !== undefined
+				? { product_ratingsCount: productRatingsCount }
+				: {})
 		};
 		const response = await adminApiFetch({
 			cookies,

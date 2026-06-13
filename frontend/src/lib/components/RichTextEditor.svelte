@@ -17,7 +17,8 @@
 		onChange = null,
 		placeholder = '',
 		uploadSessionId = '',
-		uploadEntityType = 'product'
+		uploadEntityType = 'product',
+		onUploadStateChange = null
 	} = $props();
 
 	let editor;
@@ -27,6 +28,9 @@
 	let linkUrl = $state('');
 	let linkText = $state('');
 	let selectedColor = $state('#151515');
+	let imageUploadStatus = $state('idle');
+	let imageUploadError = $state('');
+	let failedImageFile = $state(null);
 	let isUpdatingFromProp = false;
 	let detachEditorHandlers = null;
 	const editorPlaceholder = $derived(placeholder || $t('admin.editor.placeholder'));
@@ -41,6 +45,12 @@
 		if (onChange) {
 			onChange(editor?.getHTML() || '');
 		}
+	};
+
+	const setImageUploadState = (status, error = '') => {
+		imageUploadStatus = status;
+		imageUploadError = error;
+		onUploadStateChange?.({ status, error });
 	};
 
 	const uploadImage = async (file) => {
@@ -72,14 +82,35 @@
 			pushToast({ tone: 'error', message: $t('admin.editor.onlyImagesAllowed') });
 			return;
 		}
+		if (imageUploadStatus === 'uploading') {
+			pushToast({ tone: 'error', message: 'Vui lòng chờ ảnh mô tả hiện tại tải xong.' });
+			return;
+		}
 
+		failedImageFile = null;
+		setImageUploadState('uploading');
 		try {
 			const url = await uploadImage(file);
 			editor?.chain().focus().setImage({ src: url }).run();
+			setImageUploadState('success');
+			setImageUploadState('idle');
 			pushToast({ tone: 'success', message: $t('admin.editor.imageAdded') });
 		} catch (error) {
-			pushToast({ tone: 'error', message: error?.message || $t('admin.editor.imageUploadFailed') });
+			const message = error?.message || $t('admin.editor.imageUploadFailed');
+			failedImageFile = file;
+			setImageUploadState('error', message);
+			pushToast({ tone: 'error', message });
 		}
+	};
+
+	const retryImageUpload = () => {
+		if (!failedImageFile || imageUploadStatus === 'uploading') return;
+		void insertImageFile(failedImageFile);
+	};
+
+	const dismissImageUploadError = () => {
+		failedImageFile = null;
+		setImageUploadState('idle');
 	};
 
 	const handleImageSelect = async (event) => {
@@ -367,6 +398,7 @@
 					accept="image/*"
 					onchange={handleImageSelect}
 					bind:this={imageInput}
+					disabled={imageUploadStatus === 'uploading'}
 					style="display: none;"
 				/>
 			</label>
@@ -426,6 +458,27 @@
 			</button>
 		</div>
 	</div>
+
+	{#if imageUploadStatus === 'uploading' || imageUploadStatus === 'error'}
+		<div
+			class="editor-upload-state"
+			class:error={imageUploadStatus === 'error'}
+			role="status"
+			aria-live="polite"
+		>
+			{#if imageUploadStatus === 'uploading'}
+				<span class="editor-upload-spinner" aria-hidden="true"></span>
+				<span>Đang tải ảnh mô tả...</span>
+			{:else}
+				<span class="editor-upload-error-icon" aria-hidden="true">!</span>
+				<span>{imageUploadError || 'Không thể tải ảnh mô tả.'}</span>
+				<div class="editor-upload-actions">
+					<button type="button" onclick={retryImageUpload}>Thử lại</button>
+					<button type="button" onclick={dismissImageUploadError}>Bỏ qua ảnh</button>
+				</div>
+			{/if}
+		</div>
+	{/if}
 
 	<div bind:this={editorElement} class="editor-content"></div>
 </div>
@@ -490,6 +543,69 @@
 
 	.toolbar-btn.is-active {
 		color: #8a561f;
+	}
+
+	.editor-upload-state {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		min-height: 42px;
+		padding: 8px 12px;
+		border-bottom: 1px solid #cce7e2;
+		background: #effaf8;
+		color: #0f766e;
+		font-size: 0.82rem;
+		font-weight: 600;
+	}
+
+	.editor-upload-state.error {
+		border-bottom-color: #fecaca;
+		background: #fff1f2;
+		color: #b42318;
+	}
+
+	.editor-upload-spinner {
+		width: 17px;
+		height: 17px;
+		flex: 0 0 17px;
+		border: 2px solid rgba(15, 118, 110, 0.22);
+		border-top-color: #0f766e;
+		border-radius: 50%;
+		animation: editor-upload-spin 0.75s linear infinite;
+	}
+
+	.editor-upload-error-icon {
+		display: grid;
+		place-items: center;
+		width: 18px;
+		height: 18px;
+		flex: 0 0 18px;
+		border-radius: 50%;
+		background: #dc2626;
+		color: #fff;
+		font-size: 0.72rem;
+	}
+
+	.editor-upload-actions {
+		display: flex;
+		gap: 6px;
+		margin-left: auto;
+	}
+
+	.editor-upload-actions button {
+		border: 1px solid currentColor;
+		border-radius: 6px;
+		padding: 4px 8px;
+		background: #fff;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	@keyframes editor-upload-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 	.color-btn {

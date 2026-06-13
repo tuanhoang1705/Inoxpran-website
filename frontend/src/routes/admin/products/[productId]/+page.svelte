@@ -59,8 +59,12 @@
 	let ratingCount = $state('0');
 	let discountPercent = $state(null);
 	let imageError = $state('');
-	let thumbProgress = $state(0);
-	let isThumbUploading = $state(false);
+	let thumbUploadStatus = $state('idle');
+	let thumbUploadError = $state('');
+	let thumbUploadedAsset = $state(null);
+	let thumbUploadRequestId = 0;
+	let descriptionUploadStatus = $state('idle');
+	let isThumbUploading = $derived(thumbUploadStatus === 'uploading');
 	let colorInput = $state('');
 	let colorPriceInput = $state('');
 	let colors = $state([]);
@@ -89,10 +93,27 @@
 	);
 	let galleryInitialized = $state(false);
 	let hadExistingGallery = $state(false);
-	let isGalleryUploading = $state(false);
+	let isGalleryUploading = $derived(
+		galleryItems.some((item) => item?.uploadStatus === 'uploading')
+	);
 	let isSavingProduct = $state(false);
 	let uploadSessionId = $state('');
 	const uploadAssetCache = new Map();
+	let isImageUploadPending = $derived(
+		isThumbUploading || isGalleryUploading || descriptionUploadStatus === 'uploading'
+	);
+	let hasImageUploadErrors = $derived(
+		thumbUploadStatus === 'error' ||
+			descriptionUploadStatus === 'error' ||
+			galleryItems.some((item) => item?.uploadStatus === 'error')
+	);
+	let hasUnresolvedImageUploads = $derived(
+		(Boolean(thumbPreviewUrl) && thumbUploadStatus !== 'success') ||
+			galleryItems.some((item) => item?.uploadStatus !== 'success') ||
+			isImageUploadPending ||
+			hasImageUploadErrors
+	);
+	let isSaveDisabled = $derived(isSavingProduct || hasUnresolvedImageUploads);
 	let isCropperOpen = $state(false);
 	let cropMode = $state('');
 	let cropTargetIndex = $state(-1);
@@ -176,24 +197,147 @@
 		return results;
 	};
 
-	const preUploadProductImage = (file, kind, cacheKey = file) => {
-		if (!file || !uploadSessionId) return;
-		void uploadProductImageCached(file, kind, cacheKey).catch(() => {});
+	const updateGalleryUploadState = (target, patch, expectedVersion = null) => {
+		const targetId = target?.uploadId;
+		galleryItems = galleryItems.map((item) =>
+			(item === target || (targetId && item?.uploadId === targetId)) &&
+			(expectedVersion === null || item?.uploadVersion === expectedVersion)
+				? { ...item, ...patch }
+				: item
+		);
+	};
+
+	const preUploadProductImage = (file, kind, cacheKey = file, requestedRequestId = null) => {
+		if (!file || !uploadSessionId || kind !== 'thumb') return;
+		if (requestedRequestId !== null && requestedRequestId !== thumbUploadRequestId) return;
+		const requestId = requestedRequestId ?? ++thumbUploadRequestId;
+		thumbUploadStatus = 'uploading';
+		thumbUploadError = '';
+		thumbUploadedAsset = null;
+		void uploadProductImageCached(file, kind, cacheKey)
+			.then((asset) => {
+				if (requestId !== thumbUploadRequestId) return;
+				thumbUploadedAsset = asset;
+				thumbUploadStatus = 'success';
+			})
+			.catch((error) => {
+				if (requestId !== thumbUploadRequestId) return;
+				thumbUploadStatus = 'error';
+				thumbUploadError = error?.message || 'Không thể tải ảnh đại diện.';
+			});
+	};
+
+	const preUploadGalleryItem = async (
+		item,
+		file = item?.file,
+		cacheKey = item,
+		requestedVersion = null
+	) => {
+		if (!item || !file || !uploadSessionId) return null;
+		const uploadVersion = requestedVersion ?? Number(item?.uploadVersion || 0) + 1;
+		updateGalleryUploadState(item, {
+			uploadStatus: 'uploading',
+			uploadError: '',
+			uploadedAsset: null,
+			uploadVersion
+		}, requestedVersion);
+		try {
+			const asset = await uploadProductImageCached(file, 'gallery', cacheKey);
+			updateGalleryUploadState(item, {
+				uploadStatus: 'success',
+				uploadError: '',
+				uploadedAsset: asset
+			}, uploadVersion);
+			return asset;
+		} catch (error) {
+			updateGalleryUploadState(item, {
+				uploadStatus: 'error',
+				uploadError: error?.message || 'Không thể tải ảnh chi tiết.',
+				uploadedAsset: null
+			}, uploadVersion);
+			return null;
+		}
 	};
 
 	const preUploadGalleryItems = (items) => {
 		if (!items?.length || !uploadSessionId) return;
-		void mapWithConcurrency(items, 3, async (item) => {
-			if (!item?.file) return null;
-			return await uploadProductImageCached(item.file, 'gallery', item);
-		}).catch(() => {});
+		items.forEach((item) =>
+			updateGalleryUploadState(item, {
+				uploadStatus: 'uploading',
+				uploadError: '',
+				uploadedAsset: null
+			})
+		);
+		void mapWithConcurrency(items, 3, (item) => preUploadGalleryItem(item));
 	};
 
 	const preUploadCroppedProductImage = (dataUrl, fileName, kind, cacheKey) => {
 		if (!dataUrl || !uploadSessionId) return;
+		let galleryUploadVersion = null;
+		let thumbPreparationRequestId = null;
+		if (kind === 'thumb') {
+			thumbPreparationRequestId = ++thumbUploadRequestId;
+			thumbUploadStatus = 'uploading';
+			thumbUploadError = '';
+			thumbUploadedAsset = null;
+		} else {
+			galleryUploadVersion = Number(cacheKey?.uploadVersion || 0) + 1;
+			updateGalleryUploadState(cacheKey, {
+				uploadStatus: 'uploading',
+				uploadError: '',
+				uploadedAsset: null,
+				uploadVersion: galleryUploadVersion
+			});
+		}
 		void dataUrlToFile(dataUrl, fileName)
-			.then((file) => uploadProductImageCached(file, kind, cacheKey))
-			.catch(() => {});
+			.then((file) => {
+				if (kind === 'thumb') {
+					preUploadProductImage(file, kind, cacheKey, thumbPreparationRequestId);
+					return;
+				}
+				preUploadGalleryItem(cacheKey, file, cacheKey, galleryUploadVersion);
+			})
+			.catch((error) => {
+				if (kind === 'thumb') {
+					if (thumbPreparationRequestId !== thumbUploadRequestId) return;
+					thumbUploadStatus = 'error';
+					thumbUploadError = error?.message || 'Không thể xử lý ảnh đại diện.';
+					return;
+				}
+				updateGalleryUploadState(cacheKey, {
+					uploadStatus: 'error',
+					uploadError: error?.message || 'Không thể xử lý ảnh chi tiết.'
+				}, galleryUploadVersion);
+			});
+	};
+
+	const retryThumbUpload = () => {
+		if (thumbCroppedUrl) {
+			preUploadCroppedProductImage(thumbCroppedUrl, thumbFileName, 'thumb', thumbCroppedUrl);
+			return;
+		}
+		const file = thumbInput?.files?.[0];
+		if (file) preUploadProductImage(file, 'thumb', file);
+	};
+
+	const retryGalleryUpload = (item) => {
+		if (item?.croppedUrl) {
+			preUploadCroppedProductImage(item.croppedUrl, item.fileName, 'gallery', item);
+			return;
+		}
+		preUploadGalleryItem(item);
+	};
+
+	const resetThumbCrop = () => {
+		thumbCroppedUrl = '';
+		thumbCropState = null;
+		thumbUploadedAsset = null;
+		const file = thumbInput?.files?.[0];
+		if (file) preUploadProductImage(file, 'thumb', file);
+	};
+
+	const handleDescriptionUploadState = ({ status }) => {
+		descriptionUploadStatus = status || 'idle';
 	};
 
 	let galleryExistingPayload = $derived(
@@ -306,6 +450,10 @@
 		return nameParts[nameParts.length - 1] || decoded;
 	};
 
+	const createUploadId = () =>
+		globalThis.crypto?.randomUUID?.() ||
+		`gallery-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 	const buildExistingGalleryItems = (gallery = []) =>
 		(gallery || [])
 			.map((entry) => {
@@ -313,6 +461,7 @@
 					const url = entry.trim();
 					if (!url) return null;
 					return {
+						uploadId: createUploadId(),
 						isExisting: true,
 						url,
 						path: '',
@@ -320,23 +469,39 @@
 						dataUrl: '',
 						croppedUrl: '',
 						cropState: null,
-						fileName: deriveFileName(url)
+						fileName: deriveFileName(url),
+						uploadStatus: 'success',
+						uploadError: '',
+						uploadedAsset: { url },
+						uploadVersion: 0
 					};
 				}
 				if (entry && typeof entry === 'object') {
 					const url = typeof entry.url === 'string' ? entry.url.trim() : '';
 					if (!url) return null;
 					const path = typeof entry.path === 'string' ? entry.path.trim() : '';
+					const variants = entry?.variants || entry?.imageVariants || null;
+					const cropState = entry?.crop_state || entry?.cropState || null;
 					return {
+						uploadId: createUploadId(),
 						isExisting: true,
 						url,
 						path,
-						variants: entry?.variants || entry?.imageVariants || null,
+						variants,
 						previewUrl: url,
 						dataUrl: '',
 						croppedUrl: '',
-						cropState: entry?.crop_state || entry?.cropState || null,
-						fileName: deriveFileName(path || url)
+						cropState,
+						fileName: deriveFileName(path || url),
+						uploadStatus: 'success',
+						uploadError: '',
+						uploadedAsset: {
+							url,
+							...(path ? { path } : {}),
+							...(variants ? { variants } : {}),
+							...(cropState ? { crop_state: cropState } : {})
+						},
+						uploadVersion: 0
 					};
 				}
 				return null;
@@ -354,13 +519,18 @@
 				dataUrl = '';
 			}
 			items.push({
+				uploadId: createUploadId(),
 				isExisting: false,
 				file,
 				previewUrl,
 				dataUrl,
 				croppedUrl: '',
 				cropState: null,
-				fileName: file.name || ''
+				fileName: file.name || '',
+				uploadStatus: 'idle',
+				uploadError: '',
+				uploadedAsset: null,
+				uploadVersion: 0
 			});
 		}
 		return items;
@@ -596,6 +766,10 @@
 		thumbCroppedUrl = '';
 		thumbFileName = '';
 		thumbCropState = null;
+		thumbUploadedAsset = null;
+		thumbUploadStatus = 'idle';
+		thumbUploadError = '';
+		thumbUploadRequestId += 1;
 		if (!file) return;
 
 		const validationMessage = await validateImageFile(file, MAX_IMAGE_WIDTH, MAX_IMAGE_HEIGHT);
@@ -1023,63 +1197,32 @@
 		].forEach((field) => formData.delete(field));
 	};
 
-	const collectUploadedProductMedia = async () => {
-		const thumbFile = thumbCroppedUrl
-			? await dataUrlToFile(thumbCroppedUrl, thumbFileName)
-			: thumbInput?.files?.[0];
-		const uploadTasks = [];
-		if (thumbFile) {
-			uploadTasks.push({
-				type: 'thumb',
-				file: thumbFile,
-				cacheKey: thumbCroppedUrl || thumbFile
-			});
+	const collectUploadedProductMedia = () => {
+		if (isImageUploadPending) {
+			throw new Error('Vui lòng chờ tất cả ảnh tải xong trước khi lưu sản phẩm.');
 		}
-		galleryItems.forEach((item) => uploadTasks.push({ type: 'gallery', item, cacheKey: item }));
-		const uploadedAssets = await mapWithConcurrency(uploadTasks, 3, async (task) => {
-			if (task.type === 'thumb') {
-				return {
-					type: 'thumb',
-					asset: await uploadProductImageCached(task.file, 'thumb', task.cacheKey)
-				};
-			}
-			if (task.item?.isExisting && !task.item?.croppedUrl) {
-				return {
-					type: 'gallery',
-					asset: {
-						url: task.item.url,
-						...(task.item.path ? { path: task.item.path } : {}),
-						...(task.item.variants ? { variants: task.item.variants } : {}),
-						...(task.item.cropState ? { crop_state: task.item.cropState } : {})
-					}
-				};
-			}
-			const file = task.item?.croppedUrl
-				? await dataUrlToFile(task.item.croppedUrl, task.item.fileName)
-				: task.item?.file;
-			if (!file) return null;
-			const asset = await uploadProductImageCached(file, 'gallery', task.cacheKey);
-			return {
-				type: 'gallery',
-				asset: task.item?.cropState ? { ...asset, crop_state: task.item.cropState } : asset
-			};
-		});
-		const thumbAsset = uploadedAssets.find((entry) => entry?.type === 'thumb')?.asset;
+		if (hasImageUploadErrors || hasUnresolvedImageUploads) {
+			throw new Error('Có ảnh tải lỗi. Hãy thử lại hoặc xóa ảnh lỗi trước khi lưu sản phẩm.');
+		}
 		return {
 			upload_session_id: uploadSessionId,
-			...(thumbAsset
+			...(thumbUploadedAsset
 				? {
-						product_thumb: thumbAsset.url,
-						...(thumbAsset.path ? { product_thumb_path: thumbAsset.path } : {}),
-						...(thumbAsset.variants
-							? { product_thumb_variants: thumbAsset.variants }
+						product_thumb: thumbUploadedAsset.url,
+						...(thumbUploadedAsset.path
+							? { product_thumb_path: thumbUploadedAsset.path }
+							: {}),
+						...(thumbUploadedAsset.variants
+							? { product_thumb_variants: thumbUploadedAsset.variants }
 							: {}),
 						...(thumbCropState ? { product_thumb_crop_state: thumbCropState } : {})
 					}
 				: {}),
-			product_gallery: uploadedAssets
-				.filter((entry) => entry?.type === 'gallery')
-				.map((entry) => entry.asset)
+			product_gallery: galleryItems.map((item) =>
+				item?.cropState
+					? { ...item.uploadedAsset, crop_state: item.cropState }
+					: item.uploadedAsset
+			)
 		};
 	};
 
@@ -1102,10 +1245,9 @@
 	const handleProductUpdateEnhance = async ({ formData, cancel }) => {
 		handleFormSubmit();
 		isSavingProduct = true;
-		let mediaSyncPromise;
+		let mediaPayload;
 		try {
-			mediaSyncPromise = collectUploadedProductMedia();
-			void mediaSyncPromise.catch(() => {});
+			mediaPayload = collectUploadedProductMedia();
 			stripProductMediaFields(formData);
 		} catch (error) {
 			cancel();
@@ -1117,7 +1259,7 @@
 			try {
 				if (result?.type === 'success') {
 					try {
-						await syncProductMedia(await mediaSyncPromise);
+						await syncProductMedia(mediaPayload);
 						pushToast(result?.data?.toast);
 					} catch (error) {
 						pushToast({
@@ -1412,26 +1554,36 @@
 											<span>{$t('admin.productEditor.uploadHelp')}</span>
 										</div>
 									</div>
-									{#if isThumbUploading}
-										<div class="upload-progress-container mt-2">
-											<div class="progress" style="height: 4px;">
-												<div
-													class="progress-bar"
-													style="width: {thumbProgress}%; transition: width 0.2s ease;"
-												></div>
-											</div>
-											<span class="progress-text">{thumbProgress}%</span>
-										</div>
-									{/if}
 									{#if imageError}
 										<div class="text-danger small mt-2">{imageError}</div>
 									{/if}
 									{#if thumbPreviewUrl}
 										<div class="thumb-preview mt-3">
-											<img
-												src={thumbCroppedUrl || thumbPreviewUrl}
-												alt={$t('admin.productEditor.uploadLabel')}
-											/>
+											<div class="thumb-preview-image">
+												<img
+													src={thumbCroppedUrl || thumbPreviewUrl}
+													alt={$t('admin.productEditor.uploadLabel')}
+												/>
+												<div
+													class="image-upload-status"
+													class:error={thumbUploadStatus === 'error'}
+												>
+													{#if thumbUploadStatus === 'uploading'}
+														<span class="image-status-spinner" aria-hidden="true"></span>
+														<span>Đang tải ảnh...</span>
+													{:else if thumbUploadStatus === 'success'}
+														<span class="image-status-check" aria-hidden="true">✓</span>
+														<span>Đã tải</span>
+													{:else if thumbUploadStatus === 'error'}
+														<span class="image-status-error" aria-hidden="true">!</span>
+														<span>Tải lỗi</span>
+														<button type="button" onclick={retryThumbUpload}>Thử lại</button>
+													{/if}
+												</div>
+											</div>
+											{#if thumbUploadStatus === 'error'}
+												<div class="upload-error-detail">{thumbUploadError}</div>
+											{/if}
 											<div class="thumb-actions">
 												<button
 													type="button"
@@ -1449,7 +1601,7 @@
 													<button
 														type="button"
 														class="btn btn-outline-secondary btn-sm"
-													onclick={() => (thumbCroppedUrl = '')}
+														onclick={resetThumbCrop}
 													>
 														{$t('common.reset')}
 													</button>
@@ -1517,7 +1669,10 @@
 											</div>
 											<div class="gallery-thumbs">
 												{#each galleryItems as item, index}
-													<div class="gallery-thumb-item">
+													<div
+														class="gallery-thumb-item"
+														class:upload-error={item.uploadStatus === 'error'}
+													>
 														<img
 															src={item.croppedUrl || item.previewUrl}
 															alt={`${$t('admin.productEditor.gallery')} ${index + 1}`}
@@ -1525,6 +1680,7 @@
 														<button
 															class="gallery-crop-btn"
 															type="button"
+															disabled={item.uploadStatus === 'uploading'}
 															onclick={() =>
 																openCropper({
 																	mode: 'gallery',
@@ -1554,6 +1710,24 @@
 															</svg>
 														</button>
 														<div class="gallery-thumb-number">{index + 1}</div>
+														<div
+															class="gallery-upload-status"
+															class:error={item.uploadStatus === 'error'}
+															title={item.uploadError || ''}
+														>
+															{#if item.uploadStatus === 'uploading'}
+																<span class="image-status-spinner" aria-hidden="true"></span>
+																<span>Đang tải</span>
+															{:else if item.uploadStatus === 'success'}
+																<span class="image-status-check" aria-hidden="true">✓</span>
+																<span>Đã tải</span>
+															{:else if item.uploadStatus === 'error'}
+																<span class="image-status-error" aria-hidden="true">!</span>
+																<button type="button" onclick={() => retryGalleryUpload(item)}>
+																	Thử lại
+																</button>
+															{/if}
+														</div>
 														{#if item.croppedUrl}
 															<span class="gallery-thumb-badge">
 																{$t('admin.productEditor.cropped')}
@@ -1588,6 +1762,7 @@
 							value={descriptionValue}
 							uploadSessionId={uploadSessionId}
 							uploadEntityType="product"
+							onUploadStateChange={handleDescriptionUploadState}
 							onChange={(content) => {
 								descriptionValue = content;
 							}}
@@ -1784,10 +1959,20 @@
 				</details>
 
 				<div class="form-actions">
-					<button class="btn-primary" type="submit" disabled={isSavingProduct}>
+					<button class="btn-primary" type="submit" disabled={isSaveDisabled}>
 						{isSavingProduct ? 'Đang lưu...' : $t('admin.productEditor.save')}
 					</button>
 					<span class="action-note">{$t('admin.productEditor.saveHint')}</span>
+					{#if isImageUploadPending}
+						<span class="save-validation-note">
+							<span class="image-status-spinner" aria-hidden="true"></span>
+							Đang tải ảnh. Nút lưu sẽ mở khi tất cả ảnh hoàn tất.
+						</span>
+					{:else if hasImageUploadErrors}
+						<span class="save-validation-note error">
+							Có ảnh tải lỗi. Hãy thử lại hoặc xóa ảnh lỗi trước khi lưu.
+						</span>
+					{/if}
 				</div>
 			</form>
 
@@ -3140,6 +3325,133 @@
 	:global(.rich-editor:focus-within) {
 		border-color: var(--primary-color);
 		box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.1);
+	}
+
+	.thumb-preview-image {
+		position: relative;
+		width: fit-content;
+		max-width: 100%;
+	}
+
+	.gallery-thumb-item.upload-error {
+		border-color: #dc2626;
+		box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.12);
+	}
+
+	.gallery-thumb-item.upload-error .gallery-remove-btn {
+		opacity: 1;
+	}
+
+	.gallery-crop-btn:disabled {
+		cursor: wait;
+		opacity: 0.35;
+	}
+
+	.image-upload-status,
+	.gallery-upload-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		border: 1px solid #99d5cc;
+		border-radius: 999px;
+		background: rgba(239, 250, 248, 0.96);
+		color: #0f766e;
+		font-size: 0.68rem;
+		font-weight: 700;
+		line-height: 1;
+		white-space: nowrap;
+		box-shadow: 0 2px 8px rgba(15, 118, 110, 0.12);
+	}
+
+	.image-upload-status:empty,
+	.gallery-upload-status:empty {
+		display: none;
+	}
+
+	.image-upload-status {
+		position: absolute;
+		right: 8px;
+		bottom: 8px;
+		padding: 6px 8px;
+	}
+
+	.gallery-upload-status {
+		position: absolute;
+		right: 5px;
+		bottom: 5px;
+		z-index: 3;
+		padding: 5px 6px;
+	}
+
+	.gallery-thumb-badge {
+		right: auto;
+		left: 6px;
+		bottom: 36px;
+	}
+
+	.image-upload-status.error,
+	.gallery-upload-status.error {
+		border-color: #fecaca;
+		background: rgba(255, 241, 242, 0.97);
+		color: #b42318;
+	}
+
+	.image-upload-status button,
+	.gallery-upload-status button {
+		border: 0;
+		border-left: 1px solid currentColor;
+		padding: 0 0 0 5px;
+		background: transparent;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+
+	.image-status-spinner {
+		width: 13px;
+		height: 13px;
+		flex: 0 0 13px;
+		border: 2px solid currentColor;
+		border-top-color: transparent;
+		border-radius: 50%;
+		animation: image-upload-spin 0.75s linear infinite;
+	}
+
+	.image-status-check,
+	.image-status-error {
+		display: grid;
+		place-items: center;
+		width: 14px;
+		height: 14px;
+		flex: 0 0 14px;
+		border-radius: 50%;
+		background: currentColor;
+		color: #fff;
+		font-size: 0.62rem;
+	}
+
+	.upload-error-detail {
+		color: #b42318;
+		font-size: 0.75rem;
+	}
+
+	.save-validation-note {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		color: #0f766e;
+		font-size: 0.78rem;
+		font-weight: 600;
+	}
+
+	.save-validation-note.error {
+		color: #b42318;
+	}
+
+	@keyframes image-upload-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 
 </style>
