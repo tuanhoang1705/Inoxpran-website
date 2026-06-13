@@ -48,6 +48,7 @@ router.use(authenticationAdmin);
 ////////////////////////////////////
 
 router.get('/admin/all', asyncHandler(productController.getAllProductsForAdmin));
+router.get('/admin/name-exists', asyncHandler(productController.findDuplicateProductName));
 router.get('/admin/reviews', asyncHandler(productController.listAdminReviews));
 router.get('/admin/reviews/targets', asyncHandler(productController.listAdminReviewTargets));
 router.post('/admin/reviews', asyncHandler(productController.createAdminReview));

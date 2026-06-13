@@ -1,8 +1,7 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { API_BASE } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/admin/server.js';
-import { buildAdminHeaders, getAdminSession } from '$lib/server/adminAuth.js';
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import { getAdminProductNameStatus } from '$lib/server/adminProduct.js';
 import { setAdminToast } from '$lib/server/adminToast.js';
 
 const toNumber = (value) => {
@@ -17,43 +16,6 @@ const parsePayload = async (response) => {
 	} catch {
 		return null;
 	}
-};
-
-const normalizeName = (value) =>
-	String(value || '')
-		.trim()
-		.replace(/\s+/g, ' ')
-		.toLowerCase();
-
-const findDuplicateProduct = async ({ fetch, headers, name }) => {
-	const normalizedName = normalizeName(name);
-	if (!normalizedName) return null;
-
-	const limit = 200;
-	const maxPages = 25;
-	let page = 1;
-
-	while (page <= maxPages) {
-		const params = new URLSearchParams();
-		params.set('limit', String(limit));
-		params.set('page', String(page));
-		params.set('status', 'all');
-		params.set('sort', 'created');
-
-		const response = await fetch(`${API_BASE}/product/admin/all?${params.toString()}`, { headers });
-		if (!response.ok) return null;
-
-		const payload = await parsePayload(response);
-		const products = Array.isArray(payload?.metadata) ? payload.metadata : [];
-		const match = products.find(
-			(product) => normalizeName(product?.product_name) === normalizedName
-		);
-		if (match) return match;
-		if (products.length < limit) return null;
-		page += 1;
-	}
-
-	return null;
 };
 
 const buildAttributesPayload = (form, t, { requireAll = false } = {}) => {
@@ -121,8 +83,6 @@ const buildVariationsPayload = (form, { allowEmpty = false } = {}) => {
 
 export const actions = {
 	default: async ({ request, cookies, fetch }) => {
-		const session = getAdminSession(cookies);
-		const headers = buildAdminHeaders(session);
 		const form = await request.formData();
 		const t = getTranslator(cookies);
 
@@ -141,8 +101,8 @@ export const actions = {
 			return fail(400, { error: message, toast: { tone: 'error', message } });
 		}
 
-		const duplicate = await findDuplicateProduct({ fetch, headers, name: productName });
-		if (duplicate) {
+		const nameStatus = await getAdminProductNameStatus({ cookies, fetch, name: productName });
+		if (nameStatus.exists) {
 			const message = t('admin.productsNew.errors.duplicateName');
 			return fail(400, { error: message, toast: { tone: 'error', message } });
 		}

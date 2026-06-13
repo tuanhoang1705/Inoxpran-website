@@ -120,6 +120,20 @@ class ProductController {
         }).send(res);
     }
 
+    findDuplicateProductName = async (req, res, next) => {
+        const duplicate = await ProductService.findDuplicateProductName({
+            name: req.query.name,
+            excludeId: req.query.excludeId
+        });
+        new SuccessResponse({
+            message: 'Check product name success',
+            metadata: {
+                exists: Boolean(duplicate),
+                product: duplicate || null
+            }
+        }).send(res);
+    }
+
     getBestSellingProducts = async (req, res, next) => {
         new SuccessResponse({
             message: 'Get best selling products success',

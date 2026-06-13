@@ -86,6 +86,7 @@
 	let descriptionValue = $state('');
 	let uploadSessionId = $state('');
 	let isSavingProduct = $state(false);
+	const uploadAssetCache = new Map();
 
 	const resolveAdminPath = (path) => {
 		if (typeof window === 'undefined' || window.location.hostname !== 'admin.inoxpran.com') {
@@ -123,6 +124,36 @@
 			throw new Error(result?.error || 'Không thể tải ảnh sản phẩm lên storage.');
 		}
 		return result;
+	};
+
+	const uploadProductImageCached = async (file, kind, cacheKey = file) => {
+		if (uploadAssetCache.has(cacheKey)) {
+			return await uploadAssetCache.get(cacheKey);
+		}
+		const uploadPromise = uploadProductImage(file, kind);
+		uploadAssetCache.set(cacheKey, uploadPromise);
+		try {
+			return await uploadPromise;
+		} catch (error) {
+			uploadAssetCache.delete(cacheKey);
+			throw error;
+		}
+	};
+
+	const ensureProductNameAvailable = async (formData) => {
+		const name = String(formData.get('product_name') || '').trim();
+		if (!name) return;
+		const params = new URLSearchParams({ name });
+		const response = await fetch(
+			resolveAdminPath(`/admin/api/products/name-exists?${params.toString()}`)
+		);
+		const result = await response.json().catch(() => null);
+		if (!response.ok) {
+			throw new Error(result?.error || 'Không thể kiểm tra tên sản phẩm.');
+		}
+		if (result?.exists) {
+			throw new Error($t('admin.productsNew.errors.duplicateName'));
+		}
 	};
 
 	const mapWithConcurrency = async (items, limit, mapper) => {
@@ -712,29 +743,49 @@
 		handleFormSubmit();
 		isSavingProduct = true;
 		try {
+			await ensureProductNameAvailable(formData);
 			const thumbFile = thumbCroppedUrl
 				? await dataUrlToFile(thumbCroppedUrl, thumbFileName)
 				: thumbInput?.files?.[0];
+			const uploadTasks = [];
 			if (thumbFile) {
-				const thumbAsset = await uploadProductImage(thumbFile, 'thumb');
+				uploadTasks.push({
+					type: 'thumb',
+					file: thumbFile,
+					cacheKey: thumbCroppedUrl || thumbFile
+				});
+			}
+			galleryItems.forEach((item) => {
+				uploadTasks.push({ type: 'gallery', item, cacheKey: item });
+			});
+			const uploadedAssets = await mapWithConcurrency(uploadTasks, 3, async (task) => {
+				if (task.type === 'thumb') {
+					return {
+						type: 'thumb',
+						asset: await uploadProductImageCached(task.file, 'thumb', task.cacheKey)
+					};
+				}
+				const file = task.item?.croppedUrl
+					? await dataUrlToFile(task.item.croppedUrl, task.item.fileName)
+					: task.item?.file;
+				if (!file) return null;
+				const asset = await uploadProductImageCached(file, 'gallery', task.cacheKey);
+				return {
+					type: 'gallery',
+					asset: task.item?.cropState ? { ...asset, crop_state: task.item.cropState } : asset
+				};
+			});
+			const thumbAsset = uploadedAssets.find((entry) => entry?.type === 'thumb')?.asset;
+			if (thumbAsset) {
 				formData.set('product_thumb_asset', JSON.stringify(thumbAsset));
 				formData.delete('product_thumb');
 				formData.delete('product_thumb_cropped');
 			}
 
-			const galleryAssets = await mapWithConcurrency(
-				galleryItems,
-				3,
-				async (item) => {
-					const file = item?.croppedUrl
-						? await dataUrlToFile(item.croppedUrl, item.fileName)
-						: item?.file;
-					if (!file) return null;
-					const asset = await uploadProductImage(file, 'gallery');
-					return item?.cropState ? { ...asset, crop_state: item.cropState } : asset;
-				}
-			);
-			formData.set('product_gallery_assets', JSON.stringify(galleryAssets.filter(Boolean)));
+			const galleryAssets = uploadedAssets
+				.filter((entry) => entry?.type === 'gallery')
+				.map((entry) => entry.asset);
+			formData.set('product_gallery_assets', JSON.stringify(galleryAssets));
 			formData.delete('product_gallery');
 			formData.delete('product_gallery_cropped');
 			formData.delete('product_gallery_cropped_names');

@@ -6,6 +6,28 @@ const { getSelectData, getUnSelectData, convertToObjectIdMongodb } = require('..
 
 const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+const findProductByNormalizedName = async ({ name, excludeId } = {}) => {
+    const normalizedName = String(name || '').trim().replace(/\s+/g, ' ');
+    if (!normalizedName) return null;
+
+    const exactNamePattern = normalizedName
+        .split(' ')
+        .map((part) => escapeRegex(part))
+        .join('\\s+');
+    const filter = {
+        product_name: { $regex: `^${exactNamePattern}$`, $options: 'i' }
+    };
+    const excludedObjectId = convertToObjectIdMongodb(excludeId);
+    if (excludedObjectId) {
+        filter._id = { $ne: excludedObjectId };
+    }
+
+    return await product.findOne(filter)
+        .select('_id product_name product_slug isDraft isPublished')
+        .lean()
+        .exec();
+};
+
 const buildSearchTokens = (value) => {
     const normalized = typeof value === 'string' ? value.trim() : '';
     if (!normalized) return [];
@@ -298,5 +320,6 @@ module.exports = {
     checkProductByServer,
     findBestSellingProducts,
     updateBestSellingOrder,
-    adjustProductQuantity
+    adjustProductQuantity,
+    findProductByNormalizedName
 }

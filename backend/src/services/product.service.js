@@ -19,7 +19,8 @@ const { findAllDraftsForShop,
     findProduct,
     updateProductById,
     findBestSellingProducts,
-    updateBestSellingOrder
+    updateBestSellingOrder,
+    findProductByNormalizedName
 } = require('../models/repositories/product.repo');
 const { findById: findUserById } = require('../models/repositories/user.repo');
 const { order } = require('../models/order');
@@ -808,12 +809,17 @@ class ProductFactory {
     }
 
     static async createProduct(type, payload) {
-        console.log('sai lè', payload);
        const productClass = ProductFactory.productRegistry[type];
        if (!productClass) {
         throw new BadRequestError(`Invalid product type: ${type}`);
        }
          const normalizedPayload = normalizeProductPayload(payload, { requireAttributes: true });
+         const duplicate = await ProductFactory.findDuplicateProductName({
+             name: normalizedPayload.product_name
+         });
+         if (duplicate) {
+             throw new BadRequestError('Product name already exists');
+         }
          const productInstance = new productClass(normalizedPayload);
          return await productInstance.createProduct();
     }
@@ -824,6 +830,15 @@ class ProductFactory {
         throw new BadRequestError(`Invalid product type: ${type}`);
        }
           const normalizedPayload = normalizeProductPayload(payload);
+          if (normalizedPayload.product_name) {
+              const duplicate = await ProductFactory.findDuplicateProductName({
+                  name: normalizedPayload.product_name,
+                  excludeId: productId
+              });
+              if (duplicate) {
+                  throw new BadRequestError('Product name already exists');
+              }
+          }
           const hasNewThumb =
              Object.prototype.hasOwnProperty.call(normalizedPayload, 'product_thumb') ||
              Object.prototype.hasOwnProperty.call(normalizedPayload, 'product_thumb_path');
@@ -849,7 +864,8 @@ class ProductFactory {
               }
           }
 
-           if (hasNewThumb && previousProduct?.product_thumb) {
+          const mediaCleanupTasks = [];
+          if (hasNewThumb && previousProduct?.product_thumb) {
             const newThumbPath = normalizedPayload.product_thumb_path;
             const newThumbUrl = normalizedPayload.product_thumb;
             const oldThumbPath = previousProduct.product_thumb_path;
@@ -862,19 +878,19 @@ class ProductFactory {
                 !sameUrl &&
                 !isProductMediaReferenced({ path: oldThumbPath, url: oldThumbUrl }, updatedReferenceKeys)
             ) {
-                try {
+                mediaCleanupTasks.push((async () => {
                     await deleteImageFromStorage({ path: oldThumbPath, url: oldThumbUrl });
                     await deleteImageVariantsFromStorage(previousProduct.product_thumb_variants);
-                } catch (error) {
+                })().catch((error) => {
                     const errorMessage = error?.message || 'Failed to delete old image';
                     console.error('Failed to delete old product image', {
                         productId,
                         error: errorMessage
                     });
-                }
+                }));
              }
           }
-        if (hasNewGallery && previousProduct?.product_gallery?.length) {
+          if (hasNewGallery && previousProduct?.product_gallery?.length) {
            const incomingGallery = normalizedPayload.product_gallery || [];
            const keptPaths = new Set(
               incomingGallery
@@ -891,19 +907,19 @@ class ProductFactory {
               const sameUrl = image.url && keptUrls.has(image.url);
               if (samePath || sameUrl) continue;
               if (isProductMediaReferenced(image, updatedReferenceKeys)) continue;
-              try {
+              mediaCleanupTasks.push((async () => {
                  await deleteImageFromStorage({ path: image.path, url: image.url });
                  await deleteImageVariantsFromStorage(image.variants);
-              } catch (error) {
+              })().catch((error) => {
                  console.error('Failed to delete old gallery image', {
                     productId,
                     error: error?.message || 'Failed to delete gallery image'
                  });
-              }
+              }));
            }
-        }
-        if (hasDescriptionUpdate && previousProduct?.product_description) {
-            await deleteRemovedHtmlImagesFromStorage({
+          }
+          if (hasDescriptionUpdate && previousProduct?.product_description) {
+            mediaCleanupTasks.push(deleteRemovedHtmlImagesFromStorage({
                 previousHtml: previousProduct.product_description,
                 nextHtml: updatedProduct?.product_description || normalizedPayload.product_description,
                 protectedKeys: updatedReferenceKeys,
@@ -911,11 +927,16 @@ class ProductFactory {
                     entity: 'product',
                     productId
                 }
-            });
-        }
+            }));
+          }
+          await Promise.allSettled(mediaCleanupTasks);
 
            return await attachInventoryStock(updated);
       }
+
+    static async findDuplicateProductName({ name, excludeId } = {}) {
+        return await findProductByNormalizedName({ name, excludeId });
+    }
 
     static async deleteProduct({ product_id, product_shop }) {
         let foundProduct = await product.findOne({ _id: product_id, product_shop });
@@ -949,9 +970,9 @@ class ProductFactory {
             }
         }
         if (Array.isArray(foundProduct.product_gallery)) {
-            for (const galleryImage of foundProduct.product_gallery) {
+            await Promise.allSettled(foundProduct.product_gallery.map(async (galleryImage) => {
                 const galleryAttempt = Boolean(galleryImage?.path || galleryImage?.url);
-                if (!galleryAttempt) continue;
+                if (!galleryAttempt) return;
                 try {
                     await deleteImageFromStorage({
                         path: galleryImage?.path,
@@ -965,7 +986,7 @@ class ProductFactory {
                         error: error?.message || 'Failed to delete gallery image'
                     });
                 }
-            }
+            }));
         }
         await deleteHtmlImagesFromStorage(foundProduct.product_description, {
             context: {
@@ -1665,12 +1686,13 @@ class Product {
     async createProduct( product_id ) { 
         const newProduct = await product.create({ ...this, _id: product_id });
         if (newProduct) { 
-           return await insertInventory({
+           await insertInventory({
                 productId: newProduct._id,
                 shopId: newProduct.product_shop,
                 stock: newProduct.product_quantity,
-            })
+            });
         }
+        return newProduct;
     }
 
     // update product
@@ -1700,9 +1722,7 @@ class CastIron extends Product {
                 }
             */
         // 1.remove attr has null  underfined
-        console.log('object1<<<<<<<<<<<<<<<<<', this);
         const objectParams = removeUndefinedObject(this);
-        console.log('object2', this);
 
         // 2. check xem update cho nao
         if (objectParams.product_attributes) {
@@ -1740,9 +1760,7 @@ class Electronics extends Product {
                 }
             */
         // 1.remove attr has null  underfined
-          console.log('object1<<<<<<<<<<<<<<<<<', this);
         const objectParams = removeUndefinedObject(this);
-        console.log('object2', this);
 
         // 2. check xem update cho nao
         if (objectParams.product_attributes) {
@@ -1777,9 +1795,7 @@ class Inox extends Product {
                 }
             */
         // 1.remove attr has null  underfined
-        console.log('object1<<<<<<<<<<<<<<<<<', this);
         const objectParams = removeUndefinedObject(this);
-        console.log('object2', this);
 
         // 2. check xem update cho nao
         if (objectParams.product_attributes) {

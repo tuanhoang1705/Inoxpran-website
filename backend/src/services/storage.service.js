@@ -655,29 +655,37 @@ const deleteImageVariantsFromStorage = async (variants) => {
     if (!artifacts.length) return { deleted: 0, total: 0 };
 
     const seen = new Set();
-    let deleted = 0;
+    const uniqueArtifacts = [];
     for (const artifact of artifacts) {
         const key = `${artifact.path || ''}|${artifact.url || ''}`;
         if (!key || key === '|') continue;
         if (seen.has(key)) continue;
         seen.add(key);
+        uniqueArtifacts.push(artifact);
+    }
+
+    const results = await mapWithConcurrency(
+        uniqueArtifacts,
+        IMAGE_VARIANT_CONCURRENCY,
+        async (artifact) => {
         try {
-            const result = await deleteImageFromStorage({
+            return await deleteImageFromStorage({
                 path: artifact.path || undefined,
                 url: artifact.url || undefined
             });
-            if (result) deleted += 1;
         } catch (error) {
             console.error('Failed to delete image variant', {
                 path: artifact.path || null,
                 url: artifact.url || null,
                 error: error?.message || 'delete-variant-failed'
             });
+            return false;
         }
-    }
+        }
+    );
 
     return {
-        deleted,
+        deleted: results.filter(Boolean).length,
         total: seen.size
     };
 };
