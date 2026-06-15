@@ -986,7 +986,9 @@
 					<img
 						src={heroCompositeUrl}
 						srcset={heroCompositeJpgSrcSet}
-						alt=""
+						alt={$locale === 'en'
+							? 'Inoxpran premium cookware for modern kitchens'
+							: 'Gia dụng Inoxpran cao cấp cho căn bếp hiện đại'}
 						class="hero-composite-image"
 						width="2000"
 						height="1414"
@@ -1497,7 +1499,7 @@
 								<img
 									src={categoryMedia.inox.fallback}
 									class="img-fluid rounded-3"
-									alt=""
+									alt={$t('home.categoryInox')}
 									width="720"
 									height="720"
 									loading="lazy"
@@ -1531,7 +1533,7 @@
 								<img
 									src={categoryMedia.castIron.fallback}
 									class="img-fluid rounded-3"
-									alt=""
+									alt={$t('home.categoryCastIron')}
 									width="720"
 									height="720"
 									loading="lazy"
@@ -1565,7 +1567,7 @@
 								<img
 									src={categoryMedia.electronics.fallback}
 									class="img-fluid rounded-3"
-									alt=""
+									alt={$t('home.categoryElectronics')}
 									width="720"
 									height="720"
 									loading="lazy"
