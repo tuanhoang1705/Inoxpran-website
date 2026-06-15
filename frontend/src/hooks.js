@@ -2,7 +2,12 @@ const EN_PREFIX = '/en';
 const ADMIN_SUBDOMAIN = 'admin.inoxpran.com';
 const ADMIN_STATIC_PATHS = new Set([
 	'/app.css',
+	'/browserconfig.xml',
+	'/favicon-16x16.png',
+	'/favicon-32x32.png',
 	'/favicon.ico',
+	'/favicon.png',
+	'/favicon-96x96.png',
 	'/robots.txt',
 	'/site.webmanifest',
 	'/sitemap.xml'
