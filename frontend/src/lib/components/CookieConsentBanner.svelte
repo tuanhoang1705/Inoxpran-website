@@ -326,8 +326,8 @@
 		.cookie-banner {
 			left: 10px;
 			right: 10px;
-			top: max(58px, calc(env(safe-area-inset-top) + 58px));
-			bottom: auto;
+			top: auto;
+			bottom: max(10px, env(safe-area-inset-bottom));
 		}
 
 		.cookie-banner__inner {
