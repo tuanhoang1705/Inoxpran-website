@@ -2287,8 +2287,8 @@
 	#best-selling-items .product-swiper[data-native-slider] .swiper-wrapper {
 		display: grid !important;
 		grid-auto-flow: column;
-		grid-auto-columns: 260px;
-		gap: 18px;
+		grid-auto-columns: 240px;
+		gap: 12px;
 		align-items: stretch;
 		width: max-content !important;
 		min-width: 0 !important;
@@ -2296,9 +2296,9 @@
 
 	#best-selling-items .product-swiper[data-native-slider] .swiper-slide {
 		display: flex !important;
-		width: 260px !important;
-		max-width: 260px !important;
-		flex: 0 0 260px !important;
+		width: 240px !important;
+		max-width: 240px !important;
+		flex: 0 0 240px !important;
 		padding: 0 !important;
 		box-sizing: border-box;
 		scroll-snap-align: start;
@@ -2637,16 +2637,16 @@
 		}
 
 		#best-selling-items .product-swiper .swiper-slide .card {
-			height: 340px !important;
-			max-height: 340px !important;
-			min-height: 340px;
+			height: 372px !important;
+			max-height: 372px !important;
+			min-height: 372px;
 			padding-left: 10px !important;
 			padding-right: 10px !important;
 		}
 
 		#best-selling-items .product-thumb {
-			height: 100px;
-			flex: 0 0 100px;
+			height: 132px;
+			flex: 0 0 132px;
 		}
 
 		#best-selling-items .product-desc {
