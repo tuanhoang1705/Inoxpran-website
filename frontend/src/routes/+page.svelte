@@ -2637,9 +2637,9 @@
 		}
 
 		#best-selling-items .product-swiper .swiper-slide .card {
-			height: 306px !important;
-			max-height: 306px !important;
-			min-height: 306px;
+			height: 340px !important;
+			max-height: 340px !important;
+			min-height: 340px;
 			padding-left: 10px !important;
 			padding-right: 10px !important;
 		}
@@ -2650,8 +2650,8 @@
 		}
 
 		#best-selling-items .product-desc {
-			-webkit-line-clamp: 4;
-			max-height: calc(1.34em * 4);
+			-webkit-line-clamp: 5;
+			max-height: calc(1.34em * 5);
 		}
 	}
 
