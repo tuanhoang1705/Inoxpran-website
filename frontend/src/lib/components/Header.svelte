@@ -6,6 +6,7 @@
 	import { forceMobileZoomOut100 } from '$lib/client/mobileViewport.js';
 	import { locale, setLocale, t } from '$lib/i18n/index.js';
 	import { cartCount } from '$lib/stores/cartCount.js';
+	let { introHidden = false } = $props();
 	let mobileMenuOpen = $state(false);
 	let mobileSearchOpen = $state(false);
 	let logoutPending = $state(false);
@@ -361,7 +362,12 @@
 	});
 </script>
 
-<header id="header" class="site-header" bind:this={headerEl}>
+<header
+	id="header"
+	class="site-header"
+	class:site-header--intro-hidden={introHidden}
+	bind:this={headerEl}
+>
 	<div class="top-info border-bottom d-none d-xl-block">
 		<div class="container">
 			<div class="row g-0 align-items-center">
@@ -943,6 +949,17 @@
 <style>
 	.site-header {
 		z-index: 999999;
+		transition:
+			transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+			opacity 0.28s ease,
+			background 0.3s ease-out,
+			box-shadow 0.3s ease-out;
+	}
+
+	.site-header.site-header--intro-hidden {
+		transform: translateY(calc(-100% - env(safe-area-inset-top)));
+		opacity: 0;
+		pointer-events: none;
 	}
 
 	.top-info-col {

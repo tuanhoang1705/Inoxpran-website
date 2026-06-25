@@ -180,6 +180,10 @@ a.light {
 	padding-top: var(--site-header-height, var(--site-header-height-fallback, 48px));
 }
 
+#smooth-content.has-site-header.home-intro-route {
+	padding-top: 0;
+}
+
 html {
 	scroll-padding-top: var(--site-header-height, var(--site-header-height-fallback, 48px));
 }

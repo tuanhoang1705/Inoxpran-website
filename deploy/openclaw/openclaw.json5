@@ -1,0 +1,175 @@
+{
+  // TODO: Verify this schema against the installed OpenClaw version on the VPS.
+  version: "1.0",
+  project: "inoxpran-seo-automation",
+  timezone: "Asia/Ho_Chi_Minh",
+  stateDir: "/data",
+  workspacesRoot: "/workspaces",
+  dashboard: {
+    public: false,
+    bindHost: "0.0.0.0",
+    port: 18789
+  },
+  security: {
+    sandbox: {
+      enabled: true,
+      defaultNetwork: "limited",
+      denySecretsInLogs: true
+    },
+    disallowDirectDatabaseAccess: true,
+    disallowAdminUiPublishing: true,
+    defaultPublishMode: "draft"
+  },
+  skills: {
+    localDirectories: [
+      "/workspaces/shared-skills"
+    ],
+    globalAllowlist: [
+      "global-search",
+      "firecrawl-api",
+      "sovereign-content-scraper",
+      "ghost-blog-writer",
+      "contentforge-api",
+      "free-text-generator",
+      "rankforge-api",
+      "claim-verifier",
+      "openclaw-prompt-shield",
+      "skylv-secret-detector",
+      "page-agent-browser",
+      "remote-browser",
+      "n8n-pilot",
+      "inoxpran-search-console",
+      "inoxpran-brand-voice",
+      "inoxpran-seo-publisher",
+      "inoxpran-seo-review"
+    ]
+  },
+  agents: [
+    {
+      name: "seo-orchestrator",
+      workspace: "/workspaces/seo-orchestrator",
+      promptFile: "/workspaces/prompts/daily-seo-blog.md",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "inoxpran-brand-voice",
+        "inoxpran-seo-review"
+      ]
+    },
+    {
+      name: "keyword-researcher",
+      workspace: "/workspaces/keyword-researcher",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "global-search",
+        "firecrawl-api",
+        "sovereign-content-scraper",
+        "inoxpran-search-console"
+      ]
+    },
+    {
+      name: "seo-strategist",
+      workspace: "/workspaces/seo-strategist",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "rankforge-api",
+        "inoxpran-brand-voice",
+        "inoxpran-seo-review"
+      ]
+    },
+    {
+      name: "content-writer",
+      workspace: "/workspaces/content-writer",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "ghost-blog-writer",
+        "contentforge-api",
+        "free-text-generator",
+        "inoxpran-brand-voice"
+      ]
+    },
+    {
+      name: "seo-reviewer",
+      workspace: "/workspaces/seo-reviewer",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "rankforge-api",
+        "claim-verifier",
+        "openclaw-prompt-shield",
+        "skylv-secret-detector",
+        "inoxpran-seo-review"
+      ]
+    },
+    {
+      name: "publisher",
+      workspace: "/workspaces/publisher",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "inoxpran-seo-publisher"
+      ],
+      publishPolicy: {
+        defaultMode: "draft",
+        requireReviewerPass: true,
+        minSeoScoreEnv: "SEO_AGENT_MIN_SEO_SCORE",
+        autoPublishEnv: "SEO_AGENT_AUTO_PUBLISH"
+      }
+    },
+    {
+      name: "qa-agent",
+      workspace: "/workspaces/qa-agent",
+      tools: {
+        shell: false,
+        browser: true,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "page-agent-browser",
+        "remote-browser",
+        "global-search"
+      ]
+    },
+    {
+      name: "reporter",
+      workspace: "/workspaces/reporter",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "n8n-pilot"
+      ]
+    }
+  ]
+}

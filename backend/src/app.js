@@ -156,8 +156,13 @@ checkOverload();
 // so we must mount /webhooks BEFORE the global JSON parser.
 // app.use('/webhooks', rateLimitStrict, webhookRoutes);
 
-// Global JSON parser for the rest of the API
-app.use(express.json({ limit: '10mb' }));
+// Global JSON parser for the rest of the API. Automation HMAC auth signs this raw body.
+app.use(express.json({
+  limit: '10mb',
+  verify: (req, res, buf) => {
+    req.rawBody = Buffer.isBuffer(buf) ? Buffer.from(buf) : Buffer.alloc(0);
+  }
+}));
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); 
 
 // Rate limit (general) for normal API traffic

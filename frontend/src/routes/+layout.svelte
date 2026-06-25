@@ -116,6 +116,9 @@
 	const isAdminRoute = (path, routeId = '') =>
 		path.startsWith('/admin') || routeId === '/admin' || routeId.startsWith('/admin/');
 	const hideSiteChrome = $derived(isAdminRoute(page.url.pathname, page.route.id || ''));
+	const isHomeRoute = $derived(stripLocalePrefix(page.url.pathname) === '/');
+	let homeIntroHeaderRevealed = $state(false);
+	const hideHeaderForHomeIntro = $derived(isHomeRoute && !homeIntroHeaderRevealed);
 	const disableDefaultSeo = $derived(Boolean(page.data?.seo?.disableDefaults));
 	const hasUserSession = $derived(Boolean(page.data?.user?.userId));
 	const locale = $derived(page.data?.locale || 'vi');
@@ -383,6 +386,22 @@
 	});
 
 	onMount(() => {
+		const revealHomeHeader = (event) => {
+			if (event && event.isTrusted === false) return;
+			if (homeIntroHeaderRevealed) return;
+			homeIntroHeaderRevealed = true;
+		};
+		const revealFromKey = (event) => {
+			if (event.key === 'Tab' || event.key.startsWith('Arrow') || event.key === 'PageDown') {
+				revealHomeHeader(event);
+			}
+		};
+		homeIntroHeaderRevealed = !isHomeRoute;
+		window.addEventListener('wheel', revealHomeHeader, { passive: true });
+		window.addEventListener('touchmove', revealHomeHeader, { passive: true });
+		document.addEventListener('pointerdown', revealHomeHeader, { passive: true });
+		document.addEventListener('keydown', revealFromKey);
+
 		telemetryTracker = getTelemetryTracker();
 		initCookieConsent();
 		if (!hasUserSession) {
@@ -437,6 +456,10 @@
 		window.addEventListener('pageshow', handlePageShow);
 		window.addEventListener(CLIENT_UI_REFRESH_EVENT, handleClientUiRefresh);
 		return () => {
+			window.removeEventListener('wheel', revealHomeHeader);
+			window.removeEventListener('touchmove', revealHomeHeader);
+			document.removeEventListener('pointerdown', revealHomeHeader);
+			document.removeEventListener('keydown', revealFromKey);
 			unsubscribeCookieConsent();
 			if (isTelemetryRunning) {
 				telemetryTracker?.destroy?.();
@@ -495,9 +518,13 @@
 	{/if}
 </svelte:head>
 
-<div id="smooth-wrapper" class:has-site-header={!hideSiteChrome}>
+<div
+	id="smooth-wrapper"
+	class:has-site-header={!hideSiteChrome}
+	class:home-intro-route={isHomeRoute}
+>
 	{#if !hideSiteChrome}
-		<Header />
+		<Header introHidden={hideHeaderForHomeIntro} />
 	{/if}
 	<CartToast
 		visible={$cartToast.visible}
@@ -510,7 +537,11 @@
 	{#if !hideSiteChrome}
 		<LeadCaptureModal />
 	{/if}
-	<div id="smooth-content" class:has-site-header={!hideSiteChrome}>
+	<div
+		id="smooth-content"
+		class:has-site-header={!hideSiteChrome}
+		class:home-intro-route={isHomeRoute}
+	>
 		<IconDefs />
 		<RouteLoader />
 		{#if !hideSiteChrome}

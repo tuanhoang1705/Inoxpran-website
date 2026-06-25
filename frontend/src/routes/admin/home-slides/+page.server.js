@@ -29,7 +29,8 @@ const normalizeSlide = (value = {}) => ({
 	imageVariants:
 		value?.imageVariants && typeof value.imageVariants === 'object' && !Array.isArray(value.imageVariants)
 			? value.imageVariants
-			: null
+			: null,
+	isHeroBackground: value?.isHeroBackground === true
 });
 
 const normalizeSlides = (value) => {

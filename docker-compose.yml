@@ -44,6 +44,35 @@
     networks:
       - appnet
 
+  openclaw:
+    # TODO: Verify the official OpenClaw deployment image on the VPS. Replace this if the
+    # OpenClaw docs specify a different image.
+    image: openclaw/openclaw:latest
+    container_name: app_openclaw
+    environment:
+      NODE_ENV: production
+      TZ: Asia/Ho_Chi_Minh
+      OPENCLAW_STATE_DIR: /data
+      OPENCLAW_CONFIG_PATH: /data/openclaw.json5
+      INOXPRAN_BACKEND_API_BASE: http://backend:3056/v1/api
+      INOXPRAN_PUBLIC_SITE_URL: https://inoxpran.com
+      INOXPRAN_SEO_AGENT_AUTO_PUBLISH: ${SEO_AGENT_AUTO_PUBLISH:-false}
+      INOXPRAN_SEO_AGENT_API_KEY: ${SEO_AGENT_API_KEY}
+      INOXPRAN_SEO_AGENT_HMAC_SECRET: ${SEO_AGENT_HMAC_SECRET}
+      API_KEY: ${API_KEY}
+    volumes:
+      - ./deploy/openclaw/data:/data
+      - ./deploy/openclaw/openclaw.json5:/data/openclaw.json5:ro
+      - ./deploy/openclaw/workspaces:/workspaces
+      - ./deploy/openclaw/skills:/workspaces/shared-skills:ro
+      - ./deploy/openclaw/prompts:/workspaces/prompts:ro
+    restart: unless-stopped
+    networks:
+      - appnet
+    depends_on:
+      - backend
+      - redis
+
   frontend:
     build: ./frontend
     container_name: app_frontend
@@ -70,11 +99,13 @@
       - "443:443"
     volumes:
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./deploy/nginx/auth:/etc/nginx/auth:ro
       - ./deploy/nginx/ssl:/etc/letsencrypt
       - ./deploy/nginx/www:/var/www/certbot
     depends_on:
       - frontend
       - backend
+      - openclaw
     restart: unless-stopped
     networks:
       - appnet

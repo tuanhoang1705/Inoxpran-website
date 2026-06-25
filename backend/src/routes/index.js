@@ -26,5 +26,6 @@ router.use('/v1/api/site-settings', require('./site'));
 router.use('/v1/api/telemetry', require('./telemetry'));
 router.use('/v1/api/user', require('./user'));
 router.use('/v1/api/admin', require('./admin'));
+router.use('/v1/api/automation', require('./automation'));
 
 module.exports = router;

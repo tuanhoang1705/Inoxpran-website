@@ -32,7 +32,8 @@
 				id: slide.id,
 				imageUrl: slide.imageUrl,
 				imagePath: slide.imagePath || '',
-				imageVariants: slide.imageVariants || null
+				imageVariants: slide.imageVariants || null,
+				isHeroBackground: slide.isHeroBackground === true
 			}))
 		)
 	);
@@ -98,7 +99,9 @@
 					autoAltViLabel: 'Auto Alt (VI)',
 					autoAltEnLabel: 'Auto Alt (EN)',
 					orderLabel: 'Order',
-					pathLabel: 'Storage path'
+					pathLabel: 'Storage path',
+					heroBackground: 'Use as intro background',
+					heroBackgroundHint: 'Only one image can be the full-screen homepage intro background.'
 				}
 			: {
 					title: 'Slide trang chủ',
@@ -125,7 +128,9 @@
 					autoAltViLabel: 'Alt tự sinh (VI)',
 					autoAltEnLabel: 'Alt tự sinh (EN)',
 					orderLabel: 'Thứ tự',
-					pathLabel: 'Đường dẫn lưu trữ'
+					pathLabel: 'Đường dẫn lưu trữ',
+					heroBackground: 'Dùng làm background intro',
+					heroBackgroundHint: 'Chỉ một ảnh được dùng làm background toàn màn hình đầu trang.'
 				}
 	);
 
@@ -260,6 +265,13 @@
 
 	const removeSlide = (slideId) => {
 		slides = slides.filter((slide) => slide.id !== slideId);
+	};
+
+	const selectHeroBackground = (slideId) => {
+		slides = slides.map((slide) => ({
+			...slide,
+			isHeroBackground: slide.id === slideId
+		}));
 	};
 
 	const handleDragStart = (event, slide, index) => {
@@ -412,7 +424,8 @@
 					typeof slide.imageVariants === 'object' &&
 					!Array.isArray(slide.imageVariants)
 						? slide.imageVariants
-						: null
+						: null,
+				isHeroBackground: false
 			}))
 			.filter((slide) => slide.id && slide.imageUrl && !existingIds.has(slide.id))
 			.slice(0, available);
@@ -616,6 +629,18 @@
 									<span class="slide-meta__label">{pageCopy.pathLabel}</span>
 									<span class="mono text-break">{slide.imagePath || slide.imageUrl}</span>
 								</div>
+								<label class="hero-background-option">
+									<input
+										type="radio"
+										name="hero-background"
+										checked={slide.isHeroBackground === true}
+										onchange={() => selectHeroBackground(slide.id)}
+									/>
+									<span>
+										<strong>{pageCopy.heroBackground}</strong>
+										<small>{pageCopy.heroBackgroundHint}</small>
+									</span>
+								</label>
 							</div>
 
 							<div class="slide-actions">
@@ -1017,6 +1042,41 @@
 	.slide-meta__label {
 		font-weight: 700;
 		color: rgba(15, 23, 42, 0.7);
+	}
+
+	.hero-background-option {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.65rem;
+		padding: 0.65rem 0.7rem;
+		border-radius: 10px;
+		border: 1px solid rgba(11, 135, 153, 0.16);
+		background: rgba(11, 135, 153, 0.05);
+		cursor: pointer;
+	}
+
+	.hero-background-option input {
+		width: 18px;
+		height: 18px;
+		margin-top: 2px;
+		accent-color: #0b8799;
+		flex: 0 0 auto;
+	}
+
+	.hero-background-option span {
+		display: grid;
+		gap: 0.18rem;
+	}
+
+	.hero-background-option strong {
+		font-size: 0.82rem;
+		color: #0b4f5a;
+	}
+
+	.hero-background-option small {
+		font-size: 0.74rem;
+		line-height: 1.4;
+		color: rgba(15, 23, 42, 0.62);
 	}
 
 	.mono {

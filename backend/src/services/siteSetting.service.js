@@ -142,6 +142,7 @@ const normalizeHomeSlide = (value = {}, index = 0) => {
 		imageUrl,
 		imagePath: ensureNullableString(source.imagePath, { maxLength: 800 }),
 		imageVariants: normalizeImageVariants(source.imageVariants ?? source.variants),
+		isHeroBackground: source.isHeroBackground === true,
 		altVi: buildAutoHomeSlideAlt(index, 'vi'),
 		altEn: buildAutoHomeSlideAlt(index, 'en'),
 		updatedAt: new Date().toISOString()
@@ -165,6 +166,15 @@ const normalizeHomeSlides = (value) => {
 		normalized.push(nextSlide);
 	}
 
+	let hasHeroBackground = false;
+	for (const slide of normalized) {
+		if (!slide.isHeroBackground || hasHeroBackground) {
+			slide.isHeroBackground = false;
+			continue;
+		}
+		hasHeroBackground = true;
+	}
+
 	return normalized;
 };
 
@@ -181,6 +191,7 @@ const toPublicHomeSlides = (slides) =>
 		id: slide.id,
 		imageUrl: slide.imageUrl,
 		imageVariants: slide.imageVariants || null,
+		isHeroBackground: slide.isHeroBackground === true,
 		altVi: slide.altVi || null,
 		altEn: slide.altEn || null
 	}));
@@ -191,6 +202,7 @@ const toAdminHomeSlides = (slides) =>
 		imageUrl: slide.imageUrl,
 		imagePath: slide.imagePath || null,
 		imageVariants: slide.imageVariants || null,
+		isHeroBackground: slide.isHeroBackground === true,
 		altVi: slide.altVi || null,
 		altEn: slide.altEn || null
 	}));

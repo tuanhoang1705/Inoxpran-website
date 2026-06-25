@@ -23,7 +23,11 @@ frontend/src/routes/dist/
 # n8n local runtime data
 deploy/n8n/data/
 deploy/nginx/www/
+deploy/nginx/auth/.htpasswd
 deploy/openclaw-lab/
+deploy/openclaw/data/
+deploy/openclaw/workspaces/
+deploy/openclaw/reports/
 
 # Manual inspection workspace
 tmp/manual-inspect/

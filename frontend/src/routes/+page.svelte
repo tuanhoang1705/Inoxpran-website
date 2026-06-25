@@ -12,9 +12,9 @@
 	import { getMarketingRatingSummary } from '$lib/data/staticReviews.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
 	let { data } = $props();
-	const heroCompositeVersion = '20260324';
-	const heroCompositeUrl = `/images/bg-new.png?v=${heroCompositeVersion}`;
-	const heroCompositeJpgSrcSet = `/images/optimized/bg-new-960.jpg?v=${heroCompositeVersion} 960w, /images/optimized/bg-new-1440.jpg?v=${heroCompositeVersion} 1440w, /images/optimized/bg-new-1920.jpg?v=${heroCompositeVersion} 1920w, /images/bg-new.png?v=${heroCompositeVersion} 2000w`;
+	const heroCompositeVersion = '20260625';
+	const heroCompositeUrl = `/images/optimized/hero-fan-1920.jpg?v=${heroCompositeVersion}`;
+	const heroCompositeJpgSrcSet = `/images/optimized/hero-fan-960.jpg?v=${heroCompositeVersion} 960w, /images/optimized/hero-fan-1440.jpg?v=${heroCompositeVersion} 1440w, /images/optimized/hero-fan-1920.jpg?v=${heroCompositeVersion} 1920w`;
 	const heroCompositeSizes = '100vw';
 	const inoxSlideImageSizes = '(max-width: 900px) 100vw, (max-width: 1280px) 680px, 760px';
 	const BLANK_IMAGE_DATA_URL =
@@ -24,7 +24,6 @@
 	const latestPostImageSizes = '(max-width: 768px) 50vw, 25vw';
 	const CLIENT_HOME_FEED_TIMEOUT_MS = 1_500;
 	const DEFAULT_SITE_URL = 'https://inoxpran.com';
-	const HERO_TAG_SHOP_FILTER_HREF = $derived(localizeInternalHref('/shop?q=inox', $locale));
 	const normalizeSiteUrl = (value) => {
 		const raw = String(value || '').trim();
 		if (!raw) return DEFAULT_SITE_URL;
@@ -201,6 +200,7 @@
 				id: String(slide?.id || `slide-${index + 1}`),
 				imageUrl: String(slide?.imageUrl || '').trim(),
 				linkUrl: String(slide?.linkUrl || '').trim() || '',
+				isHeroBackground: slide?.isHeroBackground === true,
 				alt:
 					($locale === 'en'
 						? String(slide?.altEn || '').trim()
@@ -214,6 +214,7 @@
 			id: String(slide.id || `fallback-${index + 1}`),
 			imageUrl: String(slide.imageUrl || '').trim(),
 			linkUrl: String(slide.linkUrl || '').trim() || '',
+			isHeroBackground: slide.isHeroBackground === true,
 			alt:
 				String(slide.alt || '').trim() ||
 				($locale === 'en'
@@ -221,31 +222,31 @@
 					: `Slide quảng cáo Inoxpran ${index + 1}`)
 		}));
 	});
-	const heroFashionIntro = $derived.by(() =>
+	const heroBackgroundSlide = $derived.by(
+		() => homeInoxSlides.find((slide) => slide.isHeroBackground) || null
+	);
+	const heroBackgroundUrl = $derived(heroBackgroundSlide?.imageUrl || heroCompositeUrl);
+	const heroBackgroundAlt = $derived(
+		heroBackgroundSlide?.alt ||
+			($locale === 'en'
+				? 'Inoxpran premium cookware for modern kitchens'
+				: 'Gia dụng Inoxpran cao cấp cho căn bếp hiện đại')
+	);
+	const heroIntroCopy = $derived.by(() =>
 		$locale === 'en'
 			? {
-					origin: 'Kitchenware from Italy',
-					eyebrow: 'Italia 1954',
-					titleLines: ['Inoxpran', 'Italian', 'Kitchen', 'Atelier'],
-					description:
-						'Mirror-polished stainless steel, clean Italian lines, and durable cookware made for the rhythm of modern family cooking.',
-					tags: ['Italian heritage', '304 stainless', '12-month warranty'],
+					eyebrow: 'THE INOXPRAN STANDARD',
+					lead: 'Refined in every detail.',
+					emphasis: 'Built for lasting everyday cooking.',
 					cta: 'Shop the collection',
-					storyCta: 'Our Italian story',
-					noteTitle: 'Italian homeware',
-					noteMeta: 'Designed for Vietnamese kitchens'
+					storyCta: 'Our Italian story'
 				}
 			: {
-					origin: 'Gia dụng bếp từ Italy',
-					eyebrow: 'Italia 1954',
-					titleLines: ['Inoxpran', 'dấu ấn', 'Italy'],
-					description:
-						'Inox sáng gương, đường nét tối giản kiểu Ý và trải nghiệm nấu bền bỉ cho nhịp sống gia đình Việt.',
-					tags: ['Chính hãng', 'Vừa sang', 'Vừa tầm'],
+					eyebrow: 'TINH THẦN INOXPRAN',
+					lead: 'Tinh giản trong thiết kế.',
+					emphasis: 'Bền bỉ trong từng trải nghiệm nấu.',
 					cta: 'Khám phá bộ sưu tập',
-					storyCta: 'Câu chuyện Italy',
-					noteTitle: 'Italian homeware',
-					noteMeta: 'Tinh chỉnh cho bếp Việt'
+					storyCta: 'Câu chuyện Italy'
 				}
 	);
 	let activeInoxSlideIndex = $state(0);
@@ -912,9 +913,9 @@
 	<link
 		rel="preload"
 		as="image"
-		href={`/images/optimized/bg-new-960.jpg?v=${heroCompositeVersion}`}
-		type="image/jpeg"
-		imagesrcset={heroCompositeJpgSrcSet}
+		href={heroBackgroundSlide ? heroBackgroundUrl : `/images/optimized/hero-fan-960.jpg?v=${heroCompositeVersion}`}
+		type={heroBackgroundSlide ? undefined : 'image/jpeg'}
+		imagesrcset={heroBackgroundSlide ? undefined : heroCompositeJpgSrcSet}
 		imagesizes={heroCompositeSizes}
 		fetchpriority="high"
 		media="(max-width: 1024px)"
@@ -922,9 +923,9 @@
 	<link
 		rel="preload"
 		as="image"
-		href={`/images/optimized/bg-new-1920.jpg?v=${heroCompositeVersion}`}
-		type="image/jpeg"
-		imagesrcset={heroCompositeJpgSrcSet}
+		href={heroBackgroundSlide ? heroBackgroundUrl : `/images/optimized/hero-fan-1920.jpg?v=${heroCompositeVersion}`}
+		type={heroBackgroundSlide ? undefined : 'image/jpeg'}
+		imagesrcset={heroBackgroundSlide ? undefined : heroCompositeJpgSrcSet}
 		imagesizes={heroCompositeSizes}
 		fetchpriority="high"
 		media="(min-width: 1025px)"
@@ -984,14 +985,12 @@
 			<div class="hero-composite-layer">
 				<picture>
 					<img
-						src={heroCompositeUrl}
-						srcset={heroCompositeJpgSrcSet}
-						alt={$locale === 'en'
-							? 'Inoxpran premium cookware for modern kitchens'
-							: 'Gia dụng Inoxpran cao cấp cho căn bếp hiện đại'}
+						src={heroBackgroundUrl}
+						srcset={heroBackgroundSlide ? undefined : heroCompositeJpgSrcSet}
+						alt={heroBackgroundAlt}
 						class="hero-composite-image"
-						width="2000"
-						height="1414"
+						width="1920"
+						height="1072"
 						decoding="async"
 						loading="eager"
 						fetchpriority="high"
@@ -1005,47 +1004,28 @@
 			class="panel-inner hero-inner panel-inner-s1 parallax-layer parallax-layer-soft hero-intro"
 			class:hero-intro-visible={heroIntroVisible}
 		>
-			<p class="hero-origin-label hero-intro-item" style="--hero-intro-delay: 20ms">
-				{heroFashionIntro.origin}
+			<p class="hero-eyebrow hero-intro-item" style="--hero-intro-delay: 20ms">
+				<span aria-hidden="true"></span>
+				{heroIntroCopy.eyebrow}
 			</p>
 			<h1
 				class="panel-title hero-title hero-intro-item"
 				lang={$locale}
-				style="--hero-intro-delay: 40ms"
-				data-full={heroFashionIntro.titleLines.join(' ')}
+				style="--hero-intro-delay: 70ms"
 			>
-				{#each heroFashionIntro.titleLines as line}
-					<span>{line}</span>
-				{/each}
+				<span>{heroIntroCopy.lead}</span>
+				<strong>{heroIntroCopy.emphasis}</strong>
 			</h1>
-			<div
-				class="panel-line hero-intro-item hero-intro-line hero-italia-line"
-				style="--hero-intro-delay: 130ms"
-			></div>
-			<p class="panel-subtitle hero-intro-item" style="--hero-intro-delay: 210ms">
-				{heroFashionIntro.description}
-			</p>
-			<div class="tag-row tag-row-s1 hero-intro-item" style="--hero-intro-delay: 290ms">
-				{#each heroFashionIntro.tags as tag}
-					<a class="tag tag-link" href={HERO_TAG_SHOP_FILTER_HREF}>{tag}</a>
-				{/each}
-			</div>
 
-			<div class="hero-actions hero-intro-item" style="--hero-intro-delay: 380ms">
+			<div class="hero-actions hero-intro-item" style="--hero-intro-delay: 210ms">
 				<a class="cta btn-s1" href={localizeInternalHref('/shop', $locale)}>
-					{heroFashionIntro.cta}
+					{heroIntroCopy.cta}
 				</a>
 				<a class="hero-story-link" href={localizeInternalHref('/about', $locale)}>
-					{heroFashionIntro.storyCta}
+					{heroIntroCopy.storyCta}
 				</a>
 			</div>
 		</div>
-
-		<aside class="hero-editorial-note hero-intro-item" style="--hero-intro-delay: 440ms">
-			<span>{heroFashionIntro.eyebrow}</span>
-			<strong>{heroFashionIntro.noteTitle}</strong>
-			<small>{heroFashionIntro.noteMeta}</small>
-		</aside>
 	</section>
 
 	<section class="home-brand-intro" aria-labelledby="home-brand-intro-title">
@@ -1719,26 +1699,21 @@
 
 	#hero {
 		isolation: isolate;
-		min-height: calc(100svh - 120px);
-		padding: 7rem 7rem 4rem;
-		align-items: flex-end;
+		min-height: 100svh;
+		padding: 4rem 2rem 5rem;
+		flex-direction: column;
+		align-items: center;
+		justify-content: flex-end;
 		background: #101417;
 	}
 
 	#hero.hero-panel::before {
 		background:
 			linear-gradient(
-				90deg,
-				rgba(8, 12, 14, 0.82) 0%,
-				rgba(8, 12, 14, 0.62) 34%,
-				rgba(8, 12, 14, 0.18) 68%,
-				rgba(8, 12, 14, 0.06) 100%
-			),
-			linear-gradient(
 				180deg,
-				rgba(8, 12, 14, 0.34) 0%,
-				rgba(8, 12, 14, 0.08) 46%,
-				rgba(8, 12, 14, 0.48) 100%
+				rgba(4, 8, 10, 0.12) 0%,
+				rgba(4, 8, 10, 0.24) 50%,
+				rgba(4, 8, 10, 0.78) 100%
 			);
 		mix-blend-mode: normal;
 		z-index: 1;
@@ -1749,16 +1724,16 @@
 	}
 
 	#hero .hero-composite-image {
-		object-position: 64% 50%;
-		filter: brightness(0.92) saturate(0.96) contrast(1.05);
+		object-position: center;
+		filter: brightness(0.94) saturate(0.96) contrast(1.02);
 	}
 
 	#hero .hero-inner {
 		z-index: 2;
-		width: min(720px, 58vw);
-		max-width: 720px;
-		margin: 0;
-		padding: 0;
+		width: min(920px, calc(100vw - 2rem));
+		max-width: 920px;
+		margin: 0 auto;
+		padding: 0 !important;
 		border-radius: 0;
 		background: transparent;
 		box-shadow: none;
@@ -1766,114 +1741,81 @@
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
 		transform: none;
+		text-align: center;
 	}
 
-	#hero .hero-origin-label {
+	.hero-eyebrow {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.75rem;
-		margin: 0 0 1rem;
-		color: rgba(248, 250, 252, 0.82);
-		font-size: 0.82rem;
+		justify-content: center;
+		gap: 0.7rem;
+		margin: 0 0 0.9rem;
+		color: #b9e5ed;
+		font-family: 'Manrope', 'Segoe UI', sans-serif;
+		font-size: 0.72rem;
 		font-weight: 700;
 		letter-spacing: 0;
+		line-height: 1.2;
 		text-transform: uppercase;
+		text-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
 	}
 
-	#hero .hero-origin-label::before {
-		content: '';
-		width: 54px;
+	.hero-eyebrow span {
+		position: relative;
+		display: inline-block;
+		width: 28px;
 		height: 1px;
-		background: linear-gradient(90deg, #168a45 0%, #ffffff 50%, #d61f2c 100%);
+		background: #70c9da;
+	}
+
+	.hero-eyebrow span::after {
+		position: absolute;
+		top: 50%;
+		right: 0;
+		width: 5px;
+		height: 5px;
+		background: #70c9da;
+		content: '';
+		transform: translateY(-50%) rotate(45deg);
 	}
 
 	#hero .hero-title {
-		display: grid;
-		gap: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.2rem;
 		margin: 0;
 		color: #ffffff;
-		font-family: Didot, 'Bodoni 72', 'Bodoni MT', 'Cormorant Garamond', Georgia, serif;
-		font-size: 6.6rem;
-		font-weight: 500;
+		font-family: 'Manrope', 'Segoe UI', sans-serif;
+		font-size: clamp(1.45rem, 2.2vw, 2rem);
+		font-weight: 400;
 		letter-spacing: 0;
-		line-height: 0.86;
-		max-width: max-content;
-		text-transform: uppercase;
+		line-height: 1.3;
+		max-width: 900px;
 		text-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
+		text-transform: none;
 	}
 
 	#hero .hero-title:lang(vi) {
-		font-family: 'Playfair Display', 'Cormorant Garamond', Georgia, serif;
-		font-weight: 700;
-		line-height: 1.02;
-		row-gap: 0.16em;
+		font-family: 'Manrope', 'Segoe UI', sans-serif;
+		font-weight: 400;
+		line-height: 1.32;
 	}
 
-	#hero .hero-title:lang(vi) span + span {
-		padding-top: 0.02em;
-	}
-
-	#hero .hero-title span {
+	#hero .hero-title strong {
 		display: block;
-		white-space: nowrap;
-	}
-
-	#hero .hero-title span:nth-child(2) {
-		margin-left: 0.36em;
-	}
-
-	#hero .hero-title span:nth-child(3) {
-		margin-left: 0.78em;
-	}
-
-	#hero .hero-title span:nth-child(4) {
-		margin-left: 0.2em;
-	}
-
-	#hero .hero-italia-line {
-		width: 156px;
-		height: 2px;
-		margin-top: 1.35rem;
-		background: linear-gradient(90deg, #168a45 0%, #ffffff 50%, #d61f2c 100%);
-		border-radius: 0;
-	}
-
-	#hero .panel-subtitle {
-		max-width: 540px;
-		min-height: 0;
-		margin-top: 1.15rem;
-		color: rgba(248, 250, 252, 0.88);
-		font-size: 1.05rem;
-		line-height: 1.75;
-		text-shadow: 0 10px 30px rgba(0, 0, 0, 0.36);
-	}
-
-	#hero .tag-row {
-		gap: 0.7rem;
-		margin-top: 1.45rem;
-		letter-spacing: 0;
-	}
-
-	#hero .tag {
-		border: 1px solid rgba(248, 250, 252, 0.55);
-		border-radius: 0;
-		background: rgba(8, 12, 14, 0.16);
-		color: #ffffff;
-		-webkit-backdrop-filter: none;
-		backdrop-filter: none;
-	}
-
-	#hero .tag-link:hover {
-		background: #ffffff;
-		color: #111827;
+		font-size: clamp(1.8rem, 3.1vw, 2.65rem);
+		font-weight: 700;
+		line-height: 1.2;
 	}
 
 	.hero-actions {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
+		justify-content: center;
 		gap: 1rem;
-		margin-top: 2rem;
+		margin-top: 1.45rem;
 	}
 
 	#hero .cta {
@@ -1885,6 +1827,7 @@
 		background: #f8fafc;
 		box-shadow: none;
 		color: #0f172a;
+		font-family: 'Manrope', 'Segoe UI', sans-serif;
 		font-weight: 800;
 		letter-spacing: 0;
 	}
@@ -1900,6 +1843,7 @@
 		min-height: 52px;
 		border-bottom: 1px solid rgba(248, 250, 252, 0.82);
 		color: #ffffff;
+		font-family: 'Manrope', 'Segoe UI', sans-serif;
 		font-weight: 700;
 		text-decoration: none;
 	}
@@ -1907,35 +1851,6 @@
 	.hero-story-link:hover {
 		color: #ffffff;
 		border-bottom-color: #ffffff;
-	}
-
-	.hero-editorial-note {
-		position: absolute;
-		right: 7rem;
-		bottom: 5rem;
-		z-index: 2;
-		display: grid;
-		gap: 0.25rem;
-		max-width: 260px;
-		padding-left: 1rem;
-		border-left: 1px solid rgba(248, 250, 252, 0.55);
-		color: #ffffff;
-		text-align: left;
-	}
-
-	.hero-editorial-note span,
-	.hero-editorial-note small {
-		color: rgba(248, 250, 252, 0.72);
-		font-size: 0.76rem;
-		letter-spacing: 0;
-		text-transform: uppercase;
-	}
-
-	.hero-editorial-note strong {
-		font-family: Didot, 'Bodoni 72', 'Bodoni MT', Georgia, serif;
-		font-size: 1.45rem;
-		font-weight: 500;
-		line-height: 1.1;
 	}
 
 	.home-brand-intro {
@@ -2148,116 +2063,62 @@
 
 	@media (max-width: 1200px) {
 		#hero {
-			padding: 8rem 4.5rem 4.5rem;
+			padding-inline: 1.5rem;
 		}
 
 		#hero .hero-inner {
-			width: min(640px, 64vw);
-		}
-
-		#hero .hero-title {
-			font-size: 5rem;
-		}
-
-		.hero-editorial-note {
-			right: 4.5rem;
-			bottom: 4.5rem;
+			width: min(740px, calc(100vw - 3rem));
 		}
 	}
 
 	@media (max-height: 820px) and (min-width: 901px) {
 		#hero {
-			padding: 4.6rem 7rem 2.75rem;
-		}
-
-		#hero .hero-origin-label {
-			margin-bottom: 0.7rem;
-		}
-
-		#hero .hero-title {
-			font-size: 5.35rem;
-		}
-
-		#hero .hero-italia-line {
-			margin-top: 0.9rem;
-		}
-
-		#hero .panel-subtitle {
-			max-width: 500px;
-			margin-top: 0.8rem;
-			font-size: 0.98rem;
-			line-height: 1.6;
-		}
-
-		#hero .tag-row {
-			margin-top: 1rem;
+			padding-bottom: 3rem;
 		}
 
 		.hero-actions {
-			margin-top: 1.25rem;
+			margin-top: 1.15rem;
 		}
 
 		#hero .cta,
 		.hero-story-link {
 			min-height: 46px;
 		}
-
-		.hero-editorial-note {
-			right: 12rem;
-			bottom: 3rem;
-		}
 	}
 
 	@media (max-width: 900px) {
 		#hero {
-			min-height: 760px;
-			padding: 7.5rem 1.5rem 3rem;
-			align-items: flex-end;
+			min-height: 100svh;
+			padding: 3rem 1.25rem max(3rem, env(safe-area-inset-bottom));
+			align-items: center;
+			justify-content: flex-end;
 		}
 
 		#hero.hero-panel::before {
-			background:
-				linear-gradient(
-					90deg,
-					rgba(8, 12, 14, 0.84) 0%,
-					rgba(8, 12, 14, 0.6) 50%,
-					rgba(8, 12, 14, 0.18) 100%
-				),
-				linear-gradient(180deg, rgba(8, 12, 14, 0.16) 0%, rgba(8, 12, 14, 0.42) 100%);
+			background: linear-gradient(
+				180deg,
+				rgba(4, 8, 10, 0.08) 0%,
+				rgba(4, 8, 10, 0.22) 48%,
+				rgba(4, 8, 10, 0.82) 100%
+			);
 		}
 
 		#hero .hero-composite-image {
-			object-position: 68% 50%;
+			object-position: 68% center;
 		}
 
 		#hero .hero-inner {
 			width: 100%;
-			max-width: 620px;
+			max-width: 640px;
 		}
 
 		#hero .hero-title {
-			font-size: 3.7rem;
-			line-height: 0.92;
+			font-size: clamp(1.12rem, 5vw, 1.45rem);
+			line-height: 1.35;
 		}
 
-		#hero .hero-title:lang(vi) {
-			line-height: 1.04;
-			row-gap: 0.14em;
-		}
-
-		#hero .hero-title span:nth-child(2),
-		#hero .hero-title span:nth-child(3),
-		#hero .hero-title span:nth-child(4) {
-			margin-left: 0;
-		}
-
-		#hero .panel-subtitle {
-			max-width: 36rem;
-			font-size: 1rem;
-		}
-
-		.hero-editorial-note {
-			display: none;
+		#hero .hero-title strong {
+			font-size: clamp(1.35rem, 6.5vw, 1.85rem);
 		}
 
 		.home-brand-intro__content {
@@ -2601,28 +2462,25 @@
 		}
 
 		#hero {
-			min-height: 720px;
-			padding: 7rem 1rem 2.5rem;
+			min-height: 100svh;
+			padding: 2rem 1rem max(6rem, env(safe-area-inset-bottom));
 		}
 
 		#hero .hero-composite-image {
-			object-position: 72% 50%;
-		}
-
-		#hero .hero-origin-label {
-			font-size: 0.76rem;
+			object-position: 68% center;
 		}
 
 		#hero .hero-title {
-			font-size: 2.85rem;
+			font-size: 1.05rem;
 		}
 
-		#hero .tag-row {
-			gap: 0.5rem;
+		#hero .hero-title strong {
+			font-size: 1.32rem;
 		}
 
-		#hero .tag {
-			padding: 0.35rem 0.72rem;
+		.hero-eyebrow {
+			margin-bottom: 0.7rem;
+			font-size: 0.66rem;
 		}
 
 		.hero-actions {
