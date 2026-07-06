@@ -54,6 +54,7 @@
       TZ: Asia/Ho_Chi_Minh
       OPENCLAW_STATE_DIR: /data
       OPENCLAW_CONFIG_PATH: /data/openclaw.json5
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
       INOXPRAN_BACKEND_API_BASE: http://backend:3056/v1/api
       INOXPRAN_PUBLIC_SITE_URL: https://inoxpran.com
       INOXPRAN_SEO_AGENT_AUTO_PUBLISH: ${SEO_AGENT_AUTO_PUBLISH:-false}
