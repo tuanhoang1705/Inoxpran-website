@@ -6126,6 +6126,7 @@ footer a {
 #inox .inox-ad-slider {
 	display: grid;
 	gap: 0.8rem;
+	position: relative;
 }
 
 #inox .inox-ad-slider__viewport {
@@ -6299,8 +6300,18 @@ footer a {
 		font-size: 1.25rem;
 	}
 
+	#inox .inox-ad-slider__controls {
+		inset: 50% 8px auto;
+		transform: translateY(-50%);
+	}
+
 	#inox .inox-ad-slider__dots {
-		padding-inline: 54px;
+		position: static;
+		inset: auto;
+		order: 2;
+		justify-content: center;
+		padding-inline: 0;
+		margin-top: 0;
 	}
 
 	#inox .panel-subtitle {

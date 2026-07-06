@@ -1598,47 +1598,47 @@
 										</button>
 									</div>
 								{/each}
-
-								{#if homeInoxSlides.length > 1}
-									<div class="inox-ad-slider__controls">
-										<button
-											type="button"
-											class="inox-ad-slider__nav"
-											aria-label={$locale === 'en' ? 'Previous slide' : 'Slide trước'}
-											onclick={showPrevInoxSlide}
-										>
-											‹
-										</button>
-										<button
-											type="button"
-											class="inox-ad-slider__nav"
-											aria-label={$locale === 'en' ? 'Next slide' : 'Slide tiếp theo'}
-											onclick={showNextInoxSlide}
-										>
-											›
-										</button>
-									</div>
-									<div
-										class="inox-ad-slider__dots"
-										role="tablist"
-										aria-label={$locale === 'en' ? 'Slide pagination' : 'Điều hướng slide'}
-									>
-										{#each homeInoxSlides as slide, dotIndex (slide.id)}
-											<button
-												type="button"
-												id={inoxSlideTabId(slide.id)}
-												role="tab"
-												aria-controls={inoxSlidePanelId(slide.id)}
-												class={`inox-ad-slider__dot ${dotIndex === activeInoxSlideIndex ? 'is-active' : ''}`}
-												aria-label={`${$locale === 'en' ? 'Go to slide' : 'Đến slide'} ${dotIndex + 1}`}
-												aria-selected={dotIndex === activeInoxSlideIndex ? 'true' : 'false'}
-												tabindex={dotIndex === activeInoxSlideIndex ? 0 : -1}
-												onclick={() => goToInoxSlide(dotIndex)}
-											></button>
-										{/each}
-									</div>
-								{/if}
 							</div>
+
+							{#if homeInoxSlides.length > 1}
+								<div class="inox-ad-slider__controls">
+									<button
+										type="button"
+										class="inox-ad-slider__nav"
+										aria-label={$locale === 'en' ? 'Previous slide' : 'Slide trước'}
+										onclick={showPrevInoxSlide}
+									>
+										‹
+									</button>
+									<button
+										type="button"
+										class="inox-ad-slider__nav"
+										aria-label={$locale === 'en' ? 'Next slide' : 'Slide tiếp theo'}
+										onclick={showNextInoxSlide}
+									>
+										›
+									</button>
+								</div>
+								<div
+									class="inox-ad-slider__dots"
+									role="tablist"
+									aria-label={$locale === 'en' ? 'Slide pagination' : 'Điều hướng slide'}
+								>
+									{#each homeInoxSlides as slide, dotIndex (slide.id)}
+										<button
+											type="button"
+											id={inoxSlideTabId(slide.id)}
+											role="tab"
+											aria-controls={inoxSlidePanelId(slide.id)}
+											class={`inox-ad-slider__dot ${dotIndex === activeInoxSlideIndex ? 'is-active' : ''}`}
+											aria-label={`${$locale === 'en' ? 'Go to slide' : 'Đến slide'} ${dotIndex + 1}`}
+											aria-selected={dotIndex === activeInoxSlideIndex ? 'true' : 'false'}
+											tabindex={dotIndex === activeInoxSlideIndex ? 0 : -1}
+											onclick={() => goToInoxSlide(dotIndex)}
+										></button>
+									{/each}
+								</div>
+							{/if}
 						</div>
 					</div>
 				</div>
@@ -3900,6 +3900,61 @@
 	}
 
 	@media (max-width: 560px) {
+		.inox-stage {
+			flex-direction: column;
+			align-items: stretch;
+			justify-content: flex-start;
+			gap: 0.7rem;
+			min-height: auto;
+		}
+
+		.kinetic-band__sphere {
+			top: 42%;
+			width: min(112vw, 420px);
+			opacity: 0.42;
+		}
+
+		.inox-card {
+			order: 1;
+		}
+
+		.inox-orbit {
+			position: relative;
+			inset: auto;
+			order: 2;
+			display: grid;
+			grid-template-columns: repeat(2, minmax(0, 1fr));
+			gap: 0.5rem;
+			width: min(100%, 470px);
+			margin: 0 auto;
+			padding-inline: 0.1rem;
+			z-index: 3;
+		}
+
+		.inox-orbit__ring {
+			display: none;
+		}
+
+		.inox-orbit__chip {
+			position: static;
+			justify-content: flex-start;
+			width: 100%;
+			min-width: 0;
+			font-size: clamp(0.64rem, 2.75vw, 0.74rem);
+			line-height: 1.2;
+			white-space: normal;
+			padding: 0.44rem 0.58rem;
+			background: rgba(9, 17, 21, 0.78);
+			border-color: rgba(121, 210, 230, 0.2);
+			box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+		}
+
+		.inox-orbit__chip-text {
+			min-width: 0;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
 		.inox-stat-value {
 			gap: 0.28rem;
 			min-width: 0;
@@ -3926,16 +3981,6 @@
 		}
 		.inox-btn {
 			width: 100%;
-		}
-		.inox-orbit__chip {
-			font-size: 0.68rem;
-			padding: 0.4rem 0.7rem;
-		}
-		.inox-orbit__chip--2 {
-			right: 0;
-		}
-		.inox-orbit__chip--3 {
-			left: 0;
 		}
 	}
 
