@@ -1,6 +1,14 @@
-# block admin area from crawlers
+# block private/internal areas from crawlers
 User-agent: *
 Disallow: /admin
 Disallow: /admin/
+Disallow: /openclaw
+Disallow: /openclaw/
+Disallow: /hooks
+Disallow: /hooks/
+Disallow: /api/openclaw
+Disallow: /api/openclaw/
+Disallow: /.well-known/openclaw
+Disallow: /.well-known/openclaw/
 
 Sitemap: https://inoxpran.com/sitemap.xml
