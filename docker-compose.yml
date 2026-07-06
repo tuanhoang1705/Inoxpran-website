@@ -49,11 +49,23 @@
     # OpenClaw docs specify a different image.
     image: openclaw/openclaw:latest
     container_name: app_openclaw
+    command:
+      - openclaw
+      - gateway
+      - run
+      - --allow-unconfigured
+      - --auth
+      - token
+      - --bind
+      - lan
+      - --port
+      - "18789"
+      - --ws-log
+      - compact
     environment:
       NODE_ENV: production
       TZ: Asia/Ho_Chi_Minh
       OPENCLAW_STATE_DIR: /data
-      OPENCLAW_CONFIG_PATH: /data/openclaw.json5
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
       INOXPRAN_BACKEND_API_BASE: http://backend:3056/v1/api
       INOXPRAN_PUBLIC_SITE_URL: https://inoxpran.com
@@ -63,7 +75,6 @@
       API_KEY: ${API_KEY}
     volumes:
       - ./deploy/openclaw/data:/data
-      - ./deploy/openclaw/openclaw.json5:/data/openclaw.json5:ro
       - ./deploy/openclaw/workspaces:/workspaces
       - ./deploy/openclaw/skills:/workspaces/shared-skills:ro
       - ./deploy/openclaw/prompts:/workspaces/prompts:ro
