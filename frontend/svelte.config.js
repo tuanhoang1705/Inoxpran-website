@@ -17,7 +17,11 @@ const csrfTrustedOrigins = Array.from(
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	kit: {
-		adapter: adapter(),
+		adapter: adapter({
+			// Windows local builds can hit EMFILE during adapter precompression.
+			// Keep precompressed assets enabled for Linux/Docker production builds.
+			precompress: process.platform !== 'win32'
+		}),
 		csrf: {
 			trustedOrigins: csrfTrustedOrigins
 		}

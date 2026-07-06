@@ -5760,18 +5760,64 @@ footer a {
 }
 
 #inox.panel {
-	display: grid;
-	grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-	align-items: start;
-	gap: clamp(1rem, 2vw, 1.75rem);
-	padding: clamp(5rem, 7vw, 7rem) clamp(1rem, 4vw, 4rem) clamp(4rem, 6vw, 5.5rem);
+	/* Dark "brushed stainless" palette to harmonise with the cinematic hero above. */
+	--inox-accent: #79d2e6;
+	--inox-accent-soft: #b9e5ed;
+	--inox-hairline: rgba(255, 255, 255, 0.12);
+	--inox-text-soft: rgba(228, 240, 244, 0.72);
+	/* One premium, Vietnamese-first type family across the whole section. */
+	font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', system-ui, sans-serif;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+	/* Third cinematic slide: a tall, full-width premium block (marquee → body). */
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	justify-content: center;
+	gap: clamp(1.5rem, 3vw, 2.75rem);
+	min-height: clamp(820px, 96vh, 960px);
+	padding: clamp(4.5rem, 7vw, 7rem) clamp(1.25rem, 5vw, 5rem) clamp(4rem, 6vw, 6rem);
+	isolation: isolate;
 }
 
 #inox .panel-bg {
-	background:
-		radial-gradient(circle at 16% 18%, rgba(255, 255, 255, 0.2), transparent 56%),
-		radial-gradient(circle at 86% 12%, rgba(255, 255, 255, 0.16), transparent 48%),
-		linear-gradient(180deg, #5e97ab 0%, #6ea6b9 55%, #5f95aa 100%);
+	/* Florence/Tuscan photo background, heavily darkened so it stays cinematic and keeps
+	   text readable. Drop the photo at: frontend/static/images/inox-italy.jpg
+	   (until then, the scrims below render a graceful dark fallback). */
+	background-color: #05070a;
+	background-image:
+		/* cool key glow (top-right) + faint steel counter-light (low-left) */
+		radial-gradient(66% 56% at 76% 16%, rgba(126, 178, 202, 0.09), transparent 62%),
+		radial-gradient(58% 55% at 14% 86%, rgba(96, 134, 152, 0.05), transparent 60%),
+		/* left-side scrim → keeps the copy column dark & legible */
+		linear-gradient(90deg, rgba(6, 8, 12, 0.9) 0%, rgba(6, 8, 12, 0.55) 44%, rgba(6, 8, 12, 0.3) 100%),
+		/* vertical scrim → cinematic mood + strong contrast for the marquee/base */
+		linear-gradient(180deg, rgba(8, 11, 15, 0.58) 0%, rgba(7, 9, 13, 0.68) 52%, rgba(5, 6, 8, 0.92) 100%),
+		/* the photo */
+		url('/images/inox-italy.jpg');
+	background-size: cover;
+	background-position: center 28%;
+	background-repeat: no-repeat;
+}
+
+/* Fine square micro-grid — a subtle premium "screen" texture over the whole section.
+   Pure CSS (two 1px repeating gradients → 5px cells), GPU-cheap, never blocks clicks. */
+#inox .inox-grain {
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+	pointer-events: none;
+	background-image:
+		repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 5px),
+		repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.028) 0 1px, transparent 1px 5px);
+	opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	#inox .inox-grain {
+		opacity: 0.4;
+	}
 }
 
 #inox .inox-ribbon-layer {
@@ -5788,18 +5834,18 @@ footer a {
 	width: clamp(24rem, 42vw, 42rem);
 	height: clamp(5.5rem, 12vw, 10rem);
 	border-radius: 999px;
-	opacity: 0.28;
+	opacity: 0.5;
 	background: linear-gradient(90deg,
-			rgba(255, 255, 255, 0.02) 0%,
-			rgba(255, 255, 255, 0.22) 20%,
-			rgba(255, 255, 255, 0.58) 50%,
-			rgba(255, 255, 255, 0.18) 78%,
-			rgba(255, 255, 255, 0.02) 100%);
-	border: 1px solid rgba(255, 255, 255, 0.16);
+			rgba(185, 224, 234, 0) 0%,
+			rgba(185, 224, 234, 0.08) 22%,
+			rgba(201, 236, 245, 0.28) 50%,
+			rgba(185, 224, 234, 0.08) 78%,
+			rgba(185, 224, 234, 0) 100%);
+	border: 1px solid rgba(170, 212, 224, 0.08);
 	box-shadow:
-		inset 0 0 24px rgba(255, 255, 255, 0.12),
-		0 18px 36px rgba(15, 23, 42, 0.12);
-	filter: saturate(110%);
+		inset 0 0 30px rgba(160, 210, 225, 0.05),
+		0 24px 60px rgba(0, 0, 0, 0.34);
+	filter: saturate(108%) blur(0.4px);
 	will-change: transform, opacity;
 	transform: translate3d(0, 0, 0) rotate(0deg);
 	animation: inox-ribbon-drift 18s ease-in-out infinite;
@@ -5884,71 +5930,176 @@ footer a {
 }
 
 #inox .panel-inner {
+	/* Card-free like the hero — content breathes on the atmospheric background. */
 	width: 100%;
 	max-width: 100%;
-	padding: clamp(1rem, 1.2vw, 1.3rem);
-	border-radius: 20px;
-	border: 1px solid rgba(255, 255, 255, 0.22);
-	background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.08));
-	box-shadow: 0 20px 40px rgba(15, 23, 42, 0.14);
-	backdrop-filter: blur(6px);
+	padding: 0;
+	border-radius: 0;
+	border: 0;
+	background: transparent;
+	box-shadow: none;
+	backdrop-filter: none;
+}
+
+#inox .inox-eyebrow {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.7rem;
+	margin: 0 0 0.85rem;
+	color: var(--inox-accent-soft);
+	font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', sans-serif;
+	font-size: 0.72rem;
+	font-weight: 700;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	text-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+#inox .inox-eyebrow::before {
+	content: '';
+	width: 30px;
+	height: 1px;
+	background: linear-gradient(90deg, transparent, var(--inox-accent));
 }
 
 #inox .panel-title {
-	margin-bottom: 0.55rem;
+	margin-bottom: 0.65rem;
+	font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', sans-serif;
+	font-size: clamp(1.9rem, 3vw, 2.65rem);
+	font-weight: 700;
+	letter-spacing: 0;
+	line-height: 1.12;
+	color: #ffffff;
+	text-shadow: 0 18px 42px rgba(0, 0, 0, 0.4);
 }
 
 #inox .panel-subtitle {
 	min-height: 0;
-	max-width: 100%;
-	margin-top: 0;
-	color: rgba(255, 255, 255, 0.92);
+	max-width: 56ch;
+	margin-top: 0.3rem;
+	font-size: clamp(0.95rem, 1.05vw, 1.02rem);
+	line-height: 1.65;
+	color: var(--inox-text-soft);
 }
 
+/* Editorial "spec strip": no boxes, just big numerals divided by hairlines. */
 #inox .stats-row {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: 0.75rem;
-	margin-top: 1.1rem;
+	display: flex;
+	align-items: stretch;
+	gap: 0;
+	margin-top: clamp(1.7rem, 2.6vw, 2.3rem);
+	border-top: 1px solid var(--inox-hairline);
+	border-bottom: 1px solid var(--inox-hairline);
 }
 
 #inox .stat-card {
+	flex: 1 1 0;
 	min-width: 0;
-	padding: 0.75rem 0.85rem;
-	border-radius: 14px;
-	border: 1px solid rgba(255, 255, 255, 0.18);
-	background: rgba(255, 255, 255, 0.1);
+	padding: clamp(1.25rem, 2vw, 2rem) clamp(0.85rem, 1.4vw, 1.5rem);
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	backdrop-filter: none;
+}
+
+#inox .stat-card + .stat-card {
+	border-left: 1px solid var(--inox-hairline);
 }
 
 #inox .stat-number {
-	font-size: clamp(1.5rem, 2vw, 2rem);
+	font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', sans-serif;
+	font-size: clamp(2.4rem, 3.6vw, 3.4rem);
 	line-height: 1;
-	color: #ffffff;
+	font-weight: 600;
+	letter-spacing: -0.015em;
+	color: #f4fbfd;
 }
 
 #inox .stat-label {
-	margin-top: 0.42rem;
+	margin-top: 0.7rem;
 	font-size: 0.72rem;
-	letter-spacing: 0.09em;
-	color: rgba(255, 255, 255, 0.9);
+	letter-spacing: 0.14em;
+	line-height: 1.35;
+	text-transform: uppercase;
+	color: var(--inox-text-soft);
 }
 
 #inox .inox-info-grid {
-	margin-top: 1rem;
+	margin-top: clamp(1.5rem, 2.2vw, 2rem);
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: clamp(1.3rem, 2.6vw, 2.4rem);
 	max-width: none;
-	gap: 0.85rem;
 }
 
 #inox .inox-info-card {
-	min-height: 100%;
+	min-height: 0;
+	padding: 0 0 0 clamp(0.9rem, 1.3vw, 1.2rem);
+	border: 0;
+	border-left: 1px solid var(--inox-hairline);
+	border-radius: 0;
+	background: transparent;
+	box-shadow: none;
+	backdrop-filter: none;
+}
+
+#inox .inox-info-title {
+	font-size: 0.98rem;
+	font-weight: 700;
+	color: #f2fafc;
+	letter-spacing: 0.01em;
+}
+
+#inox .inox-info-desc {
+	margin-top: 0.5rem;
+	font-size: 0.88rem;
+	line-height: 1.55;
+	color: var(--inox-text-soft);
+}
+
+/* Concrete points become a quiet inline meta row instead of a bulleted list. */
+#inox .inox-info-list {
+	margin-top: 0.85rem;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 0.85rem;
+}
+
+#inox .inox-info-list li {
+	gap: 0.4rem;
+	font-size: 0.76rem;
+	letter-spacing: 0.03em;
+	color: var(--inox-text-soft);
+}
+
+#inox .inox-info-list li::before {
+	width: 5px;
+	height: 5px;
+	background: var(--inox-accent);
+	box-shadow: 0 0 8px rgba(121, 210, 230, 0.5);
 }
 
 #inox .inox-panel-actions {
-	margin-top: 0.95rem;
+	margin-top: 1.1rem;
 }
 
 #inox .inox-panel-link {
-	min-height: 40px;
+	min-height: 42px;
+	border: 1px solid rgba(255, 255, 255, 0.18);
+	background: rgba(255, 255, 255, 0.04);
+	color: #eef7f9;
+	letter-spacing: 0.04em;
+}
+
+#inox .inox-panel-link.alt {
+	background: rgba(255, 255, 255, 0.04);
+}
+
+#inox .inox-panel-link:hover {
+	background: rgba(121, 210, 230, 0.14);
+	border-color: rgba(121, 210, 230, 0.55);
+	color: #ffffff;
+	box-shadow: 0 12px 26px rgba(0, 0, 0, 0.32);
 }
 
 #inox .inox-card {
@@ -5963,15 +6114,57 @@ footer a {
 	z-index: 1;
 }
 
+/* Slider now lives inside the orbit stage: centre it in front of the orb + rings. */
+#inox .inox-stage .inox-card {
+	max-width: min(100%, 470px);
+	margin: 0 auto;
+	justify-self: center;
+	align-self: center;
+	z-index: 2;
+}
+
 #inox .inox-ad-slider {
 	display: grid;
 	gap: 0.8rem;
 }
 
 #inox .inox-ad-slider__viewport {
-	border-radius: 20px;
-	border: 1px solid rgba(255, 255, 255, 0.22);
-	background: rgba(255, 255, 255, 0.08);
+	border-radius: 22px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: rgba(255, 255, 255, 0.03);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.06),
+		0 34px 64px rgba(0, 0, 0, 0.5);
+}
+
+/* Cinematic top/bottom scrim so a bright promo seats into the dark scene. */
+#inox .inox-ad-slider__viewport::before {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	border-radius: inherit;
+	pointer-events: none;
+	background: linear-gradient(
+		180deg,
+		rgba(6, 16, 20, 0.55) 0%,
+		rgba(6, 16, 20, 0) 24%,
+		rgba(6, 16, 20, 0) 66%,
+		rgba(6, 16, 20, 0.62) 100%
+	);
+}
+
+/* Inset vignette so the bright promo art melts into the dark frame instead of clashing. */
+#inox .inox-ad-slider__viewport::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	border-radius: inherit;
+	pointer-events: none;
+	box-shadow:
+		inset 0 0 60px rgba(0, 0, 0, 0.5),
+		inset 0 0 0 1px rgba(255, 255, 255, 0.05);
 }
 
 #inox .inox-ad-slide__surface {
@@ -5982,6 +6175,28 @@ footer a {
 	width: 100%;
 	height: 100%;
 	object-fit: cover;
+	/* Dark placeholder (instead of the light default) + a touch less glare. */
+	background: #0b1418;
+	filter: saturate(0.98) brightness(0.95);
+}
+
+#inox .inox-ad-slider__nav {
+	border: 1px solid rgba(255, 255, 255, 0.22);
+	background: rgba(8, 16, 18, 0.55);
+	backdrop-filter: blur(6px);
+}
+
+#inox .inox-ad-slider__nav:hover {
+	background: rgba(121, 210, 230, 0.22);
+	border-color: rgba(121, 210, 230, 0.5);
+}
+
+#inox .inox-ad-slider__dot {
+	background: rgba(255, 255, 255, 0.32);
+}
+
+#inox .inox-ad-slider__dot.is-active {
+	background: var(--inox-accent);
 }
 
 #inox .inox-card-facts {
@@ -6098,4 +6313,28 @@ footer a {
 		animation: none;
 		opacity: 0.14;
 	}
+}
+
+/* --------------------------------------------------------------
+   Lenis smooth scroll (momentum feel, oeg.vn-style) base rules
+   -------------------------------------------------------------- */
+html.lenis,
+html.lenis body {
+	height: auto;
+}
+
+.lenis.lenis-smooth {
+	scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+	overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+	overflow: hidden;
+}
+
+.lenis.lenis-smooth iframe {
+	pointer-events: none;
 }

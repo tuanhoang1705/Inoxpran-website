@@ -12,10 +12,14 @@
 	import { getMarketingRatingSummary } from '$lib/data/staticReviews.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
 	let { data } = $props();
-	const heroCompositeVersion = '20260625';
+	const heroCompositeVersion = '20260626';
 	const heroCompositeUrl = `/images/optimized/hero-fan-1920.jpg?v=${heroCompositeVersion}`;
 	const heroCompositeJpgSrcSet = `/images/optimized/hero-fan-960.jpg?v=${heroCompositeVersion} 960w, /images/optimized/hero-fan-1440.jpg?v=${heroCompositeVersion} 1440w, /images/optimized/hero-fan-1920.jpg?v=${heroCompositeVersion} 1920w`;
 	const heroCompositeSizes = '100vw';
+	const cookwareHeroVersion = '20260626';
+	const cookwareHeroUrl = `/images/optimized/hero-cookware-1875.jpg?v=${cookwareHeroVersion}`;
+	const cookwareHeroJpgSrcSet = `/images/optimized/hero-cookware-960.jpg?v=${cookwareHeroVersion} 960w, /images/optimized/hero-cookware-1440.jpg?v=${cookwareHeroVersion} 1440w, /images/optimized/hero-cookware-1875.jpg?v=${cookwareHeroVersion} 1875w`;
+	const cookwareHeroSizes = '100vw';
 	const inoxSlideImageSizes = '(max-width: 900px) 100vw, (max-width: 1280px) 680px, 760px';
 	const BLANK_IMAGE_DATA_URL =
 		'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
@@ -129,7 +133,9 @@
 	let latestPosts = $state(Array.isArray(data?.latestPosts) ? data.latestPosts.slice(0, 4) : []);
 	let apiError = $state(String(data?.apiError || ''));
 	let isHomeFeedLoading = $state(!Boolean(data?.homeFeedLoaded));
-	let heroIntroVisible = $state(false);
+	let heroSceneEl = null;
+	let kineticSphereEl = null;
+	let heroMotionReduced = $state(false);
 	let isHomeCardMobileViewport = $state(
 		typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false
 	);
@@ -162,36 +168,6 @@
 				url: ogImageUrl
 			}
 		})
-	);
-	const inoxInfoCards = $derived.by(() =>
-		$locale === 'en'
-			? [
-					{
-						title: 'Built for daily cooking',
-						description:
-							'Designed for quick weekday meals and stable heat control in family kitchens.',
-						points: ['Even heat base', 'Easy-to-clean interior', 'Durable stainless finish']
-					},
-					{
-						title: 'Kitchen compatibility',
-						description:
-							'Use across common cooktops and modern home setups without changing your routine.',
-						points: ['Gas stove', 'Induction cooktop', 'Electric / ceramic hob']
-					}
-				]
-			: [
-					{
-						title: 'Phù hợp nấu ăn hằng ngày',
-						description: 'Tối ưu cho bữa cơm gia đình, giữ nhiệt ổn định và thao tác nấu gọn hơn.',
-						points: ['Truyền nhiệt đều', 'Dễ vệ sinh sau nấu', 'Bề mặt inox bền đẹp']
-					},
-					{
-						title: 'Tương thích nhiều bếp',
-						description:
-							'Dùng tốt trong căn bếp hiện đại mà không cần thay đổi thói quen nấu nướng.',
-						points: ['Bếp gas', 'Bếp từ', 'Bếp điện / hồng ngoại']
-					}
-				]
 	);
 	const homeInoxSlides = $derived.by(() => {
 		const configuredSlides = Array.isArray(data?.siteHomeSlides) ? data.siteHomeSlides : [];
@@ -244,10 +220,89 @@
 			: {
 					eyebrow: 'TINH THẦN INOXPRAN',
 					lead: 'Tinh giản trong thiết kế.',
-					emphasis: 'Bền bỉ trong từng trải nghiệm nấu.',
+					emphasis: 'Bền bỉ trong từng trải nghiệm của gia đình.',
 					cta: 'Khám phá bộ sưu tập',
 					storyCta: 'Câu chuyện Italy'
 				}
+	);
+	const cookwareIntroCopy = $derived.by(() =>
+		$locale === 'en'
+			? {
+					eyebrow: 'INOXPRAN HOMEWARE',
+					lead: 'Official Inoxpran homeware for Vietnam.',
+					emphasis: 'European stainless elegance, made for daily family cooking.',
+					cta: 'Learn about Inoxpran',
+					storyCta: 'Shop homeware'
+				}
+			: {
+					eyebrow: 'TH\u01af\u01a0NG HI\u1ec6U INOXPRAN',
+					lead: 'Website ch\u00ednh th\u1ee9c c\u1ee7a gia d\u1ee5ng Inoxpran t\u1ea1i Vi\u1ec7t Nam.',
+					emphasis:
+						'Inox s\u00e1ng g\u01b0\u01a1ng, t\u1ed1i gi\u1ea3n v\u00e0 b\u1ec1n b\u1ec9 cho gian b\u1ebfp gia \u0111\u00ecnh.',
+					cta: 'T\u00ecm hi\u1ec3u v\u1ec1 Inoxpran',
+					storyCta: 'Mua gia d\u1ee5ng Inoxpran'
+				}
+	);
+	const kineticBandPhrase = $derived($locale === 'en' ? 'For Every Family' : 'Dành Cho Gia Đình');
+	const kineticBandRepeats = [0, 1, 2, 3];
+	const inoxProof = $derived(
+		$locale === 'en'
+			? {
+					eyebrow: 'Material & Technology',
+					heading: 'For Every Family',
+					subhead: 'Built to last in every Vietnamese kitchen',
+					paragraph:
+						'INOXPRAN focuses on safe materials, effective performance with real energy savings, and easy-to-use design for the rhythm of modern family life.'
+				}
+			: {
+					eyebrow: 'Chất liệu & Công nghệ',
+					heading: 'Dành cho gia đình',
+					subhead: 'Bền bỉ trong từng căn bếp Việt',
+					paragraph:
+						'INOXPRAN tập trung vào vật liệu an toàn, sử dụng hiệu năng và tiết kiệm năng lượng hiệu quả, thiết kế dễ sử dụng cho nhịp sống gia đình hiện đại.'
+				}
+	);
+	const inoxStats = $derived(
+		$locale === 'en'
+			? [
+					{ id: 'stat-layers', target: '5', suffix: '', star: true, label: 'Energy saving' },
+					{
+						id: 'stat-grade',
+						target: '20',
+						suffix: ' yrs',
+						star: false,
+						label: 'Average lifespan'
+					},
+					{
+						id: 'stat-warranty',
+						target: '03',
+						suffix: 'x',
+						star: false,
+						label: 'Superior material vs others'
+					}
+				]
+			: [
+					{ id: 'stat-layers', target: '5', suffix: '', star: true, label: 'Tiết kiệm năng lượng' },
+					{
+						id: 'stat-grade',
+						target: '20',
+						suffix: ' năm',
+						star: false,
+						label: 'Tuổi thọ trung bình'
+					},
+					{
+						id: 'stat-warranty',
+						target: '03',
+						suffix: ' lần',
+						star: false,
+						label: 'Chất liệu vượt trội so với sản phẩm khác'
+					}
+				]
+	);
+	const inoxOrbitItems = $derived(
+		$locale === 'en'
+			? ['Safe material', 'Durable daily', 'Easy to clean', 'Many stoves']
+			: ['An toàn vật liệu', 'Bền bỉ mỗi ngày', 'Dễ vệ sinh', 'Phù hợp nhiều bếp']
 	);
 	let activeInoxSlideIndex = $state(0);
 	let isInoxSliderPaused = $state(false);
@@ -748,22 +803,366 @@
 		};
 	};
 
+	// Hero parallax driven by GSAP + ScrollTrigger (scrub-linked to scroll, no pinning).
+	// All motion is transform/opacity only and is wrapped in gsap.matchMedia() so it adapts
+	// per breakpoint and is fully disabled under prefers-reduced-motion.
 	onMount(() => {
 		if (typeof window === 'undefined') return;
-		if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-			heroIntroVisible = true;
-			return;
-		}
-		let rafA = 0;
-		let rafB = 0;
-		rafA = window.requestAnimationFrame(() => {
-			rafB = window.requestAnimationFrame(() => {
-				heroIntroVisible = true;
+
+		const heroEl = heroSceneEl;
+		const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+		let cancelled = false;
+		let mm = null;
+		let scrollTrigger = null;
+		let refreshTimer = 0;
+		let onLenisReady = null;
+		let lenisScrollHandler = null;
+
+		const handleRefresh = () => {
+			scrollTrigger?.refresh();
+		};
+
+		const applyReducedState = () => {
+			const reduced = reduceMotionQuery.matches;
+			heroMotionReduced = reduced;
+			// Pre-hide the incoming scene-two copy only while motion is enabled, so there is no
+			// flash of fully-opaque text before GSAP takes over. Reduced motion keeps it visible.
+			if (heroEl) heroEl.classList.toggle('hero-gsap-ready', !reduced);
+		};
+
+		applyReducedState();
+
+		const setupGsap = async () => {
+			if (!heroEl) return;
+			let gsapMod;
+			let scrollTriggerMod;
+			try {
+				[gsapMod, scrollTriggerMod] = await Promise.all([
+					import('gsap'),
+					import('gsap/ScrollTrigger')
+				]);
+			} catch {
+				if (heroEl) heroEl.classList.remove('hero-gsap-ready');
+				return;
+			}
+			if (cancelled) {
+				if (heroEl) heroEl.classList.remove('hero-gsap-ready');
+				return;
+			}
+
+			const gsap = gsapMod.gsap ?? gsapMod.default;
+			const ScrollTrigger = scrollTriggerMod.ScrollTrigger ?? scrollTriggerMod.default;
+			gsap.registerPlugin(ScrollTrigger);
+			scrollTrigger = ScrollTrigger;
+
+			// Keep ScrollTrigger perfectly in sync with Lenis' smoothed scroll position.
+			lenisScrollHandler = () => ScrollTrigger.update();
+			const connectLenis = () => {
+				const lenis = window.__lenis;
+				if (!lenis?.on) return false;
+				lenis.on('scroll', lenisScrollHandler);
+				ScrollTrigger.refresh();
+				return true;
+			};
+			if (!connectLenis()) {
+				onLenisReady = () => connectLenis();
+				window.addEventListener('inoxpran:lenis-ready', onLenisReady, { once: true });
+			}
+
+			const sectionOne = heroEl.querySelector('.hero-flow-section--one');
+			const sectionTwo = heroEl.querySelector('.hero-flow-section--two');
+			if (!sectionOne || !sectionTwo) return;
+			const viewportH = () => window.innerHeight || 800;
+
+			mm = gsap.matchMedia(heroEl);
+
+			mm.add(
+				{
+					isDesktop: '(min-width: 901px) and (prefers-reduced-motion: no-preference)',
+					isMobile: '(max-width: 900px) and (prefers-reduced-motion: no-preference)'
+				},
+				(context) => {
+					const { isDesktop } = context.conditions;
+					// Amplitudes — tune here. Mobile uses a gentler version of the same motion.
+					const eyebrowTravel = isDesktop ? 520 : 240; // px the eyebrow runs sideways
+					const copyTravel = isDesktop ? 84 : 56; // px the headline lifts / rises
+					const bgTravel = isDesktop ? 0.16 : 0.1; // background parallax, fraction of viewport
+
+					// GSAP now owns these transforms: centre the absolutely-positioned copy and
+					// give each background a cover-scale so the parallax translate never reveals an edge.
+					gsap.set(
+						[sectionOne, sectionTwo].map((s) => s.querySelector('.hero-copy')),
+						{
+							xPercent: -50,
+							yPercent: -50
+						}
+					);
+					gsap.set('.hero-flow-media--one, .hero-flow-media--two', {
+						scale: 1.08,
+						transformOrigin: '50% 50%'
+					});
+
+					// ── SCENE 1 ── slow background, headline lifts + fades, eyebrow runs RIGHT.
+					gsap.fromTo(
+						'.hero-flow-media--one',
+						{ y: () => -bgTravel * 0.3 * viewportH() },
+						{
+							y: () => bgTravel * viewportH(),
+							ease: 'none',
+							scrollTrigger: {
+								trigger: sectionOne,
+								start: 'top top',
+								end: 'bottom top',
+								scrub: true,
+								invalidateOnRefresh: true
+							}
+						}
+					);
+					gsap.to('.hero-copy--one', {
+						autoAlpha: 0,
+						y: -copyTravel,
+						ease: 'none',
+						scrollTrigger: { trigger: sectionOne, start: 'top top', end: '58% top', scrub: true }
+					});
+					gsap.to('.hero-eyebrow--one', {
+						x: eyebrowTravel,
+						ease: 'none',
+						scrollTrigger: { trigger: sectionOne, start: 'top top', end: 'bottom top', scrub: true }
+					});
+
+					// ── SCENE 2 ── background parallax, headline rises + fades IN,
+					// eyebrow enters from the LEFT and settles centred.
+					gsap.fromTo(
+						'.hero-flow-media--two',
+						{ y: () => -bgTravel * viewportH() },
+						{
+							y: () => bgTravel * 0.3 * viewportH(),
+							ease: 'none',
+							scrollTrigger: {
+								trigger: sectionTwo,
+								start: 'top bottom',
+								end: 'bottom top',
+								scrub: true,
+								invalidateOnRefresh: true
+							}
+						}
+					);
+					gsap.fromTo(
+						'.hero-copy--two',
+						{ autoAlpha: 0, y: copyTravel },
+						{
+							autoAlpha: 1,
+							y: 0,
+							ease: 'none',
+							scrollTrigger: { trigger: sectionTwo, start: 'top 80%', end: 'top 32%', scrub: true }
+						}
+					);
+					gsap.fromTo(
+						'.hero-eyebrow--two',
+						{ x: -eyebrowTravel },
+						{
+							x: 0,
+							ease: 'none',
+							// Later range so most of the leftward travel plays out while scene 2 is
+							// actually on screen — otherwise it finishes centring before it's visible.
+							scrollTrigger: { trigger: sectionTwo, start: 'top 70%', end: 'top top', scrub: true }
+						}
+					);
+
+					// ── SEAM ── soft shadow swells as the two scenes cross, then eases back.
+					gsap
+						.timeline({
+							scrollTrigger: {
+								trigger: sectionTwo,
+								start: 'top bottom',
+								end: 'top top',
+								scrub: true
+							}
+						})
+						.fromTo(
+							'.hero-boundary-shadow',
+							{ autoAlpha: 0.16 },
+							{ autoAlpha: 0.82, ease: 'none', duration: 0.62 }
+						)
+						.to('.hero-boundary-shadow', { autoAlpha: 0.42, ease: 'none', duration: 0.38 });
+				}
+			);
+
+			// ── INOX proof section: staggered reveals + soft parallax (clearly perceptible).
+			// Uses element refs (not selector strings) because matchMedia is scoped to the hero.
+			mm.add('(prefers-reduced-motion: no-preference)', () => {
+				const inox = document.querySelector('#inox');
+				if (!inox) return;
+				const marquee = inox.querySelector('.inox-marquee');
+				const intro = inox.querySelectorAll('.inox-head, .inox-subhead, .inox-lead');
+				const benefits = inox.querySelectorAll('.inox-benefit');
+				const cta = inox.querySelector('.inox-cta');
+				const chips = inox.querySelectorAll('.inox-orbit__chip');
+				const stage = inox.querySelector('.inox-stage');
+				const body = inox.querySelector('.inox-body');
+				const bgwords = inox.querySelector('.inox-bgwords');
+				const isCompactInox = window.matchMedia('(max-width: 900px)').matches;
+				const reverseParallax = (target, fromY, toY, end = 'top -24%') => {
+					if (!target) return;
+					gsap.fromTo(
+						target,
+						{ y: fromY },
+						{
+							y: toY,
+							ease: 'none',
+							scrollTrigger: {
+								trigger: inox,
+								start: 'top 96%',
+								end,
+								scrub: 0.18,
+								invalidateOnRefresh: true
+							}
+						}
+					);
+				};
+
+				if (marquee) {
+					gsap.from(marquee, {
+						autoAlpha: 0,
+						duration: 0.9,
+						ease: 'power2.out',
+						scrollTrigger: { trigger: inox, start: 'top 82%' }
+					});
+				}
+				if (intro.length) {
+					gsap.from(intro, {
+						autoAlpha: 0,
+						y: 42,
+						duration: 0.7,
+						ease: 'power2.out',
+						stagger: 0.12,
+						scrollTrigger: { trigger: inox, start: 'top 72%' }
+					});
+				}
+				if (benefits.length) {
+					gsap.from(benefits, {
+						autoAlpha: 0,
+						y: 30,
+						duration: 0.6,
+						ease: 'power2.out',
+						stagger: 0.1,
+						scrollTrigger: { trigger: inox, start: 'top 60%' }
+					});
+				}
+				if (cta) {
+					gsap.from(cta, {
+						autoAlpha: 0,
+						y: 26,
+						duration: 0.6,
+						ease: 'power2.out',
+						scrollTrigger: { trigger: inox, start: 'top 56%' }
+					});
+				}
+				// Opacity-only (transform is owned by the CSS float animation on the chips).
+				if (chips.length) {
+					gsap.from(chips, {
+						autoAlpha: 0,
+						duration: 0.6,
+						ease: 'power2.out',
+						stagger: 0.12,
+						scrollTrigger: { trigger: stage || inox, start: 'top 80%' }
+					});
+				}
+				gsap.fromTo(
+					inox,
+					{ y: 0 },
+					{
+						y: () => {
+							const cssLift = Number.parseFloat(
+								getComputedStyle(inox).getPropertyValue('--inox-scroll-lift')
+							);
+							return -(Number.isFinite(cssLift) && cssLift > 0
+								? cssLift
+								: isCompactInox
+									? 136
+									: 280);
+						},
+						ease: 'none',
+						scrollTrigger: {
+							trigger: inox,
+							start: 'top 108%',
+							end: 'top 12%',
+							scrub: 0.12,
+							invalidateOnRefresh: true
+						}
+					}
+				);
+				reverseParallax(marquee, isCompactInox ? 16 : 36, isCompactInox ? -18 : -40);
+				reverseParallax(body, isCompactInox ? 12 : 24, isCompactInox ? -16 : -30);
+				reverseParallax(stage, isCompactInox ? 10 : 18, isCompactInox ? -18 : -36, 'top -12%');
+				if (bgwords) {
+					gsap.fromTo(
+						bgwords,
+						{ yPercent: 8 },
+						{
+							yPercent: -8,
+							ease: 'none',
+							scrollTrigger: { trigger: inox, start: 'top bottom', end: 'bottom top', scrub: true }
+						}
+					);
+				}
 			});
-		});
+
+			handleRefresh();
+			if (document.readyState !== 'complete') {
+				window.addEventListener('load', handleRefresh, { once: true });
+			}
+			// Layout below the hero (lazy product/blog feed) settles slightly later — recompute then.
+			refreshTimer = window.setTimeout(handleRefresh, 450);
+			window.addEventListener('inoxpran:client-ui-refresh', handleRefresh);
+		};
+
+		void setupGsap();
+
+		if (reduceMotionQuery.addEventListener) {
+			reduceMotionQuery.addEventListener('change', applyReducedState);
+		} else {
+			reduceMotionQuery.addListener(applyReducedState);
+		}
+
 		return () => {
-			if (rafA) window.cancelAnimationFrame(rafA);
-			if (rafB) window.cancelAnimationFrame(rafB);
+			cancelled = true;
+			if (refreshTimer) window.clearTimeout(refreshTimer);
+			window.removeEventListener('load', handleRefresh);
+			window.removeEventListener('inoxpran:client-ui-refresh', handleRefresh);
+			if (reduceMotionQuery.removeEventListener) {
+				reduceMotionQuery.removeEventListener('change', applyReducedState);
+			} else {
+				reduceMotionQuery.removeListener(applyReducedState);
+			}
+			if (onLenisReady) window.removeEventListener('inoxpran:lenis-ready', onLenisReady);
+			if (lenisScrollHandler && window.__lenis?.off) {
+				window.__lenis.off('scroll', lenisScrollHandler);
+			}
+			mm?.revert();
+			scrollTrigger?.getAll().forEach((trigger) => trigger.kill());
+		};
+	});
+
+	// Rotating wireframe swirl-sphere behind the marquee (original Three.js scene).
+	onMount(() => {
+		if (typeof window === 'undefined') return;
+		let cleanup = null;
+		let cancelled = false;
+		(async () => {
+			try {
+				const mod = await import('$lib/client/kineticSphere.js');
+				if (cancelled || !kineticSphereEl) return;
+				cleanup = await mod.initKineticSphere(kineticSphereEl);
+				if (cancelled && cleanup) cleanup();
+			} catch {
+				/* three failed to load — the CSS rings remain as a graceful fallback */
+			}
+		})();
+		return () => {
+			cancelled = true;
+			cleanup?.();
 		};
 	});
 
@@ -913,7 +1312,9 @@
 	<link
 		rel="preload"
 		as="image"
-		href={heroBackgroundSlide ? heroBackgroundUrl : `/images/optimized/hero-fan-960.jpg?v=${heroCompositeVersion}`}
+		href={heroBackgroundSlide
+			? heroBackgroundUrl
+			: `/images/optimized/hero-fan-960.jpg?v=${heroCompositeVersion}`}
 		type={heroBackgroundSlide ? undefined : 'image/jpeg'}
 		imagesrcset={heroBackgroundSlide ? undefined : heroCompositeJpgSrcSet}
 		imagesizes={heroCompositeSizes}
@@ -923,7 +1324,9 @@
 	<link
 		rel="preload"
 		as="image"
-		href={heroBackgroundSlide ? heroBackgroundUrl : `/images/optimized/hero-fan-1920.jpg?v=${heroCompositeVersion}`}
+		href={heroBackgroundSlide
+			? heroBackgroundUrl
+			: `/images/optimized/hero-fan-1920.jpg?v=${heroCompositeVersion}`}
 		type={heroBackgroundSlide ? undefined : 'image/jpeg'}
 		imagesrcset={heroBackgroundSlide ? undefined : heroCompositeJpgSrcSet}
 		imagesizes={heroCompositeSizes}
@@ -980,15 +1383,23 @@
 </div>
 
 <main class="main-page">
-	<section id="hero" class="panel hero-panel parallax-scene">
-		<div class="hero-stage parallax-layer parallax-layer-deep" aria-hidden="true">
-			<div class="hero-composite-layer">
+	<section
+		id="hero"
+		class="panel hero-panel hero-flow-scene"
+		class:hero-motion-reduced={heroMotionReduced}
+		bind:this={heroSceneEl}
+	>
+		<section
+			class="hero-flow-section hero-flow-section--one"
+			aria-labelledby="hero-scene-one-title"
+		>
+			<div class="hero-flow-media hero-flow-media--one" aria-hidden="true">
 				<picture>
 					<img
 						src={heroBackgroundUrl}
 						srcset={heroBackgroundSlide ? undefined : heroCompositeJpgSrcSet}
-						alt={heroBackgroundAlt}
-						class="hero-composite-image"
+						alt=""
+						class="hero-flow-image hero-flow-image--one"
 						width="1920"
 						height="1072"
 						decoding="async"
@@ -998,226 +1409,238 @@
 					/>
 				</picture>
 			</div>
-		</div>
+			<div class="hero-flow-vignette" aria-hidden="true"></div>
 
-		<div
-			class="panel-inner hero-inner panel-inner-s1 parallax-layer parallax-layer-soft hero-intro"
-			class:hero-intro-visible={heroIntroVisible}
-		>
-			<p class="hero-eyebrow hero-intro-item" style="--hero-intro-delay: 20ms">
-				<span aria-hidden="true"></span>
-				{heroIntroCopy.eyebrow}
-			</p>
-			<h1
-				class="panel-title hero-title hero-intro-item"
-				lang={$locale}
-				style="--hero-intro-delay: 70ms"
-			>
-				<span>{heroIntroCopy.lead}</span>
-				<strong>{heroIntroCopy.emphasis}</strong>
-			</h1>
-
-			<div class="hero-actions hero-intro-item" style="--hero-intro-delay: 210ms">
-				<a class="cta btn-s1" href={localizeInternalHref('/shop', $locale)}>
-					{heroIntroCopy.cta}
-				</a>
-				<a class="hero-story-link" href={localizeInternalHref('/about', $locale)}>
-					{heroIntroCopy.storyCta}
-				</a>
-			</div>
-		</div>
-	</section>
-
-	<section class="home-brand-intro" aria-labelledby="home-brand-intro-title">
-		<div class="container">
-			<div class="home-brand-intro__shell">
-				<p class="home-brand-intro__eyebrow">{$t('home.brandIntroEyebrow')}</p>
-				<div class="home-brand-intro__content">
-					<div class="home-brand-intro__copy">
-						<h2 id="home-brand-intro-title" class="home-brand-intro__title">
-							{$t('home.brandIntroTitle')}
-						</h2>
-						<p class="home-brand-intro__body">{$t('home.brandIntroBody')}</p>
-					</div>
-					<div class="home-brand-intro__actions">
-						<a class="home-brand-intro__link" href={localizeInternalHref('/about', $locale)}>
-							{$t('home.brandIntroAboutCta')}
-						</a>
-						<a
-							class="home-brand-intro__link home-brand-intro__link--muted"
-							href={localizeInternalHref('/shop', $locale)}
-						>
-							{$t('home.brandIntroShopCta')}
-						</a>
-					</div>
-				</div>
-			</div>
-		</div>
-	</section>
-
-	<section id="inox" class="panel parallax-scene">
-		<div class="panel-bg parallax-bg" style="background-color: #6EA6B9;"></div>
-		<div class="inox-ribbon-layer" aria-hidden="true">
-			<span class="inox-ribbon inox-ribbon--1"></span>
-			<span class="inox-ribbon inox-ribbon--2"></span>
-			<span class="inox-ribbon inox-ribbon--3"></span>
-		</div>
-		<div class="inox-layout parallax-layer parallax-layer-soft">
-			<div class="panel-inner">
-				<h2 class="panel-title" style="color: #FFFFFF">{$t('home.inoxTitle')}</h2>
-				<p class="panel-subtitle">
-					{$t('home.inoxSubtitle')}
+			<div class="panel-inner hero-inner hero-copy hero-copy--one">
+				<p class="hero-eyebrow hero-eyebrow--one">
+					<span aria-hidden="true"></span>
+					{heroIntroCopy.eyebrow}
 				</p>
-				<div class="stats-row">
-					<div class="stat-card">
-						<div class="stat-number" id="stat-layers" data-suffix={$t('home.inoxStat1Suffix')}>
-							925{$t('home.inoxStat1Suffix')}
-						</div>
-						<div class="stat-label">{$t('home.inoxStat1')}</div>
-					</div>
-					<div class="stat-card">
-						<div
-							class="stat-number"
-							id="stat-grade"
-							data-counter-target="20"
-							data-suffix={$t('home.inoxStat2Suffix')}
-						>
-							20
-						</div>
-						<div class="stat-label">{$t('home.inoxStat2')}</div>
-					</div>
-					<div class="stat-card">
-						<div
-							class="stat-number"
-							id="stat-warranty"
-							data-counter-target="03"
-							data-suffix={$t('home.inoxStat3Suffix')}
-						>
-							03
-						</div>
-						<div class="stat-label">{$t('home.inoxStat3')}</div>
-					</div>
-				</div>
+				<h1 id="hero-scene-one-title" class="panel-title hero-title" lang={$locale}>
+					<span>{heroIntroCopy.lead}</span>
+					<strong>{heroIntroCopy.emphasis}</strong>
+				</h1>
 
-				<div class="inox-info-grid">
-					{#each inoxInfoCards as card}
-						<div class="inox-info-card">
-							<h2 class="inox-info-title">{card.title}</h2>
-							<p class="inox-info-desc">{card.description}</p>
-							<ul class="inox-info-list">
-								{#each card.points as point}
-									<li>{point}</li>
-								{/each}
-							</ul>
-						</div>
-					{/each}
-				</div>
-
-				<div class="inox-panel-actions">
-					<a class="inox-panel-link alt" href={localizeInternalHref('/shop', $locale)}
-						>{$t('home.heroCta')}</a
-					>
-					<a class="inox-panel-link alt" href={localizeInternalHref('/blog', $locale)}
-						>{$t('home.latestPostsTitle')}</a
-					>
+				<div class="hero-actions">
+					<a class="cta btn-s1" href={localizeInternalHref('/shop', $locale)}>
+						{heroIntroCopy.cta}
+					</a>
+					<a class="hero-story-link" href={localizeInternalHref('/about', $locale)}>
+						{heroIntroCopy.storyCta}
+					</a>
 				</div>
 			</div>
-		</div>
-		<div
-			class="inox-card"
-			role="region"
-			aria-label={$locale === 'en' ? 'Homepage promotions' : 'Khuyến mãi trang chủ'}
-			onmouseenter={() => {
-				isInoxSliderNearViewport = true;
-				isInoxSliderPaused = true;
-			}}
-			onmouseleave={() => (isInoxSliderPaused = false)}
-			onfocusin={() => {
-				isInoxSliderNearViewport = true;
-				isInoxSliderPaused = true;
-			}}
-			onfocusout={() => (isInoxSliderPaused = false)}
-		>
-			<div
-				class="inox-ad-slider"
-				aria-label={$locale === 'en' ? 'Homepage promotions' : 'Khuyến mãi trang chủ'}
-			>
-				<div class="inox-ad-slider__viewport" bind:this={inoxSliderViewportEl}>
-					{#each homeInoxSlides as slide, slideIndex (slide.id)}
-						<div
-							class={`inox-ad-slide ${slideIndex === activeInoxSlideIndex ? 'is-active' : ''}`}
-							id={inoxSlidePanelId(slide.id)}
-							role="tabpanel"
-							aria-labelledby={inoxSlideTabId(slide.id)}
-							tabindex={slideIndex === activeInoxSlideIndex ? 0 : -1}
-							aria-hidden={slideIndex === activeInoxSlideIndex ? 'false' : 'true'}
-						>
-							<button
-								type="button"
-								class={`inox-ad-slide__surface ${homeInoxSlides.length <= 1 ? 'is-static' : ''}`}
-								aria-label={homeInoxSlides.length > 1
-									? $locale === 'en'
-										? 'Show next slide'
-										: 'Xem slide tiếp theo'
-									: slide.alt}
-								onclick={handleInoxSlideImageClick}
-							>
-								<img
-									src={shouldLoadInoxSlideImage(slide, slideIndex)
-										? slide.imageUrl
-										: BLANK_IMAGE_DATA_URL}
-									alt={slide.alt}
-									class="inox-ad-slide__image"
-									width="940"
-									height="788"
-									loading="lazy"
-									fetchpriority="low"
-									decoding="async"
-									sizes={inoxSlideImageSizes}
-								/>
-							</button>
-						</div>
-					{/each}
+		</section>
 
-					{#if homeInoxSlides.length > 1}
-						<div class="inox-ad-slider__controls">
-							<button
-								type="button"
-								class="inox-ad-slider__nav"
-								aria-label={$locale === 'en' ? 'Previous slide' : 'Slide trước'}
-								onclick={showPrevInoxSlide}
-							>
-								‹
-							</button>
-							<button
-								type="button"
-								class="inox-ad-slider__nav"
-								aria-label={$locale === 'en' ? 'Next slide' : 'Slide tiếp theo'}
-								onclick={showNextInoxSlide}
-							>
-								›
-							</button>
-						</div>
-						<div
-							class="inox-ad-slider__dots"
-							role="tablist"
-							aria-label={$locale === 'en' ? 'Slide pagination' : 'Điều hướng slide'}
-						>
-							{#each homeInoxSlides as slide, dotIndex (slide.id)}
-								<button
-									type="button"
-									id={inoxSlideTabId(slide.id)}
-									role="tab"
-									aria-controls={inoxSlidePanelId(slide.id)}
-									class={`inox-ad-slider__dot ${dotIndex === activeInoxSlideIndex ? 'is-active' : ''}`}
-									aria-label={`${$locale === 'en' ? 'Go to slide' : 'Đến slide'} ${dotIndex + 1}`}
-									aria-selected={dotIndex === activeInoxSlideIndex ? 'true' : 'false'}
-									tabindex={dotIndex === activeInoxSlideIndex ? 0 : -1}
-									onclick={() => goToInoxSlide(dotIndex)}
-								></button>
+		<div class="hero-boundary-shadow" aria-hidden="true"></div>
+
+		<section
+			class="hero-flow-section hero-flow-section--two"
+			aria-labelledby="hero-scene-two-title"
+		>
+			<div class="hero-flow-media hero-flow-media--two" aria-hidden="true">
+				<picture>
+					<img
+						src={cookwareHeroUrl}
+						srcset={cookwareHeroJpgSrcSet}
+						alt=""
+						class="hero-flow-image hero-flow-image--two"
+						width="1875"
+						height="688"
+						decoding="async"
+						loading="eager"
+						sizes={cookwareHeroSizes}
+					/>
+				</picture>
+			</div>
+			<div class="hero-flow-vignette" aria-hidden="true"></div>
+
+			<div class="panel-inner hero-inner hero-copy hero-copy--two">
+				<p class="hero-eyebrow hero-eyebrow--two">
+					<span aria-hidden="true"></span>
+					{heroIntroCopy.eyebrow}
+				</p>
+				<h2 id="hero-scene-two-title" class="panel-title hero-title" lang={$locale}>
+					<span>{cookwareIntroCopy.lead}</span>
+					<strong>{cookwareIntroCopy.emphasis}</strong>
+				</h2>
+			</div>
+		</section>
+	</section>
+
+	<section id="inox" class="panel parallax-scene inox-scene">
+		<div class="inox-motion-plane">
+			<div class="panel-bg parallax-bg"></div>
+			<div class="inox-grain" aria-hidden="true"></div>
+			<div class="inox-bgwords" aria-hidden="true">
+				<span class="inox-bgword inox-bgword--a">INOXPRAN</span>
+				<span class="inox-bgword inox-bgword--b">BẾP VIỆT</span>
+				<span class="inox-bgword inox-bgword--c">FAMILY</span>
+			</div>
+
+			<div class="inox-head inox-reveal">
+				<p class="inox-eyebrow">
+					{inoxProof.eyebrow}
+					<span class="inox-flag" aria-label="Italy" role="img">
+						<svg viewBox="0 0 3 2" width="21" height="14" focusable="false" aria-hidden="true">
+							<rect width="1" height="2" x="0" fill="#009246" />
+							<rect width="1" height="2" x="1" fill="#f4f5f0" />
+							<rect width="1" height="2" x="2" fill="#ce2b37" />
+						</svg>
+					</span>
+				</p>
+			</div>
+
+			<div class="inox-marquee" aria-hidden="true">
+				<div class="kinetic-marquee">
+					{#each [0, 1] as group (group)}
+						<div class="kinetic-marquee__group">
+							{#each kineticBandRepeats as repeat (repeat)}
+								<span class="kinetic-word">{kineticBandPhrase}</span>
 							{/each}
 						</div>
-					{/if}
+					{/each}
+				</div>
+			</div>
+			<h2 id="inox-heading" class="visually-hidden">
+				{inoxProof.heading} — {$t('home.inoxTitle')}
+			</h2>
+
+			<div class="inox-body">
+				<div class="inox-copy">
+					<p class="inox-subhead inox-reveal">{inoxProof.subhead}</p>
+					<p class="inox-lead inox-reveal">{inoxProof.paragraph}</p>
+
+					<div class="stats-row inox-statrail">
+						{#each inoxStats as stat (stat.id)}
+							<div class="stat-card inox-reveal">
+								<div class="inox-stat-value">
+									<span
+										class="stat-number"
+										id={stat.id}
+										data-counter-target={stat.target}
+										data-suffix={stat.suffix}
+										>{stat.target}<span class="stat-suffix">{stat.suffix}</span></span
+									>
+									{#if stat.star}<span class="inox-star" aria-hidden="true">★</span>{/if}
+								</div>
+								<div class="stat-label">{stat.label}</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+
+				<div class="inox-stage">
+					<canvas class="kinetic-band__sphere" bind:this={kineticSphereEl} width="640" height="640"
+					></canvas>
+					<div class="inox-orbit" aria-hidden="true">
+						<span class="inox-orbit__ring inox-orbit__ring--1"></span>
+						<span class="inox-orbit__ring inox-orbit__ring--2"></span>
+						{#each inoxOrbitItems as item, i (item)}
+							<span class={`inox-orbit__chip inox-orbit__chip--${i + 1}`}>
+								<span class="inox-orbit__chip-dot"></span>
+								<span class="inox-orbit__chip-text">{item}</span>
+							</span>
+						{/each}
+					</div>
+					<div
+						class="inox-card"
+						role="region"
+						aria-label={$locale === 'en' ? 'Homepage promotions' : 'Khuyến mãi trang chủ'}
+						onmouseenter={() => {
+							isInoxSliderNearViewport = true;
+							isInoxSliderPaused = true;
+						}}
+						onmouseleave={() => (isInoxSliderPaused = false)}
+						onfocusin={() => {
+							isInoxSliderNearViewport = true;
+							isInoxSliderPaused = true;
+						}}
+						onfocusout={() => (isInoxSliderPaused = false)}
+					>
+						<div
+							class="inox-ad-slider"
+							aria-label={$locale === 'en' ? 'Homepage promotions' : 'Khuyến mãi trang chủ'}
+						>
+							<div class="inox-ad-slider__viewport" bind:this={inoxSliderViewportEl}>
+								{#each homeInoxSlides as slide, slideIndex (slide.id)}
+									<div
+										class={`inox-ad-slide ${slideIndex === activeInoxSlideIndex ? 'is-active' : ''}`}
+										id={inoxSlidePanelId(slide.id)}
+										role="tabpanel"
+										aria-labelledby={inoxSlideTabId(slide.id)}
+										tabindex={slideIndex === activeInoxSlideIndex ? 0 : -1}
+										aria-hidden={slideIndex === activeInoxSlideIndex ? 'false' : 'true'}
+									>
+										<button
+											type="button"
+											class={`inox-ad-slide__surface ${homeInoxSlides.length <= 1 ? 'is-static' : ''}`}
+											aria-label={homeInoxSlides.length > 1
+												? $locale === 'en'
+													? 'Show next slide'
+													: 'Xem slide tiếp theo'
+												: slide.alt}
+											onclick={handleInoxSlideImageClick}
+										>
+											<img
+												src={shouldLoadInoxSlideImage(slide, slideIndex)
+													? slide.imageUrl
+													: BLANK_IMAGE_DATA_URL}
+												alt={slide.alt}
+												class="inox-ad-slide__image"
+												width="940"
+												height="788"
+												loading="lazy"
+												fetchpriority="low"
+												decoding="async"
+												sizes={inoxSlideImageSizes}
+											/>
+										</button>
+									</div>
+								{/each}
+
+								{#if homeInoxSlides.length > 1}
+									<div class="inox-ad-slider__controls">
+										<button
+											type="button"
+											class="inox-ad-slider__nav"
+											aria-label={$locale === 'en' ? 'Previous slide' : 'Slide trước'}
+											onclick={showPrevInoxSlide}
+										>
+											‹
+										</button>
+										<button
+											type="button"
+											class="inox-ad-slider__nav"
+											aria-label={$locale === 'en' ? 'Next slide' : 'Slide tiếp theo'}
+											onclick={showNextInoxSlide}
+										>
+											›
+										</button>
+									</div>
+									<div
+										class="inox-ad-slider__dots"
+										role="tablist"
+										aria-label={$locale === 'en' ? 'Slide pagination' : 'Điều hướng slide'}
+									>
+										{#each homeInoxSlides as slide, dotIndex (slide.id)}
+											<button
+												type="button"
+												id={inoxSlideTabId(slide.id)}
+												role="tab"
+												aria-controls={inoxSlidePanelId(slide.id)}
+												class={`inox-ad-slider__dot ${dotIndex === activeInoxSlideIndex ? 'is-active' : ''}`}
+												aria-label={`${$locale === 'en' ? 'Go to slide' : 'Đến slide'} ${dotIndex + 1}`}
+												aria-selected={dotIndex === activeInoxSlideIndex ? 'true' : 'false'}
+												tabindex={dotIndex === activeInoxSlideIndex ? 0 : -1}
+												onclick={() => goToInoxSlide(dotIndex)}
+											></button>
+										{/each}
+									</div>
+								{/if}
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -1698,50 +2121,205 @@
 	}
 
 	#hero {
+		--hero-section-overlap: clamp(56px, 10svh, 96px);
 		isolation: isolate;
-		min-height: 100svh;
-		padding: 4rem 2rem 5rem;
-		flex-direction: column;
-		align-items: center;
-		justify-content: flex-end;
-		background: #101417;
+		min-height: 0;
+		display: block;
+		position: relative;
+		overflow: hidden;
+		padding: 0;
+		background: #050708;
+		color: #f8fafc;
 	}
 
 	#hero.hero-panel::before {
-		background:
-			linear-gradient(
-				180deg,
-				rgba(4, 8, 10, 0.12) 0%,
-				rgba(4, 8, 10, 0.24) 50%,
-				rgba(4, 8, 10, 0.78) 100%
-			);
-		mix-blend-mode: normal;
+		display: none;
+	}
+
+	#hero.hero-panel::after {
+		display: none;
+	}
+
+	.hero-flow-section {
+		position: relative;
+		display: grid;
+		place-items: center;
+		height: 100svh;
+		min-height: 620px;
+		overflow: hidden;
+		background: #050708;
 		z-index: 1;
 	}
 
-	#hero .hero-stage {
-		z-index: 0;
+	.hero-flow-section--one {
+		z-index: 1;
 	}
 
-	#hero .hero-composite-image {
+	.hero-flow-section--two {
+		z-index: 2;
+		height: clamp(760px, 116svh, 1040px);
+		min-height: clamp(720px, 108svh, 980px);
+		margin-top: calc(var(--hero-section-overlap) * -1);
+		-webkit-mask-image: linear-gradient(
+			180deg,
+			rgba(0, 0, 0, 0) 0,
+			rgba(0, 0, 0, 0.72) calc(var(--hero-section-overlap) * 0.62),
+			#000 calc(var(--hero-section-overlap) * 1.22)
+		);
+		mask-image: linear-gradient(
+			180deg,
+			rgba(0, 0, 0, 0) 0,
+			rgba(0, 0, 0, 0.72) calc(var(--hero-section-overlap) * 0.62),
+			#000 calc(var(--hero-section-overlap) * 1.22)
+		);
+		-webkit-mask-size: 100% 100%;
+		mask-size: 100% 100%;
+	}
+
+	.hero-flow-section--one::after,
+	.hero-flow-section--two::before {
+		position: absolute;
+		left: 0;
+		right: 0;
+		z-index: 3;
+		height: clamp(180px, 28svh, 320px);
+		content: '';
+		pointer-events: none;
+	}
+
+	.hero-flow-section--one::after {
+		bottom: -1px;
+		background: linear-gradient(
+			180deg,
+			rgba(5, 7, 8, 0) 0%,
+			rgba(5, 7, 8, 0.24) 46%,
+			rgba(5, 7, 8, 0.58) 100%
+		);
+	}
+
+	.hero-flow-section--two::before {
+		top: -1px;
+		background: linear-gradient(
+			180deg,
+			rgba(5, 7, 8, 0.58) 0%,
+			rgba(5, 7, 8, 0.24) 48%,
+			rgba(5, 7, 8, 0) 100%
+		);
+	}
+
+	.hero-flow-media {
+		position: absolute;
+		/* Generous vertical headroom so GSAP's parallax translate never reveals an edge. */
+		inset: -20svh 0;
+		z-index: 0;
+		overflow: hidden;
+		pointer-events: none;
+		will-change: transform;
+	}
+
+	.hero-flow-media picture {
+		display: block;
+		width: 100%;
+		height: 100%;
+	}
+
+	/* Base cover-scale; GSAP overrides transform with scale + parallax y on top of this. */
+	.hero-flow-media--one,
+	.hero-flow-media--two {
+		transform: scale(1.08);
+	}
+
+	#hero .hero-flow-image {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		pointer-events: none;
+		will-change: transform, opacity;
+	}
+
+	#hero .hero-flow-image--one {
 		object-position: center;
-		filter: brightness(0.94) saturate(0.96) contrast(1.02);
+		filter: brightness(0.82) saturate(0.98) contrast(1.04);
+	}
+
+	#hero .hero-flow-image--two {
+		object-position: center;
+		filter: brightness(0.8) saturate(0.94) contrast(1.05);
+	}
+
+	.hero-flow-vignette {
+		position: absolute;
+		inset: 0;
+		z-index: 1;
+		background:
+			linear-gradient(
+				90deg,
+				rgba(0, 0, 0, 0.22) 0%,
+				transparent 28%,
+				transparent 70%,
+				rgba(0, 0, 0, 0.18) 100%
+			),
+			linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, transparent 38%, rgba(0, 0, 0, 0.34) 100%),
+			radial-gradient(
+				circle at 50% 52%,
+				transparent 0%,
+				rgba(0, 0, 0, 0.16) 68%,
+				rgba(0, 0, 0, 0.36) 100%
+			);
+		pointer-events: none;
+	}
+
+	.hero-boundary-shadow {
+		position: absolute;
+		top: calc(100svh - var(--hero-section-overlap) - clamp(115px, 16svh, 190px));
+		left: 0;
+		right: 0;
+		z-index: 20;
+		height: clamp(230px, 32svh, 380px);
+		opacity: 0.55;
+		pointer-events: none;
+		/* Boundary shadow strength: tune these alpha values for a softer/deeper join. */
+		background: linear-gradient(
+			180deg,
+			rgba(5, 7, 8, 0) 0%,
+			rgba(5, 7, 8, 0.26) 24%,
+			rgba(5, 7, 8, 0.72) 50%,
+			rgba(5, 7, 8, 0.26) 76%,
+			rgba(5, 7, 8, 0) 100%
+		);
+		filter: blur(16px);
+		will-change: opacity;
 	}
 
 	#hero .hero-inner {
+		position: absolute;
+		top: 50%;
+		left: 50%;
 		z-index: 2;
-		width: min(920px, calc(100vw - 2rem));
-		max-width: 920px;
-		margin: 0 auto;
+		width: min(820px, calc(100vw - 4rem));
+		max-width: 820px;
+		margin: 0;
 		padding: 0 !important;
 		border-radius: 0;
 		background: transparent;
 		box-shadow: none;
 		color: #f8fafc;
+		text-align: center;
+		overflow: visible;
 		-webkit-backdrop-filter: none;
 		backdrop-filter: none;
-		transform: none;
-		text-align: center;
+		pointer-events: auto;
+		/* Base centring (used for reduced-motion / no-JS). GSAP overrides this inline with
+		   xPercent/yPercent + an animated y, so no !important here or GSAP could not take over. */
+		transform: translate(-50%, -50%);
+		will-change: opacity, transform;
+	}
+
+	/* Avoid a flash of the incoming scene-two copy before GSAP hides it (motion only). */
+	.hero-gsap-ready .hero-copy--two {
+		opacity: 0;
 	}
 
 	.hero-eyebrow {
@@ -1758,6 +2336,7 @@
 		line-height: 1.2;
 		text-transform: uppercase;
 		text-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+		will-change: opacity, transform;
 	}
 
 	.hero-eyebrow span {
@@ -1779,6 +2358,9 @@
 		transform: translateY(-50%) rotate(45deg);
 	}
 
+	/* Eyebrow horizontal travel (scene 1 → right, scene 2 → in from left) is set inline by GSAP.
+	   will-change kept on the base .hero-eyebrow rule; opacity follows the parent copy fade. */
+
 	#hero .hero-title {
 		display: flex;
 		flex-direction: column;
@@ -1787,11 +2369,15 @@
 		margin: 0;
 		color: #ffffff;
 		font-family: 'Manrope', 'Segoe UI', sans-serif;
-		font-size: clamp(1.45rem, 2.2vw, 2rem);
+		font-size: clamp(1.35rem, 1.85vw, 1.78rem);
 		font-weight: 400;
 		letter-spacing: 0;
 		line-height: 1.3;
-		max-width: 900px;
+		max-width: 100%;
+		width: 100%;
+		overflow-wrap: break-word;
+		text-wrap: balance;
+		white-space: normal;
 		text-shadow: 0 18px 42px rgba(0, 0, 0, 0.34);
 		text-transform: none;
 	}
@@ -1804,9 +2390,11 @@
 
 	#hero .hero-title strong {
 		display: block;
-		font-size: clamp(1.8rem, 3.1vw, 2.65rem);
+		max-width: min(820px, 100%);
+		font-size: clamp(1.65rem, 2.55vw, 2.28rem);
 		font-weight: 700;
 		line-height: 1.2;
+		white-space: normal;
 	}
 
 	.hero-actions {
@@ -1851,103 +2439,6 @@
 	.hero-story-link:hover {
 		color: #ffffff;
 		border-bottom-color: #ffffff;
-	}
-
-	.home-brand-intro {
-		padding: 2rem 0 1rem;
-		background: linear-gradient(
-			180deg,
-			rgba(241, 245, 249, 0.92) 0%,
-			rgba(255, 255, 255, 0.98) 100%
-		);
-	}
-
-	.home-brand-intro__shell {
-		border: 1px solid rgba(15, 23, 42, 0.08);
-		border-radius: 28px;
-		padding: 1.5rem;
-		background: rgba(255, 255, 255, 0.92);
-		box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
-	}
-
-	.home-brand-intro__eyebrow {
-		margin: 0 0 0.45rem;
-		font-size: 0.82rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		color: #0f5f77;
-	}
-
-	.home-brand-intro__content {
-		display: grid;
-		grid-template-columns: minmax(0, 1.7fr) minmax(240px, 0.9fr);
-		gap: 1.25rem;
-		align-items: start;
-	}
-
-	.home-brand-intro__title {
-		margin: 0 0 0.65rem;
-		font-size: clamp(1.35rem, 2.2vw, 2rem);
-		line-height: 1.15;
-		color: #0f172a;
-	}
-
-	.home-brand-intro__body {
-		margin: 0;
-		max-width: 62ch;
-		color: #475569;
-		font-size: 1rem;
-		line-height: 1.65;
-	}
-
-	.home-brand-intro__actions {
-		display: grid;
-		gap: 0.75rem;
-		align-content: start;
-	}
-
-	.home-brand-intro__link {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-height: 48px;
-		padding: 0.8rem 1.15rem;
-		border-radius: 999px;
-		background: #0f5f77;
-		color: #ffffff;
-		font-weight: 700;
-		text-decoration: none;
-		border: 1px solid #0f5f77;
-		transition:
-			background-color 0.2s ease,
-			color 0.2s ease,
-			border-color 0.2s ease,
-			transform 0.2s ease;
-	}
-
-	.home-brand-intro__link:hover {
-		transform: translateY(-1px);
-		background: #0b4a5d;
-		border-color: #0b4a5d;
-		color: #ffffff;
-	}
-
-	.home-brand-intro__link--muted {
-		background: transparent;
-		color: #0f172a;
-		border-color: rgba(15, 23, 42, 0.14);
-	}
-
-	.home-brand-intro__link--muted:hover {
-		background: #0f172a;
-		border-color: #0f172a;
-		color: #ffffff;
-	}
-
-	.home-brand-intro__link:focus-visible {
-		outline: 2px solid #0f5f77;
-		outline-offset: 2px;
 	}
 
 	.tag-link:hover {
@@ -2062,20 +2553,12 @@
 	}
 
 	@media (max-width: 1200px) {
-		#hero {
-			padding-inline: 1.5rem;
-		}
-
 		#hero .hero-inner {
 			width: min(740px, calc(100vw - 3rem));
 		}
 	}
 
 	@media (max-height: 820px) and (min-width: 901px) {
-		#hero {
-			padding-bottom: 3rem;
-		}
-
 		.hero-actions {
 			margin-top: 1.15rem;
 		}
@@ -2087,24 +2570,31 @@
 	}
 
 	@media (max-width: 900px) {
-		#hero {
+		.hero-flow-section {
 			min-height: 100svh;
-			padding: 3rem 1.25rem max(3rem, env(safe-area-inset-bottom));
-			align-items: center;
-			justify-content: flex-end;
 		}
 
-		#hero.hero-panel::before {
-			background: linear-gradient(
-				180deg,
-				rgba(4, 8, 10, 0.08) 0%,
-				rgba(4, 8, 10, 0.22) 48%,
-				rgba(4, 8, 10, 0.82) 100%
-			);
+		.hero-flow-section--two {
+			height: clamp(720px, 110svh, 940px);
+			min-height: clamp(680px, 104svh, 880px);
 		}
 
-		#hero .hero-composite-image {
-			object-position: 68% center;
+		.hero-flow-media {
+			inset: -4svh 0 -4svh 0;
+		}
+
+		.hero-boundary-shadow {
+			top: calc(100svh - var(--hero-section-overlap) - 95px);
+			height: 190px;
+			filter: blur(12px);
+		}
+
+		#hero .hero-flow-image--one {
+			object-position: 66% center;
+		}
+
+		#hero .hero-flow-image--two {
+			object-position: 54% center;
 		}
 
 		#hero .hero-inner {
@@ -2119,15 +2609,6 @@
 
 		#hero .hero-title strong {
 			font-size: clamp(1.35rem, 6.5vw, 1.85rem);
-		}
-
-		.home-brand-intro__content {
-			grid-template-columns: 1fr;
-		}
-
-		.home-brand-intro__shell {
-			padding: 1.25rem;
-			border-radius: 24px;
 		}
 	}
 
@@ -2461,13 +2942,16 @@
 			flex-basis: clamp(156px, calc((100vw - 38px) / 2), 190px) !important;
 		}
 
-		#hero {
-			min-height: 100svh;
-			padding: 2rem 1rem max(6rem, env(safe-area-inset-bottom));
+		#hero .hero-inner {
+			width: min(100%, calc(100vw - 2rem));
 		}
 
-		#hero .hero-composite-image {
+		#hero .hero-flow-image--one {
 			object-position: 68% center;
+		}
+
+		#hero .hero-flow-image--two {
+			object-position: 50% center;
 		}
 
 		#hero .hero-title {
@@ -2618,19 +3102,6 @@
 				--parallax-scale: 1.02;
 			}
 
-			#hero .parallax-bg {
-				--parallax-bg-distance: 40px;
-			}
-
-			#hero .hero-stage.parallax-layer {
-				--parallax-distance: 30px;
-				--parallax-scale: 1.025;
-			}
-
-			#hero .hero-inner.parallax-layer {
-				--parallax-distance: 16px;
-			}
-
 			#inox .parallax-bg {
 				--parallax-bg-distance: 20px;
 			}
@@ -2676,31 +3147,30 @@
 			scale: 1 1;
 			transition: none;
 		}
-	}
 
-	.hero-intro .hero-intro-item {
-		opacity: 0;
-		transform: translate3d(0, 18px, 0);
-		animation: bounceInLeft 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-		animation-delay: var(--hero-intro-delay, 0ms);
-		will-change: opacity, transform;
-	}
+		#hero {
+			min-height: auto;
+		}
 
-	.hero-intro .hero-intro-line {
-		transform-origin: left center;
-		scale: 0.001 1;
-		animation: bounceInLeftLine 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-		animation-delay: var(--hero-intro-delay, 0ms);
-	}
-
-	/* Media queries and responsive rules */
-	@media (prefers-reduced-motion: reduce) {
-		.hero-intro .hero-intro-item,
-		.hero-intro .hero-intro-line {
-			opacity: 1;
-			transform: none;
-			scale: 1 1;
+		.hero-flow-media,
+		#hero .hero-flow-image,
+		.hero-boundary-shadow,
+		#hero .hero-inner,
+		.hero-eyebrow {
+			transform: none !important;
 			transition: none;
+			will-change: auto;
+		}
+
+		#hero .hero-inner.hero-copy--one,
+		#hero .hero-inner.hero-copy--two {
+			opacity: 1;
+			transform: translate3d(-50%, -50%, 0) !important;
+		}
+
+		.hero-eyebrow--one,
+		.hero-eyebrow--two {
+			opacity: 1;
 		}
 	}
 
@@ -2807,27 +3277,6 @@
 		50% {
 			box-shadow: 0 0 0 10px rgba(13, 202, 240, 0);
 		}
-	}
-
-	/* Apply animations to elements */
-	.home-brand-intro__shell {
-		animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-	}
-
-	.home-brand-intro__eyebrow {
-		animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.1s backwards;
-	}
-
-	.home-brand-intro__title {
-		animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s backwards;
-	}
-
-	.home-brand-intro__body {
-		animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s backwards;
-	}
-
-	.home-brand-intro__link {
-		animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.4s backwards;
 	}
 
 	#best-selling-items .product-swiper .swiper-slide .card {
@@ -2961,4 +3410,539 @@
 	}
 
 	/* Hover effects removed as requested */
+
+	/* ── Kinetic wordmark band: oversized type drifting horizontally on scroll (oeg.vn feel) ── */
+	#inox.panel {
+		--inox-hero-overlap: clamp(128px, 24svh, 280px);
+		--inox-scroll-lift: 280px;
+		padding: 0;
+		margin-top: calc(var(--inox-hero-overlap) * -1);
+		min-height: clamp(920px, 108svh, 1100px);
+		position: relative;
+		z-index: 4;
+		background: #05070a;
+		overflow: hidden;
+		isolation: isolate;
+		will-change: transform;
+	}
+
+	#inox + #company-services {
+		padding-top: clamp(0.9rem, 2vw, 1.75rem) !important;
+	}
+
+	@media (prefers-reduced-motion: no-preference) {
+		#inox.panel {
+			margin-bottom: calc(var(--inox-scroll-lift) * -1);
+		}
+	}
+
+	.inox-motion-plane {
+		position: relative;
+		z-index: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		justify-content: center;
+		gap: clamp(1.5rem, 3vw, 2.75rem);
+		width: 100%;
+		min-height: inherit;
+		padding: clamp(4.5rem, 7vw, 7rem) clamp(1.25rem, 5vw, 5rem) clamp(4rem, 6vw, 6rem);
+		box-sizing: border-box;
+	}
+
+	/* Full-width marquee row that merges into the #inox block; edges fade to the section's
+	   own black (mask → transparent reveals the dark bg), so there are no white side strips. */
+	.inox-marquee {
+		position: relative;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		overflow: hidden;
+		padding-block: clamp(0.5rem, 1.4vw, 1.15rem);
+		margin-bottom: clamp(1.25rem, 3vw, 2.75rem);
+		-webkit-mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+		mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
+		will-change: transform, opacity;
+	}
+
+	/* Friendly Three.js particle orb — soft glowing backdrop centred behind the stage. */
+	.kinetic-band__sphere {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		z-index: 1;
+		display: block;
+		/* Fit fully inside the stage so the sphere is never clipped at the section edge. */
+		width: min(100%, 600px);
+		aspect-ratio: 1 / 1;
+		height: auto;
+		transform: translate(-50%, -50%);
+		pointer-events: none;
+		opacity: 0.98;
+	}
+
+	/* Continuous auto-marquee (two identical groups → seamless -50% loop). */
+	.kinetic-marquee {
+		position: relative;
+		z-index: 1;
+		display: flex;
+		flex: none;
+		width: max-content;
+		padding-inline: clamp(1rem, 4vw, 4rem);
+		will-change: transform;
+		animation: kinetic-marquee 34s linear infinite;
+	}
+
+	.kinetic-marquee__group {
+		display: flex;
+		align-items: center;
+		gap: clamp(1.4rem, 3.5vw, 3.5rem);
+		padding-right: clamp(1.4rem, 3.5vw, 3.5rem);
+		white-space: nowrap;
+	}
+
+	@keyframes kinetic-marquee {
+		from {
+			transform: translateX(0);
+		}
+		to {
+			transform: translateX(-50%);
+		}
+	}
+
+	.kinetic-word {
+		font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', sans-serif;
+		font-weight: 700;
+		font-size: clamp(3rem, 11vw, 11rem);
+		line-height: 1.04;
+		letter-spacing: -0.03em;
+		text-transform: uppercase;
+		background: linear-gradient(180deg, #ffffff 0%, #dfeef2 62%, #b9d7de 100%);
+		-webkit-background-clip: text;
+		background-clip: text;
+		color: transparent;
+	}
+
+	/* Small Italian flag beside the eyebrow (INOXPRAN's European heritage). */
+	.inox-flag {
+		display: inline-flex;
+		align-items: center;
+		line-height: 0;
+	}
+
+	.inox-flag svg {
+		display: block;
+		border-radius: 3px;
+		box-shadow:
+			0 2px 6px rgba(0, 0, 0, 0.45),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.kinetic-marquee {
+			animation: none;
+		}
+	}
+
+	/* ── Family Orbit proof section (part three of the cinematic sequence) ── */
+	.inox-head {
+		position: relative;
+		z-index: 3;
+		margin-bottom: clamp(0.35rem, 1vw, 0.75rem);
+	}
+
+	.inox-body {
+		position: relative;
+		z-index: 2;
+		display: grid;
+		grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+		gap: clamp(2rem, 4vw, 4.5rem);
+		align-items: center;
+		width: 100%;
+		will-change: transform;
+	}
+
+	.inox-copy {
+		min-width: 0;
+		max-width: 720px;
+	}
+
+	.inox-subhead {
+		margin: 0 0 clamp(1rem, 1.8vw, 1.5rem);
+		font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', sans-serif;
+		font-size: clamp(1.7rem, 3vw, 2.65rem);
+		font-weight: 700;
+		line-height: 1.15;
+		letter-spacing: -0.015em;
+		color: #f4fbfd;
+	}
+
+	.inox-lead {
+		margin: 0 0 clamp(2rem, 3.4vw, 2.9rem);
+		max-width: 58ch;
+		font-size: clamp(1.05rem, 1.35vw, 1.24rem);
+		line-height: 1.72;
+		color: var(--inox-text-soft, rgba(228, 240, 244, 0.72));
+	}
+
+	.inox-statrail {
+		margin: 0;
+	}
+
+	/* Stat value + star icon (e.g. "5 ★" for the energy-saving rating). */
+	.inox-stat-value {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.45rem;
+		min-width: max-content;
+		white-space: nowrap;
+	}
+
+	#inox .stat-number {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 0.16em;
+		white-space: nowrap;
+	}
+
+	.stat-suffix {
+		font-size: 0.58em;
+		font-weight: 700;
+		letter-spacing: 0;
+		line-height: 1;
+	}
+
+	.inox-star {
+		font-size: clamp(1.8rem, 2.55vw, 2.4rem);
+		line-height: 1;
+		color: var(--inox-accent, #79d2e6);
+		text-shadow: 0 0 14px rgba(121, 210, 230, 0.55);
+	}
+
+	.inox-benefits {
+		list-style: none;
+		margin: 0 0 clamp(1.9rem, 3.2vw, 2.75rem);
+		padding: 0;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: clamp(1.1rem, 2vw, 1.6rem) clamp(1.5rem, 3vw, 2.5rem);
+	}
+
+	.inox-benefit {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		grid-template-areas: 'dot title' '. desc';
+		column-gap: 0.7rem;
+		row-gap: 0.3rem;
+	}
+
+	.inox-benefit__dot {
+		grid-area: dot;
+		width: 8px;
+		height: 8px;
+		margin-top: 0.5rem;
+		border-radius: 999px;
+		background: var(--inox-accent, #79d2e6);
+		box-shadow: 0 0 12px rgba(121, 210, 230, 0.6);
+	}
+
+	.inox-benefit__title {
+		grid-area: title;
+		font-size: 0.98rem;
+		font-weight: 700;
+		color: #f2fafc;
+	}
+
+	.inox-benefit__desc {
+		grid-area: desc;
+		font-size: 0.85rem;
+		line-height: 1.5;
+		color: var(--inox-text-soft, rgba(228, 240, 244, 0.72));
+	}
+
+	.inox-cta {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.9rem;
+	}
+
+	.inox-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-height: 50px;
+		padding: 0.85rem 1.7rem;
+		border-radius: 999px;
+		font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', sans-serif;
+		font-size: 0.92rem;
+		font-weight: 700;
+		letter-spacing: 0.01em;
+		text-decoration: none;
+		transition:
+			transform 0.18s ease,
+			box-shadow 0.2s ease,
+			background-color 0.2s ease,
+			border-color 0.2s ease;
+	}
+
+	.inox-btn--primary {
+		color: #042028;
+		background: linear-gradient(135deg, #c6edf5 0%, #79d2e6 55%, #57b6cd 100%);
+		box-shadow: 0 14px 30px rgba(90, 190, 215, 0.26);
+	}
+
+	.inox-btn--primary:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 20px 40px rgba(90, 190, 215, 0.4);
+	}
+
+	.inox-btn--ghost {
+		color: #eaf6f9;
+		background: rgba(255, 255, 255, 0.04);
+		border: 1px solid rgba(255, 255, 255, 0.2);
+	}
+
+	.inox-btn--ghost:hover {
+		transform: translateY(-2px);
+		border-color: rgba(121, 210, 230, 0.55);
+		background: rgba(121, 210, 230, 0.1);
+	}
+
+	.inox-btn:focus-visible {
+		outline: 2px solid var(--inox-accent, #79d2e6);
+		outline-offset: 3px;
+	}
+
+	.inox-stage {
+		position: relative;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		min-height: clamp(440px, 54vh, 640px);
+		will-change: transform;
+	}
+
+	.inox-orbit {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+	}
+
+	.inox-orbit__ring {
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		z-index: 0;
+		aspect-ratio: 1 / 1;
+		border: 0;
+		border-radius: 50%;
+		background: conic-gradient(
+			from 132deg,
+			transparent 0deg,
+			rgba(121, 210, 230, 0.5) 24deg,
+			rgba(232, 251, 255, 0.14) 64deg,
+			transparent 112deg,
+			rgba(121, 210, 230, 0.22) 182deg,
+			transparent 248deg,
+			rgba(232, 251, 255, 0.22) 306deg,
+			transparent 360deg
+		);
+		-webkit-mask-image: radial-gradient(
+			farthest-side,
+			transparent calc(100% - 2px),
+			#000 calc(100% - 1px)
+		);
+		mask-image: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 1px));
+		filter: drop-shadow(0 0 14px rgba(121, 210, 230, 0.28));
+		transform: translate(-50%, -50%);
+	}
+
+	.inox-orbit__ring--1 {
+		width: min(104%, 620px);
+		animation: inox-orbit-spin 46s linear infinite;
+	}
+
+	.inox-orbit__ring--2 {
+		width: min(78%, 460px);
+		opacity: 0.62;
+		animation: inox-orbit-spin 32s linear infinite reverse;
+	}
+
+	@keyframes inox-orbit-spin {
+		to {
+			transform: translate(-50%, -50%) rotate(360deg);
+		}
+	}
+
+	.inox-orbit__chip {
+		position: absolute;
+		z-index: 4;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.9rem;
+		border-radius: 999px;
+		background: rgba(9, 17, 21, 0.62);
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		-webkit-backdrop-filter: blur(8px);
+		backdrop-filter: blur(8px);
+		box-shadow: 0 14px 28px rgba(0, 0, 0, 0.4);
+		font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', sans-serif;
+		font-size: 0.76rem;
+		font-weight: 600;
+		letter-spacing: 0.01em;
+		color: #eaf6f9;
+		white-space: nowrap;
+		animation: inox-chip-float 6s ease-in-out infinite;
+	}
+
+	.inox-orbit__chip-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 999px;
+		background: var(--inox-accent, #79d2e6);
+		box-shadow: 0 0 10px rgba(121, 210, 230, 0.75);
+	}
+
+	.inox-orbit__chip--1 {
+		top: 4%;
+		left: 2%;
+		animation-delay: 0s;
+	}
+	.inox-orbit__chip--2 {
+		top: 12%;
+		right: -2%;
+		animation-delay: -1.5s;
+	}
+	.inox-orbit__chip--3 {
+		bottom: 14%;
+		left: -2%;
+		animation-delay: -3s;
+	}
+	.inox-orbit__chip--4 {
+		bottom: 4%;
+		right: 3%;
+		animation-delay: -4.5s;
+	}
+
+	@keyframes inox-chip-float {
+		0%,
+		100% {
+			transform: translateY(0);
+		}
+		50% {
+			transform: translateY(-9px);
+		}
+	}
+
+	.inox-bgwords {
+		position: absolute;
+		inset: 0;
+		z-index: 0;
+		overflow: hidden;
+		pointer-events: none;
+		user-select: none;
+		will-change: transform;
+	}
+
+	.inox-bgword {
+		position: absolute;
+		font-family: 'Be Vietnam Pro', 'Manrope', 'Segoe UI', sans-serif;
+		font-weight: 800;
+		text-transform: uppercase;
+		line-height: 0.8;
+		letter-spacing: -0.04em;
+		white-space: nowrap;
+		color: rgba(255, 255, 255, 0.022);
+	}
+
+	.inox-bgword--a {
+		top: -4%;
+		left: -3%;
+		font-size: clamp(9rem, 25vw, 28rem);
+	}
+	.inox-bgword--b {
+		bottom: -8%;
+		right: -5%;
+		font-size: clamp(7rem, 18vw, 22rem);
+		color: rgba(140, 205, 220, 0.026);
+	}
+	.inox-bgword--c {
+		top: 46%;
+		left: 34%;
+		font-size: clamp(6rem, 15vw, 17rem);
+		color: transparent;
+		-webkit-text-stroke: 1px rgba(185, 229, 237, 0.03);
+	}
+
+	.inox-reveal {
+		will-change: transform, opacity;
+	}
+
+	@media (max-width: 900px) {
+		#inox.panel {
+			--inox-hero-overlap: clamp(92px, 16svh, 160px);
+			--inox-scroll-lift: 136px;
+		}
+		.inox-body {
+			grid-template-columns: 1fr;
+			gap: clamp(2rem, 6vw, 3rem);
+		}
+		.inox-copy {
+			max-width: none;
+			order: 1;
+		}
+		.inox-stage {
+			order: 2;
+			min-height: clamp(360px, 72vw, 520px);
+		}
+	}
+
+	@media (max-width: 560px) {
+		.inox-stat-value {
+			gap: 0.28rem;
+			min-width: 0;
+		}
+		#inox .stat-card {
+			padding: 1rem clamp(0.32rem, 1.7vw, 0.55rem);
+		}
+		#inox .stat-number {
+			gap: 0.12em;
+			font-size: clamp(1.42rem, 6.8vw, 1.72rem);
+		}
+		.stat-suffix {
+			font-size: 0.48em;
+		}
+		.inox-star {
+			font-size: clamp(1.45rem, 6vw, 1.8rem);
+		}
+		.inox-benefits {
+			grid-template-columns: 1fr;
+		}
+		.inox-cta {
+			flex-direction: column;
+			align-items: stretch;
+		}
+		.inox-btn {
+			width: 100%;
+		}
+		.inox-orbit__chip {
+			font-size: 0.68rem;
+			padding: 0.4rem 0.7rem;
+		}
+		.inox-orbit__chip--2 {
+			right: 0;
+		}
+		.inox-orbit__chip--3 {
+			left: 0;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.inox-orbit__ring,
+		.inox-orbit__chip {
+			animation: none !important;
+		}
+	}
 </style>

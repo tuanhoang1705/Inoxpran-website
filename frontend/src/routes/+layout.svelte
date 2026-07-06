@@ -19,6 +19,7 @@
 	import { cartToast } from '$lib/stores/cartToast.js';
 	import { fetchCartCountFromServer } from '$lib/client/cartCountSync.js';
 	import { initClient } from '$lib/client/initClient.js';
+	import { initSmoothScroll } from '$lib/client/smoothScroll.js';
 	import { markNavigationType } from '$lib/client/navigationState.js';
 	import { getTelemetryTracker } from '$lib/client/telemetry.js';
 	import { cookieConsent, canTrackTelemetry, initCookieConsent } from '$lib/stores/cookieConsent.js';
@@ -377,7 +378,11 @@
 		if (typeof window === 'undefined') return;
 		markNavigationType(type || 'unknown');
 		if (type === 'link') {
-			window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+			if (window.__lenis) {
+				window.__lenis.scrollTo(0, { immediate: true });
+			} else {
+				window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+			}
 		}
 		if (hasClientInit) {
 			runClientInit();
@@ -412,6 +417,15 @@
 			syncTelemetryTrackerWithConsent();
 		});
 		runClientInit();
+
+		let smoothScrollCleanup = () => {};
+		// Momentum smooth-scroll everywhere except the admin console (keeps data tables/native).
+		if (!hideSiteChrome) {
+			void initSmoothScroll().then((cleanup) => {
+				smoothScrollCleanup = cleanup;
+			});
+		}
+
 		let isSyncingCartCount = false;
 
 		const syncCartCount = async () => {
@@ -469,6 +483,7 @@
 			window.removeEventListener('popstate', handleHistoryPopstate);
 			window.removeEventListener('pageshow', handlePageShow);
 			window.removeEventListener(CLIENT_UI_REFRESH_EVENT, handleClientUiRefresh);
+			smoothScrollCleanup();
 			clientInitCleanup();
 		};
 	});
