@@ -5,6 +5,9 @@
   timezone: "Asia/Ho_Chi_Minh",
   stateDir: "/data",
   workspacesRoot: "/workspaces",
+  gateway: {
+    mode: "local"
+  },
   dashboard: {
     public: false,
     bindHost: "0.0.0.0",
