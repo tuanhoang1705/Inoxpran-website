@@ -212,17 +212,17 @@
 		$locale === 'en'
 			? {
 					eyebrow: 'THE INOXPRAN STANDARD',
-					lead: 'Refined in every detail.',
-					emphasis: 'Built for lasting everyday cooking.',
+					lead: 'Inoxpran stainless homeware.',
+					emphasis: 'Built for lasting everyday family cooking.',
 					cta: 'Shop the collection',
 					storyCta: 'Our Italian story'
 				}
 			: {
-					eyebrow: 'TINH THẦN INOXPRAN',
-					lead: 'Tinh giản trong thiết kế.',
-					emphasis: 'Bền bỉ trong từng trải nghiệm của gia đình.',
-					cta: 'Khám phá bộ sưu tập',
-					storyCta: 'Câu chuyện Italy'
+					eyebrow: 'TINH TH\u1ea6N INOXPRAN',
+					lead: 'Gia d\u1ee5ng inox Inoxpran.',
+					emphasis: 'B\u1ec1n b\u1ec9 cho c\u0103n b\u1ebfp gia \u0111\u00ecnh Vi\u1ec7t.',
+					cta: 'Kh\u00e1m ph\u00e1 b\u1ed9 s\u01b0u t\u1eadp',
+					storyCta: 'C\u00e2u chuy\u1ec7n Italy'
 				}
 	);
 	const cookwareIntroCopy = $derived.by(() =>

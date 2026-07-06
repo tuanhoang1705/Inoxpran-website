@@ -37,6 +37,8 @@ const normalizeUrlForCompare = (rawUrl) => {
 	return `${parsed.protocol}//${parsed.host}${pathname}${search}`;
 };
 
+const isLocalHost = (host) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host);
+
 const parseArgs = (argv) => {
 	const args = {};
 	for (let i = 2; i < argv.length; i += 1) {
@@ -178,6 +180,7 @@ const main = async () => {
 	const timeoutMs = Number.parseInt(String(args.timeout || DEFAULT_TIMEOUT_MS), 10);
 	const maxUrls = Number.parseInt(String(args.max || ''), 10);
 	const expectedHost = new URL(baseUrl).host;
+	const isLocalCheck = isLocalHost(expectedHost);
 
 	console.log(`SEO audit started`);
 	console.log(`Base: ${baseUrl}`);
@@ -247,7 +250,7 @@ const main = async () => {
 
 					if (canonicalAbs) {
 						const canonicalParsed = new URL(canonicalAbs);
-						if (canonicalParsed.protocol !== 'https:') {
+						if (!isLocalCheck && canonicalParsed.protocol !== 'https:') {
 							issues.push('canonical_not_https');
 						}
 						if (canonicalParsed.host !== expectedHost) {

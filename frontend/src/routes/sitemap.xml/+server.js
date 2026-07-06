@@ -202,7 +202,16 @@ export const GET = async ({ fetch, url }) => {
 		priority: entry.priority
 	}));
 
-	const [products, blogs] = await Promise.all([fetchAllProducts(fetch), fetchAllBlogs(fetch)]);
+	const [products, blogs] = await Promise.all([
+		fetchAllProducts(fetch).catch((error) => {
+			console.warn('sitemap: failed to fetch products, using static/category fallback', error);
+			return [];
+		}),
+		fetchAllBlogs(fetch).catch((error) => {
+			console.warn('sitemap: failed to fetch blogs, using static/category fallback', error);
+			return [];
+		})
+	]);
 	const categories = extractCategories(products);
 
 	const productEntries = products
