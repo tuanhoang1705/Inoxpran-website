@@ -4,21 +4,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 REPORT_FILE="${ROOT_DIR}/deploy/openclaw/SKILL_INSTALL_REPORT.md"
 FORCE_SKILL_INSTALL="${FORCE_SKILL_INSTALL:-false}"
+VERIFY_ONLY="${VERIFY_ONLY:-false}"
+OPENCLAW_PROFILE="${OPENCLAW_PROFILE:-inoxpran}"
 
+# Core skills selected from ClawHub for the daily blog multi-agent workflow.
+# Each must pass `openclaw skills verify` before install.
 SKILLS=(
-  "global-search"
+  "skill-vetter"
+  "ddg-web-search"
   "firecrawl-api"
-  "sovereign-content-scraper"
-  "ghost-blog-writer"
-  "contentforge-api"
-  "free-text-generator"
-  "rankforge-api"
-  "claim-verifier"
-  "openclaw-prompt-shield"
-  "skylv-secret-detector"
-  "page-agent-browser"
-  "remote-browser"
-  "n8n-pilot"
+  "market-research"
+  "deep-research-agent"
+  "content-generation"
+  "image-generation"
 )
 
 mkdir -p "$(dirname "${REPORT_FILE}")"
@@ -29,6 +27,28 @@ mkdir -p "$(dirname "${REPORT_FILE}")"
   echo "Generated: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
   echo
   echo "Procedure: inspect each slug, verify it, then install only verified skills."
+  echo
+  echo "VERIFY_ONLY: ${VERIFY_ONLY}"
+  echo "FORCE_SKILL_INSTALL: ${FORCE_SKILL_INSTALL}"
+  echo "OPENCLAW_PROFILE: ${OPENCLAW_PROFILE}"
+  echo
+  echo "## Core skills"
+  echo
+  for skill in "${SKILLS[@]}"; do
+    echo "- \`${skill}\`"
+  done
+  echo
+  echo "## Not installed automatically"
+  echo
+  echo "- \`keyword-research\`: verify failed because security/card was pending."
+  echo "- \`serp-analysis\`: verify failed because security/card was pending."
+  echo "- \`content-gap-analysis\`: verify failed because security/card was pending."
+  echo "- \`openclaw-seo-content-engine\`: verify failed; scanner flagged live Chrome and hard-coded local API-key path."
+  echo "- \`blog-writing\`: verify failed; scanner flagged shell/full-security subagent requests."
+  echo "- \`citedy-seo-agent\`: verify failed; scanner flagged broad credit spending, public publishing, deletes, and recurring automation."
+  echo "- \`multi-search-engine\`: verify failed; scanner flagged third-party query/privacy risk."
+  echo "- \`skillscan\`: verify failed; scanner flagged upload/telemetry/self-update behavior."
+  echo "- \`nano-banana-pro\`: slug is ambiguous across multiple owners; choose and vet one manually before use."
   echo
 } > "${REPORT_FILE}"
 
@@ -52,6 +72,16 @@ if [ "${#missing_commands[@]}" -gt 0 ]; then
   exit 0
 fi
 
+inspect_out="$(mktemp)"
+verify_out="$(mktemp)"
+install_out="$(mktemp)"
+trap 'rm -f "${inspect_out}" "${verify_out}" "${install_out}"' EXIT
+
+openclaw_prefix=()
+if [ -n "${OPENCLAW_PROFILE}" ]; then
+  openclaw_prefix=(--profile "${OPENCLAW_PROFILE}")
+fi
+
 for skill in "${SKILLS[@]}"; do
   echo "Inspecting ${skill}..."
   {
@@ -59,32 +89,40 @@ for skill in "${SKILLS[@]}"; do
     echo
   } >> "${REPORT_FILE}"
 
-  if ! clawhub inspect "${skill}" >/tmp/openclaw-skill-inspect.out 2>&1; then
+  if ! clawhub inspect "${skill}" >"${inspect_out}" 2>&1; then
     {
       echo "SKIP: inspect failed"
       echo
-      sed 's/^/    /' /tmp/openclaw-skill-inspect.out
+      sed 's/^/    /' "${inspect_out}"
       echo
     } >> "${REPORT_FILE}"
     continue
   fi
 
-  if ! openclaw skills verify "${skill}" >/tmp/openclaw-skill-verify.out 2>&1; then
+  if ! openclaw "${openclaw_prefix[@]}" skills verify "${skill}" >"${verify_out}" 2>&1; then
     {
       echo "SKIP: verify failed"
       echo
-      sed 's/^/    /' /tmp/openclaw-skill-verify.out
+      sed 's/^/    /' "${verify_out}"
       echo
     } >> "${REPORT_FILE}"
     continue
   fi
 
-  install_args=("skills" "install" "${skill}" "--global")
+  if [ "${VERIFY_ONLY}" = "true" ]; then
+    {
+      echo "VERIFIED: ${skill}"
+      echo
+    } >> "${REPORT_FILE}"
+    continue
+  fi
+
+  install_args=("${openclaw_prefix[@]}" "skills" "install" "${skill}" "--global")
   if [ "${FORCE_SKILL_INSTALL}" = "true" ]; then
     install_args+=("--force")
   fi
 
-  if openclaw "${install_args[@]}" >/tmp/openclaw-skill-install.out 2>&1; then
+  if openclaw "${install_args[@]}" >"${install_out}" 2>&1; then
     {
       echo "INSTALLED: ${skill}"
       echo
@@ -93,11 +131,10 @@ for skill in "${SKILLS[@]}"; do
     {
       echo "SKIP: install failed"
       echo
-      sed 's/^/    /' /tmp/openclaw-skill-install.out
+      sed 's/^/    /' "${install_out}"
       echo
     } >> "${REPORT_FILE}"
   fi
 done
 
-rm -f /tmp/openclaw-skill-inspect.out /tmp/openclaw-skill-verify.out /tmp/openclaw-skill-install.out
 echo "Skill installation report written to ${REPORT_FILE}"

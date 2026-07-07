@@ -32,7 +32,8 @@ const parseReview = (value = {}) => ({
     seoScore: parseNumber(value.seoScore, 0),
     brandSafety: normalizeString(value.brandSafety).toLowerCase(),
     duplicateRisk: normalizeString(value.duplicateRisk).toLowerCase(),
-    claimRisk: normalizeString(value.claimRisk).toLowerCase()
+    claimRisk: normalizeString(value.claimRisk).toLowerCase(),
+    imageSafety: normalizeString(value.imageSafety).toLowerCase()
 });
 
 const isPublishReviewPassing = ({ review, wordCount, thresholds = getSeoThresholds() }) => {
@@ -49,6 +50,9 @@ const isPublishReviewPassing = ({ review, wordCount, thresholds = getSeoThreshol
     }
     if (review.claimRisk === 'high') {
         reasons.push('claim_risk_high');
+    }
+    if (review.imageSafety !== 'pass') {
+        reasons.push('image_safety_not_pass');
     }
     if (wordCount < thresholds.minWords) {
         reasons.push(`word_count_below_${thresholds.minWords}`);

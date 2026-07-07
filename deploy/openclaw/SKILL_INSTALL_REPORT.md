@@ -1,84 +1,60 @@
-# ClawHub Skill Install Report
+﻿# ClawHub Skill Install Report
 
-Generated: 2026-06-02T09:54:44Z
+Generated: 2026-07-07T05:19:55Z
 
 Procedure: inspect each slug, verify it, then install only verified skills.
 
-## global-search
+VerifyOnly: False
+Force: False
+Profile: inoxpran
 
-SKIP: inspect failed
+## Core skills
 
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
+- `skill-vetter`
+- `ddg-web-search`
+- `firecrawl-api`
+- `market-research`
+- `deep-research-agent`
+- `content-generation`
+- `image-generation`
+
+## Not installed automatically
+
+- `keyword-research`: verify failed because security/card was pending.
+- `serp-analysis`: verify failed because security/card was pending.
+- `content-gap-analysis`: verify failed because security/card was pending.
+- `openclaw-seo-content-engine`: verify failed; scanner flagged live Chrome and hard-coded local API-key path.
+- `blog-writing`: verify failed; scanner flagged shell/full-security subagent requests.
+- `citedy-seo-agent`: verify failed; scanner flagged broad credit spending, public publishing, deletes, and recurring automation.
+- `multi-search-engine`: verify failed; scanner flagged third-party query/privacy risk.
+- `skillscan`: verify failed; scanner flagged upload/telemetry/self-update behavior.
+- `nano-banana-pro`: slug is ambiguous across multiple owners; choose and vet one manually before use.
+
+## skill-vetter
+
+INSTALLED: skill-vetter
+
+## ddg-web-search
+
+INSTALLED: ddg-web-search
 
 ## firecrawl-api
 
-SKIP: inspect failed
+INSTALLED: firecrawl-api
 
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
+## market-research
 
-## sovereign-content-scraper
+INSTALLED: market-research
 
-SKIP: inspect failed
+## deep-research-agent
 
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
+INSTALLED: deep-research-agent
 
-## ghost-blog-writer
+## content-generation
 
-SKIP: inspect failed
+INSTALLED: content-generation
 
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
+## image-generation
 
-## contentforge-api
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
-
-## free-text-generator
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
-
-## rankforge-api
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
-
-## claim-verifier
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
-
-## openclaw-prompt-shield
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
-
-## skylv-secret-detector
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
-
-## page-agent-browser
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
-
-## remote-browser
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
-
-## n8n-pilot
-
-SKIP: inspect failed
-
-    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
+INSTALLED: image-generation
 

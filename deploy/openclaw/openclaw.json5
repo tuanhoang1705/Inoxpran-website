@@ -10,6 +10,8 @@
   },
   dashboard: {
     public: false,
+    // Bound inside the Docker network only. The compose service does not publish
+    // this port and Nginx returns 403 for dashboard/public paths.
     bindHost: "0.0.0.0",
     port: 18789
   },
@@ -27,22 +29,22 @@
     localDirectories: [
       "/workspaces/shared-skills"
     ],
+    // Core ClawHub skills must pass `openclaw skills verify` before install.
+    // Do not add a skill here if verify returns fail/pending.
     globalAllowlist: [
-      "global-search",
-      "firecrawl-api",
-      "sovereign-content-scraper",
-      "ghost-blog-writer",
-      "contentforge-api",
-      "free-text-generator",
-      "rankforge-api",
-      "claim-verifier",
-      "openclaw-prompt-shield",
-      "skylv-secret-detector",
-      "page-agent-browser",
-      "remote-browser",
-      "n8n-pilot",
+      "skill-vetter",
+      "ddg-search",
+      "firecrawl",
+      "Market Research",
+      "research-agent",
+      "content-generation",
+      "AI Image Generation",
       "inoxpran-search-console",
       "inoxpran-brand-voice",
+      "inoxpran-seo-research-brief",
+      "inoxpran-positioning",
+      "inoxpran-topic-planner",
+      "inoxpran-blog-image-brief",
       "inoxpran-seo-publisher",
       "inoxpran-seo-review"
     ]
@@ -59,8 +61,28 @@
         adminUi: false
       },
       skillAllowlist: [
+        "skill-vetter",
         "inoxpran-brand-voice",
         "inoxpran-seo-review"
+      ]
+    },
+    {
+      name: "market-insight-analyst",
+      workspace: "/workspaces/market-insight-analyst",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "ddg-search",
+        "firecrawl",
+        "Market Research",
+        "research-agent",
+        "inoxpran-search-console",
+        "inoxpran-seo-research-brief",
+        "inoxpran-positioning"
       ]
     },
     {
@@ -73,10 +95,27 @@
         adminUi: false
       },
       skillAllowlist: [
-        "global-search",
-        "firecrawl-api",
-        "sovereign-content-scraper",
-        "inoxpran-search-console"
+        "ddg-search",
+        "firecrawl",
+        "inoxpran-search-console",
+        "inoxpran-seo-research-brief"
+      ]
+    },
+    {
+      name: "content-ideator",
+      workspace: "/workspaces/content-ideator",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "Market Research",
+        "content-generation",
+        "inoxpran-brand-voice",
+        "inoxpran-positioning",
+        "inoxpran-topic-planner"
       ]
     },
     {
@@ -89,8 +128,11 @@
         adminUi: false
       },
       skillAllowlist: [
-        "rankforge-api",
+        "Market Research",
+        "content-generation",
         "inoxpran-brand-voice",
+        "inoxpran-positioning",
+        "inoxpran-topic-planner",
         "inoxpran-seo-review"
       ]
     },
@@ -104,10 +146,24 @@
         adminUi: false
       },
       skillAllowlist: [
-        "ghost-blog-writer",
-        "contentforge-api",
-        "free-text-generator",
-        "inoxpran-brand-voice"
+        "content-generation",
+        "inoxpran-brand-voice",
+        "inoxpran-positioning"
+      ]
+    },
+    {
+      name: "image-planner",
+      workspace: "/workspaces/image-planner",
+      tools: {
+        shell: false,
+        browser: false,
+        mongodb: false,
+        adminUi: false
+      },
+      skillAllowlist: [
+        "AI Image Generation",
+        "inoxpran-brand-voice",
+        "inoxpran-blog-image-brief"
       ]
     },
     {
@@ -120,10 +176,8 @@
         adminUi: false
       },
       skillAllowlist: [
-        "rankforge-api",
-        "claim-verifier",
-        "openclaw-prompt-shield",
-        "skylv-secret-detector",
+        "skill-vetter",
+        "inoxpran-brand-voice",
         "inoxpran-seo-review"
       ]
     },
@@ -156,9 +210,8 @@
         adminUi: false
       },
       skillAllowlist: [
-        "page-agent-browser",
-        "remote-browser",
-        "global-search"
+        "ddg-search",
+        "firecrawl"
       ]
     },
     {
@@ -171,7 +224,7 @@
         adminUi: false
       },
       skillAllowlist: [
-        "n8n-pilot"
+        "skill-vetter"
       ]
     }
   ]

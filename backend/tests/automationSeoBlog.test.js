@@ -87,7 +87,8 @@ const buildPayload = (overrides = {}) => ({
         seoScore: 90,
         brandSafety: 'pass',
         duplicateRisk: 'low',
-        claimRisk: 'low'
+        claimRisk: 'low',
+        imageSafety: 'pass'
     },
     metadata: {
         agentRunId: 'test-run'
@@ -241,6 +242,26 @@ describe('AutomationSeoBlogService.publishSeoBlog', () => {
 
         expect(result.published).toBe(false);
         expect(result.reasons).toContain('brand_safety_not_pass');
+    });
+
+    it('does not publish when imageSafety is not pass', async () => {
+        process.env.SEO_AGENT_AUTO_PUBLISH = 'true';
+        const AutomationSeoBlogService = loadAutomationService();
+
+        const result = await AutomationSeoBlogService.publishSeoBlog({
+            payload: buildPayload({
+                review: {
+                    seoScore: 90,
+                    brandSafety: 'pass',
+                    duplicateRisk: 'low',
+                    claimRisk: 'low',
+                    imageSafety: 'fail'
+                }
+            })
+        });
+
+        expect(result.published).toBe(false);
+        expect(result.reasons).toContain('image_safety_not_pass');
     });
 
     it('rejects duplicate slug', async () => {

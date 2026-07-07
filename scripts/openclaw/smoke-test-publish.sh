@@ -66,11 +66,16 @@ const payload = {
     seoScore: 90,
     brandSafety: 'pass',
     duplicateRisk: 'low',
-    claimRisk: 'low'
+    claimRisk: 'low',
+    imageSafety: 'pass'
   },
   metadata: {
     agentRunId: `smoke-${Date.now()}`,
-    generatedAt: new Date().toISOString()
+    generatedAt: new Date().toISOString(),
+    imageBrief: {
+      imageGenerationMode: 'prompt_only',
+      safeFallbackImageUrl: '/images/og-image.png'
+    }
   }
 };
 
