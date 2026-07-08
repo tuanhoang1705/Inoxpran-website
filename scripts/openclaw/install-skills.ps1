@@ -166,11 +166,20 @@ foreach ($skill in $skills) {
         if ($installExitCode -eq 0) {
             Add-Content -Path $reportFile -Encoding UTF8 -Value @("INSTALLED: $skill", '')
         } else {
-            Add-Content -Path $reportFile -Encoding UTF8 -Value @('SKIP: install failed', '')
-            Get-Content $installOut | ForEach-Object {
-                Add-Content -Path $reportFile -Encoding UTF8 -Value "    $_"
+            $installOutput = Get-Content -Raw -ErrorAction SilentlyContinue $installOut
+            if ($installOutput -match 'Skill already exists') {
+                Add-Content -Path $reportFile -Encoding UTF8 -Value @("ALREADY INSTALLED: $skill", '')
+                Get-Content $installOut | ForEach-Object {
+                    Add-Content -Path $reportFile -Encoding UTF8 -Value "    $_"
+                }
+                Add-Content -Path $reportFile -Encoding UTF8 -Value ''
+            } else {
+                Add-Content -Path $reportFile -Encoding UTF8 -Value @('SKIP: install failed', '')
+                Get-Content $installOut | ForEach-Object {
+                    Add-Content -Path $reportFile -Encoding UTF8 -Value "    $_"
+                }
+                Add-Content -Path $reportFile -Encoding UTF8 -Value ''
             }
-            Add-Content -Path $reportFile -Encoding UTF8 -Value ''
         }
     } finally {
         Remove-Item -Force -ErrorAction SilentlyContinue $inspectOut, $verifyOut, $installOut

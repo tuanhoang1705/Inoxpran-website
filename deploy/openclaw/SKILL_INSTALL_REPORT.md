@@ -1,6 +1,6 @@
 ﻿# ClawHub Skill Install Report
 
-Generated: 2026-07-07T05:19:55Z
+Generated: 2026-07-08T05:00:40Z
 
 Procedure: inspect each slug, verify it, then install only verified skills.
 
@@ -32,29 +32,113 @@ Profile: inoxpran
 
 ## skill-vetter
 
-INSTALLED: skill-vetter
+ALREADY INSTALLED: skill-vetter
+
+    |
+    o  Doctor warnings ------------------------------------------------------+
+    |                                                                        |
+    |  - Left legacy config health state in place because 1 entry conflicts  |
+    |    with shared SQLite state:                                           |
+    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
+    |                                                                        |
+    +------------------------------------------------------------------------+
+    [state-migrations] Legacy state migration warnings:
+    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
+    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\skill-vetter. Re-run with force/update.
 
 ## ddg-web-search
 
-INSTALLED: ddg-web-search
+ALREADY INSTALLED: ddg-web-search
+
+    |
+    o  Doctor warnings ------------------------------------------------------+
+    |                                                                        |
+    |  - Left legacy config health state in place because 1 entry conflicts  |
+    |    with shared SQLite state:                                           |
+    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
+    |                                                                        |
+    +------------------------------------------------------------------------+
+    [state-migrations] Legacy state migration warnings:
+    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
+    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\ddg-web-search. Re-run with force/update.
 
 ## firecrawl-api
 
-INSTALLED: firecrawl-api
+ALREADY INSTALLED: firecrawl-api
+
+    |
+    o  Doctor warnings ------------------------------------------------------+
+    |                                                                        |
+    |  - Left legacy config health state in place because 1 entry conflicts  |
+    |    with shared SQLite state:                                           |
+    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
+    |                                                                        |
+    +------------------------------------------------------------------------+
+    [state-migrations] Legacy state migration warnings:
+    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
+    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\firecrawl-api. Re-run with force/update.
 
 ## market-research
 
-INSTALLED: market-research
+ALREADY INSTALLED: market-research
+
+    |
+    o  Doctor warnings ------------------------------------------------------+
+    |                                                                        |
+    |  - Left legacy config health state in place because 1 entry conflicts  |
+    |    with shared SQLite state:                                           |
+    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
+    |                                                                        |
+    +------------------------------------------------------------------------+
+    [state-migrations] Legacy state migration warnings:
+    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
+    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\market-research. Re-run with force/update.
 
 ## deep-research-agent
 
-INSTALLED: deep-research-agent
+ALREADY INSTALLED: deep-research-agent
+
+    |
+    o  Doctor warnings ------------------------------------------------------+
+    |                                                                        |
+    |  - Left legacy config health state in place because 1 entry conflicts  |
+    |    with shared SQLite state:                                           |
+    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
+    |                                                                        |
+    +------------------------------------------------------------------------+
+    [state-migrations] Legacy state migration warnings:
+    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
+    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\deep-research-agent. Re-run with force/update.
 
 ## content-generation
 
-INSTALLED: content-generation
+ALREADY INSTALLED: content-generation
+
+    |
+    o  Doctor warnings ------------------------------------------------------+
+    |                                                                        |
+    |  - Left legacy config health state in place because 1 entry conflicts  |
+    |    with shared SQLite state:                                           |
+    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
+    |                                                                        |
+    +------------------------------------------------------------------------+
+    [state-migrations] Legacy state migration warnings:
+    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
+    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\content-generation. Re-run with force/update.
 
 ## image-generation
 
-INSTALLED: image-generation
+ALREADY INSTALLED: image-generation
+
+    |
+    o  Doctor warnings ------------------------------------------------------+
+    |                                                                        |
+    |  - Left legacy config health state in place because 1 entry conflicts  |
+    |    with shared SQLite state:                                           |
+    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
+    |                                                                        |
+    +------------------------------------------------------------------------+
+    [state-migrations] Legacy state migration warnings:
+    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
+    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\image-generation. Re-run with force/update.
 

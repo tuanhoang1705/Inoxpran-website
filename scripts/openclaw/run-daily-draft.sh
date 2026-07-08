@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PROMPT_FILE="${ROOT_DIR}/deploy/openclaw/prompts/daily-seo-blog.md"
+SYNC_AGENTS_SCRIPT="${ROOT_DIR}/scripts/openclaw/sync-agents.sh"
 PROFILE="${OPENCLAW_PROFILE:-inoxpran}"
 SESSION_KEY="${OPENCLAW_SESSION_KEY:-agent:seo-orchestrator:daily-manual-test}"
 TIMEOUT_SECONDS="${OPENCLAW_AGENT_TIMEOUT_SECONDS:-1800}"
@@ -18,6 +19,10 @@ if [ ! -f "${PROMPT_FILE}" ]; then
 fi
 
 export INOXPRAN_SEO_AGENT_AUTO_PUBLISH=false
+
+if [ -f "${SYNC_AGENTS_SCRIPT}" ]; then
+  OPENCLAW_PROFILE="${PROFILE}" bash "${SYNC_AGENTS_SCRIPT}"
+fi
 
 profile_args=()
 if [ -n "${PROFILE}" ]; then

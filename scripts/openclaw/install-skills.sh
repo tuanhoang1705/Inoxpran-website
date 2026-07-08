@@ -127,6 +127,13 @@ for skill in "${SKILLS[@]}"; do
       echo "INSTALLED: ${skill}"
       echo
     } >> "${REPORT_FILE}"
+  elif grep -qi "Skill already exists" "${install_out}"; then
+    {
+      echo "ALREADY INSTALLED: ${skill}"
+      echo
+      sed 's/^/    /' "${install_out}"
+      echo
+    } >> "${REPORT_FILE}"
   else
     {
       echo "SKIP: install failed"

@@ -8,6 +8,7 @@ $ErrorActionPreference = 'Stop'
 
 $rootDir = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $promptFile = Join-Path $rootDir 'deploy\openclaw\prompts\daily-seo-blog.md'
+$syncAgentsScript = Join-Path $PSScriptRoot 'sync-agents.ps1'
 
 if (-not (Get-Command openclaw -ErrorAction SilentlyContinue)) {
     Write-Host 'NOT RUN: openclaw command is unavailable.'
@@ -21,6 +22,10 @@ if (-not (Test-Path $promptFile)) {
 # The backend environment still decides final publish/draft behavior.
 # Keep the OpenClaw-side flag conservative for manual tests.
 $env:INOXPRAN_SEO_AGENT_AUTO_PUBLISH = 'false'
+
+if (Test-Path $syncAgentsScript) {
+    & powershell -ExecutionPolicy Bypass -File $syncAgentsScript -Profile $Profile
+}
 
 $args = @()
 if ($Profile) {

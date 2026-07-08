@@ -157,7 +157,15 @@ The backend must also have `SEO_AGENT_ENABLED=true`. Do not run this against pro
 
 ## Manual OpenClaw Workflow Test
 
-Start OpenClaw with the local project profile first:
+The admin UI now includes an OpenClaw operations dashboard:
+
+```text
+/admin/openclaw
+```
+
+Use it to start/stop the local OpenClaw Gateway service, refresh OpenClaw status, install verified ClawHub skills, create a smoke-test draft, and run the daily draft workflow without typing shell commands. The dashboard runs only fixed backend allowlisted actions and redacts command output before showing it in the browser.
+
+If the dashboard is unavailable, start OpenClaw with the local project profile manually:
 
 ```powershell
 openclaw --profile inoxpran gateway run --auth token --bind loopback --port 18789

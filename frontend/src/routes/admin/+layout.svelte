@@ -27,6 +27,11 @@
 			{ href: '/admin/products', label: $t('admin.nav.products') },
 			{ href: '/admin/reviews', label: $t('admin.nav.reviews') },
 			{ href: '/admin/blogs', label: $t('admin.nav.blogs') },
+			{
+				href: '/admin/openclaw',
+				label: 'OpenClaw AI',
+				roles: ['ADMIN', 'SUPER_ADMIN']
+			},
 			{ href: '/admin/best-selling', label: $t('admin.nav.bestSelling') },
 			{
 				href: '/admin/home-slides',
