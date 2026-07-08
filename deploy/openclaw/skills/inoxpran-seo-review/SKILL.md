@@ -23,6 +23,7 @@ Output JSON:
   "brandSafety": "pass",
   "duplicateRisk": "low",
   "claimRisk": "low",
+  "imageSafety": "pass",
   "reasons": [],
   "fixes": []
 }

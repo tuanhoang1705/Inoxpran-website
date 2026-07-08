@@ -3,6 +3,7 @@
 const express = require("express");
 const adminController = require("../../controllers/admin.controller");
 const contactController = require("../../controllers/contact.controller");
+const openclawDashboardController = require("../../controllers/openclawDashboard.controller");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
 const { upload, uploadLarge } = require("../../middleware/upload");
@@ -95,6 +96,26 @@ router.delete(
 router.get(
   "/dashboard-summary",
   asyncHandler(adminController.getDashboardSummary),
+);
+router.get(
+  "/openclaw",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(openclawDashboardController.getDashboard),
+);
+router.get(
+  "/openclaw/runs",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(openclawDashboardController.listRuns),
+);
+router.post(
+  "/openclaw/runs",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(openclawDashboardController.startRun),
+);
+router.get(
+  "/openclaw/runs/:runId",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(openclawDashboardController.getRun),
 );
 router.get(
   "/home-slides",

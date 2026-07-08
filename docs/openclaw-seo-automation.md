@@ -1,6 +1,6 @@
 # OpenClaw SEO Automation
 
-This feature adds a safe publishing lane for daily Inoxpran SEO blog automation. OpenClaw agents research, write, review, and report. The publisher agent can only call the backend automation API, never MongoDB and never the admin UI.
+This feature adds a safe publishing lane for daily Inoxpran SEO blog automation. OpenClaw agents research, position, ideate, write, prepare image briefs, review, draft/publish, and report. The publisher agent can only call the backend automation API, never MongoDB and never the admin UI.
 
 ## Architecture
 
@@ -33,6 +33,7 @@ Publish pass conditions:
 - `review.brandSafety = pass`
 - `review.duplicateRisk != high`
 - `review.claimRisk != high`
+- `review.imageSafety = pass`
 - content word count is within `SEO_AGENT_MIN_WORDS` and `SEO_AGENT_MAX_WORDS`
 
 If any publish condition fails, the API creates a draft.
@@ -40,38 +41,39 @@ If any publish condition fails, the API creates a draft.
 ## Agents
 
 - `seo-orchestrator`: coordinates the daily workflow and never publishes directly.
-- `keyword-researcher`: researches topic candidates.
+- `market-insight-analyst`: researches audience pains, competitor angles, demand signals, and positioning opportunities.
+- `keyword-researcher`: researches topic candidates, keywords, SERP intent notes, content gaps, and internal-link opportunities.
+- `content-ideator`: scores daily topic ideas and chooses one recommended article idea.
 - `seo-strategist`: creates the SEO brief.
 - `content-writer`: writes Vietnamese HTML content and never publishes.
+- `image-planner`: creates image prompts, alt text, captions, and fallback image metadata. It does not upload or publish.
 - `seo-reviewer`: produces review JSON and pass/fail reasons.
 - `publisher`: calls only the backend automation API through `inoxpran-seo-publisher`.
 - `qa-agent`: verifies published URLs.
-- `reporter`: summarizes the run and can report through n8n if the skill is verified.
+- `reporter`: summarizes the run.
 
 ## Skills
 
-ClawHub skills to inspect and verify before install:
+ClawHub core skills installed only after `clawhub inspect` and `openclaw skills verify` pass:
 
-- `global-search`
-- `firecrawl-api`
-- `sovereign-content-scraper`
-- `ghost-blog-writer`
-- `contentforge-api`
-- `free-text-generator`
-- `rankforge-api`
-- `claim-verifier`
-- `openclaw-prompt-shield`
-- `skylv-secret-detector`
-- `page-agent-browser`
-- `remote-browser`
-- `n8n-pilot`
+- `skill-vetter`
+- `ddg-web-search` installs as `ddg-search`
+- `firecrawl-api` installs as `firecrawl`
+- `market-research` installs as `Market Research`
+- `deep-research-agent` installs as `research-agent`
+- `content-generation`
+- `image-generation` installs as `AI Image Generation`
 
 Local repository skills:
 
 - `inoxpran-brand-voice`
+- `inoxpran-search-console`
+- `inoxpran-seo-research-brief`
+- `inoxpran-positioning`
+- `inoxpran-topic-planner`
+- `inoxpran-blog-image-brief`
 - `inoxpran-seo-review`
 - `inoxpran-seo-publisher`
-- `inoxpran-search-console`
 
 Run:
 
@@ -79,7 +81,16 @@ Run:
 bash scripts/openclaw/install-skills.sh
 ```
 
+Windows PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/openclaw/install-skills.ps1 -VerifyOnly
+powershell -ExecutionPolicy Bypass -File scripts/openclaw/install-skills.ps1
+```
+
 The script writes `deploy/openclaw/SKILL_INSTALL_REPORT.md`. It skips any skill that fails inspection or verification.
+
+The detailed ClawHub selection and rejected-skill rationale is in `docs/openclaw-clawhub-skill-selection.md`.
 
 ## Environment
 
@@ -107,6 +118,7 @@ INOXPRAN_SEO_AGENT_AUTO_PUBLISH=false
 INOXPRAN_SEO_AGENT_API_KEY="${SEO_AGENT_API_KEY}"
 INOXPRAN_SEO_AGENT_HMAC_SECRET="${SEO_AGENT_HMAC_SECRET}"
 API_KEY=existing-backend-api-key
+FIRECRAWL_API_KEY=optional-firecrawl-key
 ```
 
 Keep `.env`, `.htpasswd`, service account JSON, runtime OpenClaw data, and generated secret-bearing reports out of git.
@@ -132,7 +144,40 @@ export SEO_AGENT_HMAC_SECRET="automation-hmac-secret"
 bash scripts/openclaw/smoke-test-publish.sh
 ```
 
+Windows PowerShell:
+
+```powershell
+$env:API_KEY="existing-backend-api-key"
+$env:SEO_AGENT_API_KEY="automation-key"
+$env:SEO_AGENT_HMAC_SECRET="automation-hmac-secret"
+powershell -ExecutionPolicy Bypass -File scripts/openclaw/smoke-test-publish.ps1
+```
+
 The backend must also have `SEO_AGENT_ENABLED=true`. Do not run this against production unless you accept a test draft being created.
+
+## Manual OpenClaw Workflow Test
+
+The admin UI now includes an OpenClaw operations dashboard:
+
+```text
+/admin/openclaw
+```
+
+Use it to start/stop the local OpenClaw Gateway service, refresh OpenClaw status, install verified ClawHub skills, create a smoke-test draft, and run the daily draft workflow without typing shell commands. The dashboard runs only fixed backend allowlisted actions and redacts command output before showing it in the browser.
+
+If the dashboard is unavailable, start OpenClaw with the local project profile manually:
+
+```powershell
+openclaw --profile inoxpran gateway run --auth token --bind loopback --port 18789
+```
+
+In another PowerShell window, run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/openclaw/run-daily-draft.ps1
+```
+
+This sends `deploy/openclaw/prompts/daily-seo-blog.md` to `seo-orchestrator` through OpenClaw and keeps the OpenClaw-side publishing flag draft-only. The backend still enforces final draft/publish behavior through `SEO_AGENT_AUTO_PUBLISH`.
 
 ## Docker Compose
 
@@ -184,6 +229,7 @@ If OpenClaw uses a port other than `18789`, update `deploy/nginx/default.conf`.
 - Optional IP allowlist is supported through `SEO_AGENT_ALLOWED_IPS`.
 - Publisher agent has no browser, shell, MongoDB, or admin UI access in config.
 - Agents cannot publish unless reviewer pass conditions are satisfied.
+- Backend publish gate rejects publishing when `review.imageSafety` is not `pass`.
 - Content is sanitized. Scripts, styles, inline event handlers, unsafe links, and untrusted images are removed.
 
 ## Rollback
@@ -204,6 +250,8 @@ docker compose stop openclaw
 
 - OpenClaw image and config schema must be verified on the VPS.
 - ClawHub skill availability is unknown until `install-skills.sh` runs with both CLIs installed.
+- Some relevant ClawHub SEO skills were not installed because `openclaw skills verify` returned fail/pending on 2026-07-07. Re-verify before reconsidering them.
 - Search Console is a local placeholder skill until a verified integration exists.
+- Actual image file generation/upload is provider-dependent. Core behavior creates a safe image brief and uses `SEO_AGENT_DEFAULT_BLOG_IMAGE` unless a verified image provider returns an image URL.
 - Nginx certificate coverage for `seo-agent.inoxpran.com` must be reissued and verified manually.
 - Smoke test requires a running backend and safe non-production env values.
