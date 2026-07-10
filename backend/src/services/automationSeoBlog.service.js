@@ -4,6 +4,7 @@ const { blog } = require('../models/blog.model');
 const { BadRequestError } = require('../core/error.response');
 const { normalizeString } = require('../utils/seoBlogSanitizer');
 const { validateAutomationPayload } = require('../utils/seoBlogValidation');
+const { runImagePipeline } = require('./openclaw/imagePipeline.service');
 
 const WORDS_PER_MINUTE = 220;
 const DEFAULT_SITE_URL = 'https://inoxpran.com';
@@ -30,12 +31,22 @@ const appendDraftReason = (reasons, reason) => {
     if (!reasons.includes(reason)) reasons.push(reason);
 };
 
-const createBlogDocument = ({ normalized, shouldPublish }) => ({
+const createBlogDocument = ({ normalized, shouldPublish, imagePipeline }) => ({
+    sourceType: 'agentic',
+    generationMetadata: {
+        provider: 'openclaw',
+        generatedAt: new Date().toISOString()
+    },
     blog_title: normalized.title,
     blog_slug: normalized.slug,
     blog_excerpt: normalized.excerpt,
-    blog_content: normalized.contentHtml,
-    blog_image: normalized.imageUrl,
+    blog_content: imagePipeline.contentHtml || normalized.contentHtml,
+    blog_image: imagePipeline.coverImage?.url || normalized.imageUrl,
+    blog_image_path: imagePipeline.coverImage?.path || '',
+    coverImage: imagePipeline.coverImage,
+    contentImages: imagePipeline.contentImages,
+    visualPlan: imagePipeline.visualPlan,
+    imagePipelineStatus: imagePipeline.status,
     blog_category_key: normalized.categoryKey,
     blog_tags: normalized.tags,
     blog_author_name: normalized.authorName,
@@ -80,10 +91,52 @@ class AutomationSeoBlogService {
             appendDraftReason(reasons, 'draft_mode_requested');
         }
 
-        const shouldPublish = requestedPublish && envAutoPublish && normalized.publishGate.passes;
+        let imagePipeline;
+        try {
+            imagePipeline = await runImagePipeline({
+                title: normalized.title,
+                slug: normalized.slug,
+                category: normalized.categoryKey,
+                summary: normalized.excerpt,
+                outline: normalized.outline,
+                contentHtml: normalized.contentHtml,
+                primaryKeyword: normalized.primaryKeyword,
+                articleType: normalized.articleType
+            });
+        } catch (error) {
+            imagePipeline = {
+                visualPlan: null,
+                coverImage: {
+                    url: '',
+                    status: 'failed',
+                    warning: error?.message || 'image_pipeline_failed'
+                },
+                contentImages: [],
+                contentHtml: normalized.contentHtml,
+                status: 'failed',
+                warnings: [error?.message || 'image_pipeline_failed'],
+                coverReadyForPublish: false,
+                publishReady: false
+            };
+        }
+
+        const requireCover = parseBoolean(process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH, true);
+        if (requestedPublish && requireCover && !imagePipeline.coverReadyForPublish) {
+            appendDraftReason(reasons, 'cover_image_required_for_publish');
+        }
+        if (requestedPublish && !imagePipeline.publishReady) {
+            appendDraftReason(reasons, 'image_pipeline_not_ready_for_publish');
+        }
+
+        const shouldPublish =
+            requestedPublish &&
+            envAutoPublish &&
+            normalized.publishGate.passes &&
+            imagePipeline.publishReady &&
+            (!requireCover || imagePipeline.coverReadyForPublish);
         let created;
         try {
-            created = await blog.create(createBlogDocument({ normalized, shouldPublish }));
+            created = await blog.create(createBlogDocument({ normalized, shouldPublish, imagePipeline }));
         } catch (error) {
             if (error?.code === 11000) {
                 throw new BadRequestError('blog_slug already exists');
@@ -103,7 +156,11 @@ class AutomationSeoBlogService {
             published: shouldPublish,
             reasons,
             wordCount: normalized.wordCount,
-            metadata: normalized.metadata
+            metadata: normalized.metadata,
+            imagePipelineStatus: imagePipeline.status,
+            imageWarnings: imagePipeline.warnings,
+            coverImage: imagePipeline.coverImage,
+            contentImages: imagePipeline.contentImages
         };
     }
 }

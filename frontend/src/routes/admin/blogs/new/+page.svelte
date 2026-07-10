@@ -5,6 +5,7 @@
 	import { t } from '$lib/i18n/admin/index.js';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import { toSeoSlug } from '$lib/utils/seoSlug.js';
+	import { getAdminBlogCategoryTranslationKey } from '$lib/utils/adminBlogPresentation.js';
 
 	let { data, form } = $props();
 
@@ -38,12 +39,12 @@
 	let imageError = $state('');
 
 	const categories = $derived([
-		{ value: 'guide', label: $t('blog.categoryGuide') },
-		{ value: 'care', label: $t('blog.categoryCare') },
-		{ value: 'knowledge', label: $t('blog.categoryKnowledge') },
-		{ value: 'trend', label: $t('blog.categoryTrend') },
-		{ value: 'product', label: $t('blog.categoryProduct') },
-		{ value: 'design', label: $t('blog.categoryDesign') }
+		{ value: 'guide', label: $t(getAdminBlogCategoryTranslationKey('guide')) },
+		{ value: 'care', label: $t(getAdminBlogCategoryTranslationKey('care')) },
+		{ value: 'knowledge', label: $t(getAdminBlogCategoryTranslationKey('knowledge')) },
+		{ value: 'trend', label: $t(getAdminBlogCategoryTranslationKey('trend')) },
+		{ value: 'product', label: $t(getAdminBlogCategoryTranslationKey('product')) },
+		{ value: 'design', label: $t(getAdminBlogCategoryTranslationKey('design')) }
 	]);
 
 	const plainTextFromHtml = (html) =>
@@ -307,11 +308,7 @@
 			<input type="hidden" name="blog_image_name" value={cropFileName} />
 		{/if}
 		{#if lastCropState}
-			<input
-				type="hidden"
-				name="blog_image_crop_state"
-				value={JSON.stringify(lastCropState)}
-			/>
+			<input type="hidden" name="blog_image_crop_state" value={JSON.stringify(lastCropState)} />
 		{/if}
 
 		<div class="col-12 col-xl-8 d-grid gap-3">
@@ -365,14 +362,21 @@
 			<div class="border rounded-3 bg-white p-3">
 				<h5 class="mb-2">{$t('admin.blogEditor.coverImage')}</h5>
 				<p class="text-black-50 small mb-2">{$t('admin.blogEditor.coverHint')}</p>
-				<input
-					type="file"
-					name="blog_image"
-					class="form-control"
-					accept="image/*"
-					required
-					onchange={handleCoverChange}
-				/>
+				<div class="file-input-wrapper">
+					<label class="file-input-label" for="blog-cover-input">
+						{$t('admin.blogEditor.replaceImage')}
+					</label>
+					<input
+						id="blog-cover-input"
+						type="file"
+						name="blog_image"
+						accept="image/*"
+						onchange={handleCoverChange}
+					/>
+					{#if cropFileName}
+						<span class="file-input-name">{cropFileName}</span>
+					{/if}
+				</div>
 				{#if imageError}
 					<div class="text-danger small mt-2">{imageError}</div>
 				{/if}
@@ -615,11 +619,11 @@
 
 			<div class="border rounded-3 bg-white p-3">
 				<h5 class="mb-2">{$t('admin.blogEditor.preview')}</h5>
-					{#if blogTitle || blogExcerpt}
-						<div class="preview-card">
-							{#if previewCover}
-								<img src={previewCover} alt="Preview cover" />
-							{/if}
+				{#if blogTitle || blogExcerpt}
+					<div class="preview-card">
+						{#if previewCover}
+							<img src={previewCover} alt="Preview cover" />
+						{/if}
 						<div class="preview-content">
 							<h6>{blogTitle || '--'}</h6>
 							<p>{blogExcerpt || '--'}</p>
@@ -728,5 +732,12 @@
 	.cropper-actions {
 		display: flex;
 		gap: 0.5rem;
+	}
+
+	.file-input-name {
+		margin-left: 0.6rem;
+		color: #5e665f;
+		font-size: 0.85rem;
+		word-break: break-all;
 	}
 </style>

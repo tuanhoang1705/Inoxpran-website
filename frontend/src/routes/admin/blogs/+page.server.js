@@ -21,10 +21,12 @@ const loadBlogs = async ({ fetch, headers, url }) => {
 	const status = String(url.searchParams.get('status') || 'all').trim();
 	const q = String(url.searchParams.get('q') || '').trim();
 	const category = String(url.searchParams.get('category') || '').trim();
+	const source = String(url.searchParams.get('source') || '').trim();
 
 	if (status && status !== 'all') params.set('status', status);
 	if (q) params.set('q', q);
 	if (category && category !== 'all') params.set('category', category);
+	if (source && source !== 'all') params.set('source', source);
 
 	const response = await fetch(`${API_BASE}/blog/admin/all?${params.toString()}`, {
 		headers
@@ -38,7 +40,8 @@ const loadBlogs = async ({ fetch, headers, url }) => {
 			page,
 			status: status || 'all',
 			q,
-			category: category || 'all'
+			category: category || 'all',
+			source: source || 'all'
 		}
 	};
 };
@@ -78,7 +81,8 @@ export const load = async ({ cookies, fetch, url }) => {
 				page: 1,
 				status: String(url.searchParams.get('status') || 'all').trim() || 'all',
 				q: String(url.searchParams.get('q') || '').trim(),
-				category: String(url.searchParams.get('category') || 'all').trim() || 'all'
+				category: String(url.searchParams.get('category') || 'all').trim() || 'all',
+				source: String(url.searchParams.get('source') || 'all').trim() || 'all'
 			},
 			apiError: t('admin.blogs.errors.load')
 		};

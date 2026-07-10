@@ -1,9 +1,18 @@
 <script>
 	export let content = '';
+
+	// Wrap tables in a horizontally scrollable container so wide comparison
+	// tables from the editor never force the page to scroll sideways on mobile.
+	const wrapTables = (html) =>
+		String(html || '')
+			.replace(/<table(\b[^>]*)>/gi, '<div class="rtd-table-scroll"><table$1>')
+			.replace(/<\/table>/gi, '</table></div>');
+
+	$: displayContent = wrapTables(content);
 </script>
 
 <div class="rich-text-display">
-	{@html content}
+	{@html displayContent}
 </div>
 
 <style>
@@ -104,10 +113,44 @@
 		padding: 0;
 	}
 
+	:global(.rich-text-display figure) {
+		margin: 20px 0;
+	}
+
+	:global(.rich-text-display figure img) {
+		margin: 0;
+	}
+
+	:global(.rich-text-display figcaption) {
+		margin-top: 8px;
+		text-align: center;
+		font-size: 13px;
+		color: #6b6b6b;
+		font-style: italic;
+	}
+
+	:global(.rich-text-display ul[data-type='taskList']) {
+		list-style: none;
+		margin-left: 0;
+		padding-left: 0;
+	}
+
+	:global(.rich-text-display ul[data-type='taskList'] li) {
+		display: flex;
+		gap: 8px;
+		align-items: flex-start;
+	}
+
+	:global(.rich-text-display .rtd-table-scroll) {
+		overflow-x: auto;
+		-webkit-overflow-scrolling: touch;
+		margin: 16px 0;
+	}
+
 	:global(.rich-text-display table) {
 		width: 100%;
 		border-collapse: collapse;
-		margin: 16px 0;
+		margin: 0;
 	}
 
 	:global(.rich-text-display th),

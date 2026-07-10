@@ -1,5 +1,6 @@
 <script>
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { locale } from '$lib/i18n/admin/index.js';
 
 	let { data } = $props();
@@ -14,6 +15,9 @@
 	// svelte-ignore state_referenced_locally
 	let pageError = $state(data?.loadError || '');
 	let lastUpdatedAt = $state(new Date().toISOString());
+	// svelte-ignore state_referenced_locally
+	const initialSchedulesData = data?.schedules || {};
+	let scheduleRuntime = $state(initialSchedulesData?.runtime || {});
 
 	const isEn = $derived($locale === 'en');
 	const automation = $derived(dashboard?.automation || {});
@@ -83,7 +87,7 @@
 		},
 		'daily-draft': {
 			label: isEn ? 'Daily draft' : 'Chạy daily draft',
-			detail: isEn ? 'Full multi-agent workflow' : 'Full workflow multi-agent'
+			detail: isEn ? 'Run now or manage blog schedules' : 'Chạy ngay hoặc quản lý lịch tạo bài'
 		}
 	});
 
@@ -244,6 +248,18 @@
 			</strong>
 		</div>
 		<div class="status-tile">
+			<span>Blog cron</span>
+			<strong class:good={scheduleRuntime.cronEnabled} class:bad={!scheduleRuntime.cronEnabled}>
+				{scheduleRuntime.cronEnabled ? 'ON' : 'OFF'}
+			</strong>
+		</div>
+		<div class="status-tile">
+			<span>Telegram</span>
+			<strong class:good={scheduleRuntime.telegramEnabled} class:bad={!scheduleRuntime.telegramEnabled}>
+				{scheduleRuntime.telegramEnabled ? 'ON' : 'OFF'}
+			</strong>
+		</div>
+		<div class="status-tile">
 			<span>{copy.profile}</span>
 			<strong>{dashboard?.profile || 'inoxpran'}</strong>
 		</div>
@@ -268,9 +284,12 @@
 					<button
 						type="button"
 						class="command-button"
-						class:is-danger={action.id === 'smoke-test' || action.id === 'daily-draft'}
-						disabled={Boolean(busyAction)}
-						onclick={() => startRun(action.id)}
+						class:is-danger={action.id === 'smoke-test'}
+						disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+						onclick={() =>
+							action.id === 'daily-draft'
+								? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+								: startRun(action.id)}
 					>
 						<span>{actionMeta[action.id]?.label || action.label}</span>
 						<small>{actionMeta[action.id]?.detail || action.label}</small>
@@ -293,7 +312,16 @@
 				<div><span>API_KEY</span><b class:good={env.API_KEY}>{env.API_KEY ? 'set' : 'missing'}</b></div>
 				<div><span>SEO_AGENT_API_KEY</span><b class:good={env.SEO_AGENT_API_KEY}>{env.SEO_AGENT_API_KEY ? 'set' : 'missing'}</b></div>
 				<div><span>SEO_AGENT_HMAC_SECRET</span><b class:good={env.SEO_AGENT_HMAC_SECRET}>{env.SEO_AGENT_HMAC_SECRET ? 'set' : 'missing'}</b></div>
+				<div><span>IMAGE_PIPELINE</span><b class:good={automation.imagePipelineEnabled}>{automation.imagePipelineEnabled ? 'enabled' : 'disabled'}</b></div>
+				<div><span>REQUIRE_COVER</span><b class:good={automation.requireCoverForPublish}>{automation.requireCoverForPublish ? 'true' : 'false'}</b></div>
+				<div><span>IMAGE_SEARCH</span><b>{automation.imageSearchProvider || 'disabled'}{env.IMAGE_SEARCH_API_KEY ? ' / set' : ''}</b></div>
+				<div><span>AI_IMAGE</span><b>{automation.aiImageProvider || 'disabled'}{env.AI_IMAGE_API_KEY ? ' / set' : ''}</b></div>
 				<div><span>FIRECRAWL_API_KEY</span><b>{env.FIRECRAWL_API_KEY ? 'set' : 'optional'}</b></div>
+				<div><span>OPENCLAW_BLOG_CRON_ENABLED</span><b class:good={scheduleRuntime.cronEnabled}>{scheduleRuntime.cronEnabled ? 'true' : 'false'}</b></div>
+				<div><span>TELEGRAM_BOT_ENABLED</span><b class:good={scheduleRuntime.telegramEnabled}>{scheduleRuntime.telegramEnabled ? 'true' : 'false'}</b></div>
+				<div><span>TELEGRAM_BOT_TOKEN</span><b class:good={env.TELEGRAM_BOT_TOKEN}>{env.TELEGRAM_BOT_TOKEN ? 'set' : 'missing'}</b></div>
+				<div><span>TELEGRAM_WEBHOOK_SECRET</span><b class:good={env.TELEGRAM_WEBHOOK_SECRET}>{env.TELEGRAM_WEBHOOK_SECRET ? 'set' : 'missing'}</b></div>
+				<div><span>TELEGRAM_ALLOWLIST</span><b class:good={env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS}>{env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS ? 'set' : 'missing'}</b></div>
 			</div>
 		</section>
 	</div>
@@ -475,7 +503,7 @@
 
 	.status-strip {
 		display: grid;
-		grid-template-columns: repeat(5, minmax(0, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 		gap: 0.75rem;
 	}
 
@@ -767,6 +795,10 @@
 
 		.run-output__meta code {
 			max-width: 100%;
+		}
+
+		.form-grid {
+			grid-template-columns: 1fr;
 		}
 	}
 </style>

@@ -8,6 +8,50 @@ const COLLECTION_NAME = 'Blogs';
 const MAX_SEO_SLUG_LENGTH = Number(process.env.BLOG_SLUG_MAX_LENGTH || 80);
 
 const BLOG_CATEGORY_KEYS = ['guide', 'care', 'knowledge', 'trend', 'product', 'design'];
+const IMAGE_STATUSES = ['pending_generation', 'needs_review', 'complete', 'rejected', 'failed'];
+const IMAGE_REVIEW_STATUSES = ['pending_review', 'approved', 'rejected', 'replaced'];
+const BLOG_SOURCE_TYPES = ['manual', 'agentic'];
+
+const imageMetadataSchema = new Schema(
+    {
+        url: { type: String, default: '' },
+        path: { type: String, default: '' },
+        alt: { type: String, default: '' },
+        title: { type: String, default: '' },
+        caption: { type: String, default: '' },
+        width: { type: Number, default: 0 },
+        height: { type: Number, default: 0 },
+        mimeType: { type: String, default: '' },
+        sizeBytes: { type: Number, default: 0 },
+        sourceType: { type: String, default: '' },
+        sourceUrl: { type: String, default: '' },
+        license: { type: String, default: '' },
+        author: { type: String, default: '' },
+        prompt: { type: String, default: '' },
+        model: { type: String, default: '' },
+        checksum: { type: String, default: '' },
+        status: { type: String, enum: IMAGE_STATUSES, default: 'pending_generation' },
+        warning: { type: String, default: '' },
+        qualityReview: { type: Schema.Types.Mixed, default: null },
+        imageId: { type: String, default: '' },
+        reviewStatus: {
+            type: String,
+            enum: IMAGE_REVIEW_STATUSES,
+            default: 'pending_review'
+        },
+        replacementMetadata: { type: Schema.Types.Mixed, default: null }
+    },
+    { _id: false }
+);
+
+const contentImageSchema = new Schema(
+    {
+        ...imageMetadataSchema.obj,
+        afterHeading: { type: String, default: '' },
+        headingIndex: { type: Number, default: -1 }
+    },
+    { _id: false }
+);
 
 const blogSchema = new Schema(
     {
@@ -18,6 +62,21 @@ const blogSchema = new Schema(
         blog_image: { type: String, required: true },
         blog_image_path: { type: String },
         blog_image_variants: { type: Schema.Types.Mixed, default: null },
+        coverImage: { type: imageMetadataSchema, default: () => ({}) },
+        contentImages: { type: [contentImageSchema], default: [] },
+        visualPlan: { type: Schema.Types.Mixed, default: null },
+        sourceType: {
+            type: String,
+            enum: BLOG_SOURCE_TYPES,
+            index: true
+        },
+        generationMetadata: { type: Schema.Types.Mixed, default: null },
+        imagePipelineStatus: {
+            type: String,
+            enum: ['pending', 'partial', 'complete', 'failed'],
+            default: 'pending',
+            index: true
+        },
         blog_image_crop_state: {
             zoom: { type: Number },
             offsetX: { type: Number },
@@ -78,5 +137,7 @@ blogSchema.pre('validate', function (next) {
 
 module.exports = {
     blog: model(DOCUMENT_NAME, blogSchema),
-    BLOG_CATEGORY_KEYS
+    BLOG_CATEGORY_KEYS,
+    BLOG_SOURCE_TYPES,
+    IMAGE_REVIEW_STATUSES
 };

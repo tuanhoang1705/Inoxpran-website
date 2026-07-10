@@ -669,7 +669,8 @@ export const messages = {
 				thumb: 'Ảnh đại diện',
 				thumbHint: 'Ảnh tối đa 1920x1920px, dung lượng tối đa 5MB.',
 				gallery: 'Ảnh chi tiết',
-				galleryHint: 'Kéo thả hoặc chọn ảnh chi tiết tối đa 1920x1920px, dung lượng tối đa 5MB/ảnh.',
+				galleryHint:
+					'Kéo thả hoặc chọn ảnh chi tiết tối đa 1920x1920px, dung lượng tối đa 5MB/ảnh.',
 				galleryPrompt: 'Kéo thả hoặc bấm để chọn ảnh',
 				chooseImage: 'Chọn ảnh từ máy',
 				chooseImages: 'Chọn ảnh từ máy',
@@ -742,7 +743,8 @@ export const messages = {
 				uploadLabel: 'Tải ảnh đại diện',
 				uploadHelp: 'Ảnh tối đa 1920x1920px, dung lượng tối đa 5MB.',
 				gallery: 'Ảnh chi tiết',
-				galleryHint: 'Kéo thả hoặc chọn ảnh chi tiết tối đa 1920x1920px, dung lượng tối đa 5MB/ảnh.',
+				galleryHint:
+					'Kéo thả hoặc chọn ảnh chi tiết tối đa 1920x1920px, dung lượng tối đa 5MB/ảnh.',
 				galleryPrompt: 'Kéo thả hoặc bấm để chọn ảnh',
 				chooseImage: 'Chọn ảnh từ máy',
 				chooseImages: 'Chọn ảnh từ máy',
@@ -824,8 +826,30 @@ export const messages = {
 					statusPublished: 'Đã xuất bản',
 					statusDraft: 'Bản nháp',
 					categoryAll: 'Tất cả danh mục',
+					sourceAll: 'Tất cả nguồn',
+					sourceAgentic: 'Agentic',
+					sourceManual: 'Thủ công',
 					apply: 'Lọc'
 				},
+				categories: {
+					guide: 'Hướng dẫn',
+					care: 'Chăm sóc & bảo quản',
+					knowledge: 'Kiến thức',
+					trend: 'Xu hướng',
+					product: 'Sản phẩm',
+					design: 'Thiết kế',
+					news: 'Tin tức',
+					tips: 'Mẹo hay',
+					comparison: 'So sánh',
+					buyingGuide: 'Tư vấn mua hàng',
+					other: 'Khác'
+				},
+				source: {
+					label: 'Nguồn',
+					agentic: 'Agentic',
+					manual: 'Thủ công'
+				},
+				readTimeValue: '{minutes} phút',
 				table: {
 					title: 'Tiêu đề',
 					category: 'Danh mục',
@@ -850,6 +874,69 @@ export const messages = {
 				success: {
 					published: 'Đã xuất bản bài viết.',
 					unpublished: 'Đã chuyển bài viết về bản nháp.'
+				}
+			},
+			blogImageReview: {
+				status: {
+					pending_review: 'Chờ duyệt',
+					approved: 'Đã duyệt',
+					rejected: 'Bị từ chối',
+					replaced: 'Đã thay thế'
+				},
+				actions: {
+					approve: 'Duyệt ảnh',
+					reject: 'Từ chối',
+					edit: 'Sửa ảnh'
+				},
+				dialog: {
+					cover: 'Ảnh đại diện',
+					inline: 'Ảnh trong bài',
+					title: 'Chọn ảnh thay thế',
+					close: 'Đóng',
+					preview: 'Xem trước',
+					aiPreview: 'Ảnh được tạo bằng AI',
+					pexelsPreview: 'Ảnh được chọn từ Pexels',
+					localPreview: 'Ảnh được chọn từ máy',
+					replacementNote:
+						'Ảnh sẽ thay đúng vị trí đang được duyệt và được lưu với trạng thái “Đã thay thế”.',
+					back: 'Quay lại',
+					confirm: 'Xác nhận ảnh',
+					saving: 'Đang lưu...',
+					sourceLabel: 'Nguồn ảnh',
+					aiTab: 'Tạo ảnh AI',
+					pexelsTab: 'Tìm trên Pexels',
+					localTab: 'Từ máy',
+					promptLabel: 'Prompt tạo ảnh',
+					promptPlaceholder: 'Mô tả chủ thể, bối cảnh, ánh sáng và bố cục...',
+					suggestions: 'Gợi ý theo nội dung bài viết',
+					generate: 'Tạo ảnh xem trước',
+					generating: 'Đang tạo ảnh...',
+					searchAria: 'Từ khóa tìm ảnh Pexels',
+					searchPlaceholder: 'Ví dụ: vệ sinh nồi inox',
+					search: 'Tìm',
+					loadMore: 'Xem thêm',
+					loading: 'Đang tải...',
+					localTitle: 'Chọn ảnh trong máy tính',
+					localHint: 'Kéo thả hoặc chọn ảnh JPG, PNG, WebP tối đa 5MB. Ảnh sẽ được tối ưu và lưu vào bài viết.',
+					localChoose: 'Chọn ảnh',
+					cancel: 'Hủy'
+				},
+				errors: {
+					process: 'Không thể xử lý ảnh.',
+					search: 'Không thể tìm ảnh Pexels.',
+					minPrompt: 'Prompt cần ít nhất 20 ký tự.',
+					generate: 'Không thể tạo ảnh AI.',
+					replace: 'Không thể áp dụng ảnh thay thế.',
+					localType: 'Vui lòng chọn đúng tệp ảnh.',
+					localSize: 'Ảnh local cần nhỏ hơn hoặc bằng 5MB.',
+					localMissing: 'Chưa có ảnh local để xác nhận.',
+					suggestions: 'Không thể tải gợi ý prompt.',
+					review: 'Không thể cập nhật trạng thái ảnh.'
+				},
+				success: {
+					approved: 'Đã duyệt ảnh.',
+					rejected: 'Đã đánh dấu từ chối ảnh.',
+					replaced: 'Đã thay ảnh và lưu vào bài viết.'
 				}
 			},
 			blogsComments: {
@@ -1868,8 +1955,30 @@ export const messages = {
 					statusPublished: 'Published',
 					statusDraft: 'Draft',
 					categoryAll: 'All categories',
+					sourceAll: 'All sources',
+					sourceAgentic: 'Agentic',
+					sourceManual: 'Manual',
 					apply: 'Apply'
 				},
+				categories: {
+					guide: 'Guide',
+					care: 'Care & Maintenance',
+					knowledge: 'Knowledge',
+					trend: 'Trends',
+					product: 'Product',
+					design: 'Design',
+					news: 'News',
+					tips: 'Tips',
+					comparison: 'Comparison',
+					buyingGuide: 'Buying Guide',
+					other: 'Other'
+				},
+				source: {
+					label: 'Source',
+					agentic: 'Agentic',
+					manual: 'Manual'
+				},
+				readTimeValue: '{minutes} min read',
 				table: {
 					title: 'Title',
 					category: 'Category',
@@ -1894,6 +2003,69 @@ export const messages = {
 				success: {
 					published: 'Blog post published.',
 					unpublished: 'Blog post moved to draft.'
+				}
+			},
+			blogImageReview: {
+				status: {
+					pending_review: 'Pending review',
+					approved: 'Approved',
+					rejected: 'Rejected',
+					replaced: 'Replaced'
+				},
+				actions: {
+					approve: 'Approve image',
+					reject: 'Reject',
+					edit: 'Edit image'
+				},
+				dialog: {
+					cover: 'Cover image',
+					inline: 'Inline image',
+					title: 'Choose replacement image',
+					close: 'Close',
+					preview: 'Preview',
+					aiPreview: 'AI-generated image',
+					pexelsPreview: 'Image selected from Pexels',
+					localPreview: 'Image selected from your computer',
+					replacementNote:
+						'The image will replace the selected target and be saved with “Replaced” status.',
+					back: 'Back',
+					confirm: 'Confirm image',
+					saving: 'Saving...',
+					sourceLabel: 'Image source',
+					aiTab: 'Generate AI image',
+					pexelsTab: 'Search Pexels',
+					localTab: 'From computer',
+					promptLabel: 'Image prompt',
+					promptPlaceholder: 'Describe the subject, setting, lighting, and composition...',
+					suggestions: 'Suggestions from article content',
+					generate: 'Generate preview',
+					generating: 'Generating...',
+					searchAria: 'Pexels image search query',
+					searchPlaceholder: 'Example: cleaning stainless steel cookware',
+					search: 'Search',
+					loadMore: 'Load more',
+					loading: 'Loading...',
+					localTitle: 'Choose an image from this computer',
+					localHint: 'Drag and drop or choose a JPG, PNG, or WebP image up to 5MB. The image will be optimized and saved to the post.',
+					localChoose: 'Choose image',
+					cancel: 'Cancel'
+				},
+				errors: {
+					process: 'Unable to process the image.',
+					search: 'Unable to search Pexels.',
+					minPrompt: 'The prompt must contain at least 20 characters.',
+					generate: 'Unable to generate an AI image.',
+					replace: 'Unable to apply the replacement image.',
+					localType: 'Please choose an image file.',
+					localSize: 'The local image must be 5MB or smaller.',
+					localMissing: 'No local image is ready to confirm.',
+					suggestions: 'Unable to load prompt suggestions.',
+					review: 'Unable to update image status.'
+				},
+				success: {
+					approved: 'Image approved.',
+					rejected: 'Image marked as rejected.',
+					replaced: 'Image replaced and saved.'
 				}
 			},
 			blogsComments: {

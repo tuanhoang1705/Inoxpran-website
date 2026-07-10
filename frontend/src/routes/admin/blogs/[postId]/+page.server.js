@@ -168,6 +168,35 @@ export const actions = {
 			toast: { tone: 'success', message: t('admin.blogEditor.success.updated') }
 		};
 	},
+	reviewCover: async ({ request, cookies, fetch, params }) => {
+		const session = getAdminSession(cookies);
+		const headers = buildAdminHeaders(session);
+		const form = await request.formData();
+		const decision = String(form.get('decision') || '').trim().toLowerCase();
+		if (!['complete', 'rejected'].includes(decision)) {
+			return failWithToast(400, 'Quyết định duyệt ảnh không hợp lệ.');
+		}
+
+		const payload = new FormData();
+		payload.set('cover_image_status', decision);
+		const response = await fetch(`${API_BASE}/blog/${params.postId}`, {
+			method: 'PATCH',
+			headers,
+			body: payload
+		});
+		if (!response.ok) {
+			const message = await resolveErrorMessage(response, 'Không thể cập nhật trạng thái ảnh.');
+			return failWithToast(response.status, message);
+		}
+
+		const updated = await parsePayload(response);
+		const message = decision === 'complete' ? 'Đã duyệt ảnh đại diện.' : 'Đã từ chối ảnh đại diện.';
+		return {
+			success: true,
+			post: updated?.metadata,
+			toast: { tone: decision === 'complete' ? 'success' : 'warning', message }
+		};
+	},
 	publish: async ({ cookies, fetch, params, request }) => {
 		const session = getAdminSession(cookies);
 		const headers = buildAdminHeaders(session);

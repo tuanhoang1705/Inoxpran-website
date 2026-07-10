@@ -94,7 +94,7 @@ const redactForDashboard = (value) => {
     output = output.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
     output = output.replace(/([?&](?:token|auth|access_token)=)[^&\s"']+/gi, '$1[redacted]');
     output = output.replace(
-        /\b(API_KEY|SEO_AGENT_API_KEY|SEO_AGENT_HMAC_SECRET|OPENCLAW_GATEWAY_TOKEN|OPENAI_API_KEY|MONGODB_URI)(\s*[:=]\s*)([^\s"']+)/gi,
+        /\b(API_KEY|SEO_AGENT_API_KEY|SEO_AGENT_HMAC_SECRET|OPENCLAW_GATEWAY_TOKEN|OPENAI_API_KEY|MONGODB_URI|TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET)(\s*[:=]\s*)([^\s"']+)/gi,
         '$1$2[redacted]'
     );
     output = output.replace(
@@ -291,7 +291,15 @@ const buildDashboard = () => {
         'SEO_AGENT_API_KEY',
         'SEO_AGENT_HMAC_SECRET',
         'OPENCLAW_GATEWAY_TOKEN',
-        'FIRECRAWL_API_KEY'
+        'FIRECRAWL_API_KEY',
+        'IMAGE_SEARCH_API_KEY',
+        'AI_IMAGE_API_KEY',
+        'OPENCLAW_BLOG_CRON_ENABLED',
+        'TELEGRAM_BOT_ENABLED',
+        'TELEGRAM_BOT_TOKEN',
+        'TELEGRAM_WEBHOOK_SECRET',
+        'TELEGRAM_ALLOWED_CHAT_IDS',
+        'TELEGRAM_ALLOWED_USER_IDS'
     ];
 
     return {
@@ -307,7 +315,13 @@ const buildDashboard = () => {
             minSeoScore: Number(process.env.SEO_AGENT_MIN_SEO_SCORE || 85),
             minWords: Number(process.env.SEO_AGENT_MIN_WORDS || 800),
             maxWords: Number(process.env.SEO_AGENT_MAX_WORDS || 1800),
-            defaultImage: process.env.SEO_AGENT_DEFAULT_BLOG_IMAGE || '/images/og-image.png'
+            defaultImage: process.env.SEO_AGENT_DEFAULT_BLOG_IMAGE || '/og-image.png',
+            imagePipelineEnabled: parseBoolean(process.env.OPENCLAW_IMAGE_PIPELINE_ENABLED ?? 'true'),
+            requireCoverForPublish: parseBoolean(process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH ?? 'true'),
+            imageSearchProvider: process.env.IMAGE_SEARCH_PROVIDER || 'disabled',
+            aiImageProvider: process.env.AI_IMAGE_PROVIDER || 'disabled',
+            blogCronEnabled: parseBoolean(process.env.OPENCLAW_BLOG_CRON_ENABLED),
+            telegramEnabled: parseBoolean(process.env.TELEGRAM_BOT_ENABLED)
         },
         env: Object.fromEntries(requiredEnv.map((name) => [name, Boolean(process.env[name])])),
         openclaw: {
