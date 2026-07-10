@@ -2,17 +2,22 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
 	import { locale, t } from '$lib/i18n/admin/index.js';
+	import {
+		getAdminBlogCategoryTranslationKey,
+		getAdminBlogSourceTranslationKey,
+		isAgenticBlog
+	} from '$lib/utils/adminBlogPresentation.js';
 
 	let { data } = $props();
 
 	const categories = $derived.by(() => [
 		{ value: 'all', label: $t('admin.blogs.filters.categoryAll') },
-		{ value: 'guide', label: $t('blog.categoryGuide') },
-		{ value: 'care', label: $t('blog.categoryCare') },
-		{ value: 'knowledge', label: $t('blog.categoryKnowledge') },
-		{ value: 'trend', label: $t('blog.categoryTrend') },
-		{ value: 'product', label: $t('blog.categoryProduct') },
-		{ value: 'design', label: $t('blog.categoryDesign') }
+		{ value: 'guide', label: $t('admin.blogs.categories.guide') },
+		{ value: 'care', label: $t('admin.blogs.categories.care') },
+		{ value: 'knowledge', label: $t('admin.blogs.categories.knowledge') },
+		{ value: 'trend', label: $t('admin.blogs.categories.trend') },
+		{ value: 'product', label: $t('admin.blogs.categories.product') },
+		{ value: 'design', label: $t('admin.blogs.categories.design') }
 	]);
 
 	const items = $derived(Array.isArray(data?.items) ? data.items : []);
@@ -46,19 +51,23 @@
 
 	const statusTone = (item) => (item?.isPublished ? 'status-published' : 'status-draft');
 
-	const getCategoryLabel = (categoryKey) =>
-		categories.find((category) => category.value === categoryKey)?.label || '--';
+	const getCategoryLabel = (categoryKey) => $t(getAdminBlogCategoryTranslationKey(categoryKey));
+
+	const getSourceLabel = (item) => $t(getAdminBlogSourceTranslationKey(item));
 
 	const getViews = (item) => Number(item?.views || 0);
 
-	const getReadTime = (item) => $t('blog.readTime', { minutes: item?.readTimeMinutes || 1 });
+	const getReadTime = (item) =>
+		$t('admin.blogs.readTimeValue', { minutes: item?.readTimeMinutes || 1 });
 
 	const getUpdatedLabel = (item) => formatDate(item?.updatedAt || item?.createdAt);
 
 	const getSlug = (item) => String(item?.slug || '').trim();
 
 	const truncate = (value, limit = 180) => {
-		const text = String(value || '').replace(/\s+/g, ' ').trim();
+		const text = String(value || '')
+			.replace(/\s+/g, ' ')
+			.trim();
 		if (!text) return '';
 		return text.length <= limit ? text : `${text.slice(0, limit).trim()}...`;
 	};
@@ -131,8 +140,23 @@
 				</select>
 			</div>
 
+			<div class="field">
+				<label for="admin-blog-source">{$t('admin.blogs.source.label')}</label>
+				<select
+					id="admin-blog-source"
+					class="form-select"
+					name="source"
+					value={data?.filters?.source || 'all'}
+				>
+					<option value="all">{$t('admin.blogs.filters.sourceAll')}</option>
+					<option value="agentic">{$t('admin.blogs.filters.sourceAgentic')}</option>
+					<option value="manual">{$t('admin.blogs.filters.sourceManual')}</option>
+				</select>
+			</div>
+
 			<div class="field field-actions">
-				<button class="btn btn-outline-dark" type="submit">{$t('admin.blogs.filters.apply')}</button>
+				<button class="btn btn-outline-dark" type="submit">{$t('admin.blogs.filters.apply')}</button
+				>
 			</div>
 		</div>
 	</form>
@@ -171,6 +195,11 @@
 							</div>
 						</div>
 						<div class="blog-card__status">
+							<span
+								class={`source-chip ${isAgenticBlog(item) ? 'source-agentic' : 'source-manual'}`}
+							>
+								{getSourceLabel(item)}
+							</span>
 							<span class={`status-chip ${statusTone(item)}`}>{statusLabel(item)}</span>
 						</div>
 					</div>
@@ -247,7 +276,9 @@
 			>
 				{$t('common.paginationPrev')}
 			</a>
-			<span class="page-summary">{$t('common.pageLabel', { page: pagination.page })} / {totalPages}</span>
+			<span class="page-summary"
+				>{$t('common.pageLabel', { page: pagination.page })} / {totalPages}</span
+			>
 			<a
 				class={`page-link ${hasNextPage ? '' : 'disabled'}`}
 				href={resolve(buildPageHref(Math.min(pagination.page + 1, totalPages)))}
@@ -305,7 +336,7 @@
 
 	.filter-grid {
 		display: grid;
-		grid-template-columns: 1.8fr 1fr 1fr auto;
+		grid-template-columns: 1.6fr repeat(3, minmax(150px, 0.8fr)) auto;
 		gap: 12px;
 		align-items: end;
 	}
@@ -420,9 +451,15 @@
 
 	.blog-card__status {
 		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 6px;
+		flex-wrap: wrap;
 	}
 
-	.status-chip {
+	.status-chip,
+	.source-chip {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -444,6 +481,16 @@
 	.status-chip.status-draft {
 		background: rgba(255, 196, 87, 0.24);
 		color: #8a5a00;
+	}
+
+	.source-chip.source-agentic {
+		background: #e9efff;
+		color: #294f9e;
+	}
+
+	.source-chip.source-manual {
+		background: #eef0ef;
+		color: #59625e;
 	}
 
 	.blog-meta-grid {

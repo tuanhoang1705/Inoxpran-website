@@ -1,11 +1,17 @@
 // src/server.js
+const path = require('path');
 const dotenv = require('dotenv');
-dotenv.config();
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '.env'), override: true });
 
 const app = require('./src/app'); 
 const {
   cleanupExpiredPendingStorageUploads,
 } = require('./src/services/pendingStorageUpload.service');
+const {
+  startBlogAutomationScheduler,
+  stopBlogAutomationScheduler,
+} = require('./src/services/blogAutomationScheduler.runtime');
 // import { connectDB } from './src/config/db.js';
 
 const HOST = process.env.HOST || '0.0.0.0';
@@ -32,11 +38,16 @@ const PORT = Number(process.env.PORT) || 3056;
     cleanupExpiredPendingStorageUploads().catch((error) => {
       console.error('Initial pending upload cleanup failed:', error?.message || error);
     });
+    const blogScheduler = startBlogAutomationScheduler();
+    if (blogScheduler.started) {
+      console.log(`OpenClaw blog scheduler ready: ${blogScheduler.workerId}`);
+    }
 
     // Graceful shutdown
     const shutdown = (sig) => {
       console.log(`${sig} received. Shutting down...`);
       clearInterval(cleanupTimer);
+      stopBlogAutomationScheduler();
       server.close(() => {
         console.log('HTTP server closed.');
         process.exit(0);

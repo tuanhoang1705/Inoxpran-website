@@ -1,12 +1,12 @@
-﻿# ClawHub Skill Install Report
+# ClawHub Skill Install Report
 
-Generated: 2026-07-08T05:00:40Z
+Generated: 2026-07-10T04:21:29Z
 
 Procedure: inspect each slug, verify it, then install only verified skills.
 
-VerifyOnly: False
-Force: False
-Profile: inoxpran
+VERIFY_ONLY: false
+FORCE_SKILL_INSTALL: false
+OPENCLAW_PROFILE: inoxpran
 
 ## Core skills
 
@@ -17,6 +17,8 @@ Profile: inoxpran
 - `deep-research-agent`
 - `content-generation`
 - `image-generation`
+- `google-search-console-seo`
+- `sharpagent-content-safety`
 
 ## Not installed automatically
 
@@ -32,113 +34,55 @@ Profile: inoxpran
 
 ## skill-vetter
 
-ALREADY INSTALLED: skill-vetter
+SKIP: inspect failed
 
-    |
-    o  Doctor warnings ------------------------------------------------------+
-    |                                                                        |
-    |  - Left legacy config health state in place because 1 entry conflicts  |
-    |    with shared SQLite state:                                           |
-    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
-    |                                                                        |
-    +------------------------------------------------------------------------+
-    [state-migrations] Legacy state migration warnings:
-    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
-    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\skill-vetter. Re-run with force/update.
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
 
 ## ddg-web-search
 
-ALREADY INSTALLED: ddg-web-search
+SKIP: inspect failed
 
-    |
-    o  Doctor warnings ------------------------------------------------------+
-    |                                                                        |
-    |  - Left legacy config health state in place because 1 entry conflicts  |
-    |    with shared SQLite state:                                           |
-    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
-    |                                                                        |
-    +------------------------------------------------------------------------+
-    [state-migrations] Legacy state migration warnings:
-    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
-    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\ddg-web-search. Re-run with force/update.
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
 
 ## firecrawl-api
 
-ALREADY INSTALLED: firecrawl-api
+SKIP: inspect failed
 
-    |
-    o  Doctor warnings ------------------------------------------------------+
-    |                                                                        |
-    |  - Left legacy config health state in place because 1 entry conflicts  |
-    |    with shared SQLite state:                                           |
-    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
-    |                                                                        |
-    +------------------------------------------------------------------------+
-    [state-migrations] Legacy state migration warnings:
-    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
-    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\firecrawl-api. Re-run with force/update.
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
 
 ## market-research
 
-ALREADY INSTALLED: market-research
+SKIP: inspect failed
 
-    |
-    o  Doctor warnings ------------------------------------------------------+
-    |                                                                        |
-    |  - Left legacy config health state in place because 1 entry conflicts  |
-    |    with shared SQLite state:                                           |
-    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
-    |                                                                        |
-    +------------------------------------------------------------------------+
-    [state-migrations] Legacy state migration warnings:
-    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
-    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\market-research. Re-run with force/update.
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
 
 ## deep-research-agent
 
-ALREADY INSTALLED: deep-research-agent
+SKIP: inspect failed
 
-    |
-    o  Doctor warnings ------------------------------------------------------+
-    |                                                                        |
-    |  - Left legacy config health state in place because 1 entry conflicts  |
-    |    with shared SQLite state:                                           |
-    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
-    |                                                                        |
-    +------------------------------------------------------------------------+
-    [state-migrations] Legacy state migration warnings:
-    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
-    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\deep-research-agent. Re-run with force/update.
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
 
 ## content-generation
 
-ALREADY INSTALLED: content-generation
+SKIP: inspect failed
 
-    |
-    o  Doctor warnings ------------------------------------------------------+
-    |                                                                        |
-    |  - Left legacy config health state in place because 1 entry conflicts  |
-    |    with shared SQLite state:                                           |
-    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
-    |                                                                        |
-    +------------------------------------------------------------------------+
-    [state-migrations] Legacy state migration warnings:
-    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
-    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\content-generation. Re-run with force/update.
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
 
 ## image-generation
 
-ALREADY INSTALLED: image-generation
+SKIP: inspect failed
 
-    |
-    o  Doctor warnings ------------------------------------------------------+
-    |                                                                        |
-    |  - Left legacy config health state in place because 1 entry conflicts  |
-    |    with shared SQLite state:                                           |
-    |    C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json           |
-    |                                                                        |
-    +------------------------------------------------------------------------+
-    [state-migrations] Legacy state migration warnings:
-    - Left legacy config health state in place because 1 entry conflicts with shared SQLite state: C:\Users\Admin\.openclaw-inoxpran\logs\config-health.json
-    Skill already exists at C:\Users\Admin\.openclaw-inoxpran\skills\image-generation. Re-run with force/update.
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
+
+## google-search-console-seo
+
+SKIP: inspect failed
+
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
+
+## sharpagent-content-safety
+
+SKIP: inspect failed
+
+    /mnt/c/Users/Admin/AppData/Roaming/npm/clawhub: 15: exec: node: not found
 

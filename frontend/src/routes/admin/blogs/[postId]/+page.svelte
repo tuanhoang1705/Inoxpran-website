@@ -4,6 +4,8 @@
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { t } from '$lib/i18n/admin/index.js';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
+	import AgenticImageReviewDialog from '$lib/components/AgenticImageReviewDialog.svelte';
+	import { getAdminBlogCategoryTranslationKey } from '$lib/utils/adminBlogPresentation.js';
 	import { toSeoSlug } from '$lib/utils/seoSlug.js';
 
 	let { data, form } = $props();
@@ -30,6 +32,13 @@
 	let seoTitle = $state('');
 	let seoDescription = $state('');
 	let currentImage = $state('');
+	let coverImageMeta = $state(null);
+	let imagePipelineStatus = $state('');
+	let contentImageMeta = $state([]);
+	let isAgenticPost = $state(false);
+	let reviewDialogOpen = $state(false);
+	let reviewTarget = $state(null);
+	let imageReviewBusy = $state(false);
 	let coverPreviewUrl = $state('');
 	let cropFrame = $state(null);
 	let cropImageEl = $state(null);
@@ -51,14 +60,18 @@
 	let tagInput = $state('');
 	let tags = $state([]);
 	let relatedPostIds = $state([]);
+	let saveStatus = $state('');
+	let lastSavedContent = $state('');
+	let contentHydrated = $state(false);
+	let autosaveTimer;
 
 	const categories = $derived([
-		{ value: 'guide', label: $t('blog.categoryGuide') },
-		{ value: 'care', label: $t('blog.categoryCare') },
-		{ value: 'knowledge', label: $t('blog.categoryKnowledge') },
-		{ value: 'trend', label: $t('blog.categoryTrend') },
-		{ value: 'product', label: $t('blog.categoryProduct') },
-		{ value: 'design', label: $t('blog.categoryDesign') }
+		{ value: 'guide', label: $t(getAdminBlogCategoryTranslationKey('guide')) },
+		{ value: 'care', label: $t(getAdminBlogCategoryTranslationKey('care')) },
+		{ value: 'knowledge', label: $t(getAdminBlogCategoryTranslationKey('knowledge')) },
+		{ value: 'trend', label: $t(getAdminBlogCategoryTranslationKey('trend')) },
+		{ value: 'product', label: $t(getAdminBlogCategoryTranslationKey('product')) },
+		{ value: 'design', label: $t(getAdminBlogCategoryTranslationKey('design')) }
 	]);
 
 	const plainTextFromHtml = (html) =>
@@ -72,6 +85,93 @@
 	);
 	const autoReadTime = $derived(Math.max(1, Math.ceil(wordCount / WORDS_PER_MINUTE)));
 	const previewImage = $derived(croppedPreviewUrl || coverPreviewUrl || currentImage);
+	const imageStatusLabels = {
+		pending_generation: 'Đang chờ tạo',
+		needs_review: 'Cần duyệt',
+		complete: 'Hoàn tất',
+		rejected: 'Bị từ chối',
+		failed: 'Lỗi'
+	};
+	const getReviewStatusLabel = (value) =>
+		$t(`admin.blogImageReview.status.${value || 'pending_review'}`);
+
+	const resolveAdminPath = (path) => {
+		if (typeof window === 'undefined' || window.location.hostname !== 'admin.inoxpran.com') {
+			return path;
+		}
+		return path.replace(/^\/admin(?=\/|$)/, '') || '/';
+	};
+
+	const applyImagePostState = (updated) => {
+		if (!updated) return;
+		if (updated.coverImage) {
+			coverImageMeta = updated.coverImage;
+			currentImage = resolveImageUrl(updated.coverImage.url || updated.image || currentImage);
+		}
+		if (Array.isArray(updated.contentImages)) contentImageMeta = updated.contentImages;
+		if (typeof updated.content === 'string') blogContent = updated.content;
+	};
+
+	const openImageReplacement = (target) => {
+		reviewTarget = target;
+		reviewDialogOpen = true;
+	};
+
+	const reviewAgenticImage = async ({ decision, target }) => {
+		if (!isAgenticPost || imageReviewBusy) return;
+		if (decision === 'edit') {
+			openImageReplacement(target);
+			return;
+		}
+		if (decision === 'rejected') {
+			openImageReplacement(target);
+		}
+		imageReviewBusy = true;
+		try {
+			const response = await fetch(
+				resolveAdminPath(`/admin/api/blogs/${encodeURIComponent(post._id)}/images/review`),
+				{
+					method: 'PATCH',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ decision, target })
+				}
+			);
+			const payload = await response.json().catch(() => null);
+			if (!response.ok) {
+				throw new Error(payload?.message || $t('admin.blogImageReview.errors.review'));
+			}
+			applyImagePostState(payload);
+			pushToast({
+				tone: decision === 'approved' ? 'success' : 'warning',
+				message:
+					decision === 'approved'
+						? $t('admin.blogImageReview.success.approved')
+						: $t('admin.blogImageReview.success.rejected')
+			});
+		} catch (error) {
+			if (decision === 'rejected') reviewDialogOpen = false;
+			pushToast({
+				tone: 'error',
+				message: error?.message || $t('admin.blogImageReview.errors.review')
+			});
+		} finally {
+			imageReviewBusy = false;
+		}
+	};
+
+	const resolveImageUrl = (value) => {
+		const url = String(value || '').trim();
+		if (url === '/images/og-image.png') return '/og-image.png';
+		return url;
+	};
+
+	const handlePreviewImageError = (event) => {
+		const image = event.currentTarget;
+		if (image.dataset.fallbackApplied === 'true') return;
+		image.dataset.fallbackApplied = 'true';
+		image.src = '/og-image.png';
+		imageError = 'Không tải được ảnh đã lưu. Đang hiển thị ảnh dự phòng.';
+	};
 
 	const updateSlugManually = (event) => {
 		slugTouched = true;
@@ -295,6 +395,41 @@
 
 	onDestroy(() => {
 		if (coverPreviewUrl) URL.revokeObjectURL(coverPreviewUrl);
+		clearTimeout(autosaveTimer);
+	});
+
+	const AUTOSAVE_DELAY = 2500;
+
+	const runAutosave = async () => {
+		if (!post?._id) return;
+		const content = blogContent;
+		if (!content.trim() || content === lastSavedContent) return;
+		saveStatus = 'saving';
+		try {
+			const response = await fetch(resolveAdminPath(`/admin/api/blogs/${post._id}`), {
+				method: 'PATCH',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ blog_content: content })
+			});
+			if (!response.ok) throw new Error('autosave failed');
+			lastSavedContent = content;
+			saveStatus = 'saved';
+		} catch {
+			saveStatus = 'failed';
+		}
+	};
+
+	const scheduleAutosave = () => {
+		clearTimeout(autosaveTimer);
+		autosaveTimer = setTimeout(runAutosave, AUTOSAVE_DELAY);
+	};
+
+	$effect(() => {
+		const content = blogContent;
+		if (!contentHydrated || !post?._id) return;
+		if (content === lastSavedContent) return;
+		saveStatus = 'unsaved';
+		scheduleAutosave();
 	});
 
 	$effect(() => {
@@ -305,6 +440,9 @@
 		blogSlug = post.slug || '';
 		blogExcerpt = post.excerpt || '';
 		blogContent = post.content || '';
+		lastSavedContent = post.content || '';
+		saveStatus = '';
+		contentHydrated = true;
 		categoryKey = post.categoryKey || 'guide';
 		status = post.isPublished ? 'published' : 'draft';
 		authorName = post.author || '';
@@ -314,7 +452,11 @@
 		views = String(post.views || 0);
 		seoTitle = post.seoTitle || '';
 		seoDescription = post.seoDescription || '';
-		currentImage = post.image || '';
+		coverImageMeta = post.coverImage || null;
+		contentImageMeta = Array.isArray(post.contentImages) ? [...post.contentImages] : [];
+		isAgenticPost = post.sourceType === 'agentic' || post.isAgentic === true;
+		imagePipelineStatus = post.imagePipelineStatus || '';
+		currentImage = resolveImageUrl(post.coverImage?.url || post.image);
 		lastCropState = post.blog_image_crop_state || null;
 		tags = Array.isArray(post.tags) ? [...post.tags] : [];
 		relatedPostIds = Array.isArray(post.relatedPostIds) ? [...post.relatedPostIds] : [];
@@ -371,11 +513,7 @@
 				<input type="hidden" name="blog_image_name" value={cropFileName} />
 			{/if}
 			{#if lastCropState}
-				<input
-					type="hidden"
-					name="blog_image_crop_state"
-					value={JSON.stringify(lastCropState)}
-				/>
+				<input type="hidden" name="blog_image_crop_state" value={JSON.stringify(lastCropState)} />
 			{/if}
 
 			<div class="col-12 col-xl-8 d-grid gap-3">
@@ -428,84 +566,156 @@
 
 				<div class="border rounded-3 bg-white p-3">
 					<h5 class="mb-2">{$t('admin.blogEditor.coverImage')}</h5>
-					<p class="text-black-50 small mb-2">{$t('admin.blogEditor.coverHint')}</p>
-					<input
-						type="file"
-						name="blog_image"
-						class="form-control"
-						accept="image/*"
-						onchange={handleCoverChange}
-					/>
-				{#if imageError}
-					<div class="text-danger small mt-2">{imageError}</div>
-				{/if}
-				{#if coverPreviewUrl}
-					<div class="cropper mt-3">
-						<div
-							class="cropper-frame"
-							bind:this={cropFrame}
-							onpointerdown={handleCropPointerDown}
-							onpointermove={handleCropPointerMove}
-							onpointerup={handleCropPointerUp}
-							onpointerleave={handleCropPointerUp}
-						>
-							<img
-								bind:this={cropImageEl}
-								src={coverPreviewUrl}
-								alt="Crop preview"
-								class="cropper-image"
-								onload={updateCropBaseScale}
-								draggable="false"
-								style={`transform: translate(-50%, -50%) translate(${cropOffsetX}px, ${cropOffsetY}px) scale(${cropBaseScale * cropZoom});`}
+					{#if !isAgenticPost}
+						<p class="text-black-50 small mb-2">{$t('admin.blogEditor.coverHint')}</p>
+						<div class="file-input-wrapper">
+							<label class="file-input-label" for="blog-cover-input">
+								{$t('admin.blogEditor.replaceImage')}
+							</label>
+							<input
+								id="blog-cover-input"
+								type="file"
+								name="blog_image"
+								accept="image/*"
+								onchange={handleCoverChange}
 							/>
+							{#if cropFileName}
+								<span class="file-input-name">{cropFileName}</span>
+							{/if}
 						</div>
-						<div class="cropper-controls">
-							<div class="cropper-zoom">
-								<label for="crop-zoom-edit">{$t('admin.blogEditor.cropZoom')}</label>
-								<input
-									id="crop-zoom-edit"
-									type="range"
-									min="1"
-									max="3"
-									step="0.01"
-									bind:value={cropZoom}
-									oninput={() => {
-										const clamped = clampCropOffsets(cropOffsetX, cropOffsetY);
-										cropOffsetX = clamped.x;
-										cropOffsetY = clamped.y;
-									}}
+						{#if imageError}
+							<div class="text-danger small mt-2">{imageError}</div>
+						{/if}
+					{/if}
+					{#if coverPreviewUrl}
+						<div class="cropper mt-3">
+							<div
+								class="cropper-frame"
+								bind:this={cropFrame}
+								onpointerdown={handleCropPointerDown}
+								onpointermove={handleCropPointerMove}
+								onpointerup={handleCropPointerUp}
+								onpointerleave={handleCropPointerUp}
+							>
+								<img
+									bind:this={cropImageEl}
+									src={coverPreviewUrl}
+									alt="Crop preview"
+									class="cropper-image"
+									onload={updateCropBaseScale}
+									draggable="false"
+									style={`transform: translate(-50%, -50%) translate(${cropOffsetX}px, ${cropOffsetY}px) scale(${cropBaseScale * cropZoom});`}
 								/>
 							</div>
-							<div class="cropper-actions">
-								<button
-									type="button"
-									class="btn btn-outline-secondary btn-sm"
-									onclick={() => {
-										if (lastCropState && !isSameCropState(lastCropState)) {
-											restoreLastCropState();
-										} else {
-											resetCropState();
-										}
-										updateCropBaseScale();
-									}}
-								>
-									{$t('common.reset')}
-								</button>
-								<button type="button" class="btn btn-dark btn-sm" onclick={applyCrop}>
-									{$t('admin.blogEditor.cropApply')}
-								</button>
+							<div class="cropper-controls">
+								<div class="cropper-zoom">
+									<label for="crop-zoom-edit">{$t('admin.blogEditor.cropZoom')}</label>
+									<input
+										id="crop-zoom-edit"
+										type="range"
+										min="1"
+										max="3"
+										step="0.01"
+										bind:value={cropZoom}
+										oninput={() => {
+											const clamped = clampCropOffsets(cropOffsetX, cropOffsetY);
+											cropOffsetX = clamped.x;
+											cropOffsetY = clamped.y;
+										}}
+									/>
+								</div>
+								<div class="cropper-actions">
+									<button
+										type="button"
+										class="btn btn-outline-secondary btn-sm"
+										onclick={() => {
+											if (lastCropState && !isSameCropState(lastCropState)) {
+												restoreLastCropState();
+											} else {
+												resetCropState();
+											}
+											updateCropBaseScale();
+										}}
+									>
+										{$t('common.reset')}
+									</button>
+									<button type="button" class="btn btn-dark btn-sm" onclick={applyCrop}>
+										{$t('admin.blogEditor.cropApply')}
+									</button>
+								</div>
 							</div>
+							<p class="cropper-hint text-black-50 small mb-0">
+								{$t('admin.blogEditor.cropHint')}
+							</p>
 						</div>
-						<p class="cropper-hint text-black-50 small mb-0">
-							{$t('admin.blogEditor.cropHint')}
-						</p>
-					</div>
-				{:else if previewImage}
-					<div class="mt-3">
-						<img src={previewImage} alt="Cover preview" class="img-fluid rounded border" />
-					</div>
-				{/if}
-			</div>
+					{:else if previewImage}
+						<div class="cover-preview mt-3">
+							<img
+								src={previewImage}
+								alt={coverImageMeta?.alt || 'Cover preview'}
+								class="img-fluid rounded border"
+								onerror={handlePreviewImageError}
+							/>
+							{#if isAgenticPost && (coverImageMeta?.status || imagePipelineStatus)}
+								<div class="cover-meta">
+									<span
+										class={`cover-status status-${coverImageMeta?.reviewStatus || 'pending_review'}`}
+									>
+										{coverImageMeta?.reviewStatus
+											? getReviewStatusLabel(coverImageMeta.reviewStatus)
+											: imageStatusLabels[coverImageMeta?.status] || imagePipelineStatus}
+									</span>
+									{#if coverImageMeta?.alt}<small>Alt: {coverImageMeta.alt}</small>{/if}
+									{#if coverImageMeta?.caption}<small>{coverImageMeta.caption}</small>{/if}
+									{#if isAgenticPost}
+										<div class="cover-review-actions">
+											{#if (coverImageMeta?.reviewStatus || 'pending_review') === 'pending_review'}
+												<button
+													class="btn btn-success btn-sm"
+													type="button"
+													disabled={imageReviewBusy}
+													onclick={() =>
+														reviewAgenticImage({
+															decision: 'approved',
+															target: {
+																type: 'cover',
+																imageId: coverImageMeta?.imageId || 'cover'
+															}
+														})}>{$t('admin.blogImageReview.actions.approve')}</button
+												>
+												<button
+													class="btn btn-outline-danger btn-sm"
+													type="button"
+													disabled={imageReviewBusy}
+													onclick={() =>
+														reviewAgenticImage({
+															decision: 'rejected',
+															target: {
+																type: 'cover',
+																imageId: coverImageMeta?.imageId || 'cover'
+															}
+														})}>{$t('admin.blogImageReview.actions.reject')}</button
+												>
+											{:else}
+												<button
+													class="btn btn-outline-primary btn-sm"
+													type="button"
+													onclick={() =>
+														openImageReplacement({
+															type: 'cover',
+															imageId: coverImageMeta?.imageId || 'cover'
+														})}
+												>
+													{$t('admin.blogImageReview.actions.edit')}
+												</button>
+											{/if}
+										</div>
+									{/if}
+								</div>
+							{/if}
+						</div>
+					{/if}
+				</div>
 
 				<div class="border rounded-3 bg-white p-3">
 					<h5 class="mb-2">{$t('admin.blogEditor.content')}</h5>
@@ -516,6 +726,10 @@
 							blogContent = value;
 						}}
 						placeholder={$t('admin.editor.placeholder')}
+						agenticImageReviewEnabled={isAgenticPost}
+						agenticImages={contentImageMeta}
+						onAgenticImageReview={reviewAgenticImage}
+						saveStatus={saveStatus}
 					/>
 					<div class="d-flex justify-content-between align-items-center mt-2 text-black-50 small">
 						<span>{$t('admin.blogEditor.wordCount', { count: wordCount })}</span>
@@ -582,26 +796,26 @@
 				<div class="border rounded-3 bg-white p-3">
 					<h5 class="mb-3">{$t('admin.blogEditor.meta')}</h5>
 					<div class="d-grid gap-2">
-					<div>
-						<label class="form-label" for="blog-status">{$t('admin.blogEditor.status')}</label>
-						<select id="blog-status" name="status" class="form-select" bind:value={status}>
-							<option value="draft">{$t('admin.blogEditor.statusDraft')}</option>
-							<option value="published">{$t('admin.blogEditor.statusPublished')}</option>
-						</select>
-					</div>
-					<div class="form-check">
-						<input
-							class="form-check-input"
-							type="checkbox"
-							id="send-newsletter"
-							name="send_newsletter"
-							bind:checked={sendNewsletter}
-						/>
-						<label class="form-check-label" for="send-newsletter">
-							{$t('admin.blogEditor.sendNewsletterLabel')}
-						</label>
-						<div class="form-text">{$t('admin.blogEditor.sendNewsletterHint')}</div>
-					</div>
+						<div>
+							<label class="form-label" for="blog-status">{$t('admin.blogEditor.status')}</label>
+							<select id="blog-status" name="status" class="form-select" bind:value={status}>
+								<option value="draft">{$t('admin.blogEditor.statusDraft')}</option>
+								<option value="published">{$t('admin.blogEditor.statusPublished')}</option>
+							</select>
+						</div>
+						<div class="form-check">
+							<input
+								class="form-check-input"
+								type="checkbox"
+								id="send-newsletter"
+								name="send_newsletter"
+								bind:checked={sendNewsletter}
+							/>
+							<label class="form-check-label" for="send-newsletter">
+								{$t('admin.blogEditor.sendNewsletterLabel')}
+							</label>
+							<div class="form-text">{$t('admin.blogEditor.sendNewsletterHint')}</div>
+						</div>
 						<div>
 							<label class="form-label" for="blog-category">{$t('admin.blogEditor.category')}</label
 							>
@@ -708,7 +922,11 @@
 					{#if blogTitle || blogExcerpt}
 						<div class="preview-card">
 							{#if previewImage}
-								<img src={previewImage} alt="Preview cover" />
+								<img
+									src={previewImage}
+									alt={coverImageMeta?.alt || 'Preview cover'}
+									onerror={handlePreviewImageError}
+								/>
 							{/if}
 							<div class="preview-content">
 								<h6>{blogTitle || '--'}</h6>
@@ -723,6 +941,25 @@
 				<button class="btn btn-dark btn-lg" type="submit">{$t('admin.blogEditor.update')}</button>
 			</div>
 		</form>
+
+		{#if isAgenticPost}
+			<AgenticImageReviewDialog
+				open={reviewDialogOpen}
+				postId={post._id}
+				target={reviewTarget}
+				onClose={() => {
+					reviewDialogOpen = false;
+					reviewTarget = null;
+				}}
+				onApplied={(updated) => {
+					applyImagePostState(updated);
+					pushToast({
+						tone: 'success',
+						message: $t('admin.blogImageReview.success.replaced')
+					});
+				}}
+			/>
+		{/if}
 
 		<div class="d-flex flex-wrap gap-2">
 			<form method="post" action="?/publish">
@@ -764,6 +1001,60 @@
 		border-radius: 12px;
 		overflow: hidden;
 		background: #fff;
+	}
+
+	.cover-preview {
+		display: grid;
+		gap: 0.65rem;
+	}
+
+	.cover-preview > img {
+		width: 100%;
+		aspect-ratio: 16 / 9;
+		object-fit: cover;
+	}
+
+	.cover-meta {
+		display: grid;
+		gap: 0.25rem;
+		color: #5e665f;
+	}
+
+	.cover-meta span {
+		width: fit-content;
+		padding: 0.2rem 0.5rem;
+		border-radius: 4px;
+		background: #e8f5ef;
+		color: #16775f;
+		font-size: 0.75rem;
+		font-weight: 700;
+	}
+
+	.cover-meta .status-pending_review {
+		background: #fff1d6;
+		color: #8a5b00;
+	}
+
+	.cover-meta .status-approved {
+		background: #e1f6e9;
+		color: #176c3b;
+	}
+
+	.cover-meta .status-rejected {
+		background: #ffebe8;
+		color: #a52d20;
+	}
+
+	.cover-meta .status-replaced {
+		background: #e9efff;
+		color: #294f9e;
+	}
+
+	.cover-review-actions {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		margin-top: 0.35rem;
 	}
 
 	.preview-card img {
@@ -839,5 +1130,12 @@
 	.cropper-actions {
 		display: flex;
 		gap: 0.5rem;
+	}
+
+	.file-input-name {
+		margin-left: 0.6rem;
+		color: #5e665f;
+		font-size: 0.85rem;
+		word-break: break-all;
 	}
 </style>

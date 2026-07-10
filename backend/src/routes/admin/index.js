@@ -4,6 +4,7 @@ const express = require("express");
 const adminController = require("../../controllers/admin.controller");
 const contactController = require("../../controllers/contact.controller");
 const openclawDashboardController = require("../../controllers/openclawDashboard.controller");
+const blogAutomationScheduleController = require("../../controllers/blogAutomationSchedule.controller");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
 const { upload, uploadLarge } = require("../../middleware/upload");
@@ -111,6 +112,51 @@ router.post(
   "/openclaw/runs",
   requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
   asyncHandler(openclawDashboardController.startRun),
+);
+router.get(
+  "/openclaw/blog-schedules",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.listSchedules),
+);
+router.post(
+  "/openclaw/blog-schedules",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.createSchedule),
+);
+router.get(
+  "/openclaw/blog-schedules/:scheduleId",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.getSchedule),
+);
+router.patch(
+  "/openclaw/blog-schedules/:scheduleId",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.updateSchedule),
+);
+router.delete(
+  "/openclaw/blog-schedules/:scheduleId",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.deleteSchedule),
+);
+router.post(
+  "/openclaw/blog-schedules/:scheduleId/enable",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.enableSchedule),
+);
+router.post(
+  "/openclaw/blog-schedules/:scheduleId/disable",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.disableSchedule),
+);
+router.post(
+  "/openclaw/blog-schedules/:scheduleId/run-now",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.runNow),
+);
+router.get(
+  "/openclaw/blog-schedules/:scheduleId/executions",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.listExecutions),
 );
 router.get(
   "/openclaw/runs/:runId",

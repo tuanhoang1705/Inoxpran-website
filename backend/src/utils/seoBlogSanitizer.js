@@ -63,16 +63,24 @@ const sanitizeSeoBlogHtml = (value) => {
     return sanitizeHtml(input, {
         allowedTags: [
             'p',
+            'br',
             'h2',
             'h3',
             'h4',
+            'h5',
+            'h6',
             'ul',
             'ol',
             'li',
             'strong',
             'em',
+            'u',
+            's',
             'a',
             'blockquote',
+            'pre',
+            'code',
+            'hr',
             'table',
             'thead',
             'tbody',
@@ -80,12 +88,20 @@ const sanitizeSeoBlogHtml = (value) => {
             'th',
             'td',
             'img',
+            'figure',
+            'figcaption',
             'section',
             'div'
         ],
         allowedAttributes: {
             a: ['href', 'title'],
-            img: ['src', 'alt', 'title'],
+            img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding', 'data-image-id', 'data-source-type', 'data-review-status'],
+            figure: ['data-image-id', 'data-source-type', 'data-review-status'],
+            figcaption: [],
+            ul: ['data-type'],
+            li: ['data-type', 'data-checked'],
+            th: ['colspan', 'rowspan'],
+            td: ['colspan', 'rowspan'],
             div: [],
             section: []
         },
@@ -115,7 +131,22 @@ const sanitizeSeoBlogHtml = (value) => {
                     attribs: {
                         src,
                         ...(attribs.alt ? { alt: escapeHtmlAttribute(attribs.alt) } : {}),
-                        ...(attribs.title ? { title: escapeHtmlAttribute(attribs.title) } : {})
+                        ...(attribs.title ? { title: escapeHtmlAttribute(attribs.title) } : {}),
+                        ...(/^\d{1,5}$/.test(attribs.width || '') ? { width: attribs.width } : {}),
+                        ...(/^\d{1,5}$/.test(attribs.height || '') ? { height: attribs.height } : {}),
+                        ...(attribs.loading === 'lazy' ? { loading: 'lazy' } : {}),
+                        ...(attribs.decoding === 'async' ? { decoding: 'async' } : {}),
+                        ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-image-id'] || '')
+                            ? { 'data-image-id': attribs['data-image-id'] }
+                            : {}),
+                        ...(/^[a-z0-9_-]{1,40}$/i.test(attribs['data-source-type'] || '')
+                            ? { 'data-source-type': attribs['data-source-type'] }
+                            : {}),
+                        ...(/^(pending_review|approved|rejected|replaced)$/.test(
+                            attribs['data-review-status'] || ''
+                        )
+                            ? { 'data-review-status': attribs['data-review-status'] }
+                            : {})
                     }
                 };
             }

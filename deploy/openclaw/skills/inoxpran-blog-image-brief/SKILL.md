@@ -4,7 +4,7 @@ Description: Create safe image prompts, alt text, and fallback image metadata fo
 
 Default behavior:
 - Return `imageGenerationMode: "prompt_only"` unless a verified provider skill and provider API key are configured.
-- Use `/images/og-image.png` as the safe fallback image URL unless the run provides a generated/uploaded image URL.
+- Use `/og-image.png` as the safe fallback image URL unless the run provides a generated/uploaded image URL.
 
 Output JSON:
 
@@ -17,7 +17,7 @@ Output JSON:
   "caption": "",
   "filenameSlug": "",
   "recommendedAspectRatio": "16:9",
-  "safeFallbackImageUrl": "/images/og-image.png",
+  "safeFallbackImageUrl": "/og-image.png",
   "usageNotes": []
 }
 ```
@@ -28,3 +28,4 @@ Prompt rules:
 - Do not create deceptive before/after comparisons.
 - Avoid text inside images unless a verified image model is selected for accurate typography.
 - Alt text must describe the image, not stuff keywords.
+- AI-generated images must remain `needs_review` until a human approves them.

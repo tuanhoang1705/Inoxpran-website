@@ -39,14 +39,21 @@
       "research-agent",
       "content-generation",
       "AI Image Generation",
+      "google-search-console-seo",
+      "sharpagent-content-safety",
       "inoxpran-search-console",
       "inoxpran-brand-voice",
       "inoxpran-seo-research-brief",
       "inoxpran-positioning",
       "inoxpran-topic-planner",
       "inoxpran-blog-image-brief",
+      "inoxpran-visual-plan",
+      "inoxpran-image-quality",
+      "inoxpran-image-metadata",
+      "inoxpran-publisher-gate",
       "inoxpran-seo-publisher",
-      "inoxpran-seo-review"
+      "inoxpran-seo-review",
+      "inoxpran-blog-editor-schema"
     ]
   },
   agents: [
@@ -62,8 +69,10 @@
       },
       skillAllowlist: [
         "skill-vetter",
+        "sharpagent-content-safety",
         "inoxpran-brand-voice",
-        "inoxpran-seo-review"
+        "inoxpran-seo-review",
+        "inoxpran-blog-editor-schema"
       ]
     },
     {
@@ -148,7 +157,8 @@
       skillAllowlist: [
         "content-generation",
         "inoxpran-brand-voice",
-        "inoxpran-positioning"
+        "inoxpran-positioning",
+        "inoxpran-blog-editor-schema"
       ]
     },
     {
@@ -167,6 +177,48 @@
       ]
     },
     {
+      name: "visual-planner",
+      workspace: "/workspaces/visual-planner",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-visual-plan", "inoxpran-blog-editor-schema"]
+    },
+    {
+      name: "image-researcher",
+      workspace: "/workspaces/image-researcher",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-visual-plan", "inoxpran-image-quality"]
+    },
+    {
+      name: "image-prompt-builder",
+      workspace: "/workspaces/image-prompt-builder",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-visual-plan", "inoxpran-blog-image-brief"]
+    },
+    {
+      name: "image-quality-reviewer",
+      workspace: "/workspaces/image-quality-reviewer",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-image-quality"]
+    },
+    {
+      name: "seo-image-metadata",
+      workspace: "/workspaces/seo-image-metadata",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-image-metadata"]
+    },
+    {
+      name: "publisher-gatekeeper",
+      workspace: "/workspaces/publisher-gatekeeper",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-publisher-gate", "inoxpran-seo-review"]
+    },
+    {
+      name: "search-console-reporter",
+      workspace: "/workspaces/search-console-reporter",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["google-search-console-seo", "inoxpran-search-console"]
+    },
+    {
       name: "seo-reviewer",
       workspace: "/workspaces/seo-reviewer",
       tools: {
@@ -177,8 +229,10 @@
       },
       skillAllowlist: [
         "skill-vetter",
+        "sharpagent-content-safety",
         "inoxpran-brand-voice",
-        "inoxpran-seo-review"
+        "inoxpran-seo-review",
+        "inoxpran-blog-editor-schema"
       ]
     },
     {

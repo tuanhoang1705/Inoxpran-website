@@ -107,6 +107,10 @@ beforeEach(() => {
         SEO_AGENT_MIN_SEO_SCORE: '85',
         SEO_AGENT_MIN_WORDS: '1',
         SEO_AGENT_MAX_WORDS: '1000',
+        OPENCLAW_IMAGE_PIPELINE_ENABLED: 'true',
+        OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH: 'true',
+        IMAGE_SEARCH_PROVIDER: 'disabled',
+        AI_IMAGE_PROVIDER: 'disabled',
         PUBLIC_SITE_URL: 'https://inoxpran.com'
     };
 
@@ -279,6 +283,8 @@ describe('AutomationSeoBlogService.publishSeoBlog', () => {
 
     it('publishes when env and review gates pass', async () => {
         process.env.SEO_AGENT_AUTO_PUBLISH = 'true';
+        process.env.OPENCLAW_IMAGE_PIPELINE_ENABLED = 'false';
+        process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH = 'false';
         const AutomationSeoBlogService = loadAutomationService();
 
         const result = await AutomationSeoBlogService.publishSeoBlog({
@@ -293,5 +299,33 @@ describe('AutomationSeoBlogService.publishSeoBlog', () => {
             isPublished: true,
             publishedAt: expect.any(Date)
         }));
+    });
+
+    it('blocks publish when a reviewed cover is required but unavailable', async () => {
+        process.env.SEO_AGENT_AUTO_PUBLISH = 'true';
+        process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH = 'true';
+        const AutomationSeoBlogService = loadAutomationService();
+
+        const result = await AutomationSeoBlogService.publishSeoBlog({
+            payload: buildPayload()
+        });
+
+        expect(result.published).toBe(false);
+        expect(result.mode).toBe('draft');
+        expect(result.reasons).toContain('cover_image_required_for_publish');
+        expect(result.imagePipelineStatus).toBe('pending');
+    });
+
+    it('blocks publish while any planned image is still pending', async () => {
+        process.env.SEO_AGENT_AUTO_PUBLISH = 'true';
+        process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH = 'false';
+        const AutomationSeoBlogService = loadAutomationService();
+
+        const result = await AutomationSeoBlogService.publishSeoBlog({
+            payload: buildPayload()
+        });
+
+        expect(result.published).toBe(false);
+        expect(result.reasons).toContain('image_pipeline_not_ready_for_publish');
     });
 });

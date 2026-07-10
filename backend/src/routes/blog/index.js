@@ -22,7 +22,6 @@ const BLOG_IMAGE_VALIDATION = {
 const requireAdmin = [permission(PERMISSIONS.ADMIN_SYSTEM), authenticationAdmin];
 
 router.get('', asyncHandler(blogController.listPublicBlogs));
-router.get('/:slug', asyncHandler(blogController.getPublicBlogBySlug));
 
 router.get('/admin/all', requireAdmin, asyncHandler(blogController.listBlogsForAdmin));
 router.get('/admin/comments', requireAdmin, asyncHandler(blogController.listAdminComments));
@@ -37,9 +36,36 @@ router.delete(
     asyncHandler(blogController.deleteComment)
 );
 router.get('/admin/:blogId', requireAdmin, asyncHandler(blogController.getBlogForAdmin));
+router.get(
+    '/admin/:blogId/images/suggestions',
+    requireAdmin,
+    asyncHandler(blogController.getImagePromptSuggestions)
+);
+router.get(
+    '/admin/:blogId/images/pexels',
+    requireAdmin,
+    asyncHandler(blogController.searchPexelsImages)
+);
+router.post(
+    '/admin/:blogId/images/generate',
+    requireAdmin,
+    asyncHandler(blogController.generateImagePreview)
+);
+router.patch(
+    '/admin/:blogId/images/review',
+    requireAdmin,
+    asyncHandler(blogController.reviewAgenticImage)
+);
+router.post(
+    '/admin/:blogId/images/replace',
+    requireAdmin,
+    uploadLarge.single('image'),
+    asyncHandler(blogController.replaceAgenticImage)
+);
 
 router.get('/:slug/comments', asyncHandler(blogController.listPublicComments));
 router.post('/:slug/comments', asyncHandler(blogController.createPublicComment));
+router.get('/:slug', asyncHandler(blogController.getPublicBlogBySlug));
 
 router.post(
     '',

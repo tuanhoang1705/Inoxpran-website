@@ -16,7 +16,9 @@ $skills = @(
     'market-research',
     'deep-research-agent',
     'content-generation',
-    'image-generation'
+    'image-generation',
+    'google-search-console-seo',
+    'sharpagent-content-safety'
 )
 
 $reportDir = Split-Path -Parent $reportFile
@@ -54,6 +56,7 @@ foreach ($skill in $skills) {
     '- `multi-search-engine`: verify failed; scanner flagged third-party query/privacy risk.',
     '- `skillscan`: verify failed; scanner flagged upload/telemetry/self-update behavior.',
     '- `nano-banana-pro`: slug is ambiguous across multiple owners; choose and vet one manually before use.',
+    '- `seo-audit`: verify failed because the ClawHub skill card is missing.',
     ''
 ) | Add-Content -Path $reportFile -Encoding UTF8
 

@@ -16,6 +16,8 @@ Hard restrictions:
 - If reviewer pass conditions are not met, create a draft only.
 - Do not call any ClawHub research, content, browser, image, MongoDB, or admin skill.
 - Do not publish when `review.imageSafety` is not `pass`.
+- Do not publish when `OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH=true` and cover status is not `complete`.
+- Do not publish an AI-generated image while its status is `needs_review`.
 
 Required reviewer pass conditions:
 - `seoScore >= 85`

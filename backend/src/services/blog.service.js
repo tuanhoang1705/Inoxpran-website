@@ -14,6 +14,12 @@ const {
     toStorageArtifactKey
 } = require('./storage.service');
 const NewsletterService = require('./newsletter.service');
+const {
+    areAgenticImagesReviewed,
+    buildBlogSourceFilter,
+    normalizePostImages,
+    resolveBlogSourceType
+} = require('../utils/agenticImageReview.util');
 
 const MAX_LIMIT = 100;
 const WORDS_PER_MINUTE = 220;
@@ -177,6 +183,8 @@ const sanitizeBlogContent = (value) => {
             'li',
             'a',
             'img',
+            'figure',
+            'figcaption',
             'h1',
             'h2',
             'h3',
@@ -184,11 +192,26 @@ const sanitizeBlogContent = (value) => {
             'h5',
             'h6',
             'span',
-            'div'
+            'div',
+            'table',
+            'thead',
+            'tbody',
+            'tr',
+            'th',
+            'td',
+            'pre',
+            'code',
+            'hr'
         ],
         allowedAttributes: {
             a: ['href', 'target', 'rel'],
-            img: ['src', 'alt', 'title'],
+            img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding', 'data-image-id', 'data-source-type', 'data-review-status'],
+            figure: ['data-image-id', 'data-source-type', 'data-review-status'],
+            figcaption: [],
+            ul: ['data-type'],
+            li: ['data-type', 'data-checked'],
+            th: ['colspan', 'rowspan'],
+            td: ['colspan', 'rowspan'],
             span: ['style'],
             p: ['style'],
             h1: ['style'],
@@ -307,6 +330,7 @@ const buildAuthorAvatar = ({ authorName, authorAvatar }) => {
 
 const mapBlogSummary = (item) => {
     if (!item) return null;
+    const normalizedImages = normalizePostImages(item);
     return {
         id: String(item._id),
         _id: String(item._id),
@@ -315,6 +339,13 @@ const mapBlogSummary = (item) => {
         excerpt: item.blog_excerpt,
         image: item.blog_image,
         imageVariants: item.blog_image_variants || null,
+        coverImage: normalizedImages.coverImage,
+        contentImages: normalizedImages.contentImages,
+        visualPlan: item.visualPlan || null,
+        sourceType: resolveBlogSourceType(item),
+        isAgentic: resolveBlogSourceType(item) === 'agentic',
+        generationMetadata: item.generationMetadata || null,
+        imagePipelineStatus: item.imagePipelineStatus || 'pending',
         categoryKey: item.blog_category_key,
         author: item.blog_author_name || 'Inoxpran',
         authorAvatar: item.blog_author_avatar || buildAuthorAvatar({ authorName: item.blog_author_name }),
@@ -472,6 +503,7 @@ class BlogService {
     static async createBlog({ payload = {}, shopId, sendNewsletter = false }) {
         const normalized = BlogService.normalizePayload(payload);
         BlogService.validateCreatePayload(normalized);
+        normalized.sourceType = 'manual';
 
         normalized.blog_slug = await BlogService.ensureUniqueSlug(
             normalized.blog_slug || normalized.blog_title
@@ -597,6 +629,11 @@ class BlogService {
 
         if (Object.prototype.hasOwnProperty.call(updateDoc, 'isPublished')) {
             if (updateDoc.isPublished) {
+                if (!areAgenticImagesReviewed({ ...current, ...updateDoc })) {
+                    throw new BadRequestError(
+                        'All agentic images must be approved or replaced before publishing'
+                    );
+                }
                 updateDoc.isDraft = false;
                 if (!updateDoc.publishedAt) {
                     updateDoc.publishedAt = current.publishedAt || new Date();
@@ -621,6 +658,52 @@ class BlogService {
             });
         }
 
+        const hasNewImage =
+            Object.prototype.hasOwnProperty.call(updateDoc, 'blog_image') &&
+            updateDoc.blog_image &&
+            updateDoc.blog_image !== current.blog_image;
+        if (hasNewImage) {
+            const pendingContentImages = Array.isArray(current.contentImages)
+                ? current.contentImages.filter((item) => item?.status !== 'complete')
+                : [];
+            updateDoc.coverImage = {
+                url: updateDoc.blog_image,
+                path: updateDoc.blog_image_path || '',
+                alt: updateDoc.blog_title || current.blog_title || '',
+                title: updateDoc.blog_title || current.blog_title || '',
+                caption: '',
+                sourceType: 'manual_upload',
+                status: 'complete',
+                qualityReview: {
+                    passes: true,
+                    manualReviewRequired: false,
+                    manualReviewedAt: new Date(),
+                    reviewer: 'admin_upload'
+                }
+            };
+            updateDoc.imagePipelineStatus = pendingContentImages.length ? 'partial' : 'complete';
+        }
+
+        const coverReviewStatus = normalizeString(payload.cover_image_status).toLowerCase();
+        if (!hasNewImage && ['complete', 'rejected'].includes(coverReviewStatus)) {
+            const previousReview = current.coverImage?.qualityReview || {};
+            const approved = coverReviewStatus === 'complete';
+            updateDoc['coverImage.status'] = coverReviewStatus;
+            updateDoc['coverImage.warning'] = approved ? '' : 'manually_rejected';
+            updateDoc['coverImage.qualityReview'] = {
+                ...previousReview,
+                passes: approved,
+                manualReviewRequired: false,
+                manualReviewedAt: new Date(),
+                reviewer: 'admin'
+            };
+            const contentReady = Array.isArray(current.contentImages) &&
+                current.contentImages.every((item) => item?.status === 'complete');
+            updateDoc.imagePipelineStatus = approved
+                ? (contentReady ? 'complete' : 'partial')
+                : 'failed';
+        }
+
         const updated = await blog.findByIdAndUpdate(objectId, updateDoc, { new: true }).lean();
         if (!updated) throw new NotFoundError('Blog not found');
 
@@ -629,10 +712,6 @@ class BlogService {
             await safeSendNewsletter({ blogSummary: summary, sendNewsletter });
         }
 
-        const hasNewImage =
-            Object.prototype.hasOwnProperty.call(updateDoc, 'blog_image') &&
-            updateDoc.blog_image &&
-            updateDoc.blog_image !== current.blog_image;
         const hasContentUpdate = Object.prototype.hasOwnProperty.call(updateDoc, 'blog_content');
         const updatedReferenceKeys = collectBlogMediaReferenceKeys(updated);
 
@@ -709,6 +788,13 @@ class BlogService {
     static async publishBlog({ blogId, sendNewsletter = false }) {
         const objectId = convertToObjectIdMongodb(blogId);
         if (!objectId) throw new BadRequestError('Invalid blog id');
+        const current = await blog.findById(objectId).lean();
+        if (!current) throw new NotFoundError('Blog not found');
+        if (!areAgenticImagesReviewed(current)) {
+            throw new BadRequestError(
+                'All agentic images must be approved or replaced before publishing'
+            );
+        }
 
         const updated = await blog
             .findByIdAndUpdate(
@@ -760,6 +846,7 @@ class BlogService {
         status = 'all',
         sort = 'updated',
         category,
+        source,
         q
     } = {}) {
         const safeLimit = Math.min(Math.max(parseNumber(limit, 20), 1), MAX_LIMIT);
@@ -775,6 +862,10 @@ class BlogService {
 
         if (category && BLOG_CATEGORY_KEYS.includes(category)) {
             filter.blog_category_key = category;
+        }
+        const sourceFilter = buildBlogSourceFilter(normalizeString(source).toLowerCase());
+        if (sourceFilter) {
+            filter.$and = [sourceFilter];
         }
 
         const searchText = normalizeString(q);

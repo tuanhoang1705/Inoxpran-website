@@ -17,6 +17,8 @@ SKILLS=(
   "deep-research-agent"
   "content-generation"
   "image-generation"
+  "google-search-console-seo"
+  "sharpagent-content-safety"
 )
 
 mkdir -p "$(dirname "${REPORT_FILE}")"

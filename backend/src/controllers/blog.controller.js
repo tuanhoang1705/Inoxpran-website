@@ -2,6 +2,7 @@
 
 const BlogService = require('../services/blog.service');
 const BlogCommentService = require('../services/blogComment.service');
+const AgenticImageReviewService = require('../services/agenticImageReview.service');
 const { SuccessResponse } = require('../core/success.response');
 const { commitPendingStorageUploads } = require('../services/pendingStorageUpload.service');
 
@@ -34,6 +35,29 @@ const resolveSendNewsletter = (req) =>
         req?.body?.send_newsletter ?? req?.body?.sendNewsletter ?? req?.body?.sendEmail,
         false
     );
+
+const summarizeImageReplacement = (req) => {
+    let target = req.body?.target;
+    let selection = req.body?.selection;
+    try {
+        if (typeof target === 'string') target = JSON.parse(target);
+    } catch {
+        target = {};
+    }
+    try {
+        if (typeof selection === 'string') selection = JSON.parse(selection);
+    } catch {
+        selection = {};
+    }
+    return {
+        blogId: req.params?.blogId,
+        targetType: target?.type || target?.targetType || 'unknown',
+        targetIdentifier:
+            target?.imageId ||
+            (Number.isInteger(Number(target?.imageIndex)) ? `index:${target.imageIndex}` : 'missing'),
+        replacementSourceType: selection?.kind || selection?.sourceType || 'unknown'
+    };
+};
 
 class BlogController {
     listPublicBlogs = async (req, res, next) => {
@@ -83,6 +107,72 @@ class BlogController {
             message: 'Get blog for admin success',
             metadata: await BlogService.getBlogForAdmin({ blogId: req.params.blogId })
         }).send(res);
+    }
+
+    getImagePromptSuggestions = async (req, res, next) => {
+        new SuccessResponse({
+            message: 'Get image prompt suggestions success',
+            metadata: await AgenticImageReviewService.getPromptSuggestions({
+                blogId: req.params.blogId,
+                target: req.query.target
+            })
+        }).send(res);
+    }
+
+    searchPexelsImages = async (req, res, next) => {
+        new SuccessResponse({
+            message: 'Search Pexels images success',
+            metadata: await AgenticImageReviewService.searchPexels({
+                blogId: req.params.blogId,
+                target: req.query.target,
+                query: req.query.query,
+                page: req.query.page,
+                perPage: req.query.perPage
+            })
+        }).send(res);
+    }
+
+    generateImagePreview = async (req, res, next) => {
+        new SuccessResponse({
+            message: 'Generate image preview success',
+            metadata: await AgenticImageReviewService.generatePreview({
+                blogId: req.params.blogId,
+                target: req.body?.target,
+                prompt: req.body?.prompt
+            })
+        }).send(res);
+    }
+
+    reviewAgenticImage = async (req, res, next) => {
+        new SuccessResponse({
+            message: 'Review agentic image success',
+            metadata: await AgenticImageReviewService.reviewImage({
+                blogId: req.params.blogId,
+                target: req.body?.target,
+                decision: req.body?.decision
+            })
+        }).send(res);
+    }
+
+    replaceAgenticImage = async (req, res, next) => {
+        try {
+            new SuccessResponse({
+                message: 'Replace agentic image success',
+                metadata: await AgenticImageReviewService.replaceImage({
+                    blogId: req.params.blogId,
+                    target: req.body?.target,
+                    selection: req.body?.selection,
+                    file: req.file
+                })
+            }).send(res);
+        } catch (error) {
+            console.error('Agentic image replacement failed', {
+                ...summarizeImageReplacement(req),
+                status: error?.status || 500,
+                error: error?.message || 'image_replacement_failed'
+            });
+            throw error;
+        }
     }
 
     listAdminComments = async (req, res, next) => {
