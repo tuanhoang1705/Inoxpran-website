@@ -5,6 +5,7 @@ const adminController = require("../../controllers/admin.controller");
 const contactController = require("../../controllers/contact.controller");
 const openclawDashboardController = require("../../controllers/openclawDashboard.controller");
 const blogAutomationScheduleController = require("../../controllers/blogAutomationSchedule.controller");
+const googleIntelligenceController = require("../../controllers/googleIntelligence.controller");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
 const { upload, uploadLarge } = require("../../middleware/upload");
@@ -12,7 +13,7 @@ const {
   cleanupUploadedArtifacts,
   uploadSingleImage,
 } = require("../../middleware/firebaseUpload");
-const { requireAdminRole } = require("../../middleware/requireAdminRole");
+const { requireAdminPermission, requireAdminRole } = require("../../middleware/requireAdminRole");
 
 const router = express.Router();
 const DESCRIPTION_IMAGE_MAX_SIZE = Number(
@@ -112,6 +113,76 @@ router.post(
   "/openclaw/runs",
   requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
   asyncHandler(openclawDashboardController.startRun),
+);
+router.get(
+  "/openclaw/google-intelligence/status",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(googleIntelligenceController.getStatus),
+);
+router.get(
+  "/openclaw/google-intelligence/snapshots",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(googleIntelligenceController.listSnapshots),
+);
+router.get(
+  "/openclaw/google-intelligence/snapshots/:snapshotId",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(googleIntelligenceController.getSnapshot),
+);
+router.post(
+  "/openclaw/google-intelligence/snapshots/:snapshotId/override",
+  requireAdminPermission(["google_intelligence.override_gate"]),
+  asyncHandler(googleIntelligenceController.overrideSnapshot),
+);
+router.post(
+  "/openclaw/google-intelligence/run-now",
+  requireAdminPermission(["google_intelligence.run"]),
+  asyncHandler(googleIntelligenceController.runNow),
+);
+router.get(
+  "/openclaw/google-intelligence/sources",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(googleIntelligenceController.listSources),
+);
+router.post(
+  "/openclaw/google-intelligence/sources",
+  requireAdminPermission(["google_intelligence.manage_sources"]),
+  asyncHandler(googleIntelligenceController.createSource),
+);
+router.patch(
+  "/openclaw/google-intelligence/sources/:sourceId",
+  requireAdminPermission(["google_intelligence.manage_sources"]),
+  asyncHandler(googleIntelligenceController.updateSource),
+);
+router.post(
+  "/openclaw/google-intelligence/sources/:sourceId/run-now",
+  requireAdminPermission(["google_intelligence.run"]),
+  asyncHandler(googleIntelligenceController.runSourceNow),
+);
+router.get(
+  "/openclaw/google-intelligence/schedule",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(googleIntelligenceController.getSchedule),
+);
+router.patch(
+  "/openclaw/google-intelligence/schedule",
+  requireAdminPermission(["google_intelligence.manage_schedule"]),
+  asyncHandler(googleIntelligenceController.updateSchedule),
+);
+router.post(
+  "/openclaw/google-intelligence/schedule/enable",
+  requireAdminPermission(["google_intelligence.manage_schedule"]),
+  asyncHandler(googleIntelligenceController.enableSchedule),
+);
+router.post(
+  "/openclaw/google-intelligence/schedule/disable",
+  requireAdminPermission(["google_intelligence.manage_schedule"]),
+  asyncHandler(googleIntelligenceController.disableSchedule),
+);
+router.get(
+  "/openclaw/google-intelligence/executions",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(googleIntelligenceController.listExecutions),
 );
 router.get(
   "/openclaw/blog-schedules",
