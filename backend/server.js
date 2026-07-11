@@ -12,6 +12,10 @@ const {
   startBlogAutomationScheduler,
   stopBlogAutomationScheduler,
 } = require('./src/services/blogAutomationScheduler.runtime');
+const {
+  startTelegramPolling,
+  stopTelegramPolling,
+} = require('./src/services/telegramPolling.runtime');
 // import { connectDB } from './src/config/db.js';
 
 const HOST = process.env.HOST || '0.0.0.0';
@@ -42,12 +46,15 @@ const PORT = Number(process.env.PORT) || 3056;
     if (blogScheduler.started) {
       console.log(`OpenClaw blog scheduler ready: ${blogScheduler.workerId}`);
     }
+    const telegramPolling = startTelegramPolling();
+    if (telegramPolling.started) console.log('Telegram approval polling ready');
 
     // Graceful shutdown
     const shutdown = (sig) => {
       console.log(`${sig} received. Shutting down...`);
       clearInterval(cleanupTimer);
       stopBlogAutomationScheduler();
+      stopTelegramPolling();
       server.close(() => {
         console.log('HTTP server closed.');
         process.exit(0);

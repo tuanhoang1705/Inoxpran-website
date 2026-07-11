@@ -421,7 +421,10 @@ class BlogAutomationScheduleService {
                     blogId: result.blogId,
                     blogTitle: payload.title,
                     blogSlug: result.slug || payload.slug,
-                    blogUrl: result.url || '',
+                    coverImageUrl: result.coverImage?.url || '',
+                    snapshotStatus: payload.googleIntelStatus,
+                    styleFamily: payload.metadata?.styleFamily || '',
+                    reviewStatus: pipeline.highRisk ? 'blocked — manual review required' : 'passed',
                     scheduleId,
                     executionId: execution._id
                 });

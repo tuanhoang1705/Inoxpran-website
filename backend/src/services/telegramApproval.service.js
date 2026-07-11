@@ -1,14 +1,18 @@
 'use strict'
 
 const crypto = require('node:crypto');
+const mongoose = require('mongoose');
 const { TelegramBlogApproval } = require('../models/telegramBlogApproval.model');
 const { TelegramUpdate } = require('../models/telegramUpdate.model');
+const { blog: Blog } = require('../models/blog.model');
 const BlogService = require('./blog.service');
 const { BadRequestError, ForbiddenError } = require('../core/error.response');
 const { normalizeString } = require('../utils/seoBlogSanitizer');
+const { validateTelegramImageUrl } = require('./telegramImageSafety.service');
 
 const DEFAULT_APPROVAL_TTL_HOURS = 72;
 const TELEGRAM_API_BASE = 'https://api.telegram.org';
+const DEFAULT_ADMIN_BASE_URL = 'http://localhost:5173';
 
 const parseBoolean = (value, fallback = false) => {
     if (typeof value === 'boolean') return value;
@@ -19,20 +23,12 @@ const parseBoolean = (value, fallback = false) => {
     return fallback;
 };
 
-const parseList = (value) =>
-    String(value || '')
-        .split(',')
-        .map((item) => item.trim())
-        .filter(Boolean);
-
-const isTelegramEnabled = () =>
-    parseBoolean(process.env.TELEGRAM_BOT_ENABLED, false) &&
-    Boolean(normalizeString(process.env.TELEGRAM_BOT_TOKEN));
-
+const parseList = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
+const getTelegramMode = () => normalizeString(process.env.TELEGRAM_MODE || 'webhook').toLowerCase() === 'polling' ? 'polling' : 'webhook';
+const isTelegramEnabled = () => parseBoolean(process.env.TELEGRAM_BOT_ENABLED, false) && Boolean(normalizeString(process.env.TELEGRAM_BOT_TOKEN));
 const getNotifyChatIds = () => {
     const explicit = parseList(process.env.TELEGRAM_NOTIFY_CHAT_IDS);
-    if (explicit.length) return explicit;
-    return parseList(process.env.TELEGRAM_ALLOWED_CHAT_IDS);
+    return explicit.length ? explicit : parseList(process.env.TELEGRAM_ALLOWED_CHAT_IDS);
 };
 
 const isAuthorizedTelegramActor = ({ chatId, userId }) => {
@@ -51,220 +47,292 @@ const timingSafeStringEqual = (left, right) => {
 const validateWebhookSecretHeader = (headers = {}) => {
     const expected = normalizeString(process.env.TELEGRAM_WEBHOOK_SECRET);
     if (!expected) throw new ForbiddenError('Telegram webhook secret is not configured');
-    const provided = normalizeString(
-        headers['x-telegram-bot-api-secret-token'] ||
-        headers['X-Telegram-Bot-Api-Secret-Token']
-    );
-    if (!provided || !timingSafeStringEqual(provided, expected)) {
-        throw new ForbiddenError('Invalid Telegram webhook secret');
-    }
+    const provided = normalizeString(headers['x-telegram-bot-api-secret-token'] || headers['X-Telegram-Bot-Api-Secret-Token']);
+    if (!provided || !timingSafeStringEqual(provided, expected)) throw new ForbiddenError('Invalid Telegram webhook secret');
+};
+
+const assertBlogId = (blogId) => {
+    const value = normalizeString(blogId);
+    if (!value || !mongoose.isValidObjectId(value)) throw new BadRequestError('A valid blogId is required for Telegram approval');
+    return value;
+};
+
+const buildAdminEditUrl = (blogId, baseUrl = process.env.ADMIN_BASE_URL || DEFAULT_ADMIN_BASE_URL) => {
+    const validBlogId = assertBlogId(blogId);
+    const normalizedBase = normalizeString(baseUrl).replace(/\/+$/g, '');
+    if (!/^https?:\/\//i.test(normalizedBase)) throw new BadRequestError('ADMIN_BASE_URL must be an absolute HTTP(S) URL');
+    return `${normalizedBase}/admin/blogs/${validBlogId}`;
+};
+
+const resolveCoverImageUrl = (value) => {
+    const image = normalizeString(value);
+    if (!image) return '';
+    if (/^https:\/\//i.test(image)) return image;
+    if (/^http:\/\//i.test(image)) return image;
+    if (!image.startsWith('/')) return '';
+    const base = normalizeString(process.env.PUBLIC_SITE_URL || process.env.APP_BASE_URL || 'https://inoxpran.com').replace(/\/+$/g, '');
+    return `${base}${image}`;
 };
 
 const generateApprovalCode = () => crypto.randomBytes(4).toString('hex').toUpperCase();
-
 const parseTelegramCommand = (text = '') => {
     const normalized = normalizeString(text);
     if (!normalized.startsWith('/')) return { command: '', code: '' };
     const [rawCommand, code = ''] = normalized.split(/\s+/, 2);
-    const command = rawCommand.replace(/^\/+/, '').split('@')[0].toLowerCase();
-    return {
-        command,
-        code: normalizeString(code).toUpperCase()
-    };
+    return { command: rawCommand.replace(/^\/+/, '').split('@')[0].toLowerCase(), code: normalizeString(code).toUpperCase() };
 };
 
-const buildDraftMessage = ({ approval }) => [
-    'Inoxpran OpenClaw draft is ready for review.',
+const buildHelpMessage = () => [
+    'INOXPRAN blog approval commands',
+    '/whoami — show your Telegram user/chat IDs',
+    '/pending — list pending draft approvals',
+    '/approve CODE — publish an approved saved draft',
+    '/reject CODE — reject a draft approval',
+    '/help — show this help',
     '',
-    `Title: ${approval.blogTitle}`,
-    `Slug: ${approval.blogSlug}`,
-    approval.blogUrl ? `URL: ${approval.blogUrl}` : '',
-    '',
-    `Approve: /approve ${approval.approvalCode}`,
-    `Reject: /reject ${approval.approvalCode}`,
-    'Pending: /pending'
-].filter(Boolean).join('\n');
+    'Telegram commands never run AI or regenerate content.'
+].join('\n');
 
-const postTelegram = async ({ token, method, body }) => {
+const buildCommandResponse = ({ command, chatId, userId, username }) => {
+    if (command === 'start') return `INOXPRAN approval bot is ready.\n\n${buildHelpMessage()}`;
+    if (command === 'help') return buildHelpMessage();
+    if (command === 'whoami') return [
+        'Your Telegram identifiers:',
+        `User ID: ${userId || '(not provided)'}`,
+        `Chat ID: ${chatId || '(not provided)'}`,
+        `Username: ${username ? `@${username}` : '(not provided)'}`
+    ].join('\n');
+    return '';
+};
+
+const buildDraftLines = ({ approval, compact = false }) => {
+    const metadata = approval.reviewMetadata || {};
+    const lines = [
+        'INOXPRAN — Draft ready for admin review',
+        '',
+        `Title: ${approval.blogTitle}`,
+        `Blog ID: ${approval.blogId}`,
+        `Admin editor: ${approval.adminEditUrl}`,
+        metadata.snapshotStatus ? `Google Intelligence: ${metadata.snapshotStatus}` : '',
+        metadata.styleFamily ? `Editorial style: ${metadata.styleFamily}` : '',
+        metadata.reviewStatus ? `Quality gates: ${metadata.reviewStatus}` : '',
+        '',
+        `Approve: /approve ${approval.approvalCode}`,
+        `Reject: /reject ${approval.approvalCode}`,
+        compact ? '' : 'Pending: /pending'
+    ];
+    return lines.filter((line) => line !== '').join('\n');
+};
+
+const buildDraftMessage = ({ approval }) => buildDraftLines({ approval, compact: false });
+const buildDraftCaption = ({ approval }) => buildDraftLines({ approval, compact: true }).slice(0, 1024);
+
+const postTelegram = async ({ token, method, body, fetchImpl = global.fetch, timeoutMs = 12_000 }) => {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
-        const response = await fetch(`${TELEGRAM_API_BASE}/bot${token}/${method}`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(body),
-            signal: controller.signal
+        const response = await fetchImpl(`${TELEGRAM_API_BASE}/bot${token}/${method}`, {
+            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal
         });
         const payload = await response.json().catch(() => ({}));
-        if (!response.ok || payload?.ok === false) {
-            throw new Error(payload?.description || `telegram_${method}_failed`);
-        }
+        if (!response.ok || payload?.ok === false) throw new Error(payload?.description || `telegram_${method}_failed`);
         return payload.result || payload;
+    } catch (error) {
+        if (error?.name === 'AbortError') throw new Error(`telegram_${method}_timeout`);
+        throw error;
     } finally {
         clearTimeout(timeout);
     }
 };
 
-const sendMessage = async ({ chatId, text }) => {
-    if (!isTelegramEnabled()) {
-        return { sent: false, reason: 'telegram_disabled' };
-    }
-    const token = normalizeString(process.env.TELEGRAM_BOT_TOKEN);
-    const result = await postTelegram({
-        token,
-        method: 'sendMessage',
-        body: {
-            chat_id: chatId,
-            text,
-            disable_web_page_preview: true
-        }
+const sendMessage = async ({ chatId, text, token = normalizeString(process.env.TELEGRAM_BOT_TOKEN), postTelegramImpl = postTelegram }) => {
+    if (!isTelegramEnabled()) return { sent: false, reason: 'telegram_disabled' };
+    const result = await postTelegramImpl({
+        token, method: 'sendMessage',
+        body: { chat_id: chatId, text, disable_web_page_preview: true }
     });
-    return {
-        sent: true,
-        messageId: result?.message_id ? String(result.message_id) : ''
-    };
+    return { sent: true, messageId: result?.message_id ? String(result.message_id) : '' };
 };
 
-const sendMessageWithRetry = async ({ chatId, text }) => {
+const sendMessageWithRetry = async (args) => {
     let lastError;
     for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-            return await sendMessage({ chatId, text });
-        } catch (error) {
-            lastError = error;
-        }
+        try { return await sendMessage(args); } catch (error) { lastError = error; }
     }
     throw lastError;
 };
 
+const sendPhoto = async ({ chatId, photo, caption, adminEditUrl, token = normalizeString(process.env.TELEGRAM_BOT_TOKEN), postTelegramImpl = postTelegram }) => {
+    const result = await postTelegramImpl({
+        token, method: 'sendPhoto',
+        body: {
+            chat_id: chatId, photo, caption,
+            reply_markup: { inline_keyboard: adminEditUrl ? [[{ text: 'Open admin editor', url: adminEditUrl }]] : [] }
+        }
+    });
+    return { sent: true, messageId: result?.message_id ? String(result.message_id) : '' };
+};
+
+const sendApprovalNotification = async ({
+    chatId,
+    approval,
+    validateImageImpl = validateTelegramImageUrl,
+    sendPhotoImpl = sendPhoto,
+    sendMessageImpl = sendMessageWithRetry
+}) => {
+    let photoError = '';
+    if (approval.coverImageUrl) {
+        try {
+            const validated = await validateImageImpl({ url: approval.coverImageUrl });
+            const result = await sendPhotoImpl({
+                chatId, photo: validated.canonicalUrl, caption: buildDraftCaption({ approval }), adminEditUrl: approval.adminEditUrl
+            });
+            return { ...result, notificationType: 'photo', notificationStatus: 'sent', notificationError: '' };
+        } catch (error) {
+            photoError = normalizeString(error?.message || 'telegram_photo_failed').slice(0, 500);
+        }
+    }
+    const result = await sendMessageImpl({ chatId, text: buildDraftMessage({ approval }) });
+    return {
+        ...result,
+        notificationType: approval.coverImageUrl ? 'text_fallback' : 'text',
+        notificationStatus: approval.coverImageUrl ? 'photo_failed_text_sent' : 'sent',
+        notificationError: photoError
+    };
+};
+
 class TelegramApprovalService {
-    static isEnabled() {
-        return isTelegramEnabled();
+    static isEnabled() { return isTelegramEnabled(); }
+    static mode() { return getTelegramMode(); }
+    static status() {
+        return {
+            enabled: isTelegramEnabled(), mode: getTelegramMode(),
+            tokenConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN),
+            allowlistConfigured: Boolean(process.env.TELEGRAM_ALLOWED_CHAT_IDS || process.env.TELEGRAM_ALLOWED_USER_IDS),
+            webhookSecretConfigured: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET),
+            adminBaseUrlConfigured: Boolean(process.env.ADMIN_BASE_URL)
+        };
     }
-
-    static validateWebhookSecret({ headers }) {
-        validateWebhookSecretHeader(headers);
-    }
-
-    static parseCommand(text) {
-        return parseTelegramCommand(text);
-    }
+    static validateWebhookSecret({ headers }) { validateWebhookSecretHeader(headers); }
+    static parseCommand(text) { return parseTelegramCommand(text); }
 
     static async createDraftApprovalAndNotify({
-        blogId,
-        blogTitle,
-        blogSlug,
-        blogUrl,
-        scheduleId,
-        executionId
+        blogId, blogTitle, blogSlug, scheduleId, executionId,
+        coverImageUrl = '', snapshotStatus = '', styleFamily = '', reviewStatus = ''
     }) {
+        const validBlogId = assertBlogId(blogId);
+        const savedBlog = await Blog.findById(validBlogId).select('blog_title blog_slug blog_image coverImage isDraft isPublished').lean();
+        if (!savedBlog) throw new BadRequestError('Blog draft not found for Telegram approval');
+        const idempotencyKey = `blog-approval:${validBlogId}:${String(executionId || scheduleId || 'manual')}`;
         const ttlHours = Math.max(1, Number(process.env.TELEGRAM_APPROVAL_TTL_HOURS || DEFAULT_APPROVAL_TTL_HOURS));
-        const approval = await TelegramBlogApproval.create({
-            blogId,
-            blogTitle: normalizeString(blogTitle),
-            blogSlug: normalizeString(blogSlug),
-            blogUrl: normalizeString(blogUrl),
-            scheduleId: scheduleId || null,
-            executionId: executionId || null,
-            approvalCode: generateApprovalCode(),
-            expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000)
-        });
-
-        if (!isTelegramEnabled()) {
-            return {
-                approvalId: String(approval._id),
-                approvalCode: approval.approvalCode,
-                status: 'not_sent',
-                reason: 'telegram_disabled'
-            };
+        let approval = await TelegramBlogApproval.findOne({ idempotencyKey });
+        if (!approval) {
+            try {
+                approval = await TelegramBlogApproval.create({
+                    blogId: validBlogId,
+                    blogTitle: normalizeString(blogTitle || savedBlog.blog_title),
+                    blogSlug: normalizeString(blogSlug || savedBlog.blog_slug),
+                    blogUrl: '',
+                    adminEditUrl: buildAdminEditUrl(validBlogId),
+                    coverImageUrl: resolveCoverImageUrl(coverImageUrl || savedBlog.coverImage?.url || savedBlog.blog_image),
+                    scheduleId: scheduleId || null,
+                    executionId: executionId || null,
+                    idempotencyKey,
+                    approvalCode: generateApprovalCode(),
+                    expiresAt: new Date(Date.now() + ttlHours * 60 * 60 * 1000)
+                });
+            } catch (error) {
+                if (error?.code !== 11000) throw error;
+                approval = await TelegramBlogApproval.findOne({ idempotencyKey });
+            }
         }
-
+        if (!approval) throw new BadRequestError('Unable to create Telegram approval');
+        approval.reviewMetadata = { snapshotStatus, styleFamily, reviewStatus };
+        if (approval.notificationStatus && approval.notifiedAt) {
+            return { approvalId: String(approval._id), approvalCode: approval.approvalCode, status: approval.notificationStatus, duplicate: true };
+        }
+        if (!isTelegramEnabled()) {
+            approval.notificationType = 'disabled';
+            approval.notificationStatus = 'not_sent';
+            approval.notificationError = 'telegram_disabled';
+            await approval.save();
+            return { approvalId: String(approval._id), approvalCode: approval.approvalCode, status: 'not_sent', reason: 'telegram_disabled' };
+        }
         const chatIds = getNotifyChatIds();
         if (!chatIds.length) {
-            return {
-                approvalId: String(approval._id),
-                approvalCode: approval.approvalCode,
-                status: 'not_sent',
-                reason: 'no_notify_chat_ids'
-            };
+            approval.notificationType = 'disabled';
+            approval.notificationStatus = 'not_sent';
+            approval.notificationError = 'no_notify_chat_ids';
+            await approval.save();
+            return { approvalId: String(approval._id), approvalCode: approval.approvalCode, status: 'not_sent', reason: 'no_notify_chat_ids' };
         }
 
-        const messageText = buildDraftMessage({ approval });
         const sent = [];
         const failed = [];
         for (const chatId of chatIds) {
             try {
-                const result = await sendMessageWithRetry({ chatId, text: messageText });
-                sent.push({ chatId, messageId: result.messageId || '' });
+                const result = await sendApprovalNotification({ chatId, approval });
+                sent.push({ chatId, ...result });
             } catch (error) {
-                failed.push({ chatId, error: error?.message || 'telegram_send_failed' });
+                failed.push({ chatId, error: normalizeString(error?.message || 'telegram_send_failed').slice(0, 500) });
             }
         }
-
-        if (sent[0]) {
-            approval.telegramChatId = sent[0].chatId;
-            approval.telegramMessageId = sent[0].messageId;
-            await approval.save();
+        const primary = sent[0];
+        approval.notificationType = primary?.notificationType || (approval.coverImageUrl ? 'text_fallback' : 'text');
+        approval.notificationStatus = sent.length ? primary.notificationStatus : 'failed';
+        approval.notificationError = [primary?.notificationError, ...failed.map((item) => item.error)].filter(Boolean).join('; ').slice(0, 500);
+        approval.notifiedAt = sent.length ? new Date() : null;
+        if (primary) {
+            approval.telegramChatId = primary.chatId;
+            approval.telegramMessageId = primary.messageId || '';
         }
-
+        await approval.save();
         return {
-            approvalId: String(approval._id),
-            approvalCode: approval.approvalCode,
-            status: sent.length ? 'sent' : 'failed',
-            sent,
-            failed
+            approvalId: String(approval._id), approvalCode: approval.approvalCode,
+            status: sent.length ? 'sent' : 'failed', notificationType: approval.notificationType,
+            notificationStatus: approval.notificationStatus, sent, failed
         };
     }
 
-    static async approveCode({ code, userId, username }) {
+    static async approveCode({ code, userId, username, updateId = null }) {
         const approvalCode = normalizeString(code).toUpperCase();
         if (!approvalCode) throw new BadRequestError('approval code is required');
-
-        const approval = await TelegramBlogApproval.findOne({ approvalCode }).lean();
-        if (!approval) throw new BadRequestError('approval code not found');
-        if (approval.status !== 'pending') {
-            return { status: approval.status, message: `Approval is already ${approval.status}` };
-        }
-        if (approval.expiresAt && new Date(approval.expiresAt).getTime() < Date.now()) {
-            await TelegramBlogApproval.updateOne(
-                { _id: approval._id },
-                { $set: { status: 'expired' } }
-            );
-            return { status: 'expired', message: 'Approval code has expired' };
-        }
-
-        const published = await BlogService.publishBlog({ blogId: String(approval.blogId), sendNewsletter: false });
-        await TelegramBlogApproval.updateOne(
-            { _id: approval._id },
-            {
-                $set: {
-                    status: 'approved',
-                    approvedAt: new Date(),
-                    approvedByTelegramUserId: String(userId || ''),
-                    approvedByTelegramUsername: normalizeString(username)
-                }
+        const now = new Date();
+        const approval = await TelegramBlogApproval.findOneAndUpdate(
+            { approvalCode, status: 'pending', $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] },
+            { $set: { status: 'processing', processedUpdateId: updateId } },
+            { new: true }
+        ).lean();
+        if (!approval) {
+            const current = await TelegramBlogApproval.findOne({ approvalCode }).lean();
+            if (!current) throw new BadRequestError('approval code not found');
+            if (current.status === 'pending' && current.expiresAt && new Date(current.expiresAt) <= now) {
+                await TelegramBlogApproval.updateOne({ _id: current._id, status: 'pending' }, { $set: { status: 'expired', processedUpdateId: updateId } });
+                return { status: 'expired', message: 'Approval code has expired' };
             }
-        );
-        return {
-            status: 'approved',
-            message: `Published: ${published?.title || approval.blogTitle}`,
-            blog: published
-        };
+            return { status: current.status, message: `Approval is already ${current.status}` };
+        }
+        try {
+            const published = await BlogService.publishBlog({ blogId: String(approval.blogId), sendNewsletter: false });
+            await TelegramBlogApproval.updateOne({ _id: approval._id, status: 'processing' }, {
+                $set: {
+                    status: 'approved', approvedAt: new Date(), processedUpdateId: updateId,
+                    approvedByTelegramUserId: String(userId || ''), approvedByTelegramUsername: normalizeString(username)
+                }
+            });
+            return { status: 'approved', message: `Published: ${published?.title || approval.blogTitle}`, blog: published };
+        } catch (error) {
+            await TelegramBlogApproval.updateOne({ _id: approval._id, status: 'processing' }, { $set: { status: 'pending' } });
+            throw error;
+        }
     }
 
-    static async rejectCode({ code, userId, username }) {
+    static async rejectCode({ code, userId, username, updateId = null }) {
         const approvalCode = normalizeString(code).toUpperCase();
         if (!approvalCode) throw new BadRequestError('approval code is required');
         const approval = await TelegramBlogApproval.findOneAndUpdate(
-            { approvalCode, status: 'pending' },
-            {
-                $set: {
-                    status: 'rejected',
-                    rejectedAt: new Date(),
-                    rejectedByTelegramUserId: String(userId || ''),
-                    rejectedByTelegramUsername: normalizeString(username)
-                }
-            },
+            { approvalCode, status: 'pending', $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
+            { $set: { status: 'rejected', rejectedAt: new Date(), processedUpdateId: updateId, rejectedByTelegramUserId: String(userId || ''), rejectedByTelegramUsername: normalizeString(username) } },
             { new: true }
         ).lean();
         if (!approval) return { status: 'not_found', message: 'No pending approval found for that code' };
@@ -272,106 +340,98 @@ class TelegramApprovalService {
     }
 
     static async listPending({ limit = 10 } = {}) {
-        const approvals = await TelegramBlogApproval.find({
-            status: 'pending',
-            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }]
-        })
-            .sort({ createdAt: -1 })
-            .limit(Math.min(Math.max(Number(limit) || 10, 1), 20))
-            .lean();
+        const approvals = await TelegramBlogApproval.find({ status: 'pending', $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] })
+            .sort({ createdAt: -1 }).limit(Math.min(Math.max(Number(limit) || 10, 1), 20)).lean();
         return approvals.map((approval) => ({
-            code: approval.approvalCode,
-            title: approval.blogTitle,
-            slug: approval.blogSlug,
-            expiresAt: approval.expiresAt
+            code: approval.approvalCode, title: approval.blogTitle, blogId: String(approval.blogId),
+            adminEditUrl: approval.adminEditUrl || buildAdminEditUrl(String(approval.blogId)), expiresAt: approval.expiresAt
         }));
     }
 
-    static async handleWebhook({ headers, body }) {
-        validateWebhookSecretHeader(headers);
-        if (!isTelegramEnabled()) return { ok: true, ignored: true, reason: 'telegram_disabled' };
-
+    static async handleUpdate({ body }) {
         const updateId = Number(body?.update_id);
         if (!Number.isInteger(updateId)) return { ok: true, ignored: true, reason: 'missing_update_id' };
-
         const message = body?.message || body?.edited_message || body?.channel_post || null;
         const text = normalizeString(message?.text);
         const chatId = String(message?.chat?.id || '');
         const userId = String(message?.from?.id || '');
         const username = normalizeString(message?.from?.username || message?.from?.first_name || '');
         const parsed = parseTelegramCommand(text);
-
         try {
-            await TelegramUpdate.create({
-                updateId,
-                chatId,
-                userId,
-                command: parsed.command || ''
-            });
+            await TelegramUpdate.create({ updateId, chatId, userId, command: parsed.command || '' });
         } catch (error) {
             if (error?.code === 11000) return { ok: true, duplicate: true };
             throw error;
         }
+        if (!message || !text || !parsed.command) return { ok: true, ignored: true, reason: 'not_a_command' };
 
-        if (!message || !text || !parsed.command) {
-            return { ok: true, ignored: true, reason: 'not_a_command' };
+        const safeResponse = buildCommandResponse({ command: parsed.command, chatId, userId, username });
+        if (safeResponse) {
+            await sendMessageWithRetry({ chatId, text: safeResponse });
+            return { ok: true, command: parsed.command };
         }
 
         if (!isAuthorizedTelegramActor({ chatId, userId })) {
-            if (chatId) {
-                await sendMessageWithRetry({ chatId, text: 'Unauthorized Telegram account.' }).catch(() => null);
-            }
+            if (chatId) await sendMessageWithRetry({ chatId, text: 'Unauthorized Telegram account. Use /whoami to view the IDs an administrator must allowlist.' }).catch(() => null);
             return { ok: true, unauthorized: true };
         }
-
         if (parsed.command === 'pending') {
             const approvals = await TelegramApprovalService.listPending();
-            const textReply = approvals.length
-                ? approvals.map((item) => `/approve ${item.code} - ${item.title}`).join('\n')
+            const reply = approvals.length
+                ? approvals.map((item) => `/approve ${item.code} — ${item.title}\n${item.adminEditUrl}`).join('\n\n')
                 : 'No pending blog approvals.';
-            await sendMessageWithRetry({ chatId, text: textReply });
+            await sendMessageWithRetry({ chatId, text: reply });
             return { ok: true, command: 'pending', count: approvals.length };
         }
-
         if (parsed.command === 'approve') {
             let result;
-            try {
-                result = await TelegramApprovalService.approveCode({
-                    code: parsed.code,
-                    userId,
-                    username
-                });
-            } catch (error) {
-                result = {
-                    status: 'failed',
-                    message: error?.message || 'Approve failed'
-                };
-            }
+            try { result = await TelegramApprovalService.approveCode({ code: parsed.code, userId, username, updateId }); }
+            catch (error) { result = { status: 'failed', message: error?.message || 'Approve failed' }; }
             await sendMessageWithRetry({ chatId, text: result.message || result.status });
             return { ok: true, command: 'approve', status: result.status };
         }
-
         if (parsed.command === 'reject') {
-            const result = await TelegramApprovalService.rejectCode({
-                code: parsed.code,
-                userId,
-                username
-            });
+            const result = await TelegramApprovalService.rejectCode({ code: parsed.code, userId, username, updateId });
             await sendMessageWithRetry({ chatId, text: result.message || result.status });
             return { ok: true, command: 'reject', status: result.status };
         }
-
-        await sendMessageWithRetry({
-            chatId,
-            text: 'Supported commands: /pending, /approve CODE, /reject CODE'
-        });
+        await sendMessageWithRetry({ chatId, text: buildHelpMessage() });
         return { ok: true, ignored: true, reason: 'unsupported_command' };
+    }
+
+    static async handleWebhook({ headers, body }) {
+        validateWebhookSecretHeader(headers);
+        if (!isTelegramEnabled()) return { ok: true, ignored: true, reason: 'telegram_disabled' };
+        return TelegramApprovalService.handleUpdate({ body });
+    }
+
+    static async pollOnce({ offset = 0, postTelegramImpl = postTelegram } = {}) {
+        if (!isTelegramEnabled() || getTelegramMode() !== 'polling') return { offset, ignored: true };
+        const updates = await postTelegramImpl({
+            token: normalizeString(process.env.TELEGRAM_BOT_TOKEN), method: 'getUpdates', timeoutMs: 35_000,
+            body: { offset, timeout: 25, allowed_updates: ['message', 'edited_message', 'channel_post'] }
+        });
+        let nextOffset = offset;
+        for (const update of Array.isArray(updates) ? updates : []) {
+            await TelegramApprovalService.handleUpdate({ body: update });
+            nextOffset = Math.max(nextOffset, Number(update.update_id) + 1);
+        }
+        return { offset: nextOffset, count: Array.isArray(updates) ? updates.length : 0 };
     }
 }
 
 module.exports = {
     TelegramApprovalService,
+    buildAdminEditUrl,
+    buildCommandResponse,
+    buildDraftCaption,
+    buildDraftMessage,
+    buildHelpMessage,
+    getTelegramMode,
     isAuthorizedTelegramActor,
     parseTelegramCommand,
+    postTelegram,
+    resolveCoverImageUrl,
+    sendApprovalNotification,
     timingSafeStringEqual
 };
