@@ -10,7 +10,7 @@ const executionSchema = new Schema(
         scheduleId: {
             type: Schema.Types.ObjectId,
             ref: 'BlogAutomationSchedule',
-            required: true,
+            default: null,
             index: true
         },
         executionKey: { type: String, required: true, unique: true, index: true },
@@ -29,6 +29,7 @@ const executionSchema = new Schema(
         error: { type: String, default: '' },
         retryCount: { type: Number, default: 0, min: 0 },
         telegramNotificationStatus: { type: String, default: '' },
+        telegramNotificationType: { type: String, default: '' },
         telegramNotificationError: { type: String, default: '' },
         metadata: { type: Schema.Types.Mixed, default: () => ({}) },
         googleIntelSnapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', default: null, index: true },

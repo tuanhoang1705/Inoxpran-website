@@ -114,6 +114,13 @@ const normalizeAgentConfig = (value = {}) => {
         language: normalizeString(config.language || 'vi'),
         tone: normalizeString(config.tone || 'practical'),
         generateImages: parseBoolean(config.generateImages, true),
+        researchSources: Array.isArray(config.researchSources)
+            ? config.researchSources.map((item) => normalizeString(item)).filter(Boolean).slice(0, 12)
+            : String(config.researchSources || '')
+                .split(',')
+                .map((item) => normalizeString(item))
+                .filter(Boolean)
+                .slice(0, 12),
         prompt: normalizeString(config.prompt || '')
     };
 };

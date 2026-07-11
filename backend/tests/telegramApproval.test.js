@@ -228,7 +228,7 @@ describe('Telegram approval helpers', () => {
 });
 
 describe('Telegram image safety', () => {
-    const publicDns = async () => [{ address: '203.0.113.10', family: 4 }];
+    const publicDns = async () => [{ address: '93.184.216.34', family: 4 }];
 
     it('blocks SSRF image URLs', async () => {
         await expect(validateTelegramImageUrl({ url: 'https://127.0.0.1/cover.jpg' })).rejects.toThrow();

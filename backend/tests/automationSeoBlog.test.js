@@ -16,6 +16,7 @@ const blogMock = {
     findByIdAndUpdate: vi.fn()
 };
 const ensureGoogleSnapshotMock = vi.fn();
+const executionMock = { create: vi.fn(), updateOne: vi.fn() };
 
 const installMock = (modulePath, exports) => {
     const resolvedPath = require.resolve(modulePath);
@@ -36,6 +37,9 @@ const loadAutomationService = () => {
     });
     installMock('../src/services/agenticBlogCore.service', {
         AgenticBlogCoreService: { prepareContext: vi.fn() }
+    });
+    installMock('../src/models/blogAutomationExecution.model', {
+        BlogAutomationExecution: executionMock
     });
 
     [
@@ -144,6 +148,7 @@ beforeEach(() => {
         snapshotDate: '2026-07-11',
         status: 'completed_no_change'
     });
+    executionMock.updateOne.mockResolvedValue({ modifiedCount: 1 });
 
     blogMock.findOne.mockReturnValue({
         select: () => ({

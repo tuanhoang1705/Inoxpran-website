@@ -18,6 +18,7 @@
 		daily: { times: ['05:30'] },
 		interval: { value: 24, unit: 'hours' },
 		strictGate: true,
+		sourceGroups: ['official'],
 		allowLastSuccessfulSnapshot: false,
 		maxSnapshotAgeHours: 24,
 		sourceTimeoutMs: 15000,
@@ -94,6 +95,7 @@
 		maxAge: isEn ? 'Maximum age (hours)' : 'Tuổi tối đa (giờ)',
 		timeout: isEn ? 'Source timeout (ms)' : 'Timeout nguồn (ms)',
 		retries: isEn ? 'Retry count' : 'Số lần thử lại',
+		sourceGroups: isEn ? 'Source groups' : 'Nhóm nguồn',
 		saveSchedule: isEn ? 'Save schedule' : 'Lưu lịch',
 		executions: isEn ? 'Execution history' : 'Lịch sử thực thi',
 		snapshots: isEn ? 'Snapshot history' : 'Lịch sử snapshot',
@@ -143,6 +145,7 @@
 	};
 
 	const statusLabel = (value) => String(value || 'not_ready').replaceAll('_', ' ');
+	const listInputValue = (value) => Array.isArray(value) ? value.join(', ') : String(value || '');
 	const severityTone = (severity) => ['critical', 'high'].includes(severity) ? 'danger' : severity === 'medium' ? 'warn' : 'calm';
 
 	const refreshAll = async () => {
@@ -189,6 +192,7 @@
 				...schedule,
 				daily: { times: String(schedule?.daily?.times || '').split(',').map((item) => item.trim()).filter(Boolean) },
 				interval: { value: Number(schedule?.interval?.value || 24), unit: 'hours' },
+				sourceGroups: String(schedule?.sourceGroups || '').split(',').map((item) => item.trim()).filter(Boolean),
 				maxSnapshotAgeHours: Number(schedule?.maxSnapshotAgeHours || 24),
 				sourceTimeoutMs: Number(schedule?.sourceTimeoutMs || 15000),
 				retryPolicy: { ...schedule.retryPolicy, count: Number(schedule?.retryPolicy?.count || 0) }
@@ -297,13 +301,14 @@
 			<label><span>{t.enabled}</span><input type="checkbox" bind:checked={schedule.enabled} /></label>
 			<label><span>{t.timezone}</span><input bind:value={schedule.timezone} /></label>
 			<label><span>{t.scheduleType}</span><select bind:value={schedule.scheduleType}><option value="daily">{t.daily}</option><option value="interval">{t.interval}</option></select></label>
-			{#if schedule.scheduleType === 'daily'}<label><span>{t.runTimes}</span><input value={(schedule?.daily?.times || []).join(', ')} oninput={(event) => schedule = { ...schedule, daily: { times: event.currentTarget.value } }} /></label>
+			{#if schedule.scheduleType === 'daily'}<label><span>{t.runTimes}</span><input value={listInputValue(schedule?.daily?.times)} oninput={(event) => schedule = { ...schedule, daily: { times: event.currentTarget.value } }} /></label>
 			{:else}<label><span>{t.interval}</span><input type="number" min="1" bind:value={schedule.interval.value} /></label>{/if}
 			<label><span>{t.strictGate}</span><input type="checkbox" bind:checked={schedule.strictGate} /></label>
 			<label><span>{t.allowLast}</span><input type="checkbox" bind:checked={schedule.allowLastSuccessfulSnapshot} /></label>
 			<label><span>{t.maxAge}</span><input type="number" min="1" bind:value={schedule.maxSnapshotAgeHours} /></label>
 			<label><span>{t.timeout}</span><input type="number" min="1000" step="1000" bind:value={schedule.sourceTimeoutMs} /></label>
 			<label><span>{t.retries}</span><input type="number" min="0" max="5" bind:value={schedule.retryPolicy.count} /></label>
+			<label><span>{t.sourceGroups}</span><input value={listInputValue(schedule?.sourceGroups)} oninput={(event) => schedule = { ...schedule, sourceGroups: event.currentTarget.value }} /></label>
 		</div>
 		<div class="right"><button class="button primary" onclick={saveSchedule} disabled={Boolean(busy)}>{t.saveSchedule}</button></div>
 	</section>

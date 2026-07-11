@@ -208,7 +208,8 @@ class GoogleIntelligenceService {
             maxSnapshotAgeHours: Number(schedule.maxSnapshotAgeHours || 24),
             sourceTimeoutMs: Number(schedule.sourceTimeoutMs || 15000),
             retryCount: Number(schedule.retryPolicy?.count || 0),
-            retryDelayMs: Number(schedule.retryPolicy?.delayMs || 1000)
+            retryDelayMs: Number(schedule.retryPolicy?.delayMs || 1000),
+            sourceGroups: Array.isArray(schedule.sourceGroups) ? schedule.sourceGroups : ['official']
         };
     }
 
@@ -323,7 +324,9 @@ class GoogleIntelligenceService {
         }
 
         try {
-            const sources = await GoogleIntelligenceSource.find({ enabled: true }).sort({ official: -1, priority: 1 }).select('+lastContentHash').lean();
+            const sourceQuery = { enabled: true };
+            if (config.sourceGroups.length) sourceQuery.sourceGroups = { $in: config.sourceGroups };
+            const sources = await GoogleIntelligenceSource.find(sourceQuery).sort({ official: -1, priority: 1 }).select('+lastContentHash').lean();
             const results = [];
             for (const source of sources) {
                 results.push(await GoogleIntelligenceService.fetchSource({
@@ -338,6 +341,7 @@ class GoogleIntelligenceService {
                         allowHttp: fetchOptions.allowHttp
                     }
                 }));
+                if (results.length < sources.length) await new Promise((resolve) => setTimeout(resolve, 150));
             }
 
             const successful = results.filter((item) => item.ok);
@@ -448,6 +452,7 @@ class GoogleIntelligenceService {
     }
 
     static async getStatus() {
+        await GoogleIntelligenceService.seedDefaultSources();
         const [config, latestSnapshot, latestRun, sourceCounts, schedule] = await Promise.all([
             GoogleIntelligenceService.getGateConfig(),
             GoogleIntelligenceSnapshot.findOne().sort({ checkedAt: -1 }).lean(),

@@ -26,10 +26,17 @@ const isPrivateIp = (address = '') => {
     const value = String(address || '').replace(/^::ffff:/, '').toLowerCase();
     if (!net.isIP(value)) return false;
     if (net.isIPv4(value)) {
-        const [a, b] = value.split('.').map(Number);
-        return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+        const [a, b, c] = value.split('.').map(Number);
+        return a === 10 || a === 127 || a === 0 || a >= 224 ||
+            (a === 100 && b >= 64 && b <= 127) ||
+            (a === 169 && b === 254) ||
+            (a === 172 && b >= 16 && b <= 31) ||
+            (a === 192 && [0, 168].includes(b)) ||
+            (a === 198 && [18, 19].includes(b)) ||
+            (a === 198 && b === 51 && c === 100) ||
+            (a === 203 && b === 0 && c === 113);
     }
-    return value === '::1' || value === '::' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb');
+    return value === '::1' || value === '::' || value.startsWith('fc') || value.startsWith('fd') || value.startsWith('fe8') || value.startsWith('fe9') || value.startsWith('fea') || value.startsWith('feb') || value.startsWith('2001:db8');
 };
 
 const canonicalizeUrl = (input) => {

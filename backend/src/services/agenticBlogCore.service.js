@@ -196,10 +196,19 @@ class AgenticBlogCoreService {
             EditorialStyleProfile.find({ createdAt: { $gte: lookback } }).sort({ createdAt: -1 }).lean()
         ]);
         if (!definitions.length) throw new Error('No enabled editorial styles');
-        const recentFamilies = new Set(recent.map((profile) => profile.styleFamily));
         const yesterdayFamily = recent[0]?.styleFamily || '';
         const locked = definitions.find((definition) => definition.locked && definition.styleFamily !== yesterdayFamily);
-        const eligible = definitions.filter((definition) => definition.styleFamily !== yesterdayFamily && !recentFamilies.has(definition.styleFamily));
+        const recentOpenings = new Set(recent.map((profile) => profile.openingMode));
+        const recentHeadings = new Set(recent.map((profile) => profile.headingMode));
+        const recentCtas = new Set(recent.map((profile) => profile.ctaMode));
+        const eligible = definitions.filter((definition) => {
+            if (definition.styleFamily === yesterdayFamily) return false;
+            const lastUsedAt = definition.lastUsedAt ? new Date(definition.lastUsedAt).getTime() : 0;
+            const cooldownMs = Number(definition.cooldownDays || 7) * 86_400_000;
+            if (lastUsedAt && now.getTime() - lastUsedAt < cooldownMs) return false;
+            const config = STYLE_CONFIG[definition.styleFamily] || [];
+            return !recentOpenings.has(config[0]) && !recentHeadings.has(config[1]) && !recentCtas.has(config[6]);
+        });
         const selected = locked || eligible[0] || definitions.find((definition) => definition.styleFamily !== yesterdayFamily) || definitions[0];
         const values = STYLE_CONFIG[selected.styleFamily] || STYLE_CONFIG['concise-practical-guide'];
         const profile = await EditorialStyleProfile.create({

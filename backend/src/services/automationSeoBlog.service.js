@@ -1,6 +1,8 @@
 'use strict'
 
+const crypto = require('node:crypto');
 const { blog } = require('../models/blog.model');
+const { BlogAutomationExecution } = require('../models/blogAutomationExecution.model');
 const { BadRequestError } = require('../core/error.response');
 const { normalizeString } = require('../utils/seoBlogSanitizer');
 const { validateAutomationPayload } = require('../utils/seoBlogValidation');
@@ -95,6 +97,23 @@ class AutomationSeoBlogService {
             articleType: normalizeString(payload.articleType),
             sourceUrls: Array.isArray(payload.researchSources) ? payload.researchSources : []
         });
+        const execution = await BlogAutomationExecution.create({
+            scheduleId: null,
+            executionKey: `external:${context.snapshot.snapshotDate}:${crypto.randomUUID()}`,
+            status: context.strategy.decision === 'skip' ? 'skipped' : 'running',
+            startedAt: new Date(),
+            completedAt: context.strategy.decision === 'skip' ? new Date() : null,
+            googleIntelSnapshotId: context.snapshot.id,
+            researchBundleId: context.researchBundle._id,
+            editorialStyleProfileId: context.style._id,
+            strategyPlanId: context.strategy._id,
+            correlationId: crypto.randomUUID(),
+            agentSteps: context.strategy.decision === 'skip'
+                ? ['google-intelligence-gate', 'topic-opportunity-research', 'skip']
+                : ['google-intelligence-gate', 'topic-opportunity-research', 'industry-content-research', 'editorial-style-planning', 'content-strategy-plan', 'content-architecture'],
+            publisherDecision: context.strategy.decision === 'skip' ? { allowed: false, reason: context.strategy.decisionReason } : {},
+            metadata: { trigger: 'external_prepare', pipelineVersion: 'agentic-blog-core-v2' }
+        });
         return {
             googleIntelSnapshotId: context.snapshot.id,
             googleIntelSnapshotDate: context.snapshot.snapshotDate,
@@ -116,6 +135,7 @@ class AutomationSeoBlogService {
                 activeVariant: context.style.activeVariant
             },
             strategyPlanId: String(context.strategy._id),
+            agenticExecutionId: String(execution._id),
             strategy: {
                 decision: context.strategy.decision,
                 decisionReason: context.strategy.decisionReason,
@@ -218,6 +238,24 @@ class AutomationSeoBlogService {
         const createdObject = typeof created.toObject === 'function' ? created.toObject() : created;
         const blogId = String(createdObject?._id || createdObject?.id || '');
         const mode = shouldPublish ? 'publish' : 'draft';
+
+        await BlogAutomationExecution.updateOne(
+            { _id: normalized.agenticExecutionId },
+            {
+                $set: {
+                    status: shouldPublish ? 'published' : 'draft_created',
+                    completedAt: new Date(),
+                    blogId,
+                    blogSlug: normalized.slug,
+                    blogTitle: normalized.title,
+                    mode,
+                    reviewerDecisions: normalized.agenticReviews || normalized.metadata?.reviewerDecisions || {},
+                    publisherDecision: { allowed: shouldPublish, reasons },
+                    'metadata.resultReasons': reasons,
+                    'metadata.imagePipelineStatus': imagePipeline.status
+                }
+            }
+        );
 
         return {
             mode,

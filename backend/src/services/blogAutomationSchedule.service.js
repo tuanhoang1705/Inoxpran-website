@@ -65,6 +65,7 @@ const mapExecution = (execution) => {
         mode: execution.mode || 'draft',
         error: execution.error || '',
         telegramNotificationStatus: execution.telegramNotificationStatus || '',
+        telegramNotificationType: execution.telegramNotificationType || '',
         telegramNotificationError: execution.telegramNotificationError || '',
         googleIntelSnapshotId: execution.googleIntelSnapshotId ? String(execution.googleIntelSnapshotId) : '',
         researchBundleId: execution.researchBundleId ? String(execution.researchBundleId) : '',
@@ -433,6 +434,7 @@ class BlogAutomationScheduleService {
                     {
                         $set: {
                             telegramNotificationStatus: telegramResult.status || '',
+                            telegramNotificationType: telegramResult.notificationType || '',
                             telegramNotificationError: telegramResult.reason || ''
                         }
                     }
@@ -459,6 +461,7 @@ class BlogAutomationScheduleService {
                     blogTitle: payload.title,
                     mode: result.mode,
                     telegramNotificationStatus: telegramResult?.status || '',
+                    telegramNotificationType: telegramResult?.notificationType || '',
                     telegramNotificationError: telegramResult?.reason || ''
                 }),
                 result,
