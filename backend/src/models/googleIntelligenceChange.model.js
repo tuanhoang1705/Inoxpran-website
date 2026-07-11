@@ -22,6 +22,8 @@ const changeSchema = new Schema(
         impactOnInoxpran: { type: String, default: '', maxlength: 1000 },
         recommendedAction: { type: String, default: '', maxlength: 1000 },
         affectedArea: { type: String, default: 'content_quality' },
+        actionStatus: { type: String, enum: ['pending_review', 'monitoring', 'actioned', 'dismissed'], default: 'pending_review', index: true },
+        changeDetails: { type: Schema.Types.Mixed, default: () => ({}) },
         confidence: { type: Number, default: 1, min: 0, max: 1 }
     },
     { collection: 'GoogleIntelligenceChanges', timestamps: true }

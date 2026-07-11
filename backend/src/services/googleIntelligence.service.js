@@ -23,6 +23,8 @@ const {
 const { safeSourceFetch } = require('./safeSourceFetch.service');
 
 const LEASE_MS = 10 * 60 * 1000;
+const CONCURRENT_SNAPSHOT_WAIT_MS = 30_000;
+const CONCURRENT_SNAPSHOT_POLL_MS = 250;
 const MAX_LIST_LIMIT = 100;
 const DEFAULT_SOURCES = [
     {
@@ -90,6 +92,62 @@ const extractTitle = (body, fallback) => {
     return stripMarkup(match?.[1] || fallback).slice(0, 300);
 };
 
+const extractDocumentDates = (body) => {
+    const source = String(body || '');
+    const findDate = (patterns) => {
+        for (const pattern of patterns) {
+            const value = stripMarkup(source.match(pattern)?.[1] || '');
+            const parsed = value ? new Date(value) : null;
+            if (parsed && Number.isFinite(parsed.getTime())) return parsed;
+        }
+        return null;
+    };
+    return {
+        publishedAt: findDate([
+            /<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)/i,
+            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:published_time["']/i,
+            /<(?:pubDate|published)\b[^>]*>([\s\S]*?)<\/(?:pubDate|published)>/i
+        ]),
+        updatedAt: findDate([
+            /<meta[^>]+property=["']article:modified_time["'][^>]+content=["']([^"']+)/i,
+            /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:modified_time["']/i,
+            /<(?:updated|lastBuildDate)\b[^>]*>([\s\S]*?)<\/(?:updated|lastBuildDate)>/i
+        ])
+    };
+};
+
+const summarizeMaterialChange = ({ previousExcerpt = '', currentExcerpt = '', isNew = false } = {}) => {
+    if (isNew || !previousExcerpt) return {
+        changeType: 'new', addedTerms: [], removedTerms: [], terminologyChanged: false,
+        summaryPrefix: 'New source material detected.'
+    };
+    const terms = (value) => new Set(String(value || '').toLowerCase().match(/[\p{L}\p{N}][\p{L}\p{N}-]{3,}/gu) || []);
+    const previousTerms = terms(previousExcerpt);
+    const currentTerms = terms(currentExcerpt);
+    const addedTerms = [...currentTerms].filter((term) => !previousTerms.has(term)).slice(0, 12);
+    const removedTerms = [...previousTerms].filter((term) => !currentTerms.has(term)).slice(0, 12);
+    const removalDominates = currentExcerpt.length < previousExcerpt.length * 0.75 && removedTerms.length > addedTerms.length;
+    const changeType = removalDominates ? 'removed' : 'updated';
+    const parts = [changeType === 'removed'
+        ? 'Previously observed guidance may have been removed or substantially shortened.'
+        : 'Material source content changed.'];
+    if (addedTerms.length) parts.push(`Added terminology: ${addedTerms.join(', ')}.`);
+    if (removedTerms.length) parts.push(`Removed terminology: ${removedTerms.join(', ')}.`);
+    return {
+        changeType, addedTerms, removedTerms,
+        terminologyChanged: Boolean(addedTerms.length || removedTerms.length),
+        summaryPrefix: parts.join(' ')
+    };
+};
+
+const assertConfiguredSourcePath = (source) => {
+    const pathname = new URL(canonicalizeUrl(source.baseUrl)).pathname;
+    const allowPaths = Array.isArray(source.allowPaths) ? source.allowPaths.filter(Boolean) : [];
+    const denyPaths = Array.isArray(source.denyPaths) ? source.denyPaths.filter(Boolean) : [];
+    if (denyPaths.some((path) => pathname.startsWith(path))) throw new BadRequestError('source_path_denied');
+    if (allowPaths.length && !allowPaths.some((path) => pathname.startsWith(path))) throw new BadRequestError('source_path_not_allowed');
+};
+
 const classifyAffectedArea = (text) => {
     const value = String(text || '').toLowerCase();
     if (/spam|scaled content|site reputation|cloaking|doorway/.test(value)) return 'spam_risk';
@@ -132,6 +190,8 @@ const mapSource = (source) => ({
     lastFailureAt: source.lastFailureAt,
     lastError: source.lastError || '',
     lastFetchedAt: source.lastFetchedAt,
+    lastPublishedAt: source.lastPublishedAt,
+    lastDocumentUpdatedAt: source.lastDocumentUpdatedAt,
     createdAt: source.createdAt,
     updatedAt: source.updatedAt
 });
@@ -224,9 +284,12 @@ class GoogleIntelligenceService {
         if (!['https:'].includes(new URL(baseUrl).protocol)) throw new BadRequestError('source URL must use HTTPS');
         const official = Boolean(payload.official);
         if (official && !officialHostAllowed(baseUrl)) throw new BadRequestError('official sources must use an official Google domain');
+        const name = normalizeString(payload.name);
+        const sourceType = normalizeString(payload.sourceType || (official ? 'documentation' : 'third_party'));
+        if (!name) throw new BadRequestError('source name is required');
+        if (!['documentation', 'blog', 'status', 'search_console', 'merchant', 'third_party'].includes(sourceType)) throw new BadRequestError('invalid source type');
         const created = await GoogleIntelligenceSource.create({
-            name: normalizeString(payload.name),
-            sourceType: normalizeString(payload.sourceType || (official ? 'documentation' : 'third_party')),
+            name, sourceType,
             baseUrl, official, required: official && Boolean(payload.required),
             priority: Math.min(Math.max(Number(payload.priority || 100), 1), 1000),
             enabled: payload.enabled !== false,
@@ -243,8 +306,15 @@ class GoogleIntelligenceService {
         if (!objectId) throw new BadRequestError('Invalid source id');
         const allowed = ['name', 'enabled', 'required', 'priority', 'sourceGroups', 'fetchMode', 'allowPaths', 'denyPaths'];
         const update = Object.fromEntries(Object.entries(payload).filter(([key]) => allowed.includes(key)));
+        const current = await GoogleIntelligenceSource.findById(objectId).select('official').lean();
+        if (!current) throw new NotFoundError('Google Intelligence source not found');
+        if (Object.hasOwn(update, 'name')) {
+            update.name = normalizeString(update.name);
+            if (!update.name) throw new BadRequestError('source name is required');
+        }
+        if (Object.hasOwn(update, 'required')) update.required = Boolean(current.official) && Boolean(update.required);
+        if (Array.isArray(update.sourceGroups)) update.sourceGroups = update.sourceGroups.map(normalizeString).filter(Boolean);
         const updated = await GoogleIntelligenceSource.findByIdAndUpdate(objectId, { $set: update }, { new: true, runValidators: true }).lean();
-        if (!updated) throw new NotFoundError('Google Intelligence source not found');
         return mapSource(updated);
     }
 
@@ -253,6 +323,7 @@ class GoogleIntelligenceService {
         let lastError;
         for (let attempt = 0; attempt < attempts; attempt += 1) {
             try {
+                assertConfiguredSourcePath(source);
                 const fetched = await safeSourceFetch({
                     url: source.baseUrl,
                     timeoutMs: fetchOptions.timeoutMs,
@@ -264,19 +335,29 @@ class GoogleIntelligenceService {
                 const normalizedText = stripMarkup(fetched.body).slice(0, 120_000);
                 const currentHash = sha256(normalizedText);
                 const previousHash = source.lastContentHash || '';
+                const previousExcerpt = source.lastExcerpt || '';
                 const changed = Boolean(previousHash && previousHash !== currentHash);
                 const isNew = !previousHash;
                 const title = extractTitle(fetched.body, source.name);
+                const documentDates = extractDocumentDates(fetched.body);
+                const baselineUpdate = fetchOptions.updateBaseline === false ? {} : {
+                    lastContentHash: currentHash,
+                    lastExcerpt: normalizedText.slice(0, 4000),
+                    lastPublishedAt: documentDates.publishedAt,
+                    lastDocumentUpdatedAt: documentDates.updatedAt
+                };
                 await GoogleIntelligenceSource.updateOne({ _id: source._id }, {
                     $set: {
                         canonicalUrl: fetched.canonicalUrl, lastSuccessAt: fetched.fetchedAt,
-                        lastFetchedAt: fetched.fetchedAt, lastError: '', lastContentHash: currentHash, lastTitle: title
+                        lastFetchedAt: fetched.fetchedAt, lastError: '', lastTitle: title,
+                        ...baselineUpdate
                     }
                 });
                 return {
                     ok: true, sourceId: String(source._id), sourceName: source.name,
                     sourceUrl: fetched.canonicalUrl, official: Boolean(source.official), required: Boolean(source.required),
-                    title, previousHash, currentHash, changed, isNew,
+                    title, previousHash, currentHash, previousExcerpt, changed, isNew,
+                    publishedAt: documentDates.publishedAt, updatedAt: documentDates.updatedAt,
                     excerpt: normalizedText.slice(0, 1200), fetchedAt: fetched.fetchedAt
                 };
             } catch (error) {
@@ -315,10 +396,13 @@ class GoogleIntelligenceService {
             });
         } catch (error) {
             if (error?.code !== 11000) throw error;
-            for (let attempt = 0; attempt < 20; attempt += 1) {
+            const maxAttempts = Math.ceil(CONCURRENT_SNAPSHOT_WAIT_MS / CONCURRENT_SNAPSHOT_POLL_MS);
+            for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
                 const completed = await GoogleIntelligenceSnapshot.findOne({ snapshotDate, timezone }).lean();
                 if (completed) return { snapshot: mapSnapshot(completed), reused: true, concurrent: true };
-                await new Promise((resolve) => setTimeout(resolve, 100));
+                const concurrentRun = await GoogleIntelligenceRun.findOne({ executionKey }).select('status error').lean();
+                if (concurrentRun?.status === 'failed') throw new BadRequestError(concurrentRun.error || 'Concurrent Google Intelligence run failed');
+                await new Promise((resolve) => setTimeout(resolve, CONCURRENT_SNAPSHOT_POLL_MS));
             }
             throw new BadRequestError('Google Intelligence snapshot is already running');
         }
@@ -326,7 +410,7 @@ class GoogleIntelligenceService {
         try {
             const sourceQuery = { enabled: true };
             if (config.sourceGroups.length) sourceQuery.sourceGroups = { $in: config.sourceGroups };
-            const sources = await GoogleIntelligenceSource.find(sourceQuery).sort({ official: -1, priority: 1 }).select('+lastContentHash').lean();
+            const sources = await GoogleIntelligenceSource.find(sourceQuery).sort({ official: -1, priority: 1 }).select('+lastContentHash +lastExcerpt').lean();
             const results = [];
             for (const source of sources) {
                 results.push(await GoogleIntelligenceService.fetchSource({
@@ -359,17 +443,25 @@ class GoogleIntelligenceService {
                 const source = sources.find((candidate) => String(candidate._id) === item.sourceId);
                 const affectedArea = classifyAffectedArea(`${item.title} ${item.excerpt}`);
                 const severity = classifySeverity({ source, text: `${item.title} ${item.excerpt}` });
+                const materialChange = summarizeMaterialChange({
+                    previousExcerpt: item.previousExcerpt,
+                    currentExcerpt: item.excerpt,
+                    isNew: item.isNew
+                });
                 return {
                     fingerprint: sha256(`${item.sourceId}:${item.currentHash}`), sourceId: item.sourceId,
                     title: item.title, sourceUrl: item.sourceUrl, sourceLevel: item.official ? 'official' : 'third_party',
-                    changeType: item.isNew ? 'new' : 'updated', severity, detectedAt: now,
+                    changeType: materialChange.changeType, severity, detectedAt: now,
+                    publishedAt: item.publishedAt || null,
                     previousHash: item.previousHash, currentHash: item.currentHash,
-                    summary: item.excerpt.slice(0, 700),
+                    summary: `${materialChange.summaryPrefix} ${item.excerpt.slice(0, 500)}`.slice(0, 700),
                     officialStatement: item.official ? item.excerpt.slice(0, 700) : '',
                     analystInterpretation: item.official ? 'Review the verified source before changing editorial policy.' : 'Third-party observation; it cannot override official Google guidance.',
                     impactOnInoxpran: affectedArea === 'content_quality' ? 'Review people-first usefulness and source attribution.' : `Review the ${affectedArea.replace(/_/g, ' ')} implementation.`,
                     recommendedAction: severity === 'critical' || severity === 'high' ? 'Pause affected auto-publishing until an editor reviews this change.' : 'Monitor and include the verified guidance in the next strategy plan.',
-                    affectedArea, confidence: item.official ? 1 : 0.6
+                    affectedArea, actionStatus: severity === 'informational' ? 'monitoring' : 'pending_review',
+                    changeDetails: materialChange,
+                    confidence: item.official ? 1 : 0.6
                 };
             });
 
@@ -381,8 +473,16 @@ class GoogleIntelligenceService {
                     sourceId: item.sourceId, name: item.sourceName, url: item.sourceUrl,
                     official: item.official, required: item.required, ok: item.ok, error: item.error || '', fetchedAt: item.fetchedAt || now
                 })),
-                officialChanges: changeDrafts.filter((item) => item.sourceLevel === 'official').map((item) => ({ title: item.title, sourceUrl: item.sourceUrl, severity: item.severity, affectedArea: item.affectedArea, summary: item.summary })),
-                thirdPartyObservations: changeDrafts.filter((item) => item.sourceLevel === 'third_party').map((item) => ({ title: item.title, sourceUrl: item.sourceUrl, severity: item.severity, affectedArea: item.affectedArea, summary: item.summary })),
+                officialChanges: changeDrafts.filter((item) => item.sourceLevel === 'official').map((item) => ({
+                    title: item.title, sourceUrl: item.sourceUrl, severity: item.severity,
+                    changeType: item.changeType, affectedArea: item.affectedArea,
+                    actionStatus: item.actionStatus, changeDetails: item.changeDetails, summary: item.summary
+                })),
+                thirdPartyObservations: changeDrafts.filter((item) => item.sourceLevel === 'third_party').map((item) => ({
+                    title: item.title, sourceUrl: item.sourceUrl, severity: item.severity,
+                    changeType: item.changeType, affectedArea: item.affectedArea,
+                    actionStatus: item.actionStatus, changeDetails: item.changeDetails, summary: item.summary
+                })),
                 currentRules: [
                     { area: 'content_quality', rule: 'Create original, helpful, reliable, people-first content.' },
                     { area: 'spam_risk', rule: 'Do not create scaled low-value content or content intended to manipulate Search.' },
@@ -559,10 +659,18 @@ class GoogleIntelligenceService {
     static async runSourceNow({ sourceId }) {
         const objectId = convertToObjectIdMongodb(sourceId);
         if (!objectId) throw new BadRequestError('Invalid source id');
-        const source = await GoogleIntelligenceSource.findById(objectId).select('+lastContentHash').lean();
+        const source = await GoogleIntelligenceSource.findById(objectId).select('+lastContentHash +lastExcerpt').lean();
         if (!source) throw new NotFoundError('Google Intelligence source not found');
         const config = await GoogleIntelligenceService.getGateConfig();
-        return GoogleIntelligenceService.fetchSource({ source, fetchOptions: { timeoutMs: config.sourceTimeoutMs, retryCount: config.retryCount, retryDelayMs: config.retryDelayMs } });
+        return GoogleIntelligenceService.fetchSource({
+            source,
+            fetchOptions: {
+                timeoutMs: config.sourceTimeoutMs,
+                retryCount: config.retryCount,
+                retryDelayMs: config.retryDelayMs,
+                updateBaseline: false
+            }
+        });
     }
 
     static async overrideSnapshot({ snapshotId, reason, adminId }) {
@@ -654,7 +762,9 @@ module.exports = {
     GoogleIntelligenceService,
     classifyAffectedArea,
     classifySeverity,
+    extractDocumentDates,
     extractTitle,
     officialHostAllowed,
+    summarizeMaterialChange,
     stripMarkup
 };

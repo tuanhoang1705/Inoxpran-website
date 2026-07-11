@@ -25,8 +25,10 @@ const sourceSchema = new Schema(
         lastFailureAt: { type: Date, default: null },
         lastError: { type: String, default: '', maxlength: 500 },
         lastContentHash: { type: String, default: '', select: false },
+        lastExcerpt: { type: String, default: '', maxlength: 4000, select: false },
         lastTitle: { type: String, default: '', maxlength: 300 },
         lastPublishedAt: { type: Date, default: null },
+        lastDocumentUpdatedAt: { type: Date, default: null },
         lastFetchedAt: { type: Date, default: null }
     },
     { collection: 'GoogleIntelligenceSources', timestamps: true }

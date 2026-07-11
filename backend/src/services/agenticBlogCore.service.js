@@ -55,6 +55,18 @@ const STYLE_CONFIG = {
 const sha256 = (value) => crypto.createHash('sha256').update(String(value || '')).digest('hex');
 const parseList = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const buildSearchConsoleContext = (env = process.env) => {
+    const property = normalizeString(env.GOOGLE_SEARCH_CONSOLE_PROPERTY || env.SEARCH_CONSOLE_SITE_URL);
+    return {
+        configured: Boolean(property),
+        fallback: !property,
+        property: property || '',
+        metrics: [],
+        note: property
+            ? 'Read-only Search Console property is configured; only verified signals supplied by the external connector may be used.'
+            : 'Search Console is unavailable; use internal inventory and never fabricate performance data.'
+    };
+};
 
 const inferAbstractPattern = ({ text, index }) => {
     const normalized = normalizeForSimilarity(text);
@@ -113,7 +125,14 @@ const headingSetForStyle = ({ styleFamily, topic }) => {
         'mistakes-to-avoid': ['Sai lầm bắt đầu từ việc chọn sai nhu cầu', 'Sai lầm khi đọc thông tin vật liệu', 'Sai lầm trong lần sử dụng đầu tiên', 'Cách sửa thói quen mà không tốn thêm chi phí'],
         'step-by-step': ['Bước 1: xác định nhu cầu thật', 'Bước 2: kiểm tra vật liệu và đáy', 'Bước 3: thử khả năng thao tác an toàn', 'Bước 4: lập kế hoạch vệ sinh và bảo quản'],
         'technical-explainer': ['Cấu tạo ảnh hưởng đến trải nghiệm ra sao?', 'Vật liệu phản ứng thế nào với nhiệt?', 'Đáy nhiều lớp giải quyết vấn đề gì?', 'Từ cơ chế kỹ thuật đến lựa chọn thực tế'],
-        'myth-vs-fact': ['Lầm tưởng: inox nào cũng giống nhau', 'Sự thật: tên vật liệu chưa nói lên toàn bộ sản phẩm', 'Lầm tưởng: càng nặng luôn càng tốt', 'Sự thật: nhu cầu sử dụng mới là tiêu chí quyết định']
+        'myth-vs-fact': ['Lầm tưởng: inox nào cũng giống nhau', 'Sự thật: tên vật liệu chưa nói lên toàn bộ sản phẩm', 'Lầm tưởng: càng nặng luôn càng tốt', 'Sự thật: nhu cầu sử dụng mới là tiêu chí quyết định'],
+        'expert-advisory': ['Bối cảnh sử dụng cần nói rõ trước tiên', 'Dữ liệu nào đủ để đưa ra lời khuyên?', 'Giới hạn nào người mua cần biết?', 'Khuyến nghị theo từng thói quen bếp'],
+        'narrative-case-study': ['Một tình huống bếp gia đình thường gặp', 'Quyết định ban đầu đã tạo ra vấn đề gì?', 'Gia đình điều chỉnh tiêu chí ra sao?', 'Bài học có thể áp dụng mà không phóng đại trải nghiệm'],
+        'buyer-journey': ['Giai đoạn nhận ra nhu cầu', 'Giai đoạn thu hẹp tiêu chí', 'Giai đoạn kiểm chứng thông tin sản phẩm', 'Giai đoạn xác nhận độ phù hợp lâu dài'],
+        'scenario-based': ['Kịch bản gia đình ít người', 'Kịch bản nấu nhiều món Việt', 'Kịch bản ưu tiên thao tác và vệ sinh', 'Chọn tiêu chí theo kịch bản của bạn'],
+        'evidence-first': ['Thông tin nào đã có thể kiểm chứng?', 'Bằng chứng nói được gì và không nói được gì?', 'Áp dụng dữ liệu vào nhu cầu gia đình', 'Các điểm vẫn cần xác nhận trước khi mua'],
+        'editorial-magazine': ['Một quan sát từ căn bếp hiện đại', 'Khi độ bền gặp thói quen sử dụng', 'Chi tiết nhỏ tạo khác biệt dài hạn', 'Lựa chọn thực tế sau góc nhìn tổng thể'],
+        'concise-practical-guide': ['Câu trả lời thực hành trong một phút', 'Ba kiểm tra trước khi sử dụng', 'Hai cảnh báo nên ghi nhớ', 'Một bước tiếp theo đủ rõ ràng']
     };
     return sets[styleFamily] || [`Hiểu đúng nhu cầu về ${topicLabel}`, 'Tiêu chí thực tế cho gia đình Việt', 'Cách sử dụng an toàn và bền lâu', 'Tự đánh giá trước khi quyết định'];
 };
@@ -147,26 +166,43 @@ const paragraphBank = ({ topic, keyword }) => [
     `Trước khi quyết định, hãy xem lại ba điểm: sản phẩm có giải quyết đúng công việc cần làm không, thông tin quan trọng có nguồn rõ ràng không và việc sử dụng lâu dài có phù hợp thời gian chăm sóc của gia đình không. Nếu một điểm chưa rõ, lựa chọn hợp lý là hỏi thêm hoặc trì hoãn thay vì mua theo áp lực.`
 ];
 
-const buildDraft = ({ topic, primaryKeyword, architecture, style }) => {
+const buildDraft = ({ topic, primaryKeyword, architecture, style, variantIndex = 0 }) => {
     const paragraphs = paragraphBank({ topic, keyword: primaryKeyword || topic });
+    const effectiveVariant = Math.abs(Number(variantIndex) || Number(style.activeVariant?.usageIndex || 0));
     const introByMode = {
         'problem-first': `Chọn sai ${topic} thường không lộ ra ngay ở quầy hàng. Vấn đề xuất hiện khi kích thước không hợp bếp, tay cầm khó thao tác hoặc việc vệ sinh tốn quá nhiều thời gian. Bài viết này giúp bạn kiểm tra từng điểm bằng nhu cầu thực tế.`,
         'direct-answer': `Câu trả lời ngắn gọn: hãy chọn ${topic} theo loại bếp, món thường nấu, dung tích và khả năng chăm sóc lâu dài. Vật liệu quan trọng, nhưng cần được đánh giá cùng cấu tạo và hướng dẫn sử dụng.`,
         'symptom-first': `Nếu ${topic} đang đổi màu, bám dính hoặc khó vệ sinh, đừng vội kết luận sản phẩm hỏng. Cần tách dấu hiệu, nguyên nhân sử dụng và đặc điểm vật liệu trước khi quyết định xử lý.`,
         'surprising-myth': `“Inox nào cũng giống nhau” là một lầm tưởng khiến nhiều gia đình bỏ qua cấu tạo đáy, tay cầm và cách dùng. Sự khác biệt hữu ích nằm ở mức độ phù hợp với công việc hằng ngày, không chỉ ở một tên gọi vật liệu.`
     };
-    const intro = introByMode[style.openingMode] || `Mỗi gia đình có cách nấu và mức độ chăm sóc dụng cụ khác nhau. Vì vậy, ${topic} nên được đánh giá bằng nhu cầu, dữ liệu có thể kiểm tra và trải nghiệm sử dụng thực tế thay vì một công thức mua sắm chung.`;
+    const fallbackIntros = [
+        `Mỗi gia đình có cách nấu và mức độ chăm sóc dụng cụ khác nhau. Vì vậy, ${topic} nên được đánh giá bằng nhu cầu, dữ liệu có thể kiểm tra và trải nghiệm sử dụng thực tế thay vì một công thức mua sắm chung.`,
+        `Trước khi so sánh ${topic}, hãy ghi lại loại bếp, số khẩu phần và công việc thường làm. Ba dữ kiện này giúp loại bỏ những lựa chọn không phù hợp mà không cần dựa vào lời hứa quảng cáo.`,
+        `Một cách thực tế để hiểu ${topic} là bắt đầu từ tình huống sử dụng, sau đó mới đối chiếu vật liệu, cấu tạo và hướng dẫn của nhà sản xuất. Thứ tự này giữ quyết định gần với nhu cầu thật.`
+    ];
+    const intro = introByMode[style.openingMode] || fallbackIntros[effectiveVariant % fallbackIntros.length];
+    const paragraphOffset = effectiveVariant % paragraphs.length;
     const sections = architecture.headings.map((item, index) => {
-        const first = paragraphs[(index * 2) % paragraphs.length];
-        const second = paragraphs[(index * 2 + 1) % paragraphs.length];
+        const first = paragraphs[(paragraphOffset + index * 2) % paragraphs.length];
+        const second = paragraphs[(paragraphOffset + index * 2 + 1) % paragraphs.length];
         const answer = item.answerBlock ? `<aside class="answer-block"><strong>Trả lời nhanh:</strong> ${first}</aside>` : '';
-        const list = index === 1 ? '<ul><li>Đối chiếu loại bếp và kích thước vùng nấu.</li><li>Kiểm tra thông tin vật liệu và hướng dẫn sử dụng.</li><li>Đánh giá thao tác khi sản phẩm có thực phẩm.</li><li>Dự kiến cách vệ sinh và bảo quản.</li></ul>' : '';
-        return `<section><h2>${item.heading}</h2>${answer}<p>${first}</p>${list}<p>${second}</p></section>`;
+        const listAt = (paragraphOffset + 1) % architecture.headings.length;
+        const list = index === listAt ? '<ul><li>Đối chiếu loại bếp và kích thước vùng nấu.</li><li>Kiểm tra thông tin vật liệu và hướng dẫn sử dụng.</li><li>Đánh giá thao tác khi sản phẩm có thực phẩm.</li><li>Dự kiến cách vệ sinh và bảo quản.</li></ul>' : '';
+        const supportingHeading = (index + paragraphOffset) % 3 === 0 ? `<h3>${index % 2 ? 'Điểm cần xác nhận' : 'Cách tự kiểm tra'}</h3>` : '';
+        return `<section><h2>${item.heading}</h2>${answer}<p>${first}</p>${list}${supportingHeading}<p>${second}</p></section>`;
     }).join('');
     const table = style.styleFamily === 'comparison-led' || style.styleFamily === 'decision-tree'
         ? '<section><h2>Bảng quyết định thực tế</h2><table><thead><tr><th>Nhu cầu</th><th>Điểm cần kiểm tra</th><th>Câu hỏi xác nhận</th></tr></thead><tbody><tr><td>Nấu hằng ngày</td><td>Dung tích và thao tác</td><td>Có phù hợp khẩu phần?</td></tr><tr><td>Dùng bếp từ</td><td>Đáy và hướng dẫn tương thích</td><td>Nhà sản xuất công bố rõ?</td></tr><tr><td>Dễ chăm sóc</td><td>Bề mặt và cách vệ sinh</td><td>Có thể làm sạch bằng dụng cụ sẵn có?</td></tr></tbody></table></section>'
         : '';
-    return `<article><p>${intro}</p>${sections}${table}<section><h2>Câu hỏi thường gặp</h2><h3>Có nên chọn chỉ theo tên loại inox?</h3><p>Không. Hãy xem tên vật liệu cùng cấu tạo, hướng dẫn sử dụng, loại bếp và nhu cầu nấu. Không nên suy luận chất lượng toàn bộ sản phẩm từ một thông tin đơn lẻ.</p><h3>Khi nào nên hỏi thêm tư vấn?</h3><p>Hãy hỏi khi thông tin vật liệu, tương thích bếp, bảo hành hoặc cách vệ sinh chưa rõ. Một câu trả lời có thể kiểm tra hữu ích hơn lời khẳng định tuyệt đối.</p></section><section><h2>Bước tiếp theo phù hợp</h2><p>${paragraphs[11]}</p><p>Nếu cần đối chiếu với sản phẩm INOXPRAN, bạn có thể chuẩn bị thông tin về loại bếp, số người ăn và món thường nấu để cuộc trao đổi tập trung vào độ phù hợp.</p></section></article>`;
+    const faq = effectiveVariant % 3 === 2 ? '' : '<section><h2>Câu hỏi thường gặp</h2><h3>Có nên chọn chỉ theo tên loại inox?</h3><p>Không. Hãy xem tên vật liệu cùng cấu tạo, hướng dẫn sử dụng, loại bếp và nhu cầu nấu. Không nên suy luận chất lượng toàn bộ sản phẩm từ một thông tin đơn lẻ.</p><h3>Khi nào nên hỏi thêm tư vấn?</h3><p>Hãy hỏi khi thông tin vật liệu, tương thích bếp, bảo hành hoặc cách vệ sinh chưa rõ. Một câu trả lời có thể kiểm tra hữu ích hơn lời khẳng định tuyệt đối.</p></section>';
+    const ctaByMode = {
+        'soft-consultation': 'Nếu cần đối chiếu với sản phẩm INOXPRAN, hãy chuẩn bị loại bếp, số người ăn và món thường nấu để cuộc trao đổi tập trung vào độ phù hợp.',
+        'next-best-action': 'Hãy ghi lại một tiêu chí còn thiếu dữ liệu và xác nhận tiêu chí đó trước khi chuyển sang bước lựa chọn tiếp theo.',
+        'saveable-checklist': 'Bạn có thể lưu checklist, đánh dấu từng mục đã kiểm tra và chỉ ra quyết định khi các thông tin quan trọng đã rõ.',
+        'decision-support': 'Đặt hai lựa chọn cạnh nhau theo cùng bộ tiêu chí sẽ giúp quyết định dễ kiểm chứng hơn.'
+    };
+    const closing = ctaByMode[style.ctaMode] || 'Bước tiếp theo hợp lý là xác nhận thông tin còn thiếu, không mua hoặc thay đổi thói quen chỉ vì áp lực từ một lời khẳng định tuyệt đối.';
+    return `<article><p>${intro}</p>${sections}${table}${faq}<section><h2>Bước tiếp theo phù hợp</h2><p>${paragraphs[(paragraphOffset + 11) % paragraphs.length]}</p><p>${closing}</p></section></article>`;
 };
 
 class AgenticBlogCoreService {
@@ -185,7 +221,7 @@ class AgenticBlogCoreService {
         const existing = await EditorialStyleProfile.findOne({ date }).lean();
         if (existing) {
             const usageCount = Number(existing.usageCount || 0) + 1;
-            const variant = { key: `${existing.styleFamily}-${usageCount}`, usageIndex: usageCount, openingModifier: usageCount % 2 ? 'scene' : 'question', headingModifier: usageCount % 3 ? 'action' : 'diagnostic' };
+            const variant = { key: `${existing.styleFamily}-${crypto.randomUUID().slice(0, 8)}`, usageIndex: usageCount, openingModifier: usageCount % 2 ? 'scene' : 'question', headingModifier: usageCount % 3 ? 'action' : 'diagnostic' };
             const updated = await EditorialStyleProfile.findByIdAndUpdate(existing._id, { $inc: { usageCount: 1 }, $push: { articleVariants: variant } }, { new: true }).lean();
             return { ...updated, activeVariant: variant };
         }
@@ -211,16 +247,22 @@ class AgenticBlogCoreService {
         });
         const selected = locked || eligible[0] || definitions.find((definition) => definition.styleFamily !== yesterdayFamily) || definitions[0];
         const values = STYLE_CONFIG[selected.styleFamily] || STYLE_CONFIG['concise-practical-guide'];
-        const profile = await EditorialStyleProfile.create({
-            date, styleFamily: selected.styleFamily, openingMode: values[0], headingMode: values[1],
-            paragraphRhythm: values[2], sentenceLengthDistribution: values[3], evidenceMode: values[4],
-            exampleMode: values[5], ctaMode: values[6], visualPlanMode: values[7], answerBlockMode: values[8],
-            forbiddenRecentPatterns: recent.slice(0, lookbackDays).flatMap((item) => [item.styleFamily, item.openingMode, item.headingMode, item.ctaMode]).filter(Boolean),
-            brandVoiceConstraints: ['practical', 'clear', 'trustworthy', 'evidence-based', 'Vietnamese households', 'no fabricated experience or certification'],
-            structuralFingerprintTarget: { styleFamily: selected.styleFamily, openingMode: values[0], headingMode: values[1], ctaMode: values[6] },
-            usageCount: 1,
-            articleVariants: [{ key: `${selected.styleFamily}-1`, usageIndex: 1, openingModifier: 'base', headingModifier: 'base' }]
-        });
+        let profile;
+        try {
+            profile = await EditorialStyleProfile.create({
+                date, styleFamily: selected.styleFamily, openingMode: values[0], headingMode: values[1],
+                paragraphRhythm: values[2], sentenceLengthDistribution: values[3], evidenceMode: values[4],
+                exampleMode: values[5], ctaMode: values[6], visualPlanMode: values[7], answerBlockMode: values[8],
+                forbiddenRecentPatterns: recent.slice(0, lookbackDays).flatMap((item) => [item.styleFamily, item.openingMode, item.headingMode, item.ctaMode]).filter(Boolean),
+                brandVoiceConstraints: ['practical', 'clear', 'trustworthy', 'evidence-based', 'Vietnamese households', 'no fabricated experience or certification'],
+                structuralFingerprintTarget: { styleFamily: selected.styleFamily, openingMode: values[0], headingMode: values[1], ctaMode: values[6] },
+                usageCount: 1,
+                articleVariants: [{ key: `${selected.styleFamily}-1`, usageIndex: 1, openingModifier: 'base', headingModifier: 'base' }]
+            });
+        } catch (error) {
+            if (error?.code === 11000) return AgenticBlogCoreService.chooseStyleProfile({ now, timezone });
+            throw error;
+        }
         await EditorialStyleDefinition.updateOne({ _id: selected._id }, { $set: { lastUsedAt: now }, $inc: { useCount: 1 } });
         return { ...profile.toObject(), activeVariant: profile.articleVariants[0] };
     }
@@ -257,11 +299,7 @@ class AgenticBlogCoreService {
                 fallbackUsed: successful.length < 2,
                 rule: successful.length === 1 ? 'Single source cannot control style; internal style library is mandatory.' : 'Synthesize abstract patterns across sources.'
             },
-            searchConsole: {
-                configured: Boolean(process.env.GOOGLE_SEARCH_CONSOLE_PROPERTY || process.env.SEARCH_CONSOLE_SITE_URL),
-                fallback: !Boolean(process.env.GOOGLE_SEARCH_CONSOLE_PROPERTY || process.env.SEARCH_CONSOLE_SITE_URL),
-                note: 'Read-only opportunity signals are optional; absence never fabricates performance data.'
-            },
+            searchConsole: buildSearchConsoleContext(),
             contentHash: sha256(JSON.stringify(successful.map((source) => source.contentHash)))
         });
         return bundle.toObject();
@@ -305,11 +343,22 @@ class AgenticBlogCoreService {
         const primaryKeyword = normalizeString(config.primaryKeyword || topic);
         const context = await AgenticBlogCoreService.prepareContext({ topic, primaryKeyword, articleType: config.articleType, now, sourceUrls: Array.isArray(config.researchSources) ? config.researchSources : [] });
         if (context.opportunity.decision === 'skip') return { skipped: true, reason: context.opportunity.reason, context };
-        const contentHtml = buildDraft({ topic, primaryKeyword, architecture: context.architecture, style: context.style });
         const targetIds = new Set(context.opportunity.targets.map((item) => String(item._id)));
         const comparisonCorpus = await blog.find({ _id: { $nin: Array.from(targetIds) } }).sort({ updatedAt: -1 }).limit(50).select('_id blog_title blog_content structuralFingerprint').lean();
+        const maxOriginalityAttempts = 3;
+        let contentHtml = '';
+        let originality = null;
+        let originalityAttempts = 0;
+        for (let attempt = 0; attempt < maxOriginalityAttempts; attempt += 1) {
+            originalityAttempts = attempt + 1;
+            contentHtml = buildDraft({
+                topic, primaryKeyword, architecture: context.architecture, style: context.style,
+                variantIndex: Number(context.style.activeVariant?.usageIndex || 0) + attempt
+            });
+            originality = reviewOriginality({ title: topic, contentHtml, existing: comparisonCorpus });
+            if (originality.passed) break;
+        }
         const factuality = reviewFacts(contentHtml);
-        const originality = reviewOriginality({ title: topic, contentHtml, existing: comparisonCorpus });
         const peopleSpam = reviewPeopleFirstAndSpam({ html: contentHtml, primaryKeyword });
         const brandVoice = reviewBrandVoice(contentHtml);
         const wordCount = normalizeForSimilarity(contentHtml).split(' ').filter(Boolean).length;
@@ -357,6 +406,7 @@ class AgenticBlogCoreService {
                 searchConsoleFallback: context.researchBundle.searchConsole?.fallback !== false,
                 decision: context.opportunity.decision, decisionReason: context.opportunity.reason,
                 reviewerDecisions: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice },
+                originalityAttempts, originalityRetryExhausted: !originality.passed,
                 wordCount
             },
             review: {
@@ -416,6 +466,7 @@ module.exports = {
     STYLE_FAMILIES,
     buildArchitecture,
     buildDraft,
+    buildSearchConsoleContext,
     decideTopicAction,
     inferAbstractPattern,
     synthesizePatterns

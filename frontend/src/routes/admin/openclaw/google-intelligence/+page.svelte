@@ -38,6 +38,10 @@
 	// svelte-ignore state_referenced_locally
 	let error = $state(data?.loadError || '');
 	let overrideReason = $state('');
+	let sourceDraft = $state({
+		name: '', baseUrl: '', sourceType: 'third_party', official: false,
+		required: false, priority: 100, sourceGroups: 'industry'
+	});
 
 	const latest = $derived(status?.snapshot || snapshots[0] || null);
 	const changes = $derived([
@@ -82,6 +86,10 @@
 		lastSuccess: isEn ? 'Last success' : 'Lần thành công cuối',
 		lastError: isEn ? 'Last error' : 'Lỗi cuối',
 		runSource: isEn ? 'Run source' : 'Chạy nguồn',
+		addSource: isEn ? 'Add source' : 'Thêm nguồn',
+		sourceName: isEn ? 'Source name' : 'Tên nguồn',
+		sourceUrl: isEn ? 'HTTPS source URL' : 'URL HTTPS của nguồn',
+		sourceType: isEn ? 'Source type' : 'Loại nguồn',
 		enabled: isEn ? 'Enabled' : 'Bật',
 		disabled: isEn ? 'Disabled' : 'Tắt',
 		schedule: isEn ? 'Persistent schedule' : 'Lịch chạy bền vững',
@@ -95,6 +103,8 @@
 		maxAge: isEn ? 'Maximum age (hours)' : 'Tuổi tối đa (giờ)',
 		timeout: isEn ? 'Source timeout (ms)' : 'Timeout nguồn (ms)',
 		retries: isEn ? 'Retry count' : 'Số lần thử lại',
+		retryDelay: isEn ? 'Retry delay (ms)' : 'Độ trễ thử lại (ms)',
+		intervalUnit: isEn ? 'Interval unit' : 'Đơn vị chu kỳ',
 		sourceGroups: isEn ? 'Source groups' : 'Nhóm nguồn',
 		saveSchedule: isEn ? 'Save schedule' : 'Lưu lịch',
 		executions: isEn ? 'Execution history' : 'Lịch sử thực thi',
@@ -185,17 +195,39 @@
 		catch (cause) { error = cause.message; busy = ''; }
 	};
 
+	const createSource = async () => {
+		busy = 'source-create'; error = ''; notice = '';
+		try {
+			const created = await api('google-intelligence/sources', {
+				method: 'POST',
+				body: JSON.stringify({
+					...sourceDraft,
+					priority: Number(sourceDraft.priority || 100),
+					sourceGroups: String(sourceDraft.sourceGroups || '').split(',').map((item) => item.trim()).filter(Boolean)
+				})
+			});
+			sources = [...sources, created];
+			sourceDraft = { name: '', baseUrl: '', sourceType: 'third_party', official: false, required: false, priority: 100, sourceGroups: 'industry' };
+			notice = t.success;
+		} catch (cause) { error = cause.message; }
+		finally { busy = ''; }
+	};
+
 	const saveSchedule = async () => {
 		busy = 'schedule'; error = ''; notice = '';
 		try {
 			const payload = {
 				...schedule,
 				daily: { times: String(schedule?.daily?.times || '').split(',').map((item) => item.trim()).filter(Boolean) },
-				interval: { value: Number(schedule?.interval?.value || 24), unit: 'hours' },
+				interval: { value: Number(schedule?.interval?.value || 24), unit: schedule?.interval?.unit || 'hours' },
 				sourceGroups: String(schedule?.sourceGroups || '').split(',').map((item) => item.trim()).filter(Boolean),
 				maxSnapshotAgeHours: Number(schedule?.maxSnapshotAgeHours || 24),
 				sourceTimeoutMs: Number(schedule?.sourceTimeoutMs || 15000),
-				retryPolicy: { ...schedule.retryPolicy, count: Number(schedule?.retryPolicy?.count || 0) }
+				retryPolicy: {
+					...schedule.retryPolicy,
+					count: Number(schedule?.retryPolicy?.count || 0),
+					delayMs: Number(schedule?.retryPolicy?.delayMs || 1000)
+				}
 			};
 			schedule = await api('google-intelligence/schedule', { method: 'PATCH', body: JSON.stringify(payload) }); notice = t.success;
 		} catch (cause) { error = cause.message; }
@@ -266,7 +298,7 @@
 				<div class="change-list">
 					{#each changes as change}
 						<article class="change">
-							<div class="change-top"><span class="severity {severityTone(change.severity)}">{change.severity}</span><span>{change.affectedArea || 'content_quality'}</span></div>
+							<div class="change-top"><span class="severity {severityTone(change.severity)}">{change.severity}</span><span>{change.changeType || 'updated'} · {change.affectedArea || 'content_quality'} · {change.actionStatus || 'pending_review'}</span></div>
 							<h3>{change.title}</h3><p>{change.summary}</p>
 							<a href={change.sourceUrl} target="_blank" rel="noreferrer">{new URL(change.sourceUrl).hostname} ↗</a>
 						</article>
@@ -288,11 +320,21 @@
 		<div class="table-wrap"><table><thead><tr><th>{t.enabled}</th><th>{isEn ? 'Source' : 'Nguồn'}</th><th>{t.official}</th><th>{t.priority}</th><th>{t.lastSuccess}</th><th>{t.lastError}</th><th></th></tr></thead>
 		<tbody>{#each sources as source (source.id)}<tr>
 			<td><button class="toggle" class:on={source.enabled} aria-label={`${t.enabled} ${source.name}`} onclick={() => updateSource(source, { enabled: !source.enabled })} disabled={busy === `source-${source.id}`}><span></span></button></td>
-			<td><strong>{source.name}</strong><a href={source.baseUrl} target="_blank" rel="noreferrer">{new URL(source.baseUrl).hostname}</a></td>
-			<td><span class="tag" class:official={source.official}>{source.official ? t.official : '3RD PARTY'}</span>{#if source.required}<span class="tag required">{t.required}</span>{/if}</td>
-			<td>{source.priority}</td><td>{formatDate(source.lastSuccessAt)}</td><td class="error-cell">{source.lastError || '—'}</td>
+			<td><strong><input class="source-name-input" value={source.name} maxlength="180" onchange={(event) => updateSource(source, { name: event.currentTarget.value })} /></strong><a href={source.baseUrl} target="_blank" rel="noreferrer">{new URL(source.baseUrl).hostname}</a><input class="source-groups-input" value={listInputValue(source.sourceGroups)} aria-label={t.sourceGroups} onchange={(event) => updateSource(source, { sourceGroups: event.currentTarget.value.split(',').map((item) => item.trim()).filter(Boolean) })} /></td>
+			<td><span class="tag" class:official={source.official}>{source.official ? t.official : '3RD PARTY'}</span>{#if source.official}<button class="tag required control-tag" class:inactive={!source.required} onclick={() => updateSource(source, { required: !source.required })}>{t.required}</button>{/if}</td>
+			<td><input class="compact-input" type="number" min="1" max="1000" value={source.priority} onchange={(event) => updateSource(source, { priority: Number(event.currentTarget.value) })} /></td><td>{formatDate(source.lastSuccessAt)}</td><td class="error-cell">{source.lastError || '—'}</td>
 			<td><button class="text-button" onclick={() => runSource(source)} disabled={busy === `source-${source.id}`}>{t.runSource}</button></td>
 		</tr>{/each}</tbody></table></div>
+		<div class="source-create form-grid">
+			<label><span>{t.sourceName}</span><input bind:value={sourceDraft.name} maxlength="180" /></label>
+			<label><span>{t.sourceUrl}</span><input type="url" bind:value={sourceDraft.baseUrl} placeholder="https://…" /></label>
+			<label><span>{t.sourceType}</span><select bind:value={sourceDraft.sourceType}><option value="third_party">third_party</option><option value="documentation">documentation</option><option value="blog">blog</option><option value="status">status</option><option value="search_console">search_console</option><option value="merchant">merchant</option></select></label>
+			<label><span>{t.priority}</span><input type="number" min="1" max="1000" bind:value={sourceDraft.priority} /></label>
+			<label><span>{t.sourceGroups}</span><input bind:value={sourceDraft.sourceGroups} placeholder="industry, cookware" /></label>
+			<label class="check-row"><span>{t.official}</span><input type="checkbox" bind:checked={sourceDraft.official} /></label>
+			<label class="check-row"><span>{t.required}</span><input type="checkbox" bind:checked={sourceDraft.required} disabled={!sourceDraft.official} /></label>
+		</div>
+		<div class="right"><button class="button secondary" onclick={createSource} disabled={busy === 'source-create' || !sourceDraft.name.trim() || !sourceDraft.baseUrl.trim()}>{t.addSource}</button></div>
 	</section>
 
 	<section class="block">
@@ -302,12 +344,13 @@
 			<label><span>{t.timezone}</span><input bind:value={schedule.timezone} /></label>
 			<label><span>{t.scheduleType}</span><select bind:value={schedule.scheduleType}><option value="daily">{t.daily}</option><option value="interval">{t.interval}</option></select></label>
 			{#if schedule.scheduleType === 'daily'}<label><span>{t.runTimes}</span><input value={listInputValue(schedule?.daily?.times)} oninput={(event) => schedule = { ...schedule, daily: { times: event.currentTarget.value } }} /></label>
-			{:else}<label><span>{t.interval}</span><input type="number" min="1" bind:value={schedule.interval.value} /></label>{/if}
+			{:else}<label><span>{t.interval}</span><input type="number" min="1" bind:value={schedule.interval.value} /></label><label><span>{t.intervalUnit}</span><select bind:value={schedule.interval.unit}><option value="minutes">minutes</option><option value="hours">hours</option><option value="days">days</option></select></label>{/if}
 			<label><span>{t.strictGate}</span><input type="checkbox" bind:checked={schedule.strictGate} /></label>
 			<label><span>{t.allowLast}</span><input type="checkbox" bind:checked={schedule.allowLastSuccessfulSnapshot} /></label>
 			<label><span>{t.maxAge}</span><input type="number" min="1" bind:value={schedule.maxSnapshotAgeHours} /></label>
 			<label><span>{t.timeout}</span><input type="number" min="1000" step="1000" bind:value={schedule.sourceTimeoutMs} /></label>
 			<label><span>{t.retries}</span><input type="number" min="0" max="5" bind:value={schedule.retryPolicy.count} /></label>
+			<label><span>{t.retryDelay}</span><input type="number" min="100" max="60000" step="100" bind:value={schedule.retryPolicy.delayMs} /></label>
 			<label><span>{t.sourceGroups}</span><input value={listInputValue(schedule?.sourceGroups)} oninput={(event) => schedule = { ...schedule, sourceGroups: event.currentTarget.value }} /></label>
 		</div>
 		<div class="right"><button class="button primary" onclick={saveSchedule} disabled={Boolean(busy)}>{t.saveSchedule}</button></div>
@@ -338,7 +381,7 @@
 	</section>
 
 	<div class="split">
-		<section class="block"><div class="section-title compact"><span>10</span><div><h2>{t.relatedBlogs}</h2></div></div><div class="blog-list">{#each relatedBlogs as item}<article><div><strong>{item.title}</strong><p>{item.googleIntelSnapshotDate} · {item.googleIntelStatus}</p><small>style {item.editorialStyleProfileId.slice(-6)} · strategy {item.strategyPlanId.slice(-6)} · fingerprint {item.structuralFingerprint?.hash?.slice(0, 10) || '—'}</small>{#if item.originalityReview?.reasons?.length}<small class="similarity-warning">⚠ {item.originalityReview.reasons.join(', ')}</small>{/if}</div><a href={`/admin/blogs/${item.id}`} target="_blank" rel="noreferrer">{t.openEditor} ↗</a></article>{/each}</div></section>
+		<section class="block"><div class="section-title compact"><span>10</span><div><h2>{t.relatedBlogs}</h2></div></div><div class="blog-list">{#each relatedBlogs as item}<article><div><strong>{item.title}</strong><p>{item.googleIntelSnapshotDate} · {item.googleIntelStatus}</p><small>research {item.researchBundleId.slice(-6)} · style {item.editorialStyleProfileId.slice(-6)} · strategy {item.strategyPlanId.slice(-6)} · execution {item.agenticExecutionId.slice(-6)}</small><small>fingerprint {item.structuralFingerprint?.hash?.slice(0, 10) || '—'}</small>{#if item.originalityReview?.reasons?.length}<small class="similarity-warning">⚠ {item.originalityReview.reasons.join(', ')}</small>{/if}</div><a href={`/admin/blogs/${item.id}`} target="_blank" rel="noreferrer">{t.openEditor} ↗</a></article>{/each}</div></section>
 		<section class="block"><div class="section-title compact"><span>11</span><div><h2>{t.telegramStatus}</h2></div></div><div class="status-list">
 			<div><span>{t.enabled}</span><b>{telegram.enabled ? t.enabled : t.disabled}</b></div><div><span>{t.token}</span><b>{telegram.tokenConfigured ? t.configured : t.missing}</b></div><div><span>{t.allowlist}</span><b>{telegram.allowlistConfigured ? t.configured : t.missing}</b></div><div><span>{t.mode}</span><b>{telegram.mode || 'webhook'}</b></div><div><span>Webhook secret</span><b>{telegram.webhookSecretConfigured ? t.configured : t.missing}</b></div><div><span>{t.adminUrl}</span><b>{telegram.adminBaseUrlConfigured ? t.configured : t.missing}</b></div>
 		</div></section>
@@ -348,4 +391,8 @@
 <style>
 	.intel-shell{--ink:#17211f;--muted:#66736f;--line:#dce3df;--paper:#fff;--wash:#f4f7f5;--green:#0f6b5b;--green-dark:#084b40;--copper:#b35e2a;--danger:#b42318;display:grid;gap:18px;color:var(--ink);min-width:0;font-family:'Avenir Next','Trebuchet MS',sans-serif}.back{color:var(--green);font-weight:800;text-decoration:none;width:fit-content;font-size:.86rem}.hero{position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:flex-end;gap:24px;padding:28px;background:var(--ink);color:#fff;border-radius:18px}.hero:after{content:'';position:absolute;width:310px;height:310px;border:1px solid rgba(255,255,255,.13);border-radius:50%;right:-90px;top:-160px;box-shadow:0 0 0 44px rgba(255,255,255,.025),0 0 0 88px rgba(255,255,255,.018)}.hero>div{position:relative;z-index:1}.eyebrow{margin:0 0 10px;color:#8fd6c8;font:800 .68rem/1.2 ui-monospace,monospace;letter-spacing:.18em}.hero h1{margin:0;font-size:clamp(2rem,5vw,4.5rem);line-height:.9;letter-spacing:-.055em}.lede{max-width:760px;margin:16px 0 0;color:#cbd6d2;line-height:1.55}.hero-actions{display:flex;gap:10px;flex-wrap:wrap}.button{min-height:42px;padding:0 17px;border:1px solid transparent;border-radius:9px;font:800 .82rem/1 inherit;cursor:pointer}.button:disabled{opacity:.55;cursor:wait}.primary{background:#75cfbd;color:#0a302a}.secondary{background:#fff;color:var(--ink);border-color:var(--line)}.danger-button{background:#fff;color:var(--danger);border-color:#efb5af}.alert{padding:12px 16px;border-radius:10px;font-weight:700}.alert.danger{background:#fff0ee;color:var(--danger);border:1px solid #f5c1bb}.alert.success{background:#eaf8f4;color:var(--green);border:1px solid #b8e3d8}.block{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:clamp(18px,2.2vw,28px);box-shadow:0 1px 2px rgba(18,33,29,.03)}.section-title{display:flex;align-items:flex-start;gap:13px;margin-bottom:20px}.section-title>span{font:800 .68rem/1 ui-monospace,monospace;color:var(--copper);border-top:2px solid var(--copper);padding-top:6px}.section-title>div{flex:1}.section-title h2{margin:0;font-size:1.25rem;letter-spacing:-.025em}.section-title p{margin:5px 0 0;color:var(--muted);font-size:.87rem}.section-title.compact{margin-bottom:14px}.metric-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border:1px solid var(--line);border-radius:12px;overflow:hidden}.metric{padding:18px;border-right:1px solid var(--line);background:linear-gradient(180deg,#fff,var(--wash));min-width:0}.metric:last-child{border-right:0}.metric span,.metric small{display:block;color:var(--muted);font-size:.73rem}.metric strong{display:block;margin:8px 0 10px;font:800 clamp(1.05rem,2vw,1.45rem)/1 ui-monospace,monospace;text-transform:uppercase;overflow-wrap:anywhere}.metric.gate{background:#e8f6f2}.metric.gate.closed{background:#fff0ee;color:var(--danger)}.danger-text{color:var(--danger)}.split{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.9fr);gap:18px;align-items:start}.change-list{display:grid;gap:10px}.change{padding:15px;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:10px}.change-top{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font:700 .7rem/1 ui-monospace,monospace;text-transform:uppercase}.severity{padding:4px 7px;border-radius:4px;background:#eef3f1}.severity.danger{background:#fff0ee;color:var(--danger)}.severity.warn{background:#fff6e7;color:#9a5b08}.change h3{margin:10px 0 6px;font-size:.98rem}.change p{margin:0 0 8px;color:var(--muted);font-size:.84rem;line-height:1.5}.change a,.table-wrap a{color:var(--green);font-size:.76rem}.empty{padding:25px;background:var(--wash);border-radius:10px;color:var(--muted)}.guidance-row{padding:14px 0;border-bottom:1px solid var(--line)}.guidance-row:last-child{border:0}.guidance-row h3{margin:0 0 5px;font-size:.83rem;color:var(--green)}.guidance-row p{margin:0;color:var(--muted);font-size:.84rem;line-height:1.48}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:.8rem}th{padding:10px;text-align:left;background:var(--wash);color:var(--muted);font:800 .68rem/1 ui-monospace,monospace;text-transform:uppercase;white-space:nowrap}td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:middle}td strong,td a{display:block}.error-cell{max-width:220px;color:var(--danger)}.tag{display:inline-block;padding:4px 6px;margin:2px;border-radius:4px;background:#eef1f0;font:800 .64rem/1 ui-monospace,monospace}.tag.official{background:#e3f4ef;color:var(--green)}.tag.required{background:#fff2e9;color:var(--copper)}.toggle{width:38px;height:22px;border:0;border-radius:20px;background:#cbd3d0;padding:3px;cursor:pointer}.toggle span{display:block;width:16px;height:16px;background:#fff;border-radius:50%;transition:transform .2s}.toggle.on{background:var(--green)}.toggle.on span{transform:translateX(16px)}.text-button{border:0;background:none;color:var(--green);font-weight:800;cursor:pointer;white-space:nowrap}.form-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.form-grid label{display:grid;gap:6px;color:var(--muted);font-size:.76rem;font-weight:800}.form-grid input:not([type='checkbox']),.form-grid select,.style-controls input,.override textarea{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:8px;padding:10px 11px;background:#fff;color:var(--ink);font:inherit}.form-grid input[type='checkbox']{width:20px;height:20px;accent-color:var(--green)}.right{display:flex;justify-content:flex-end;margin-top:18px}.timeline,.snapshot-list,.blog-list{display:grid;gap:0}.timeline article{position:relative;display:flex;gap:12px;padding:0 0 18px}.timeline article:before{content:'';position:absolute;left:5px;top:12px;bottom:0;border-left:1px solid var(--line)}.timeline-dot{position:relative;z-index:1;width:11px;height:11px;margin-top:4px;border-radius:50%;background:var(--green);flex:none}.timeline-dot.failed{background:var(--danger)}.timeline p,.timeline small,.snapshot-list p,.snapshot-list small,.blog-list p,.blog-list small{margin:4px 0 0;color:var(--muted);font-size:.74rem}.snapshot-list article,.blog-list article{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:12px 0;border-bottom:1px solid var(--line)}.snapshot-list article>div:last-child{text-align:right}.snapshot-list small{display:block}.override{border-color:#edc7c2;background:linear-gradient(135deg,#fff,#fff9f8)}.override-form{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:end}.override textarea{resize:vertical}.style-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.style-grid article{display:grid;gap:11px;padding:15px;border:1px solid var(--line);border-radius:11px;background:var(--wash)}.style-grid article.disabled{opacity:.55}.style-grid article.locked{border-color:var(--copper);box-shadow:inset 0 3px 0 var(--copper)}.style-head{display:flex;justify-content:space-between;gap:10px}.style-head h3{margin:0;font:800 .84rem/1.2 ui-monospace,monospace}.style-grid p{margin:0;color:var(--muted);font-size:.76rem}.style-grid small{color:var(--muted);font-size:.68rem}.style-controls{display:flex;align-items:end;justify-content:space-between;gap:8px}.style-controls label{font-size:.68rem;color:var(--muted)}.style-controls input{width:70px;display:block;margin-top:4px;padding:6px}.lock{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px;font-size:.68rem;cursor:pointer}.lock.active{border-color:var(--copper);color:var(--copper)}.subhead{margin:24px 0 10px;font-size:.9rem}.profile-strip{display:flex;gap:8px;overflow:auto;padding-bottom:5px}.profile-strip>span{min-width:165px;padding:10px;border:1px solid var(--line);border-radius:8px;font-size:.72rem}.profile-strip b,.profile-strip small{display:block}.profile-strip small{margin-top:5px;color:var(--muted)}.blog-list a{color:var(--green);font-weight:800;font-size:.76rem;white-space:nowrap}.status-list{display:grid}.status-list>div{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}.status-list span{color:var(--muted);font-size:.8rem}.status-list b{font:800 .74rem/1 ui-monospace,monospace;text-transform:uppercase}@media(max-width:1150px){.metric-grid{grid-template-columns:repeat(3,1fr)}.metric{border-bottom:1px solid var(--line)}.style-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:820px){.hero,.split{grid-template-columns:1fr;display:grid}.metric-grid,.form-grid,.style-grid{grid-template-columns:1fr 1fr}.hero-actions{justify-content:start}.override-form{grid-template-columns:1fr}}@media(max-width:560px){.metric-grid,.form-grid,.style-grid{grid-template-columns:1fr}.metric{border-right:0}.section-title{flex-wrap:wrap}.section-title>.button{width:100%}.hero-actions,.hero-actions .button{width:100%}.hero-actions .button{flex:1}.block{padding:16px}}
 	.similarity-warning{display:block;color:var(--danger)!important;margin-top:5px!important}
+	.source-create{margin-top:20px;padding-top:20px;border-top:1px dashed var(--line)}
+	.compact-input{width:72px;border:1px solid var(--line);border-radius:6px;padding:6px;background:#fff;color:var(--ink)}
+	.source-name-input,.source-groups-input{display:block;width:220px;max-width:35vw;border:0;border-bottom:1px solid transparent;background:transparent;color:var(--ink);font:inherit;font-weight:800;padding:3px 0}.source-name-input:focus,.source-groups-input:focus{outline:0;border-color:var(--green)}.source-groups-input{margin-top:4px;color:var(--muted);font-size:.68rem;font-weight:600}.control-tag{border:0;cursor:pointer}.control-tag.inactive{opacity:.38}
+	.check-row{align-content:start}.check-row input{margin-top:5px}
 </style>

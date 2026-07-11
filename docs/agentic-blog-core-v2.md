@@ -67,6 +67,8 @@ Fact review blocks unsupported certifications, statistics, testing, experts, saf
 
 Originality review compares title, 7-token phrases, headings, intent, and structural fingerprint. Thresholds are configurable:
 
+The local scheduled writer applies the persisted same-day sub-variant to paragraph selection, supporting headings, FAQ composition, tables, and CTA mode. When a candidate fails originality, it tries at most three structural variants, records the attempt count, and remains blocked after the bounded retries are exhausted.
+
 ```dotenv
 CONTENT_ORIGINALITY_GATE_ENABLED=true
 CONTENT_SIMILARITY_THRESHOLD=0.82

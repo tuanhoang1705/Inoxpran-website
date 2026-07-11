@@ -54,6 +54,8 @@ The snapshot key is `(snapshotDate, timezone)` and is unique. Default timezone i
 
 Every snapshot includes source health, counts, required-source result, verified changes, current rules, recommendations, risks, required actions, content guidance, reviewer outcome, and a content hash.
 
+For changed sources, the monitor retains only a bounded prior excerpt. The detector records whether material was new, updated, or substantially removed, plus limited added/removed terminology and an action status. A standalone “Run Source” health check does not advance the daily comparison baseline, so the next snapshot cannot silently lose a detected change.
+
 `ensureGoogleIntelligenceSnapshotForDate()` is called by the schedule pipeline and the authenticated automation publisher. It reuses a fresh daily snapshot, starts an idempotent run when absent, waits briefly for concurrent work, and blocks when the result is unacceptable.
 
 ## Strict gate and fallback

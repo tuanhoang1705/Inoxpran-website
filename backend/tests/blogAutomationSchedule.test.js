@@ -10,6 +10,7 @@ const {
 } = require('../src/utils/blogSchedule.util');
 const {
     buildDraft,
+    buildSearchConsoleContext,
     decideTopicAction,
     synthesizePatterns
 } = require('../src/services/agenticBlogCore.service');
@@ -98,6 +99,26 @@ describe('blogSchedule util', () => {
 });
 
 describe('Agentic Blog Core V2 planning', () => {
+    it('chooses new when no internal article materially overlaps', () => {
+        expect(decideTopicAction({ topic: 'Bao quan am sieu toc', existing: [] }).decision).toBe('new');
+    });
+
+    it('chooses merge when multiple existing articles overlap the same intent', () => {
+        const result = decideTopicAction({
+            topic: 'Cach chon noi inox 304',
+            existing: [
+                { _id: '1', blog_title: 'Cach chon noi inox 304', blog_tags: [], updatedAt: new Date() },
+                { _id: '2', blog_title: 'Cach chon noi inox 304', blog_tags: ['noi inox'], updatedAt: new Date() }
+            ]
+        });
+        expect(result.decision).toBe('merge');
+        expect(result.targets).toHaveLength(2);
+    });
+
+    it('falls back safely when Search Console is absent without inventing metrics', () => {
+        expect(buildSearchConsoleContext({})).toMatchObject({ configured: false, fallback: true, metrics: [] });
+    });
+
     it('chooses skip for a recent article with the same intent', () => {
         const result = decideTopicAction({
             topic: 'Cach chon noi inox 304',
@@ -143,5 +164,24 @@ describe('Agentic Blog Core V2 planning', () => {
         expect(comparison).toContain('<table>');
         expect(diagnostic).not.toContain('<table>');
         expect(comparison).not.toBe(diagnostic);
+    });
+
+    it('uses article sub-variants to change real section composition and CTA output', () => {
+        const base = {
+            topic: 'chảo inox', primaryKeyword: 'chảo inox',
+            architecture: {
+                headings: [
+                    { heading: 'Mở đầu', answerBlock: true }, { heading: 'Kiểm tra', answerBlock: false },
+                    { heading: 'Đối chiếu', answerBlock: false }, { heading: 'Quyết định', answerBlock: true }
+                ]
+            },
+            style: { styleFamily: 'answer-first', openingMode: 'context-first', ctaMode: 'next-best-action' }
+        };
+        const first = buildDraft({ ...base, variantIndex: 1 });
+        const second = buildDraft({ ...base, variantIndex: 2 });
+        expect(first).not.toBe(second);
+        expect(first).toContain('Câu hỏi thường gặp');
+        expect(second).not.toContain('Câu hỏi thường gặp');
+        expect(first).toContain('một tiêu chí còn thiếu dữ liệu');
     });
 });

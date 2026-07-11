@@ -28,6 +28,7 @@ const approvalSchema = new Schema(
         notificationType: { type: String, enum: ['photo', 'text', 'text_fallback', 'disabled', ''], default: '' },
         notificationStatus: { type: String, default: '' },
         notificationError: { type: String, default: '' },
+        reviewMetadata: { type: Schema.Types.Mixed, default: () => ({}) },
         notifiedAt: { type: Date, default: null },
         expiresAt: { type: Date, default: null, index: true },
         approvedAt: { type: Date, default: null },

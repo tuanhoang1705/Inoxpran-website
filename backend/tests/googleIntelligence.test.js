@@ -18,13 +18,28 @@ const {
 const {
     DEFAULT_SOURCES,
     classifySeverity,
+    extractDocumentDates,
     officialHostAllowed,
+    summarizeMaterialChange,
     stripMarkup
 } = require('../src/services/googleIntelligence.service');
+const { GoogleIntelligenceSnapshot } = require('../src/models/googleIntelligenceSnapshot.model');
+const { GoogleIntelligenceRun } = require('../src/models/googleIntelligenceRun.model');
+const { GoogleIntelligenceSchedule } = require('../src/models/googleIntelligenceSchedule.model');
+const { GoogleIntelligenceChange } = require('../src/models/googleIntelligenceChange.model');
 
 const publicDns = vi.fn(async () => [{ address: '142.250.72.14', family: 4 }]);
 
 describe('Google Intelligence snapshot policy', () => {
+    it('persists unique daily snapshots, execution keys, singleton schedules and change fingerprints', () => {
+        const hasUniqueIndex = (model, expectedKeys) => model.schema.indexes().some(([keys, options]) =>
+            options.unique && Object.entries(expectedKeys).every(([key, value]) => keys[key] === value));
+        expect(hasUniqueIndex(GoogleIntelligenceSnapshot, { snapshotDate: 1, timezone: 1 })).toBe(true);
+        expect(hasUniqueIndex(GoogleIntelligenceRun, { executionKey: 1 })).toBe(true);
+        expect(hasUniqueIndex(GoogleIntelligenceSchedule, { singletonKey: 1 })).toBe(true);
+        expect(hasUniqueIndex(GoogleIntelligenceChange, { fingerprint: 1 })).toBe(true);
+    });
+
     it('uses the configured Asia/Ho_Chi_Minh calendar date', () => {
         expect(dateInTimezone(new Date('2026-07-10T17:30:00.000Z'), 'Asia/Ho_Chi_Minh')).toBe('2026-07-11');
     });
@@ -95,6 +110,23 @@ describe('Google Intelligence source hierarchy and analysis', () => {
     it('keeps only normalized text needed for hashing and limited summaries', () => {
         expect(stripMarkup('<style>.x{}</style><script>bad()</script><h1>Useful &amp; original</h1>')).toBe('Useful & original');
     });
+
+    it('extracts source publication and modification dates without storing full documents', () => {
+        const dates = extractDocumentDates('<meta property="article:published_time" content="2026-07-10T01:00:00Z"><updated>2026-07-11T02:00:00Z</updated>');
+        expect(dates.publishedAt.toISOString()).toBe('2026-07-10T01:00:00.000Z');
+        expect(dates.updatedAt.toISOString()).toBe('2026-07-11T02:00:00.000Z');
+    });
+
+    it('distinguishes removed guidance and terminology changes from a plain hash change', () => {
+        const result = summarizeMaterialChange({
+            previousExcerpt: 'Structured data properties alpha beta gamma delta epsilon must remain visible and supported.',
+            currentExcerpt: 'Structured data properties alpha remain visible.',
+            isNew: false
+        });
+        expect(result.changeType).toBe('removed');
+        expect(result.terminologyChanged).toBe(true);
+        expect(result.removedTerms.length).toBeGreaterThan(0);
+    });
 });
 
 describe('safe source fetch controls', () => {
@@ -142,5 +174,26 @@ describe('safe source fetch controls', () => {
         });
         expect(result.body).toContain('Search update');
         expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it('aborts a source request on timeout', async () => {
+        const fetchImpl = (url, options) => {
+            if (String(url).endsWith('/robots.txt')) return Promise.resolve(new Response('', { status: 404 }));
+            return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
+        };
+        await expect(safeSourceFetch({
+            url: 'https://developers.google.com/search/updates', fetchImpl,
+            resolveHostname: publicDns, timeoutMs: 10
+        })).rejects.toThrow('source_request_timeout');
+    });
+
+    it('rejects source bodies larger than the configured limit', async () => {
+        const fetchImpl = vi.fn(async (url) => String(url).endsWith('/robots.txt')
+            ? new Response('', { status: 404 })
+            : new Response('0123456789', { status: 200, headers: { 'content-type': 'text/plain', 'content-length': '10' } }));
+        await expect(safeSourceFetch({
+            url: 'https://developers.google.com/search/updates', fetchImpl,
+            resolveHostname: publicDns, maxBytes: 4
+        })).rejects.toThrow('source_response_too_large');
     });
 });
