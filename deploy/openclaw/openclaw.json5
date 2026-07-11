@@ -42,6 +42,14 @@
       "google-search-console-seo",
       "sharpagent-content-safety",
       "inoxpran-search-console",
+      "google-search-source-policy",
+      "google-intelligence-snapshot",
+      "inoxpran-editorial-style-rotation",
+      "inoxpran-originality-gate",
+      "inoxpran-people-first-review",
+      "inoxpran-blog-strategy-contract",
+      "inoxpran-source-attribution",
+      "inoxpran-telegram-approval-contract",
       "inoxpran-brand-voice",
       "inoxpran-seo-research-brief",
       "inoxpran-positioning",
@@ -158,7 +166,10 @@
         "content-generation",
         "inoxpran-brand-voice",
         "inoxpran-positioning",
-        "inoxpran-blog-editor-schema"
+        "inoxpran-blog-editor-schema",
+        "inoxpran-blog-strategy-contract",
+        "inoxpran-editorial-style-rotation",
+        "inoxpran-source-attribution"
       ]
     },
     {
@@ -210,7 +221,13 @@
       name: "publisher-gatekeeper",
       workspace: "/workspaces/publisher-gatekeeper",
       tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-publisher-gate", "inoxpran-seo-review"]
+      skillAllowlist: [
+        "inoxpran-publisher-gate",
+        "inoxpran-seo-review",
+        "google-intelligence-snapshot",
+        "inoxpran-originality-gate",
+        "inoxpran-people-first-review"
+      ]
     },
     {
       name: "search-console-reporter",
@@ -267,6 +284,102 @@
         "ddg-search",
         "firecrawl"
       ]
+    },
+    {
+      name: "google-source-monitor",
+      workspace: "/workspaces/google-source-monitor",
+      tools: { shell: false, browser: true, mongodb: false, adminUi: false },
+      skillAllowlist: ["google-search-source-policy"]
+    },
+    {
+      name: "google-change-detector",
+      workspace: "/workspaces/google-change-detector",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["google-search-source-policy", "google-intelligence-snapshot"]
+    },
+    {
+      name: "google-policy-analyst",
+      workspace: "/workspaces/google-policy-analyst",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["google-search-source-policy", "inoxpran-source-attribution"]
+    },
+    {
+      name: "google-intelligence-reviewer",
+      workspace: "/workspaces/google-intelligence-reviewer",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["google-search-source-policy", "google-intelligence-snapshot", "inoxpran-source-attribution"]
+    },
+    {
+      name: "google-intelligence-gatekeeper",
+      workspace: "/workspaces/google-intelligence-gatekeeper",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["google-intelligence-snapshot"]
+    },
+    {
+      name: "seo-aeo-geo-strategist",
+      workspace: "/workspaces/seo-aeo-geo-strategist",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["google-intelligence-snapshot", "inoxpran-source-attribution", "inoxpran-seo-review"]
+    },
+    {
+      name: "topic-opportunity-researcher",
+      workspace: "/workspaces/topic-opportunity-researcher",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-topic-planner", "inoxpran-blog-strategy-contract", "inoxpran-search-console"]
+    },
+    {
+      name: "industry-content-researcher",
+      workspace: "/workspaces/industry-content-researcher",
+      tools: { shell: false, browser: true, mongodb: false, adminUi: false },
+      skillAllowlist: ["ddg-search", "firecrawl", "google-search-source-policy", "inoxpran-source-attribution"]
+    },
+    {
+      name: "search-intent-analyst",
+      workspace: "/workspaces/search-intent-analyst",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-blog-strategy-contract"]
+    },
+    {
+      name: "editorial-style-planner",
+      workspace: "/workspaces/editorial-style-planner",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-editorial-style-rotation"]
+    },
+    {
+      name: "content-strategist",
+      workspace: "/workspaces/content-strategist",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-blog-strategy-contract", "inoxpran-brand-voice", "inoxpran-source-attribution"]
+    },
+    {
+      name: "content-architect",
+      workspace: "/workspaces/content-architect",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-blog-strategy-contract", "inoxpran-editorial-style-rotation", "inoxpran-blog-editor-schema"]
+    },
+    {
+      name: "originality-reviewer",
+      workspace: "/workspaces/originality-reviewer",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-originality-gate"]
+    },
+    {
+      name: "spam-risk-reviewer",
+      workspace: "/workspaces/spam-risk-reviewer",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-people-first-review", "google-intelligence-snapshot"]
+    },
+    {
+      name: "fact-checker",
+      workspace: "/workspaces/fact-checker",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-source-attribution", "inoxpran-brand-voice"]
+    },
+    {
+      name: "brand-voice-reviewer",
+      workspace: "/workspaces/brand-voice-reviewer",
+      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
+      skillAllowlist: ["inoxpran-brand-voice"]
     },
     {
       name: "reporter",

@@ -9,5 +9,6 @@ Allowed skills:
 Rules:
 - Default to draft.
 - Block publish when cover is required but missing, pending, rejected, or awaiting manual review.
-- Block publish unless all SEO, brand, claim, duplicate, and image checks pass.
+- Block publish unless Google Intelligence, strategy, factuality, originality, SEO/AEO/GEO, people-first, spam, brand, and image checks pass.
+- Block high spam risk, factuality failure, originality failure, stale/failed snapshot, or missing artifact IDs.
 - Never call the API directly, use shell, access MongoDB, browse, or use the admin UI.

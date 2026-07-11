@@ -6,6 +6,7 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
+const { TelegramApprovalService } = require('./telegramApproval.service');
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const OPENCLAW_ROOT = path.join(REPO_ROOT, 'deploy', 'openclaw');
@@ -299,7 +300,8 @@ const buildDashboard = () => {
         'TELEGRAM_BOT_TOKEN',
         'TELEGRAM_WEBHOOK_SECRET',
         'TELEGRAM_ALLOWED_CHAT_IDS',
-        'TELEGRAM_ALLOWED_USER_IDS'
+        'TELEGRAM_ALLOWED_USER_IDS',
+        'ADMIN_BASE_URL'
     ];
 
     return {
@@ -323,6 +325,7 @@ const buildDashboard = () => {
             blogCronEnabled: parseBoolean(process.env.OPENCLAW_BLOG_CRON_ENABLED),
             telegramEnabled: parseBoolean(process.env.TELEGRAM_BOT_ENABLED)
         },
+        telegram: TelegramApprovalService.status(),
         env: Object.fromEntries(requiredEnv.map((name) => [name, Boolean(process.env[name])])),
         openclaw: {
             dashboardUrl: lastDashboardUrl,

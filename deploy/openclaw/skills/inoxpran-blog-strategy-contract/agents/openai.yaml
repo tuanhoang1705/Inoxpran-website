@@ -1,0 +1,4 @@
+interface:
+  display_name: "INOXPRAN Blog Strategy Contract"
+  short_description: "Create auditable pre-draft strategy plans"
+  default_prompt: "Use this skill to create the required strategy plan before the content writer runs."

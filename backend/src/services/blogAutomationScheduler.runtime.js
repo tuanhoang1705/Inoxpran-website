@@ -2,6 +2,7 @@
 
 const os = require('node:os');
 const { BlogAutomationScheduleService, isCronEnabled } = require('./blogAutomationSchedule.service');
+const { GoogleIntelligenceService } = require('./googleIntelligence.service');
 
 const DEFAULT_POLL_MS = 30_000;
 const MIN_POLL_MS = 5_000;
@@ -18,9 +19,13 @@ const buildWorkerId = () =>
 
 const tick = async () => {
     if (running) return;
-    if (!isCronEnabled()) return;
+    if (!isCronEnabled() && process.env.GOOGLE_INTELLIGENCE_ENABLED !== 'true') return;
     running = true;
     try {
+        await GoogleIntelligenceService.runDueOnce({ workerId }).catch((error) => {
+            console.error('Google Intelligence scheduler tick failed:', error?.message || error);
+            return null;
+        });
         for (let i = 0; i < 3; i += 1) {
             const result = await BlogAutomationScheduleService.runDueOnce({ workerId });
             if (!result) break;

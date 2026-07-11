@@ -10,6 +10,7 @@ const router = express.Router();
 router.use(automationAuth);
 
 router.get('/seo-blog/health', asyncHandler(automationSeoBlogController.health));
+router.post('/seo-blog/prepare', asyncHandler(automationSeoBlogController.prepare));
 router.post('/seo-blog/publish', asyncHandler(automationSeoBlogController.publish));
 
 module.exports = router;

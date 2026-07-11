@@ -13,22 +13,31 @@ const approvalSchema = new Schema(
         approvalCode: { type: String, required: true, unique: true, index: true },
         status: {
             type: String,
-            enum: ['pending', 'approved', 'rejected', 'expired'],
+            enum: ['pending', 'processing', 'approved', 'rejected', 'expired'],
             default: 'pending',
             index: true
         },
         blogTitle: { type: String, default: '' },
         blogSlug: { type: String, default: '' },
         blogUrl: { type: String, default: '' },
+        adminEditUrl: { type: String, default: '' },
+        coverImageUrl: { type: String, default: '' },
+        idempotencyKey: { type: String, unique: true, sparse: true, index: true },
         telegramChatId: { type: String, default: '', index: true },
         telegramMessageId: { type: String, default: '' },
+        notificationType: { type: String, enum: ['photo', 'text', 'text_fallback', 'disabled', ''], default: '' },
+        notificationStatus: { type: String, default: '' },
+        notificationError: { type: String, default: '' },
+        reviewMetadata: { type: Schema.Types.Mixed, default: () => ({}) },
+        notifiedAt: { type: Date, default: null },
         expiresAt: { type: Date, default: null, index: true },
         approvedAt: { type: Date, default: null },
         approvedByTelegramUserId: { type: String, default: '' },
         approvedByTelegramUsername: { type: String, default: '' },
         rejectedAt: { type: Date, default: null },
         rejectedByTelegramUserId: { type: String, default: '' },
-        rejectedByTelegramUsername: { type: String, default: '' }
+        rejectedByTelegramUsername: { type: String, default: '' },
+        processedUpdateId: { type: Number, default: null, index: true }
     },
     {
         collection: COLLECTION_NAME,

@@ -1,0 +1,4 @@
+interface:
+  display_name: "INOXPRAN People-First Review"
+  short_description: "Block low-value and spam-risk drafts"
+  default_prompt: "Use this skill to review usefulness user intent and spam risk before publication."

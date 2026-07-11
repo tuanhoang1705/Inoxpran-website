@@ -1,0 +1,4 @@
+interface:
+  display_name: "INOXPRAN Telegram Approval Contract"
+  short_description: "Send secure non-AI admin approval notifications"
+  default_prompt: "Use this skill to build Telegram draft approvals with admin URLs photo fallback and command isolation."

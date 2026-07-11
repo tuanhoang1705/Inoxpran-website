@@ -29,6 +29,11 @@ class AutomationSeoBlogController {
             metadata
         });
     }
+
+    prepare = async (req, res) => {
+        const metadata = await AutomationSeoBlogService.prepareAgenticContext({ payload: req.body || {} });
+        return res.json({ status: 'success', metadata });
+    }
 }
 
 module.exports = new AutomationSeoBlogController();

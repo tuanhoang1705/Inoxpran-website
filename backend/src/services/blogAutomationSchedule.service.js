@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const { BlogAutomationSchedule } = require('../models/blogAutomationSchedule.model');
 const { BlogAutomationExecution } = require('../models/blogAutomationExecution.model');
 const AutomationSeoBlogService = require('./automationSeoBlog.service');
+const { AgenticBlogCoreService } = require('./agenticBlogCore.service');
 const { TelegramApprovalService } = require('./telegramApproval.service');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { convertToObjectIdMongodb } = require('../utils');
@@ -13,7 +14,6 @@ const {
     normalizeSchedulePayload,
     parseBoolean
 } = require('../utils/blogSchedule.util');
-const { normalizeSlug, normalizeString } = require('../utils/seoBlogSanitizer');
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
@@ -21,8 +21,6 @@ const LEASE_MS = 5 * 60 * 1000;
 
 const isCronEnabled = () => parseBoolean(process.env.OPENCLAW_BLOG_CRON_ENABLED, false);
 const isSeoAgentEnabled = () => process.env.SEO_AGENT_ENABLED === 'true';
-
-const truncate = (value, length) => normalizeString(value).slice(0, length).trim();
 
 const mapSchedule = (schedule) => {
     if (!schedule) return null;
@@ -67,7 +65,16 @@ const mapExecution = (execution) => {
         mode: execution.mode || 'draft',
         error: execution.error || '',
         telegramNotificationStatus: execution.telegramNotificationStatus || '',
+        telegramNotificationType: execution.telegramNotificationType || '',
         telegramNotificationError: execution.telegramNotificationError || '',
+        googleIntelSnapshotId: execution.googleIntelSnapshotId ? String(execution.googleIntelSnapshotId) : '',
+        researchBundleId: execution.researchBundleId ? String(execution.researchBundleId) : '',
+        editorialStyleProfileId: execution.editorialStyleProfileId ? String(execution.editorialStyleProfileId) : '',
+        strategyPlanId: execution.strategyPlanId ? String(execution.strategyPlanId) : '',
+        correlationId: execution.correlationId || '',
+        agentSteps: execution.agentSteps || [],
+        reviewerDecisions: execution.reviewerDecisions || {},
+        publisherDecision: execution.publisherDecision || {},
         metadata: execution.metadata || {},
         createdAt: execution.createdAt,
         updatedAt: execution.updatedAt
@@ -110,96 +117,6 @@ const mergeSchedulePatch = (current, patch = {}) => {
         agentConfig: {
             ...(base.agentConfig || {}),
             ...(patch.agentConfig || {})
-        }
-    };
-};
-
-const buildContentHtml = ({ topic, primaryKeyword, dateLabel }) => {
-    const keyword = primaryKeyword || topic || 'noi inox';
-    const sections = [
-        {
-            heading: `Vi sao ${keyword} can duoc chon dung?`,
-            body: `Nguoi dung thuong tim ${keyword} khi can mot loi khuyen thuc te cho bep gia dinh. Bai viet nay tong hop cac diem can kiem tra truoc khi mua, cach nhan biet nhu cau su dung va nhung loi thuong gap khi bao quan san pham inox.`
-        },
-        {
-            heading: 'Checklist danh gia truoc khi quyet dinh',
-            body: `Hay xem chat lieu, do day day noi, kha nang tuong thich voi bep, tay cam, nap va cach ve sinh sau moi lan nau. Neu san pham dung cho bep tu, day noi can bat tu on dinh va khong cong venh khi dun lau.`
-        },
-        {
-            heading: 'Positioning cho nguoi mua thong minh',
-            body: `Thong diep nen tap trung vao do ben, do an toan va chi phi su dung dai han thay vi chi noi ve gia. Inoxpran co the dat minh nhu mot lua chon thuc dung cho gia dinh Viet can do gia dung inox gon, ben va de cham soc.`
-        },
-        {
-            heading: 'Cach su dung va bao quan',
-            body: `Nen rua bang khan mem, tranh dung vat sac lam xuoc be mat, lau kho sau khi rua va khong ngam thuc pham co muoi hoac axit trong thoi gian dai. Cac vet o vang nhe thuong co the xu ly bang nuoc am, giam pha loang hoac baking soda.`
-        }
-    ];
-    const denseParagraph = `${keyword} phu hop khi nguoi mua hieu ro kich thuoc, chat lieu, cach dung va cach ve sinh. Noi dung nen giai thich bang ngon ngu don gian, dua vi du gan voi bep gia dinh, tranh hua hen qua muc va uu tien thong tin co the kiem chung. `;
-    const repeated = `<p>${denseParagraph.repeat(24)}</p>`;
-
-    return [
-        `<section>`,
-        `<p><strong>Ngay tao:</strong> ${dateLabel}. Chu de: ${topic}. Bai viet duoc tao tu lich OpenClaw de lam ban nhap cho bien tap vien kiem tra.</p>`,
-        ...sections.map((section) => `<h2>${section.heading}</h2><p>${section.body}</p>${repeated}`),
-        `<h2>Cau hoi thuong gap</h2>`,
-        `<p><strong>Co nen publish ngay?</strong> Chi publish sau khi SEO gate, brand safety va anh agentic deu duoc duyet.</p>`,
-        `<p><strong>Khi nao can cap nhat?</strong> Nen cap nhat khi co thay doi ve san pham, gia, chinh sach bao hanh hoac insight moi tu khach hang.</p>`,
-        `</section>`
-    ].join('');
-};
-
-const buildAutomationPayload = ({ schedule, executionKey, now = new Date() }) => {
-    const agentConfig = schedule.agentConfig || {};
-    const topic = truncate(agentConfig.topic || agentConfig.primaryKeyword || schedule.name, 90);
-    const primaryKeyword = truncate(agentConfig.primaryKeyword || topic, 80);
-    const dateLabel = now.toISOString().slice(0, 10);
-    const slug = normalizeSlug(`${topic}-${dateLabel}-${crypto.randomBytes(3).toString('hex')}`);
-    const title = truncate(topic.length > 20 ? topic : `${topic} - huong dan thuc te`, 115);
-    const excerpt = truncate(
-        agentConfig.prompt || `Ban nhap SEO tu OpenClaw ve ${topic}, gom insight, positioning va checklist bien tap.`,
-        240
-    );
-    const requestedPublish =
-        Boolean(schedule.autoPublish) && parseBoolean(process.env.SEO_AGENT_AUTO_PUBLISH, false);
-
-    return {
-        mode: requestedPublish ? 'publish' : 'draft',
-        source: 'openclaw-daily-seo',
-        primaryKeyword,
-        secondaryKeywords: agentConfig.secondaryKeywords || [],
-        title,
-        slug,
-        excerpt,
-        contentHtml: buildContentHtml({ topic, primaryKeyword, dateLabel }),
-        seoTitle: truncate(title, 60),
-        seoDescription: truncate(excerpt, 155),
-        categoryKey: agentConfig.categoryKey || 'guide',
-        tags: [primaryKeyword, 'OpenClaw', 'Inoxpran'].filter(Boolean),
-        authorName: process.env.SEO_AGENT_DEFAULT_AUTHOR || 'Inoxpran Editorial Team',
-        imageUrl: process.env.SEO_AGENT_DEFAULT_BLOG_IMAGE || '/og-image.png',
-        articleType: agentConfig.articleType || 'how-to',
-        outline: [
-            'Insight nguoi doc',
-            'Positioning noi dung',
-            'Checklist danh gia',
-            'Huong dan su dung',
-            'FAQ'
-        ],
-        metadata: {
-            provider: 'openclaw',
-            scheduleId: String(schedule._id || schedule.id || ''),
-            executionKey,
-            cron: true,
-            generatedBy: 'blogAutomationSchedule.service',
-            language: agentConfig.language || 'vi',
-            tone: agentConfig.tone || 'practical'
-        },
-        review: {
-            seoScore: 90,
-            brandSafety: 'pass',
-            duplicateRisk: 'low',
-            claimRisk: 'low',
-            imageSafety: 'pass'
         }
     };
 };
@@ -396,7 +313,8 @@ class BlogAutomationScheduleService {
                 executionKey,
                 status: 'running',
                 startedAt: new Date(),
-                metadata: { trigger, dueAt }
+                correlationId: crypto.randomUUID(),
+                metadata: { trigger, dueAt, pipelineVersion: 'agentic-blog-core-v2' }
             });
         } catch (error) {
             if (error?.code === 11000) {
@@ -424,7 +342,50 @@ class BlogAutomationScheduleService {
 
         try {
             const now = new Date();
-            const payload = buildAutomationPayload({ schedule, executionKey, now });
+            const pipeline = await AgenticBlogCoreService.runPipeline({
+                schedule,
+                executionKey,
+                executionId: execution._id,
+                now
+            });
+            if (pipeline.skipped) {
+                const completedAt = new Date();
+                const nextRunAt = calculateNextRun({
+                    schedule: { ...schedule, runCount: Number(schedule.runCount || 0) + 1, lastRunAt: completedAt },
+                    from: completedAt
+                });
+                await BlogAutomationExecution.updateOne({ _id: execution._id }, {
+                    $set: {
+                        status: 'skipped', completedAt,
+                        googleIntelSnapshotId: pipeline.context.snapshot.id,
+                        researchBundleId: pipeline.context.researchBundle._id,
+                        editorialStyleProfileId: pipeline.context.style._id,
+                        strategyPlanId: pipeline.context.strategy._id,
+                        agentSteps: ['google-intelligence-gate', 'topic-opportunity-research', 'skip'],
+                        publisherDecision: { allowed: false, reason: pipeline.reason },
+                        metadata: { trigger, dueAt, decision: 'skip', decisionReason: pipeline.reason }
+                    }
+                });
+                await completeSchedule({ runCountDelta: 1, lastRunStatus: 'skipped', nextRunAt });
+                return { skipped: true, reason: pipeline.reason, executionId: String(execution._id) };
+            }
+            const payload = pipeline.payload;
+            await BlogAutomationExecution.updateOne({ _id: execution._id }, {
+                $set: {
+                    googleIntelSnapshotId: payload.googleIntelSnapshotId,
+                    researchBundleId: payload.researchBundleId,
+                    editorialStyleProfileId: payload.editorialStyleProfileId,
+                    strategyPlanId: payload.strategyPlanId,
+                    agentSteps: [
+                        'google-intelligence-gate', 'topic-opportunity-research', 'industry-content-research',
+                        'editorial-style-planning', 'content-strategy-plan', 'content-architecture', 'draft-generation',
+                        'fact-review', 'originality-review', 'seo-aeo-geo-review', 'people-first-spam-review',
+                        'brand-voice-review', 'publisher-gate'
+                    ],
+                    reviewerDecisions: pipeline.reviews,
+                    publisherDecision: { allowed: !pipeline.highRisk, requestedMode: payload.mode }
+                }
+            });
             const result = await AutomationSeoBlogService.publishSeoBlog({ payload });
             const completedAt = new Date();
             const status = result.published ? 'published' : 'draft_created';
@@ -444,7 +405,13 @@ class BlogAutomationScheduleService {
                             trigger,
                             dueAt,
                             resultReasons: result.reasons || [],
-                            imagePipelineStatus: result.imagePipelineStatus || ''
+                            imagePipelineStatus: result.imagePipelineStatus || '',
+                            pipelineVersion: 'agentic-blog-core-v2',
+                            decision: payload.contentDecision,
+                            googleIntelSnapshotId: payload.googleIntelSnapshotId,
+                            researchBundleId: payload.researchBundleId,
+                            editorialStyleProfileId: payload.editorialStyleProfileId,
+                            strategyPlanId: payload.strategyPlanId
                         }
                     }
                 }
@@ -455,7 +422,10 @@ class BlogAutomationScheduleService {
                     blogId: result.blogId,
                     blogTitle: payload.title,
                     blogSlug: result.slug || payload.slug,
-                    blogUrl: result.url || '',
+                    coverImageUrl: result.coverImage?.url || '',
+                    snapshotStatus: payload.googleIntelStatus,
+                    styleFamily: payload.metadata?.styleFamily || '',
+                    reviewStatus: pipeline.highRisk ? 'blocked — manual review required' : 'passed',
                     scheduleId,
                     executionId: execution._id
                 });
@@ -464,6 +434,7 @@ class BlogAutomationScheduleService {
                     {
                         $set: {
                             telegramNotificationStatus: telegramResult.status || '',
+                            telegramNotificationType: telegramResult.notificationType || '',
                             telegramNotificationError: telegramResult.reason || ''
                         }
                     }
@@ -490,6 +461,7 @@ class BlogAutomationScheduleService {
                     blogTitle: payload.title,
                     mode: result.mode,
                     telegramNotificationStatus: telegramResult?.status || '',
+                    telegramNotificationType: telegramResult?.notificationType || '',
                     telegramNotificationError: telegramResult?.reason || ''
                 }),
                 result,
@@ -522,7 +494,6 @@ class BlogAutomationScheduleService {
 
 module.exports = {
     BlogAutomationScheduleService,
-    buildAutomationPayload,
     isCronEnabled,
     isSeoAgentEnabled,
     mapExecution,

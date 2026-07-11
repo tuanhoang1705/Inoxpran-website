@@ -1,0 +1,4 @@
+interface:
+  display_name: "INOXPRAN Originality Gate"
+  short_description: "Detect copied spun and structurally repetitive content"
+  default_prompt: "Use this skill to review a draft for phrase heading title and structural similarity."
