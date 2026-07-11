@@ -608,7 +608,7 @@ class GoogleIntelligenceService {
         const blogs = await Blog.find({ googleIntelSnapshotId: { $ne: null } })
             .sort({ createdAt: -1 })
             .limit(Math.min(Math.max(Number(limit) || 30, 1), MAX_LIST_LIMIT))
-            .select('_id blog_title isDraft isPublished googleIntelSnapshotId googleIntelSnapshotDate googleIntelStatus researchBundleId editorialStyleProfileId strategyPlanId agenticExecutionId structuralFingerprint createdAt updatedAt')
+            .select('_id blog_title isDraft isPublished googleIntelSnapshotId googleIntelSnapshotDate googleIntelStatus researchBundleId editorialStyleProfileId strategyPlanId agenticExecutionId structuralFingerprint agenticReviews createdAt updatedAt')
             .lean();
         return {
             blogs: blogs.map((item) => ({
@@ -617,6 +617,7 @@ class GoogleIntelligenceService {
                 googleIntelStatus: item.googleIntelStatus || '', researchBundleId: String(item.researchBundleId || ''),
                 editorialStyleProfileId: String(item.editorialStyleProfileId || ''), strategyPlanId: String(item.strategyPlanId || ''),
                 agenticExecutionId: String(item.agenticExecutionId || ''), structuralFingerprint: item.structuralFingerprint || null,
+                originalityReview: item.agenticReviews?.originality || null,
                 createdAt: item.createdAt, updatedAt: item.updatedAt
             }))
         };
