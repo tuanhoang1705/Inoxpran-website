@@ -71,6 +71,16 @@ const blogSchema = new Schema(
             index: true
         },
         generationMetadata: { type: Schema.Types.Mixed, default: null },
+        googleIntelSnapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', default: null, index: true },
+        googleIntelSnapshotDate: { type: String, default: '', index: true },
+        googleIntelStatus: { type: String, default: '' },
+        researchBundleId: { type: Schema.Types.ObjectId, ref: 'ResearchBundle', default: null, index: true },
+        editorialStyleProfileId: { type: Schema.Types.ObjectId, ref: 'EditorialStyleProfile', default: null, index: true },
+        strategyPlanId: { type: Schema.Types.ObjectId, ref: 'BlogStrategyPlan', default: null, index: true },
+        agenticExecutionId: { type: Schema.Types.ObjectId, ref: 'BlogAutomationExecution', default: null, index: true },
+        contentDecision: { type: String, enum: ['new', 'update', 'merge', 'skip', ''], default: '' },
+        structuralFingerprint: { type: Schema.Types.Mixed, default: null },
+        agenticReviews: { type: Schema.Types.Mixed, default: null },
         imagePipelineStatus: {
             type: String,
             enum: ['pending', 'partial', 'complete', 'failed'],

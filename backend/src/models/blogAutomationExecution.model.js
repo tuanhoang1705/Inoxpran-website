@@ -30,7 +30,15 @@ const executionSchema = new Schema(
         retryCount: { type: Number, default: 0, min: 0 },
         telegramNotificationStatus: { type: String, default: '' },
         telegramNotificationError: { type: String, default: '' },
-        metadata: { type: Schema.Types.Mixed, default: () => ({}) }
+        metadata: { type: Schema.Types.Mixed, default: () => ({}) },
+        googleIntelSnapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', default: null, index: true },
+        researchBundleId: { type: Schema.Types.ObjectId, ref: 'ResearchBundle', default: null },
+        editorialStyleProfileId: { type: Schema.Types.ObjectId, ref: 'EditorialStyleProfile', default: null },
+        strategyPlanId: { type: Schema.Types.ObjectId, ref: 'BlogStrategyPlan', default: null },
+        correlationId: { type: String, default: '', index: true },
+        agentSteps: { type: [Schema.Types.Mixed], default: [] },
+        reviewerDecisions: { type: Schema.Types.Mixed, default: () => ({}) },
+        publisherDecision: { type: Schema.Types.Mixed, default: () => ({}) }
     },
     {
         collection: COLLECTION_NAME,

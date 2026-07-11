@@ -6,6 +6,7 @@ const contactController = require("../../controllers/contact.controller");
 const openclawDashboardController = require("../../controllers/openclawDashboard.controller");
 const blogAutomationScheduleController = require("../../controllers/blogAutomationSchedule.controller");
 const googleIntelligenceController = require("../../controllers/googleIntelligence.controller");
+const agenticBlogCoreController = require("../../controllers/agenticBlogCore.controller");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
 const { upload, uploadLarge } = require("../../middleware/upload");
@@ -183,6 +184,31 @@ router.get(
   "/openclaw/google-intelligence/executions",
   requireAdminPermission(["google_intelligence.view"]),
   asyncHandler(googleIntelligenceController.listExecutions),
+);
+router.get(
+  "/openclaw/editorial-styles",
+  requireAdminPermission(["editorial_style.view"]),
+  asyncHandler(agenticBlogCoreController.listStyles),
+);
+router.patch(
+  "/openclaw/editorial-styles/:styleId",
+  requireAdminPermission(["editorial_style.manage"]),
+  asyncHandler(agenticBlogCoreController.updateStyle),
+);
+router.post(
+  "/openclaw/editorial-styles/generate-today",
+  requireAdminPermission(["editorial_style.manage"]),
+  asyncHandler(agenticBlogCoreController.generateTodayStyle),
+);
+router.get(
+  "/openclaw/research-bundles/:bundleId",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(agenticBlogCoreController.getResearchBundle),
+);
+router.get(
+  "/openclaw/blog-strategies/:strategyId",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(agenticBlogCoreController.getStrategy),
 );
 router.get(
   "/openclaw/blog-schedules",

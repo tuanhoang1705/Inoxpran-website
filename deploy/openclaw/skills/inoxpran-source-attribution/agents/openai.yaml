@@ -1,0 +1,4 @@
+interface:
+  display_name: "INOXPRAN Source Attribution"
+  short_description: "Separate verified facts from interpretation"
+  default_prompt: "Use this skill to build concise accurate source attribution without storing full articles."

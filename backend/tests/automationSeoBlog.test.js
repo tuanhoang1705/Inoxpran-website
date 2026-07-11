@@ -12,8 +12,10 @@ const ORIGINAL_ENV = { ...process.env };
 
 const blogMock = {
     findOne: vi.fn(),
-    create: vi.fn()
+    create: vi.fn(),
+    findByIdAndUpdate: vi.fn()
 };
+const ensureGoogleSnapshotMock = vi.fn();
 
 const installMock = (modulePath, exports) => {
     const resolvedPath = require.resolve(modulePath);
@@ -26,6 +28,14 @@ const loadAutomationService = () => {
     installMock('../src/models/blog.model', {
         blog: blogMock,
         BLOG_CATEGORY_KEYS: ['guide', 'care', 'knowledge', 'trend', 'product', 'design']
+    });
+    installMock('../src/services/googleIntelligence.service', {
+        GoogleIntelligenceService: {
+            ensureGoogleIntelligenceSnapshotForDate: ensureGoogleSnapshotMock
+        }
+    });
+    installMock('../src/services/agenticBlogCore.service', {
+        AgenticBlogCoreService: { prepareContext: vi.fn() }
     });
 
     [
@@ -88,11 +98,26 @@ const buildPayload = (overrides = {}) => ({
         brandSafety: 'pass',
         duplicateRisk: 'low',
         claimRisk: 'low',
-        imageSafety: 'pass'
+        imageSafety: 'pass',
+        factuality: 'pass',
+        originality: 'pass',
+        peopleFirst: 'pass',
+        spamRisk: 'low',
+        seoAeoGeo: 'pass'
     },
     metadata: {
         agentRunId: 'test-run'
     },
+    googleIntelSnapshotId: '507f1f77bcf86cd799439021',
+    googleIntelSnapshotDate: '2026-07-11',
+    googleIntelStatus: 'completed_no_change',
+    researchBundleId: '507f1f77bcf86cd799439022',
+    editorialStyleProfileId: '507f1f77bcf86cd799439023',
+    strategyPlanId: '507f1f77bcf86cd799439024',
+    agenticExecutionId: '507f1f77bcf86cd799439025',
+    contentDecision: 'new',
+    structuralFingerprint: { hash: 'fingerprint' },
+    agenticReviews: {},
     ...overrides
 });
 
@@ -114,6 +139,12 @@ beforeEach(() => {
         PUBLIC_SITE_URL: 'https://inoxpran.com'
     };
 
+    ensureGoogleSnapshotMock.mockResolvedValue({
+        id: '507f1f77bcf86cd799439021',
+        snapshotDate: '2026-07-11',
+        status: 'completed_no_change'
+    });
+
     blogMock.findOne.mockReturnValue({
         select: () => ({
             lean: () => Promise.resolve(null)
@@ -125,6 +156,11 @@ beforeEach(() => {
         toObject() {
             return { ...doc, _id: this._id };
         }
+    }));
+    blogMock.findByIdAndUpdate.mockImplementation((id, update) => Promise.resolve({
+        ...update.$set,
+        _id: id,
+        toObject() { return { ...update.$set, _id: id }; }
     }));
 });
 
@@ -220,7 +256,13 @@ describe('AutomationSeoBlogService.publishSeoBlog', () => {
                     seoScore: 70,
                     brandSafety: 'pass',
                     duplicateRisk: 'low',
-                    claimRisk: 'low'
+                    claimRisk: 'low',
+                    imageSafety: 'pass',
+                    factuality: 'pass',
+                    originality: 'pass',
+                    peopleFirst: 'pass',
+                    spamRisk: 'low',
+                    seoAeoGeo: 'pass'
                 }
             })
         });
@@ -239,7 +281,13 @@ describe('AutomationSeoBlogService.publishSeoBlog', () => {
                     seoScore: 90,
                     brandSafety: 'fail',
                     duplicateRisk: 'low',
-                    claimRisk: 'low'
+                    claimRisk: 'low',
+                    imageSafety: 'pass',
+                    factuality: 'pass',
+                    originality: 'pass',
+                    peopleFirst: 'pass',
+                    spamRisk: 'low',
+                    seoAeoGeo: 'pass'
                 }
             })
         });
@@ -259,7 +307,12 @@ describe('AutomationSeoBlogService.publishSeoBlog', () => {
                     brandSafety: 'pass',
                     duplicateRisk: 'low',
                     claimRisk: 'low',
-                    imageSafety: 'fail'
+                    imageSafety: 'fail',
+                    factuality: 'pass',
+                    originality: 'pass',
+                    peopleFirst: 'pass',
+                    spamRisk: 'low',
+                    seoAeoGeo: 'pass'
                 }
             })
         });
@@ -279,6 +332,21 @@ describe('AutomationSeoBlogService.publishSeoBlog', () => {
         await expect(AutomationSeoBlogService.publishSeoBlog({
             payload: buildPayload()
         })).rejects.toThrow('blog_slug already exists');
+    });
+
+    it('rejects a writer payload without mandatory strategy context', async () => {
+        const AutomationSeoBlogService = loadAutomationService();
+        await expect(AutomationSeoBlogService.publishSeoBlog({
+            payload: buildPayload({ strategyPlanId: '' })
+        })).rejects.toThrow('Agentic writer context is missing');
+        expect(ensureGoogleSnapshotMock).not.toHaveBeenCalled();
+    });
+
+    it('rejects a payload that references a different daily snapshot', async () => {
+        const AutomationSeoBlogService = loadAutomationService();
+        await expect(AutomationSeoBlogService.publishSeoBlog({
+            payload: buildPayload({ googleIntelSnapshotId: '507f1f77bcf86cd799439099' })
+        })).rejects.toThrow('does not match the current daily snapshot');
     });
 
     it('publishes when env and review gates pass', async () => {

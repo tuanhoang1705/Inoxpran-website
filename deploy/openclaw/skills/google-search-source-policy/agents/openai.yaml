@@ -1,0 +1,4 @@
+interface:
+  display_name: "Google Search Source Policy"
+  short_description: "Prioritize and validate Google Search sources"
+  default_prompt: "Use this skill to classify Google Search intelligence sources and reject unsupported claims."

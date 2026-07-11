@@ -33,7 +33,12 @@ const parseReview = (value = {}) => ({
     brandSafety: normalizeString(value.brandSafety).toLowerCase(),
     duplicateRisk: normalizeString(value.duplicateRisk).toLowerCase(),
     claimRisk: normalizeString(value.claimRisk).toLowerCase(),
-    imageSafety: normalizeString(value.imageSafety).toLowerCase()
+    imageSafety: normalizeString(value.imageSafety).toLowerCase(),
+    factuality: normalizeString(value.factuality).toLowerCase(),
+    originality: normalizeString(value.originality).toLowerCase(),
+    peopleFirst: normalizeString(value.peopleFirst).toLowerCase(),
+    spamRisk: normalizeString(value.spamRisk).toLowerCase(),
+    seoAeoGeo: normalizeString(value.seoAeoGeo).toLowerCase()
 });
 
 const isPublishReviewPassing = ({ review, wordCount, thresholds = getSeoThresholds() }) => {
@@ -54,6 +59,11 @@ const isPublishReviewPassing = ({ review, wordCount, thresholds = getSeoThreshol
     if (review.imageSafety !== 'pass') {
         reasons.push('image_safety_not_pass');
     }
+    if (review.factuality !== 'pass') reasons.push('factuality_not_pass');
+    if (review.originality !== 'pass') reasons.push('originality_not_pass');
+    if (review.peopleFirst !== 'pass') reasons.push('people_first_not_pass');
+    if (review.spamRisk === 'high') reasons.push('spam_risk_high');
+    if (review.seoAeoGeo !== 'pass') reasons.push('seo_aeo_geo_not_pass');
     if (wordCount < thresholds.minWords) {
         reasons.push(`word_count_below_${thresholds.minWords}`);
     }
@@ -114,6 +124,18 @@ const validateAutomationPayload = (payload = {}) => {
     if (!review.brandSafety) throw new BadRequestError('review.brandSafety is required');
     if (!review.duplicateRisk) throw new BadRequestError('review.duplicateRisk is required');
     if (!review.claimRisk) throw new BadRequestError('review.claimRisk is required');
+    const requiredContext = [
+        'googleIntelSnapshotId',
+        'googleIntelSnapshotDate',
+        'googleIntelStatus',
+        'researchBundleId',
+        'editorialStyleProfileId',
+        'strategyPlanId',
+        'agenticExecutionId'
+    ];
+    const context = Object.fromEntries(requiredContext.map((key) => [key, normalizeString(payload[key] || payload.metadata?.[key])]));
+    const missingContext = requiredContext.filter((key) => !context[key]);
+    if (missingContext.length) throw new BadRequestError(`Agentic writer context is missing: ${missingContext.join(', ')}`);
 
     const wordCount = countWords(sanitizedContentHtml);
     const thresholds = getSeoThresholds();
@@ -138,6 +160,11 @@ const validateAutomationPayload = (payload = {}) => {
         outline: Array.isArray(payload.outline) ? payload.outline : [],
         internalLinks: Array.isArray(payload.internalLinks) ? payload.internalLinks : [],
         faq: Array.isArray(payload.faq) ? payload.faq : [],
+        contentDecision: normalizeString(payload.contentDecision || 'new').toLowerCase(),
+        targetBlogId: normalizeString(payload.targetBlogId),
+        ...context,
+        structuralFingerprint: payload.structuralFingerprint && typeof payload.structuralFingerprint === 'object' ? payload.structuralFingerprint : null,
+        agenticReviews: payload.agenticReviews && typeof payload.agenticReviews === 'object' ? payload.agenticReviews : null,
         metadata: payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {},
         review,
         wordCount,

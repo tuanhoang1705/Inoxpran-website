@@ -5,6 +5,8 @@ const { BadRequestError } = require('../core/error.response');
 const { normalizeString } = require('../utils/seoBlogSanitizer');
 const { validateAutomationPayload } = require('../utils/seoBlogValidation');
 const { runImagePipeline } = require('./openclaw/imagePipeline.service');
+const { GoogleIntelligenceService } = require('./googleIntelligence.service');
+const { AgenticBlogCoreService } = require('./agenticBlogCore.service');
 
 const WORDS_PER_MINUTE = 220;
 const DEFAULT_SITE_URL = 'https://inoxpran.com';
@@ -35,8 +37,20 @@ const createBlogDocument = ({ normalized, shouldPublish, imagePipeline }) => ({
     sourceType: 'agentic',
     generationMetadata: {
         provider: 'openclaw',
-        generatedAt: new Date().toISOString()
+        generatedAt: new Date().toISOString(),
+        pipelineVersion: 'agentic-blog-core-v2',
+        ...normalized.metadata
     },
+    googleIntelSnapshotId: normalized.googleIntelSnapshotId,
+    googleIntelSnapshotDate: normalized.googleIntelSnapshotDate,
+    googleIntelStatus: normalized.googleIntelStatus,
+    researchBundleId: normalized.researchBundleId,
+    editorialStyleProfileId: normalized.editorialStyleProfileId,
+    strategyPlanId: normalized.strategyPlanId,
+    agenticExecutionId: normalized.agenticExecutionId,
+    contentDecision: normalized.contentDecision,
+    structuralFingerprint: normalized.structuralFingerprint,
+    agenticReviews: normalized.agenticReviews,
     blog_title: normalized.title,
     blog_slug: normalized.slug,
     blog_excerpt: normalized.excerpt,
@@ -72,13 +86,67 @@ class AutomationSeoBlogService {
         };
     }
 
+    static async prepareAgenticContext({ payload = {} }) {
+        const topic = normalizeString(payload.topic || payload.primaryKeyword);
+        if (!topic) throw new BadRequestError('topic is required');
+        const context = await AgenticBlogCoreService.prepareContext({
+            topic,
+            primaryKeyword: normalizeString(payload.primaryKeyword || topic),
+            articleType: normalizeString(payload.articleType),
+            sourceUrls: Array.isArray(payload.researchSources) ? payload.researchSources : []
+        });
+        return {
+            googleIntelSnapshotId: context.snapshot.id,
+            googleIntelSnapshotDate: context.snapshot.snapshotDate,
+            googleIntelStatus: context.snapshot.status,
+            googleGuidance: context.snapshot.contentGuidance,
+            researchBundleId: String(context.researchBundle._id),
+            researchCoverage: context.researchBundle.researchCoverage,
+            editorialPatterns: context.researchBundle.editorialPatterns,
+            editorialStyleProfileId: String(context.style._id),
+            editorialStyle: {
+                styleFamily: context.style.styleFamily,
+                openingMode: context.style.openingMode,
+                headingMode: context.style.headingMode,
+                paragraphRhythm: context.style.paragraphRhythm,
+                evidenceMode: context.style.evidenceMode,
+                ctaMode: context.style.ctaMode,
+                forbiddenRecentPatterns: context.style.forbiddenRecentPatterns,
+                brandVoiceConstraints: context.style.brandVoiceConstraints,
+                activeVariant: context.style.activeVariant
+            },
+            strategyPlanId: String(context.strategy._id),
+            strategy: {
+                decision: context.strategy.decision,
+                decisionReason: context.strategy.decisionReason,
+                targetBlogIds: (context.strategy.targetBlogIds || []).map(String),
+                searchIntent: context.strategy.searchIntent,
+                primaryQuestion: context.strategy.primaryQuestion,
+                supportingQuestions: context.strategy.supportingQuestions,
+                articleType: context.strategy.articleType,
+                evidenceRequirements: context.strategy.evidenceRequirements,
+                riskFlags: context.strategy.riskFlags,
+                contentArchitecture: context.strategy.contentArchitecture
+            }
+        };
+    }
+
     static async publishSeoBlog({ payload = {} }) {
         const normalized = validateAutomationPayload(payload);
+        const currentSnapshot = await GoogleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate();
+        if (String(currentSnapshot.id) !== String(normalized.googleIntelSnapshotId)) {
+            throw new BadRequestError('googleIntelSnapshotId does not match the current daily snapshot');
+        }
+        if (String(currentSnapshot.snapshotDate) !== String(normalized.googleIntelSnapshotDate)) {
+            throw new BadRequestError('googleIntelSnapshotDate does not match the current daily snapshot');
+        }
 
         const existing = await blog.findOne({ blog_slug: normalized.slug }).select('_id').lean();
-        if (existing) {
+        const isUpdate = ['update', 'merge'].includes(normalized.contentDecision);
+        if (existing && (!isUpdate || String(existing._id) !== String(normalized.targetBlogId))) {
             throw new BadRequestError('blog_slug already exists');
         }
+        if (isUpdate && !normalized.targetBlogId) throw new BadRequestError('targetBlogId is required for update or merge');
 
         const reasons = [...normalized.publishGate.reasons];
         const requestedPublish = normalized.mode === 'publish';
@@ -136,7 +204,11 @@ class AutomationSeoBlogService {
             (!requireCover || imagePipeline.coverReadyForPublish);
         let created;
         try {
-            created = await blog.create(createBlogDocument({ normalized, shouldPublish, imagePipeline }));
+            const document = createBlogDocument({ normalized, shouldPublish, imagePipeline });
+            created = isUpdate
+                ? await blog.findByIdAndUpdate(normalized.targetBlogId, { $set: document }, { new: true, runValidators: true })
+                : await blog.create(document);
+            if (!created) throw new BadRequestError('Target blog for update or merge was not found');
         } catch (error) {
             if (error?.code === 11000) {
                 throw new BadRequestError('blog_slug already exists');
@@ -160,7 +232,9 @@ class AutomationSeoBlogService {
             imagePipelineStatus: imagePipeline.status,
             imageWarnings: imagePipeline.warnings,
             coverImage: imagePipeline.coverImage,
-            contentImages: imagePipeline.contentImages
+            contentImages: imagePipeline.contentImages,
+            contentDecision: normalized.contentDecision,
+            updatedExisting: isUpdate
         };
     }
 }

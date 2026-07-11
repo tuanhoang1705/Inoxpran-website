@@ -1,0 +1,4 @@
+interface:
+  display_name: "INOXPRAN Editorial Style Rotation"
+  short_description: "Rotate article structure without losing brand voice"
+  default_prompt: "Use this skill to select a non-repeating editorial style and article-specific structural variant."

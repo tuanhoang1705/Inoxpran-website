@@ -8,7 +8,11 @@ const {
     normalizeSchedulePayload,
     zonedTimeToUtc
 } = require('../src/utils/blogSchedule.util');
-const { buildAutomationPayload } = require('../src/services/blogAutomationSchedule.service');
+const {
+    buildDraft,
+    decideTopicAction,
+    synthesizePatterns
+} = require('../src/services/agenticBlogCore.service');
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -93,40 +97,51 @@ describe('blogSchedule util', () => {
     });
 });
 
-describe('blog automation payload', () => {
-    it('forces draft mode when SEO_AGENT_AUTO_PUBLISH=false', () => {
-        process.env.SEO_AGENT_AUTO_PUBLISH = 'false';
-        const payload = buildAutomationPayload({
-            schedule: {
-                _id: '507f1f77bcf86cd799439011',
-                name: 'Noi inox 304',
-                autoPublish: true,
-                agentConfig: {
-                    topic: 'Noi inox 304 co dung duoc bep tu khong',
-                    primaryKeyword: 'noi inox 304'
-                }
-            },
-            executionKey: 'test-key',
-            now: new Date('2026-07-10T00:00:00.000Z')
+describe('Agentic Blog Core V2 planning', () => {
+    it('chooses skip for a recent article with the same intent', () => {
+        const result = decideTopicAction({
+            topic: 'Cach chon noi inox 304',
+            existing: [{ _id: '1', blog_title: 'Cach chon noi inox 304', blog_tags: ['noi inox 304'], updatedAt: new Date() }]
         });
-
-        expect(payload.mode).toBe('draft');
-        expect(payload.source).toBe('openclaw-daily-seo');
-        expect(payload.metadata.executionKey).toBe('test-key');
+        expect(result.decision).toBe('skip');
     });
 
-    it('requests publish only when schedule and global flag both allow it', () => {
-        process.env.SEO_AGENT_AUTO_PUBLISH = 'true';
-        const payload = buildAutomationPayload({
-            schedule: {
-                _id: '507f1f77bcf86cd799439011',
-                name: 'Noi inox 304',
-                autoPublish: true,
-                agentConfig: { topic: 'Noi inox 304' }
-            },
-            executionKey: 'test-key'
+    it('chooses update for an old overlapping article instead of creating a new URL', () => {
+        const result = decideTopicAction({
+            topic: 'Cach chon noi inox 304',
+            now: new Date('2026-07-11T00:00:00Z'),
+            existing: [{ _id: '1', blog_title: 'Cach chon noi inox 304', blog_tags: [], updatedAt: new Date('2025-01-01T00:00:00Z') }]
         });
+        expect(result.decision).toBe('update');
+        expect(result.targets).toHaveLength(1);
+    });
 
-        expect(payload.mode).toBe('publish');
+    it('synthesizes abstract patterns without source or author identities', () => {
+        const result = synthesizePatterns([
+            { openingPattern: 'problem-first', narrativeMode: 'practical-advisory', sectionRhythm: 'short-long-short', evidenceMode: 'examples', headingStyle: 'question-led', visualDensity: 'low' },
+            { openingPattern: 'answer-first', narrativeMode: 'comparison-advisory', sectionRhythm: 'medium-short-medium', evidenceMode: 'source-plus-explanation', headingStyle: 'action-led', visualDensity: 'medium' }
+        ]);
+        expect(result.synthesisRule).toContain('identities');
+        expect(JSON.stringify(result)).not.toContain('competitor');
+    });
+
+    it('builds materially different structure for comparison and diagnostic styles', () => {
+        const base = {
+            topic: 'noi inox',
+            primaryKeyword: 'noi inox',
+            architecture: {
+                headings: [
+                    { heading: 'Dau hieu can kiem tra', answerBlock: true },
+                    { heading: 'Cach danh gia', answerBlock: false },
+                    { heading: 'Lua chon phu hop', answerBlock: false },
+                    { heading: 'Tu kiem tra', answerBlock: true }
+                ]
+            }
+        };
+        const comparison = buildDraft({ ...base, style: { styleFamily: 'comparison-led', openingMode: 'direct-answer' } });
+        const diagnostic = buildDraft({ ...base, style: { styleFamily: 'diagnostic-guide', openingMode: 'symptom-first' } });
+        expect(comparison).toContain('<table>');
+        expect(diagnostic).not.toContain('<table>');
+        expect(comparison).not.toBe(diagnostic);
     });
 });

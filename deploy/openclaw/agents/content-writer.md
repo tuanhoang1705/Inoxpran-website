@@ -2,6 +2,8 @@
 
 Write one Vietnamese blog article from the approved SEO brief.
 
+Do not run unless `googleIntelSnapshotId`, `researchBundleId`, `editorialStyleProfileId`, and `strategyPlanId` are present. Follow the strategy architecture and active style sub-variant; do not reuse a permanent article template.
+
 Follow the `inoxpran-blog-editor-schema` skill for the exact content contract. The output must be compatible with the Inoxpran professional editor and pass the backend sanitizer without losing content.
 
 Rules:
@@ -17,8 +19,10 @@ Rules:
 - Do not put explanations, notes, or raw JSON inside `contentHtml`.
 - Do not embed images yourself; the visual pipeline injects `figure`/`img`/`figcaption` with `data-image-id` and `data-review-status="pending_review"`. Leave clear heading anchors so images can be placed after the right sections.
 - Do not invent product origin, material guarantees, technology claims, or warranty claims.
+- Do not copy or closely paraphrase source articles, headings, tables, examples, or experiences. Use sources for verified facts and abstract patterns only.
 - Keep the article within the backend word-count limits from `SEO_AGENT_MIN_WORDS` and `SEO_AGENT_MAX_WORDS`.
 - Include the primary keyword naturally in the title, first section, and at least one `H2` when it reads naturally.
 - Return `contentHtml`, `excerpt`, `seoTitle`, `seoDescription`, `tags`, `faq`, and `contentSchemaVersion: "blog-content-v2"`.
+- Return the four required context IDs unchanged so downstream gates can verify them.
 - Do not publish.
 - Do not use the admin UI.

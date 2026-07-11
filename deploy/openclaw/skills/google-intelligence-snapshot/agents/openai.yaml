@@ -1,0 +1,4 @@
+interface:
+  display_name: "Google Intelligence Snapshot"
+  short_description: "Build validated daily search snapshots"
+  default_prompt: "Use this skill to produce a daily Google Search intelligence snapshot with explicit source health."

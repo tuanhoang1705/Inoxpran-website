@@ -3,6 +3,7 @@
 Run the daily Inoxpran SEO blog workflow.
 
 Rules:
+0. Before any research or writing, call the authenticated `POST /automation/seo-blog/prepare` endpoint with the topic. Stop if the Google Intelligence gate is blocked. Preserve the returned snapshot, research, style, and strategy IDs unchanged.
 1. Default to draft-only.
 2. Do not publish directly unless `SEO_AGENT_AUTO_PUBLISH=true` and the reviewer pass conditions are satisfied.
 3. Do not use the admin UI.
@@ -23,20 +24,17 @@ Rules:
 10. All blog HTML MUST follow the `inoxpran-blog-editor-schema` content contract (semantic HTML only, no `<h1>` in content, `H2`→`H3`→`H4` hierarchy with no skipped levels, `figure`/`img`/`figcaption` images with `data-image-id` and `data-review-status="pending_review"`, semantic tables, HTML not Markdown, no code fences) so it round-trips losslessly through the professional editor.
 
 Workflow:
-1. Ask `market-insight-analyst` to produce `positioning.json` with audience pains, competitor angles, source notes, and positioning opportunities.
-2. Ask `keyword-researcher` to produce `research.json` with 3 topic candidates, primary/secondary keywords, SERP intent notes, content gaps, and internal-link suggestions.
-3. Ask `content-ideator` to score ideas and choose one daily topic in `topicIdeas.json`.
-4. Ask `seo-strategist` to create `seoBrief.json` with title, slug, excerpt, meta fields, category, tags, outline, FAQ, internal links, claim constraints, and image needs.
-5. Ask `content-writer` to write a clean Vietnamese HTML article from the approved brief, following the `inoxpran-blog-editor-schema` content contract.
-6. Ask `visual-planner` to create one cover plan and 2-4 heading-linked inline plans.
-7. Ask `image-researcher` to prepare licensed search queries and reject unsafe attribution.
-8. Ask `image-prompt-builder` and `seo-image-metadata` to create prompts, filenames, alt text, titles, and captions.
-9. Ask `image-quality-reviewer` to review available images. AI-generated images remain `needs_review`.
-10. Ask `seo-reviewer` to review the complete text and visual package, including semantic-HTML / editor-schema compliance (`semanticHtml`).
-11. Ask `publisher-gatekeeper` to enforce cover and reviewer gates.
-12. If all gates pass, ask `publisher` to publish only when auto publish is enabled. Otherwise create draft only.
-13. Ask `qa-agent` to verify the resulting URL only if publishing happened. For drafts, verify the API response shape and report manual admin review tasks.
-14. Ask `reporter` to summarize the run.
+1. Ask `google-intelligence-gatekeeper` to validate the prepared daily snapshot.
+2. Ask `topic-opportunity-researcher` for exactly `new`, `update`, `merge`, or `skip`; stop on `skip`.
+3. Ask `industry-content-researcher` and `search-intent-analyst` to build multi-source abstract research and intent.
+4. Ask `editorial-style-planner` for the daily profile and article sub-variant.
+5. Ask `content-strategist` and `content-architect` to validate the persisted strategy and architecture.
+6. Ask `content-writer` to write semantic Vietnamese HTML only after all four context IDs exist.
+7. Ask the visual/image agents to plan, source/generate, annotate, and review images.
+8. Ask `fact-checker`, `originality-reviewer`, `seo-reviewer`, `seo-aeo-geo-strategist`, `spam-risk-reviewer`, and `brand-voice-reviewer` to review the complete draft.
+9. Ask `publisher-gatekeeper` to enforce every text, compliance, and image gate.
+10. Ask `publisher` to call the publish endpoint only with the four context IDs and all reviewer results. Default to draft.
+11. Ask `qa-agent` to verify published URLs or draft API shape, then ask `reporter` to summarize.
 
 Reviewer pass conditions:
 - `seoScore >= 85`
@@ -56,6 +54,8 @@ Publisher payload requirements:
 - `articleType`, `outline`, and visual-plan metadata when available.
 - `review`: include `seoScore`, `brandSafety`, `duplicateRisk`, `claimRisk`, and `imageSafety`.
 - `metadata`: include agent run ID, source notes, positioning summary, topic score, and image brief.
+- Required context: `googleIntelSnapshotId`, `googleIntelSnapshotDate`, `googleIntelStatus`, `researchBundleId`, `editorialStyleProfileId`, `strategyPlanId`, and `agenticExecutionId`.
+- Required review additions: `factuality`, `originality`, `peopleFirst`, `spamRisk`, and `seoAeoGeo`.
 
 Final report in Vietnamese:
 - Topic
