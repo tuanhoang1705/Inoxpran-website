@@ -56,8 +56,24 @@
 		refresh: isEn ? 'Refresh' : 'Làm mới',
 		dashboard: isEn ? 'Open dashboard' : 'Mở dashboard',
 		noRuns: isEn ? 'No runs yet.' : 'Chưa có run nào.',
+		noRunsHint: isEn ? 'Trigger a command to see activity here.' : 'Chạy một lệnh để xem hoạt động tại đây.',
 		noOutput: isEn ? 'No output yet.' : 'Chưa có output.',
-		loadFailed: isEn ? 'Load failed' : 'Tải dữ liệu lỗi'
+		noOutputHint: isEn ? 'Select a run to view its log.' : 'Chọn một run để xem nhật ký.',
+		loadFailed: isEn ? 'Load failed' : 'Tải dữ liệu lỗi',
+		statusAria: isEn ? 'OpenClaw status overview' : 'Tổng quan trạng thái OpenClaw',
+		updated: isEn ? 'Updated' : 'Cập nhật',
+		running: isEn ? 'running' : 'đang chạy',
+		runs: isEn ? 'runs' : 'run',
+		groupGateway: isEn ? 'Gateway control' : 'Điều khiển Gateway',
+		groupSetup: isEn ? 'Agent setup' : 'Thiết lập agent',
+		groupAutomation: isEn ? 'Testing & automation' : 'Kiểm thử & tự động',
+		groupOther: isEn ? 'Other actions' : 'Thao tác khác',
+		gateAutomation: isEn ? 'Automation' : 'Tự động hoá',
+		gateImages: isEn ? 'Images' : 'Hình ảnh',
+		gateScheduling: isEn ? 'Scheduling & Telegram' : 'Lịch & Telegram',
+		capabilities: isEn ? 'Capabilities' : 'Năng lực hệ thống',
+		noReport: isEn ? 'No install report yet.' : 'Chưa có report cài đặt.',
+		starting: isEn ? 'Starting' : 'Đang khởi tạo'
 	});
 
 	const actionMeta = $derived({
@@ -214,591 +230,990 @@
 </svelte:head>
 
 <section class="openclaw-console">
-	<header class="openclaw-head">
-		<div>
-			<p class="openclaw-kicker">Agentic SEO Operations</p>
+	<header class="oc-header">
+		<div class="oc-header__intro">
+			<p class="oc-eyebrow">Agentic SEO Operations</p>
 			<h1>{copy.title}</h1>
-			<p>{copy.subtitle}</p>
+			<p class="oc-header__sub">{copy.subtitle}</p>
 		</div>
-		<div class="openclaw-head__actions">
-			<button type="button" class="console-btn secondary" onclick={refreshDashboard}>
-				{copy.refresh}
+		<div class="oc-header__actions">
+			<button type="button" class="oc-btn oc-btn--ghost" onclick={refreshDashboard}>
+				<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.3M21 12a9 9 0 0 1-15.5 6.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 3v3.5H14.5M6 21v-3.5H9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				<span>{copy.refresh}</span>
 			</button>
-			<a class="console-btn dark" href={dashboardUrl} target="_blank" rel="noreferrer">
-				{copy.dashboard}
+			<a class="oc-btn oc-btn--primary" href={dashboardUrl} target="_blank" rel="noreferrer">
+				<span>{copy.dashboard}</span>
+				<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
 			</a>
 		</div>
 	</header>
 
 	{#if pageError}
-		<div class="console-alert">{pageError}</div>
+		<div class="oc-alert" role="alert">{pageError}</div>
 	{/if}
 
-	<section class="status-strip" aria-label="OpenClaw status">
-		<div class="status-tile">
-			<span>{copy.automation}</span>
-			<strong class:good={automation.enabled} class:bad={!automation.enabled}>
-				{automation.enabled ? 'ON' : 'OFF'}
-			</strong>
-		</div>
-		<div class="status-tile">
-			<span>{copy.autoPublish}</span>
-			<strong class:bad={automation.autoPublish} class:good={!automation.autoPublish}>
-				{automation.autoPublish ? 'ON' : 'DRAFT'}
-			</strong>
-		</div>
-		<div class="status-tile">
-			<span>Blog cron</span>
-			<strong class:good={scheduleRuntime.cronEnabled} class:bad={!scheduleRuntime.cronEnabled}>
-				{scheduleRuntime.cronEnabled ? 'ON' : 'OFF'}
-			</strong>
-		</div>
-		<div class="status-tile">
-			<span>Telegram</span>
-			<strong class:good={scheduleRuntime.telegramEnabled} class:bad={!scheduleRuntime.telegramEnabled}>
-				{scheduleRuntime.telegramEnabled ? 'ON' : 'OFF'}
-			</strong>
-		</div>
-		<div class="status-tile">
-			<span>{copy.profile}</span>
-			<strong>{dashboard?.profile || 'inoxpran'}</strong>
-		</div>
-		<div class="status-tile">
-			<span>{copy.gateway}</span>
-			<strong>{dashboard?.openclaw?.gatewayUrl || '--'}</strong>
-		</div>
-		<div class="status-tile">
-			<span>{isEn ? 'Updated' : 'Cập nhật'}</span>
-			<strong>{formatDateTime(lastUpdatedAt)}</strong>
+	<section class="oc-status" aria-label={copy.statusAria}>
+		<div class="oc-status__grid">
+			<div class="oc-status__item">
+				<span class="oc-status__label">{copy.automation}</span>
+				<span class="oc-badge" class:is-good={automation.enabled} class:is-muted={!automation.enabled}>
+					<span class="oc-dot"></span>{automation.enabled ? 'ON' : 'OFF'}
+				</span>
+			</div>
+			<div class="oc-status__item">
+				<span class="oc-status__label">{copy.autoPublish}</span>
+				<span class="oc-badge" class:is-warn={automation.autoPublish} class:is-good={!automation.autoPublish}>
+					<span class="oc-dot"></span>{automation.autoPublish ? 'ON' : 'DRAFT'}
+				</span>
+			</div>
+			<div class="oc-status__item">
+				<span class="oc-status__label">Blog cron</span>
+				<span class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>
+					<span class="oc-dot"></span>{scheduleRuntime.cronEnabled ? 'ON' : 'OFF'}
+				</span>
+			</div>
+			<div class="oc-status__item">
+				<span class="oc-status__label">Telegram</span>
+				<span class="oc-badge" class:is-good={scheduleRuntime.telegramEnabled} class:is-muted={!scheduleRuntime.telegramEnabled}>
+					<span class="oc-dot"></span>{scheduleRuntime.telegramEnabled ? 'ON' : 'OFF'}
+				</span>
+			</div>
+			<div class="oc-status__item">
+				<span class="oc-status__label">{copy.profile}</span>
+				<span class="oc-status__value">{dashboard?.profile || 'inoxpran'}</span>
+			</div>
+			<div class="oc-status__item oc-status__item--wide">
+				<span class="oc-status__label">{copy.gateway}</span>
+				<span class="oc-status__value oc-status__value--mono" title={dashboard?.openclaw?.gatewayUrl || '--'}>
+					{dashboard?.openclaw?.gatewayUrl || '--'}
+				</span>
+			</div>
+			<div class="oc-status__item">
+				<span class="oc-status__label">{copy.updated}</span>
+				<span class="oc-status__value">{formatDateTime(lastUpdatedAt)}</span>
+			</div>
 		</div>
 	</section>
 
-	<div class="console-grid">
-		<section class="console-panel command-panel">
-			<div class="panel-head">
+	<div class="oc-grid oc-grid--main">
+		<section class="oc-panel oc-panel--command">
+			<div class="oc-panel__head">
 				<h2>{copy.commandCenter}</h2>
-				<span>{activeRuns.length} running</span>
+				<span class="oc-count">{activeRuns.length} {copy.running}</span>
 			</div>
-			<div class="command-grid">
-				{#each actions as action}
-					<button
-						type="button"
-						class="command-button"
-						class:is-danger={action.id === 'smoke-test'}
-						disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
-						onclick={() =>
-							action.id === 'daily-draft'
-								? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
-								: startRun(action.id)}
-					>
-						<span>{actionMeta[action.id]?.label || action.label}</span>
-						<small>{actionMeta[action.id]?.detail || action.label}</small>
-						{#if busyAction === action.id}
-							<b>{isEn ? 'Starting' : 'Đang khởi tạo'}</b>
-						{/if}
-					</button>
-				{/each}
+
+			<div class="oc-actions">
+				<div class="oc-actions__group">
+					<p class="oc-actions__label">{copy.groupGateway}</p>
+					<div class="oc-actions__grid">
+						{#each actions.filter((a) => ['start-openclaw', 'stop-openclaw', 'status'].includes(a.id)) as action (action.id)}
+							<button
+								type="button"
+								class="oc-action"
+								class:oc-action--warn={action.id === 'stop-openclaw'}
+								disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+								onclick={() =>
+									action.id === 'daily-draft'
+										? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+										: startRun(action.id)}
+							>
+								<span class="oc-action__title">{actionMeta[action.id]?.label || action.label}</span>
+								<span class="oc-action__detail">{actionMeta[action.id]?.detail || action.label}</span>
+								{#if busyAction === action.id}
+									<span class="oc-action__state">{copy.starting}…</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="oc-actions__group">
+					<p class="oc-actions__label">{copy.groupSetup}</p>
+					<div class="oc-actions__grid">
+						{#each actions.filter((a) => ['install-skills', 'sync-agents'].includes(a.id)) as action (action.id)}
+							<button
+								type="button"
+								class="oc-action"
+								disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+								onclick={() =>
+									action.id === 'daily-draft'
+										? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+										: startRun(action.id)}
+							>
+								<span class="oc-action__title">{actionMeta[action.id]?.label || action.label}</span>
+								<span class="oc-action__detail">{actionMeta[action.id]?.detail || action.label}</span>
+								{#if busyAction === action.id}
+									<span class="oc-action__state">{copy.starting}…</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				<div class="oc-actions__group">
+					<p class="oc-actions__label">{copy.groupAutomation}</p>
+					<div class="oc-actions__grid">
+						{#each actions.filter((a) => ['smoke-test', 'daily-draft'].includes(a.id)) as action (action.id)}
+							<button
+								type="button"
+								class="oc-action"
+								class:oc-action--link={action.id === 'daily-draft'}
+								disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+								onclick={() =>
+									action.id === 'daily-draft'
+										? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+										: startRun(action.id)}
+							>
+								<span class="oc-action__title">{actionMeta[action.id]?.label || action.label}</span>
+								<span class="oc-action__detail">{actionMeta[action.id]?.detail || action.label}</span>
+								{#if busyAction === action.id}
+									<span class="oc-action__state">{copy.starting}…</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				{#if actions.filter((a) => !['start-openclaw', 'stop-openclaw', 'status', 'install-skills', 'sync-agents', 'smoke-test', 'daily-draft'].includes(a.id)).length}
+					<div class="oc-actions__group">
+						<p class="oc-actions__label">{copy.groupOther}</p>
+						<div class="oc-actions__grid">
+							{#each actions.filter((a) => !['start-openclaw', 'stop-openclaw', 'status', 'install-skills', 'sync-agents', 'smoke-test', 'daily-draft'].includes(a.id)) as action (action.id)}
+								<button
+									type="button"
+									class="oc-action"
+									disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+									onclick={() =>
+										action.id === 'daily-draft'
+											? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+											: startRun(action.id)}
+								>
+									<span class="oc-action__title">{actionMeta[action.id]?.label || action.label}</span>
+									<span class="oc-action__detail">{actionMeta[action.id]?.detail || action.label}</span>
+									{#if busyAction === action.id}
+										<span class="oc-action__state">{copy.starting}…</span>
+									{/if}
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
 			</div>
 		</section>
 
-		<section class="console-panel safety-panel">
-			<div class="panel-head">
+		<aside class="oc-panel oc-panel--safety">
+			<div class="oc-panel__head">
 				<h2>{copy.safety}</h2>
-				<span>{automation.minSeoScore || 85}+ SEO</span>
+				<span class="oc-count">{automation.minSeoScore || 85}+ SEO</span>
 			</div>
-			<div class="gate-list">
-				<div><span>SEO_AGENT_ENABLED</span><b class:good={automation.enabled}>{automation.enabled ? 'true' : 'false'}</b></div>
-				<div><span>SEO_AGENT_AUTO_PUBLISH</span><b class:good={!automation.autoPublish} class:bad={automation.autoPublish}>{automation.autoPublish ? 'true' : 'false'}</b></div>
-				<div><span>API_KEY</span><b class:good={env.API_KEY}>{env.API_KEY ? 'set' : 'missing'}</b></div>
-				<div><span>SEO_AGENT_API_KEY</span><b class:good={env.SEO_AGENT_API_KEY}>{env.SEO_AGENT_API_KEY ? 'set' : 'missing'}</b></div>
-				<div><span>SEO_AGENT_HMAC_SECRET</span><b class:good={env.SEO_AGENT_HMAC_SECRET}>{env.SEO_AGENT_HMAC_SECRET ? 'set' : 'missing'}</b></div>
-				<div><span>IMAGE_PIPELINE</span><b class:good={automation.imagePipelineEnabled}>{automation.imagePipelineEnabled ? 'enabled' : 'disabled'}</b></div>
-				<div><span>REQUIRE_COVER</span><b class:good={automation.requireCoverForPublish}>{automation.requireCoverForPublish ? 'true' : 'false'}</b></div>
-				<div><span>IMAGE_SEARCH</span><b>{automation.imageSearchProvider || 'disabled'}{env.IMAGE_SEARCH_API_KEY ? ' / set' : ''}</b></div>
-				<div><span>AI_IMAGE</span><b>{automation.aiImageProvider || 'disabled'}{env.AI_IMAGE_API_KEY ? ' / set' : ''}</b></div>
-				<div><span>FIRECRAWL_API_KEY</span><b>{env.FIRECRAWL_API_KEY ? 'set' : 'optional'}</b></div>
-				<div><span>OPENCLAW_BLOG_CRON_ENABLED</span><b class:good={scheduleRuntime.cronEnabled}>{scheduleRuntime.cronEnabled ? 'true' : 'false'}</b></div>
-				<div><span>TELEGRAM_BOT_ENABLED</span><b class:good={scheduleRuntime.telegramEnabled}>{scheduleRuntime.telegramEnabled ? 'true' : 'false'}</b></div>
-				<div><span>TELEGRAM_BOT_TOKEN</span><b class:good={env.TELEGRAM_BOT_TOKEN}>{env.TELEGRAM_BOT_TOKEN ? 'set' : 'missing'}</b></div>
-				<div><span>TELEGRAM_WEBHOOK_SECRET</span><b class:good={env.TELEGRAM_WEBHOOK_SECRET}>{env.TELEGRAM_WEBHOOK_SECRET ? 'set' : 'missing'}</b></div>
-				<div><span>TELEGRAM_ALLOWLIST</span><b class:good={env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS}>{env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS ? 'set' : 'missing'}</b></div>
+
+			<div class="oc-gate-group">
+				<p class="oc-gate-group__label">{copy.gateAutomation}</p>
+				<div class="oc-gate__row">
+					<span>SEO_AGENT_ENABLED</span>
+					<b class="oc-badge" class:is-good={automation.enabled} class:is-muted={!automation.enabled}>{automation.enabled ? 'true' : 'false'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>SEO_AGENT_AUTO_PUBLISH</span>
+					<b class="oc-badge" class:is-good={!automation.autoPublish} class:is-warn={automation.autoPublish}>{automation.autoPublish ? 'true' : 'false'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>API_KEY</span>
+					<b class="oc-badge" class:is-good={env.API_KEY} class:is-warn={!env.API_KEY}>{env.API_KEY ? 'set' : 'missing'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>SEO_AGENT_API_KEY</span>
+					<b class="oc-badge" class:is-good={env.SEO_AGENT_API_KEY} class:is-warn={!env.SEO_AGENT_API_KEY}>{env.SEO_AGENT_API_KEY ? 'set' : 'missing'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>SEO_AGENT_HMAC_SECRET</span>
+					<b class="oc-badge" class:is-good={env.SEO_AGENT_HMAC_SECRET} class:is-warn={!env.SEO_AGENT_HMAC_SECRET}>{env.SEO_AGENT_HMAC_SECRET ? 'set' : 'missing'}</b>
+				</div>
 			</div>
-		</section>
+
+			<div class="oc-gate-group">
+				<p class="oc-gate-group__label">{copy.gateImages}</p>
+				<div class="oc-gate__row">
+					<span>IMAGE_PIPELINE</span>
+					<b class="oc-badge" class:is-good={automation.imagePipelineEnabled} class:is-muted={!automation.imagePipelineEnabled}>{automation.imagePipelineEnabled ? 'enabled' : 'disabled'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>REQUIRE_COVER</span>
+					<b class="oc-badge" class:is-good={automation.requireCoverForPublish} class:is-muted={!automation.requireCoverForPublish}>{automation.requireCoverForPublish ? 'true' : 'false'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>IMAGE_SEARCH</span>
+					<b class="oc-badge" class:is-good={automation.imageSearchProvider} class:is-muted={!automation.imageSearchProvider}>{automation.imageSearchProvider || 'disabled'}{env.IMAGE_SEARCH_API_KEY ? ' / set' : ''}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>AI_IMAGE</span>
+					<b class="oc-badge" class:is-good={automation.aiImageProvider} class:is-muted={!automation.aiImageProvider}>{automation.aiImageProvider || 'disabled'}{env.AI_IMAGE_API_KEY ? ' / set' : ''}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>FIRECRAWL_API_KEY</span>
+					<b class="oc-badge" class:is-good={env.FIRECRAWL_API_KEY} class:is-muted={!env.FIRECRAWL_API_KEY}>{env.FIRECRAWL_API_KEY ? 'set' : 'optional'}</b>
+				</div>
+			</div>
+
+			<div class="oc-gate-group">
+				<p class="oc-gate-group__label">{copy.gateScheduling}</p>
+				<div class="oc-gate__row">
+					<span>OPENCLAW_BLOG_CRON_ENABLED</span>
+					<b class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>{scheduleRuntime.cronEnabled ? 'true' : 'false'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>TELEGRAM_BOT_ENABLED</span>
+					<b class="oc-badge" class:is-good={scheduleRuntime.telegramEnabled} class:is-muted={!scheduleRuntime.telegramEnabled}>{scheduleRuntime.telegramEnabled ? 'true' : 'false'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>TELEGRAM_BOT_TOKEN</span>
+					<b class="oc-badge" class:is-good={env.TELEGRAM_BOT_TOKEN} class:is-warn={!env.TELEGRAM_BOT_TOKEN}>{env.TELEGRAM_BOT_TOKEN ? 'set' : 'missing'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>TELEGRAM_WEBHOOK_SECRET</span>
+					<b class="oc-badge" class:is-good={env.TELEGRAM_WEBHOOK_SECRET} class:is-warn={!env.TELEGRAM_WEBHOOK_SECRET}>{env.TELEGRAM_WEBHOOK_SECRET ? 'set' : 'missing'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>TELEGRAM_ALLOWLIST</span>
+					<b class="oc-badge" class:is-good={env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS} class:is-warn={!(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)}>{env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS ? 'set' : 'missing'}</b>
+				</div>
+			</div>
+		</aside>
 	</div>
 
-	<section class="console-panel run-panel">
-		<div class="panel-head">
+	<section class="oc-panel oc-runtime">
+		<div class="oc-panel__head">
 			<h2>{copy.runMonitor}</h2>
-			<span>{runs.length} runs</span>
+			<span class="oc-count">{runs.length} {copy.runs}</span>
 		</div>
 
-		<div class="run-layout">
-			<div class="run-list">
+		<div class="oc-run-layout">
+			<div class="oc-run-list">
 				{#if runs.length}
 					{#each runs as run}
 						<button
 							type="button"
-							class="run-row"
-							class:selected={selectedRun?.id === run.id}
+							class="oc-run-row"
+							class:is-selected={selectedRun?.id === run.id}
 							onclick={() => (selectedRunId = run.id)}
 						>
-							<span class={`run-status ${run.status}`}>{statusLabel(run.status)}</span>
+							<span class={`oc-run-status ${run.status}`}>{statusLabel(run.status)}</span>
 							<strong>{run.label}</strong>
-							<small>{formatDateTime(run.startedAt)} - {formatDuration(run.durationMs)}</small>
+							<small>{formatDateTime(run.startedAt)} · {formatDuration(run.durationMs)}</small>
 						</button>
 					{/each}
 				{:else}
-					<div class="empty-state">{copy.noRuns}</div>
+					<div class="oc-empty">
+						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+						<p>{copy.noRuns}</p>
+						<small>{copy.noRunsHint}</small>
+					</div>
 				{/if}
 			</div>
 
-			<div class="run-output">
+			<div class="oc-run-output">
 				{#if selectedRun}
-					<div class="run-output__meta">
+					<div class="oc-run-output__meta">
 						<div>
 							<span>{selectedRun.label}</span>
-							<strong>{statusLabel(selectedRun.status)}</strong>
+							<strong class={`oc-run-status ${selectedRun.status}`}>{statusLabel(selectedRun.status)}</strong>
 						</div>
 						<code>{selectedRun.command}</code>
 					</div>
-					<pre>{selectedRun.output || selectedRun.error || copy.noOutput}</pre>
+					<pre class="oc-log">{selectedRun.output || selectedRun.error || copy.noOutput}</pre>
 				{:else}
-					<div class="empty-state">{copy.noOutput}</div>
+					<div class="oc-empty">
+						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+						<p>{copy.noOutput}</p>
+						<small>{copy.noOutputHint}</small>
+					</div>
 				{/if}
 			</div>
 		</div>
 	</section>
 
-	<div class="console-grid bottom-grid">
-		<section class="console-panel">
-			<div class="panel-head">
+	<div class="oc-grid oc-grid--caps">
+		<section class="oc-panel">
+			<div class="oc-panel__head">
 				<h2>{copy.agents}</h2>
-				<span>{agents.length}</span>
+				<span class="oc-count">{agents.length}</span>
 			</div>
-			<div class="pill-grid">
+			<div class="oc-chips">
 				{#each agents as agent}
-					<span>{agent}</span>
+					<span class="oc-chip">{agent}</span>
 				{/each}
 			</div>
 		</section>
 
-		<section class="console-panel">
-			<div class="panel-head">
+		<section class="oc-panel">
+			<div class="oc-panel__head">
 				<h2>{copy.skills}</h2>
-				<span>{localSkills.length}</span>
+				<span class="oc-count">{localSkills.length}</span>
 			</div>
-			<div class="pill-grid">
+			<div class="oc-chips">
 				{#each localSkills as skill}
-					<span>{skill}</span>
+					<span class="oc-chip">{skill}</span>
 				{/each}
 			</div>
 		</section>
 
-		<section class="console-panel">
-			<div class="panel-head">
+		<section class="oc-panel">
+			<div class="oc-panel__head">
 				<h2>{copy.coreSkills}</h2>
-				<span>{skillReport?.installed?.length || 0}</span>
+				<span class="oc-count">{skillReport?.installed?.length || 0}</span>
 			</div>
-			<div class="skill-report">
-				{#each skillReport?.installed || [] as skill}
-					<div><b>installed</b><span>{skill}</span></div>
-				{/each}
-				{#if !(skillReport?.installed || []).length}
-					<div class="empty-state">{isEn ? 'No install report yet.' : 'Chưa có report cài đặt.'}</div>
-				{/if}
-			</div>
+			{#if (skillReport?.installed || []).length}
+				<div class="oc-skill-report">
+					{#each skillReport?.installed || [] as skill}
+						<div class="oc-skill-report__row"><b>installed</b><span>{skill}</span></div>
+					{/each}
+				</div>
+			{:else}
+				<div class="oc-empty">
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7 9 18l-5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+					<p>{copy.noReport}</p>
+				</div>
+			{/if}
 		</section>
 	</div>
 </section>
 
 <style>
 	.openclaw-console {
-		--ink: #17201b;
-		--muted: #607067;
-		--line: rgba(23, 32, 27, 0.12);
-		--panel: #fbfbf7;
-		--field: #f1f5ee;
-		--good: #13795b;
-		--bad: #b42318;
+		--oc-surface: var(--admin-surface, #ffffff);
+		--oc-surface-2: #f9fafb;
+		--oc-border: var(--admin-border, #e5e7eb);
+		--oc-border-soft: rgba(17, 24, 39, 0.07);
+		--oc-text: var(--admin-ink, #1a1f2e);
+		--oc-muted: var(--admin-muted, #6b7280);
+		--oc-primary: var(--admin-accent, #0f766e);
+		--oc-primary-strong: var(--admin-accent-strong, #065f5a);
+		--oc-primary-soft: var(--admin-accent-soft, rgba(15, 118, 110, 0.08));
+		--oc-warning: var(--admin-warning, #d97706);
+		--oc-danger: var(--admin-danger, #dc2626);
+		--oc-radius: var(--admin-radius, 12px);
+		--oc-radius-sm: 9px;
+		--oc-shadow: var(--admin-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
 		display: grid;
-		gap: 1rem;
-		color: var(--ink);
+		gap: clamp(16px, 2vw, 22px);
+		color: var(--oc-text);
+		min-width: 0;
 	}
 
-	.openclaw-head {
-		display: flex;
-		align-items: end;
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 1.25rem;
-		background:
-			linear-gradient(135deg, rgba(19, 121, 91, 0.12), transparent 38%),
-			linear-gradient(90deg, #fcfbf4, #eef5f1);
-		border: 1px solid var(--line);
-		border-radius: 8px;
-	}
-
-	.openclaw-kicker {
-		margin: 0 0 0.35rem;
-		color: var(--good);
-		font-size: 0.78rem;
-		font-weight: 800;
-		text-transform: uppercase;
-	}
-
-	.openclaw-head h1 {
+	.openclaw-console h1,
+	.openclaw-console h2 {
 		margin: 0;
-		font-size: clamp(1.7rem, 3vw, 2.55rem);
-		line-height: 1.05;
 	}
 
-	.openclaw-head p {
-		margin: 0.45rem 0 0;
-		color: var(--muted);
+	/* ── Header ── */
+	.oc-header {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 16px;
+		flex-wrap: wrap;
+		padding: clamp(18px, 2vw, 22px) clamp(18px, 2vw, 24px);
+		background: var(--oc-surface);
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius);
+		box-shadow: var(--oc-shadow);
 	}
 
-	.openclaw-head__actions,
-	.command-grid,
-	.panel-head,
-	.run-output__meta,
-	.gate-list div {
+	.oc-eyebrow {
+		margin: 0 0 6px;
+		font-size: 0.7rem;
+		font-weight: 800;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		color: var(--oc-primary);
+	}
+
+	.oc-header__intro h1 {
+		font-size: clamp(1.4rem, 2vw, 1.85rem);
+		font-weight: 700;
+		line-height: 1.15;
+	}
+
+	.oc-header__sub {
+		margin: 6px 0 0;
+		color: var(--oc-muted);
+		font-size: 0.92rem;
+	}
+
+	.oc-header__actions {
+		display: flex;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+
+	/* ── Buttons ── */
+	.oc-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		min-height: 40px;
+		padding: 0 16px;
+		border-radius: 10px;
+		border: 1px solid transparent;
+		font: inherit;
+		font-weight: 600;
+		font-size: 0.88rem;
+		cursor: pointer;
+		text-decoration: none;
+		transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	.oc-btn svg {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+	}
+
+	.oc-btn--primary {
+		background: var(--oc-primary);
+		border-color: var(--oc-primary);
+		color: #fff;
+		box-shadow: 0 2px 8px rgba(15, 118, 110, 0.16);
+	}
+
+	.oc-btn--primary:hover {
+		background: var(--oc-primary-strong);
+		border-color: var(--oc-primary-strong);
+		transform: translateY(-1px);
+	}
+
+	.oc-btn--ghost {
+		background: var(--oc-surface);
+		border-color: var(--oc-border);
+		color: var(--oc-text);
+	}
+
+	.oc-btn--ghost:hover {
+		border-color: var(--oc-primary);
+		background: var(--oc-primary-soft);
+		color: var(--oc-primary-strong);
+	}
+
+	.oc-btn:focus-visible,
+	.oc-action:focus-visible,
+	.oc-run-row:focus-visible {
+		outline: 2px solid var(--oc-primary);
+		outline-offset: 2px;
+	}
+
+	/* ── Alert ── */
+	.oc-alert {
+		padding: 12px 16px;
+		border-radius: var(--oc-radius);
+		border: 1px solid rgba(220, 38, 38, 0.2);
+		background: rgba(220, 38, 38, 0.08);
+		color: #991b1b;
+		font-size: 0.9rem;
+	}
+
+	/* ── Panels ── */
+	.oc-panel {
+		min-width: 0;
+		background: var(--oc-surface);
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius);
+		box-shadow: var(--oc-shadow);
+		padding: clamp(16px, 1.6vw, 20px);
+	}
+
+	.oc-panel__head {
 		display: flex;
 		align-items: center;
-	}
-
-	.openclaw-head__actions {
-		gap: 0.55rem;
-		flex-wrap: wrap;
-		justify-content: end;
-	}
-
-	.console-btn,
-	.command-button,
-	.run-row {
-		border: 1px solid var(--line);
-		background: #fff;
-		color: var(--ink);
-		text-decoration: none;
-		cursor: pointer;
-	}
-
-	.console-btn {
-		border-radius: 8px;
-		padding: 0.65rem 0.9rem;
-		font-weight: 800;
-	}
-
-	.console-btn.dark {
-		background: #17201b;
-		color: #fff;
-	}
-
-	.console-alert {
-		padding: 0.9rem 1rem;
-		border-radius: 8px;
-		border: 1px solid rgba(180, 35, 24, 0.25);
-		background: #fff1ef;
-		color: var(--bad);
-	}
-
-	.status-strip {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-		gap: 0.75rem;
-	}
-
-	.status-tile,
-	.console-panel {
-		border: 1px solid var(--line);
-		background: var(--panel);
-		border-radius: 8px;
-	}
-
-	.status-tile {
-		min-width: 0;
-		padding: 0.85rem;
-		display: grid;
-		gap: 0.35rem;
-	}
-
-	.status-tile span,
-	.panel-head span,
-	.command-button small,
-	.run-row small,
-	.run-output__meta span {
-		color: var(--muted);
-		font-size: 0.82rem;
-	}
-
-	.status-tile strong,
-	.run-output__meta strong {
-		overflow-wrap: anywhere;
-	}
-
-	.good {
-		color: var(--good);
-	}
-
-	.bad {
-		color: var(--bad);
-	}
-
-	.console-grid {
-		display: grid;
-		grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.8fr);
-		gap: 1rem;
-	}
-
-	.bottom-grid {
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-	}
-
-	.console-panel {
-		min-width: 0;
-		padding: 1rem;
-	}
-
-	.panel-head {
 		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 0.85rem;
+		gap: 12px;
+		margin-bottom: 16px;
 	}
 
-	.panel-head h2 {
-		margin: 0;
+	.oc-panel__head h2 {
 		font-size: 1rem;
-	}
-
-	.command-grid {
-		gap: 0.75rem;
-		flex-wrap: wrap;
-	}
-
-	.command-button {
-		flex: 1 1 180px;
-		min-height: 92px;
-		border-radius: 8px;
-		padding: 0.9rem;
-		display: grid;
-		gap: 0.25rem;
-		text-align: left;
-	}
-
-	.command-button:hover,
-	.run-row:hover,
-	.console-btn.secondary:hover {
-		border-color: rgba(19, 121, 91, 0.45);
-		background: #f7fbf8;
-	}
-
-	.command-button:disabled {
-		opacity: 0.62;
-		cursor: wait;
-	}
-
-	.command-button span {
-		font-weight: 850;
-	}
-
-	.command-button b {
-		color: var(--good);
-		font-size: 0.78rem;
-	}
-
-	.command-button.is-danger {
-		border-color: rgba(180, 83, 9, 0.28);
-	}
-
-	.gate-list {
-		display: grid;
-		gap: 0.45rem;
-	}
-
-	.gate-list div {
-		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.6rem 0;
-		border-bottom: 1px solid rgba(23, 32, 27, 0.08);
-	}
-
-	.gate-list div:last-child {
-		border-bottom: 0;
-	}
-
-	.gate-list span {
-		color: var(--muted);
-		font-size: 0.83rem;
-	}
-
-	.run-layout {
-		display: grid;
-		grid-template-columns: minmax(260px, 0.42fr) minmax(0, 1fr);
-		gap: 1rem;
-	}
-
-	.run-list {
-		display: grid;
-		align-content: start;
-		gap: 0.55rem;
-		max-height: 560px;
-		overflow: auto;
-	}
-
-	.run-row {
-		border-radius: 8px;
-		padding: 0.75rem;
-		display: grid;
-		gap: 0.25rem;
-		text-align: left;
-	}
-
-	.run-row.selected {
-		border-color: rgba(19, 121, 91, 0.5);
-		background: #eef8f1;
-	}
-
-	.run-status {
-		width: fit-content;
-		border-radius: 999px;
-		padding: 0.16rem 0.5rem;
-		font-size: 0.72rem;
-		font-weight: 850;
-		background: #e9f3ff;
-		color: #164e8b;
-	}
-
-	.run-status.completed {
-		background: #e8f7ef;
-		color: var(--good);
-	}
-
-	.run-status.failed,
-	.run-status.timed_out {
-		background: #fff1ef;
-		color: var(--bad);
-	}
-
-	.run-output {
-		min-width: 0;
-		display: grid;
-		grid-template-rows: auto 1fr;
-		gap: 0.75rem;
-	}
-
-	.run-output__meta {
-		justify-content: space-between;
-		gap: 1rem;
-	}
-
-	.run-output__meta code {
-		max-width: 52%;
-		overflow-wrap: anywhere;
-		color: #3e4c44;
-	}
-
-	pre {
-		margin: 0;
-		min-height: 360px;
-		max-height: 560px;
-		overflow: auto;
-		padding: 1rem;
-		border-radius: 8px;
-		background: #121813;
-		color: #dbeee2;
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		white-space: pre-wrap;
-		word-break: break-word;
-		font-size: 0.82rem;
-		line-height: 1.55;
-	}
-
-	.pill-grid,
-	.skill-report {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.45rem;
-	}
-
-	.pill-grid span {
-		border: 1px solid var(--line);
-		background: var(--field);
-		border-radius: 999px;
-		padding: 0.4rem 0.65rem;
-		font-size: 0.82rem;
 		font-weight: 700;
 	}
 
-	.skill-report {
-		display: grid;
-		gap: 0.45rem;
+	.oc-count {
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: var(--oc-muted);
+		background: var(--oc-surface-2);
+		border: 1px solid var(--oc-border);
+		padding: 3px 9px;
+		border-radius: 999px;
+		white-space: nowrap;
 	}
 
-	.skill-report div {
+	/* ── Status overview ── */
+	.oc-status {
+		background: var(--oc-surface);
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius);
+		box-shadow: var(--oc-shadow);
+		padding: 6px;
+	}
+
+	.oc-status__grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+		gap: 2px;
+	}
+
+	.oc-status__item {
+		display: grid;
+		gap: 7px;
+		padding: 12px 14px;
+		border-radius: var(--oc-radius-sm);
+		min-width: 0;
+		transition: background 0.18s ease;
+	}
+
+	.oc-status__item:hover {
+		background: var(--oc-surface-2);
+	}
+
+	.oc-status__item--wide {
+		grid-column: span 2;
+	}
+
+	.oc-status__label {
+		font-size: 0.7rem;
+		font-weight: 700;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--oc-muted);
+	}
+
+	.oc-status__value {
+		font-weight: 600;
+		font-size: 0.92rem;
+		overflow-wrap: anywhere;
+	}
+
+	.oc-status__value--mono {
+		font-family: 'Monaco', 'Courier New', monospace;
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: var(--oc-muted);
+	}
+
+	/* ── Badges & dots ── */
+	.oc-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		width: fit-content;
+		padding: 3px 9px;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		font-weight: 700;
+		font-style: normal;
+		background: rgba(107, 114, 128, 0.12);
+		color: #4b5563;
+		border: 1px solid rgba(107, 114, 128, 0.16);
+	}
+
+	.oc-badge .oc-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: currentColor;
+		flex-shrink: 0;
+	}
+
+	.oc-badge.is-good {
+		background: rgba(5, 150, 105, 0.12);
+		color: #047857;
+		border-color: rgba(5, 150, 105, 0.22);
+	}
+
+	.oc-badge.is-warn {
+		background: rgba(217, 119, 6, 0.12);
+		color: #b45309;
+		border-color: rgba(217, 119, 6, 0.22);
+	}
+
+	.oc-badge.is-danger {
+		background: rgba(220, 38, 38, 0.12);
+		color: #b91c1c;
+		border-color: rgba(220, 38, 38, 0.22);
+	}
+
+	.oc-badge.is-muted {
+		background: rgba(107, 114, 128, 0.1);
+		color: #4b5563;
+		border-color: rgba(107, 114, 128, 0.18);
+	}
+
+	/* ── Grids ── */
+	.oc-grid {
+		display: grid;
+		gap: clamp(16px, 2vw, 22px);
+	}
+
+	.oc-grid--main {
+		grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.92fr);
+		align-items: start;
+	}
+
+	.oc-grid--caps {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	/* ── Command actions ── */
+	.oc-actions {
+		display: grid;
+		gap: 16px;
+	}
+
+	.oc-actions__group {
+		display: grid;
+		gap: 9px;
+	}
+
+	.oc-actions__label,
+	.oc-gate-group__label {
+		margin: 0;
+		font-size: 0.7rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--oc-muted);
+	}
+
+	.oc-actions__grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(178px, 1fr));
+		gap: 10px;
+	}
+
+	.oc-action {
+		display: grid;
+		gap: 3px;
+		align-content: start;
+		text-align: left;
+		padding: 13px 14px;
+		min-height: 76px;
+		border-radius: var(--oc-radius-sm);
+		border: 1px solid var(--oc-border);
+		background: var(--oc-surface);
+		color: var(--oc-text);
+		cursor: pointer;
+		transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	.oc-action:hover {
+		border-color: var(--oc-primary);
+		background: var(--oc-primary-soft);
+		transform: translateY(-1px);
+		box-shadow: var(--oc-shadow);
+	}
+
+	.oc-action:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+		transform: none;
+		box-shadow: none;
+		background: var(--oc-surface-2);
+	}
+
+	.oc-action__title {
+		font-weight: 700;
+		font-size: 0.9rem;
+	}
+
+	.oc-action__detail {
+		font-size: 0.78rem;
+		color: var(--oc-muted);
+		line-height: 1.35;
+	}
+
+	.oc-action__state {
+		margin-top: 4px;
+		font-size: 0.72rem;
+		font-weight: 700;
+		color: var(--oc-primary);
+	}
+
+	.oc-action--warn:hover {
+		border-color: var(--oc-warning);
+		background: rgba(217, 119, 6, 0.07);
+	}
+
+	.oc-action--link {
+		border-color: rgba(15, 118, 110, 0.3);
+		background: var(--oc-primary-soft);
+	}
+
+	/* ── Safety gates ── */
+	.oc-panel--safety {
+		align-self: start;
+	}
+
+	.oc-gate-group {
+		display: grid;
+		gap: 0;
+	}
+
+	.oc-gate-group + .oc-gate-group {
+		margin-top: 14px;
+	}
+
+	.oc-gate-group__label {
+		margin-bottom: 5px;
+	}
+
+	.oc-gate__row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
-		padding: 0.58rem 0;
-		border-bottom: 1px solid rgba(23, 32, 27, 0.08);
+		gap: 12px;
+		padding: 8px 0;
+		border-bottom: 1px solid var(--oc-border-soft);
 	}
 
-	.skill-report b {
-		color: var(--good);
-		font-size: 0.78rem;
+	.oc-gate__row:last-child {
+		border-bottom: 0;
+	}
+
+	.oc-gate__row > span {
+		color: var(--oc-muted);
+		font-family: 'Monaco', 'Courier New', monospace;
+		font-size: 0.73rem;
+		overflow-wrap: anywhere;
+	}
+
+	/* ── Runtime ── */
+	.oc-run-layout {
+		display: grid;
+		grid-template-columns: minmax(230px, 0.4fr) minmax(0, 1fr);
+		gap: 16px;
+	}
+
+	.oc-run-list {
+		display: grid;
+		align-content: start;
+		gap: 8px;
+		max-height: 520px;
+		overflow: auto;
+	}
+
+	.oc-run-row {
+		display: grid;
+		gap: 5px;
+		text-align: left;
+		padding: 11px 12px;
+		border-radius: var(--oc-radius-sm);
+		border: 1px solid var(--oc-border);
+		background: var(--oc-surface);
+		cursor: pointer;
+		transition: border-color 0.18s ease, background 0.18s ease;
+	}
+
+	.oc-run-row:hover {
+		border-color: var(--oc-primary);
+		background: var(--oc-primary-soft);
+	}
+
+	.oc-run-row.is-selected {
+		border-color: var(--oc-primary);
+		background: var(--oc-primary-soft);
+		box-shadow: inset 3px 0 0 var(--oc-primary);
+	}
+
+	.oc-run-row strong {
+		font-size: 0.86rem;
+		overflow-wrap: anywhere;
+	}
+
+	.oc-run-row small {
+		color: var(--oc-muted);
+		font-size: 0.75rem;
+	}
+
+	.oc-run-status {
+		width: fit-content;
+		padding: 2px 8px;
+		border-radius: 999px;
+		font-size: 0.68rem;
+		font-weight: 800;
 		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: rgba(37, 99, 235, 0.12);
+		color: #1e40af;
 	}
 
-	.empty-state {
-		padding: 1rem;
-		border-radius: 8px;
-		background: var(--field);
-		color: var(--muted);
+	.oc-run-status.completed {
+		background: rgba(5, 150, 105, 0.12);
+		color: #047857;
 	}
 
-	@media (max-width: 1180px) {
-		.status-strip,
-		.console-grid,
-		.bottom-grid,
-		.run-layout {
+	.oc-run-status.failed,
+	.oc-run-status.timed_out {
+		background: rgba(220, 38, 38, 0.12);
+		color: #b91c1c;
+	}
+
+	.oc-run-output {
+		min-width: 0;
+		display: grid;
+		grid-template-rows: auto 1fr;
+		gap: 10px;
+	}
+
+	.oc-run-output__meta {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
+	}
+
+	.oc-run-output__meta > div {
+		display: grid;
+		gap: 3px;
+	}
+
+	.oc-run-output__meta span {
+		color: var(--oc-muted);
+		font-size: 0.78rem;
+	}
+
+	.oc-run-output__meta code {
+		font-size: 0.75rem;
+		color: var(--oc-muted);
+		overflow-wrap: anywhere;
+		max-width: 48%;
+		background: none;
+		padding: 0;
+	}
+
+	.oc-log {
+		margin: 0;
+		min-height: 220px;
+		max-height: 520px;
+		overflow: auto;
+		padding: 14px;
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
+		color: #334155;
+		border: 1px solid var(--oc-border);
+		white-space: pre-wrap;
+		word-break: break-word;
+		font-size: 0.78rem;
+		line-height: 1.55;
+		font-family: 'Monaco', 'Courier New', monospace;
+	}
+
+	/* ── Empty state ── */
+	.oc-empty {
+		display: grid;
+		gap: 6px;
+		justify-items: center;
+		align-content: center;
+		text-align: center;
+		padding: 26px 16px;
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
+		border: 1px dashed var(--oc-border);
+		color: var(--oc-muted);
+	}
+
+	.oc-empty svg {
+		width: 26px;
+		height: 26px;
+		opacity: 0.55;
+	}
+
+	.oc-empty p {
+		margin: 0;
+		font-weight: 600;
+		color: var(--oc-text);
+		font-size: 0.9rem;
+	}
+
+	.oc-empty small {
+		font-size: 0.78rem;
+	}
+
+	/* ── Capability chips ── */
+	.oc-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 7px;
+		max-height: 264px;
+		overflow: auto;
+	}
+
+	.oc-chip {
+		padding: 5px 11px;
+		border-radius: 999px;
+		border: 1px solid var(--oc-border);
+		background: var(--oc-surface-2);
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--oc-text);
+	}
+
+	.oc-skill-report {
+		display: grid;
+		gap: 4px;
+	}
+
+	.oc-skill-report__row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+		padding: 8px 0;
+		border-bottom: 1px solid var(--oc-border-soft);
+		font-size: 0.82rem;
+	}
+
+	.oc-skill-report__row:last-child {
+		border-bottom: 0;
+	}
+
+	.oc-skill-report__row b {
+		color: var(--oc-primary);
+		font-size: 0.68rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.oc-skill-report__row span {
+		overflow-wrap: anywhere;
+	}
+
+	/* ── Responsive ── */
+	@media (max-width: 1080px) {
+		.oc-grid--main,
+		.oc-grid--caps,
+		.oc-run-layout {
 			grid-template-columns: 1fr;
 		}
-
-		.status-strip {
-			grid-template-columns: repeat(2, minmax(0, 1fr));
-		}
 	}
 
-	@media (max-width: 720px) {
-		.openclaw-head {
+	@media (max-width: 640px) {
+		.oc-header {
 			align-items: stretch;
-			flex-direction: column;
 		}
 
-		.openclaw-head__actions {
-			justify-content: stretch;
-		}
-
-		.console-btn,
-		.openclaw-head__actions a {
-			text-align: center;
+		.oc-header__actions .oc-btn {
 			flex: 1 1 auto;
 		}
 
-		.status-strip {
-			grid-template-columns: 1fr;
+		.oc-status__item--wide {
+			grid-column: span 1;
 		}
 
-		.run-output__meta {
-			align-items: start;
-			flex-direction: column;
-		}
-
-		.run-output__meta code {
+		.oc-run-output__meta code {
 			max-width: 100%;
-		}
-
-		.form-grid {
-			grid-template-columns: 1fr;
 		}
 	}
 </style>

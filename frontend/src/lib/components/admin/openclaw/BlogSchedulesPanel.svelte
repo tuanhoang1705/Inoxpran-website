@@ -97,7 +97,24 @@
 		reset: isEn ? 'Reset' : 'Đặt lại',
 		save: isEn ? 'Save schedule' : 'Lưu lịch',
 		saving: isEn ? 'Saving' : 'Đang lưu',
-		confirmDelete: isEn ? 'Delete this schedule?' : 'Xoá lịch này?'
+		confirmDelete: isEn ? 'Delete this schedule?' : 'Xoá lịch này?',
+		secBasic: isEn ? 'Basic information' : 'Thông tin cơ bản',
+		secSchedule: isEn ? 'Schedule' : 'Lịch chạy',
+		secContent: isEn ? 'Content configuration' : 'Cấu hình nội dung',
+		secPublishing: isEn ? 'Publishing' : 'Xuất bản',
+		frequency: isEn ? 'Frequency' : 'Tần suất',
+		weekdays: isEn
+			? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+			: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'],
+		dailyTimesHint: isEn
+			? 'Time of day the post is generated, every day.'
+			: 'Giờ trong ngày sẽ tạo bài, lặp lại mỗi ngày.',
+		weeklyTimesHint: isEn
+			? 'Time of day on the selected weekdays above.'
+			: 'Giờ trong ngày, theo các thứ đã chọn ở trên.',
+		windowHint: isEn
+			? 'Active window for this schedule — leave empty to run indefinitely.'
+			: 'Khoảng thời gian lịch có hiệu lực — để trống nếu muốn chạy vô thời hạn.'
 	});
 
 	const formatDateTime = (value) => {
@@ -349,86 +366,101 @@
 	});
 </script>
 
-<section class="console-panel schedule-panel">
-	<div class="panel-head">
+<section class="oc-schedules">
+	<div class="oc-panel__head">
 		<h2>{t.title}</h2>
-		<span>{schedules.length}</span>
+		<span class="oc-count">{schedules.length}</span>
 	</div>
 
 	{#if pageError}
-		<div class="console-alert">{pageError}</div>
+		<div class="oc-alert" role="alert">{pageError}</div>
 	{/if}
 
-	<div class="schedule-layout">
-		<div class="schedule-list">
-			<div class="schedule-list__head">
-				<button type="button" class="console-btn secondary" onclick={refreshSchedules}>{t.refresh}</button>
-				<button type="button" class="console-btn secondary" onclick={() => fillScheduleForm(null)}>{t.new}</button>
+	<div class="oc-sched-layout">
+		<div class="oc-sched-side">
+			<div class="oc-sched-toolbar">
+				<button type="button" class="oc-btn oc-btn--ghost oc-btn--sm" onclick={refreshSchedules}>{t.refresh}</button>
+				<button type="button" class="oc-btn oc-btn--primary oc-btn--sm" onclick={() => fillScheduleForm(null)}>{t.new}</button>
 			</div>
 			{#if schedules.length}
-				{#each schedules as schedule (schedule.id)}
-					<article class="schedule-card" class:selected={selectedSchedule?.id === schedule.id}>
-						<button
-							type="button"
-							class="schedule-card__main"
-							onclick={() => {
-								selectedScheduleId = schedule.id;
-								loadScheduleExecutions(schedule.id);
-							}}
-						>
-							<span class:good={schedule.enabled} class:bad={!schedule.enabled}>
-								{schedule.enabled ? t.enabledLabel : t.disabledLabel}
-							</span>
-							<strong>{schedule.name}</strong>
-							<small>{scheduleTimes(schedule)}</small>
-							<small>{t.next}: {formatDateTime(schedule.nextRunAt)}</small>
-							<small>
-								{t.last}: {formatDateTime(schedule.lastRunAt)}
-								{#if schedule.lastRunStatus}· {executionStatusLabel(schedule.lastRunStatus)}{/if}
-								· {t.runCount}: {schedule.runCount ?? 0}
-							</small>
-						</button>
-						<div class="schedule-actions">
-							<button type="button" onclick={() => fillScheduleForm(schedule)}>{t.edit}</button>
+				<div class="oc-sched-list">
+					{#each schedules as schedule (schedule.id)}
+						<article class="oc-sched-card" class:is-selected={selectedSchedule?.id === schedule.id}>
 							<button
 								type="button"
-								onclick={() => scheduleOperation(schedule.id, schedule.enabled ? 'disable' : 'enable')}
-								disabled={Boolean(busyScheduleAction)}
+								class="oc-sched-card__main"
+								onclick={() => {
+									selectedScheduleId = schedule.id;
+									loadScheduleExecutions(schedule.id);
+								}}
 							>
-								{schedule.enabled ? t.disable : t.enable}
+								<div class="oc-sched-card__top">
+									<strong>{schedule.name}</strong>
+									<span class="oc-badge" class:is-good={schedule.enabled} class:is-muted={!schedule.enabled}>
+										<span class="oc-dot"></span>{schedule.enabled ? t.enabledLabel : t.disabledLabel}
+									</span>
+								</div>
+								<dl class="oc-sched-card__meta">
+									<div><dt>{t.frequency}</dt><dd>{scheduleTimes(schedule)}</dd></div>
+									<div><dt>{t.next}</dt><dd>{formatDateTime(schedule.nextRunAt)}</dd></div>
+									<div>
+										<dt>{t.last}</dt>
+										<dd>
+											{formatDateTime(schedule.lastRunAt)}
+											{#if schedule.lastRunStatus}· {executionStatusLabel(schedule.lastRunStatus)}{/if}
+											· {t.runCount}: {schedule.runCount ?? 0}
+										</dd>
+									</div>
+								</dl>
 							</button>
-							<button
-								type="button"
-								class="run-this"
-								onclick={() => scheduleOperation(schedule.id, 'run-now')}
-								disabled={Boolean(busyScheduleAction)}
-							>
-								{busyScheduleAction === `run-now:${schedule.id}` ? (isEn ? 'Running…' : 'Đang chạy…') : t.runThis}
-							</button>
-							<button type="button" onclick={() => deleteSchedule(schedule.id)}>{t.delete}</button>
-						</div>
-					</article>
-				{/each}
+							<div class="oc-sched-card__actions">
+								<button type="button" class="oc-chip-btn" onclick={() => fillScheduleForm(schedule)}>{t.edit}</button>
+								<button
+									type="button"
+									class="oc-chip-btn"
+									onclick={() => scheduleOperation(schedule.id, schedule.enabled ? 'disable' : 'enable')}
+									disabled={Boolean(busyScheduleAction)}
+								>
+									{schedule.enabled ? t.disable : t.enable}
+								</button>
+								<button
+									type="button"
+									class="oc-chip-btn oc-chip-btn--run"
+									onclick={() => scheduleOperation(schedule.id, 'run-now')}
+									disabled={Boolean(busyScheduleAction)}
+								>
+									{busyScheduleAction === `run-now:${schedule.id}` ? (isEn ? 'Running…' : 'Đang chạy…') : t.runThis}
+								</button>
+								<button type="button" class="oc-chip-btn oc-chip-btn--danger" onclick={() => deleteSchedule(schedule.id)}>{t.delete}</button>
+							</div>
+						</article>
+					{/each}
+				</div>
 			{:else}
-				<div class="empty-state">{t.empty}</div>
+				<div class="oc-empty">
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 2v4M16 2v4M3 9h18M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+					<p>{t.empty}</p>
+				</div>
 			{/if}
 
-			<div class="execution-box">
-				<div class="panel-head compact">
+			<div class="oc-exec">
+				<div class="oc-exec__head">
 					<h3>{t.executions}</h3>
-					<button type="button" onclick={() => loadScheduleExecutions(selectedScheduleId)}>{t.reload}</button>
+					<button type="button" class="oc-chip-btn" onclick={() => loadScheduleExecutions(selectedScheduleId)}>{t.reload}</button>
 				</div>
 				{#if scheduleExecutions.length}
-					<div class="execution-list">
+					<div class="oc-exec__list">
 						{#each scheduleExecutions as execution (execution.executionKey || execution.createdAt)}
-							<div class="execution-row">
+							<div class="oc-exec__row">
 								<b
-									class:good={execution.status === 'published' || execution.status === 'draft_created'}
-									class:bad={execution.status === 'failed'}
+									class="oc-badge"
+									class:is-good={execution.status === 'published' || execution.status === 'draft_created'}
+									class:is-danger={execution.status === 'failed'}
+									class:is-muted={execution.status !== 'published' && execution.status !== 'draft_created' && execution.status !== 'failed'}
 								>
 									{executionStatusLabel(execution.status)}
 								</b>
-								<span>{execution.blogTitle || execution.executionKey}</span>
+								<span class="oc-exec__title">{execution.blogTitle || execution.executionKey}</span>
 								<small>{formatDateTime(execution.createdAt)}</small>
 								{#if execution.blogId}
 									<a href={`/admin/blogs/${execution.blogId}`} target="_blank" rel="noreferrer">{t.openDraft}</a>
@@ -437,87 +469,116 @@
 									<small>Telegram: {execution.telegramNotificationStatus}</small>
 								{/if}
 								{#if execution.error}
-									<small class="bad">{execution.error}</small>
+									<small class="oc-exec__error">{execution.error}</small>
 								{/if}
 							</div>
 						{/each}
 					</div>
 				{:else}
-					<div class="empty-state">{t.noExecutions}</div>
+					<div class="oc-empty oc-empty--sm">
+						<p>{t.noExecutions}</p>
+					</div>
 				{/if}
 			</div>
 		</div>
 
-		<form class="schedule-form" onsubmit={saveSchedule}>
-			<div class="panel-head compact">
+		<form class="oc-form" onsubmit={saveSchedule}>
+			<div class="oc-form__head">
 				<h3>{editingScheduleId ? t.editTitle : t.createTitle}</h3>
 				<span>{editingScheduleId ? t.editHint : t.createHint}</span>
 			</div>
-			<label>
-				<span>{t.name}</span>
-				<input bind:value={scheduleForm.name} required />
-			</label>
-			<label>
-				<span>{t.topic}</span>
-				<textarea bind:value={scheduleForm.topic} rows="2" required></textarea>
-			</label>
-			<div class="form-grid">
-				<label>
-					<span>{t.type}</span>
-					<select bind:value={scheduleForm.scheduleType}>
-						<option value="daily">{t.daily}</option>
-						<option value="weekly">{t.weekly}</option>
-						<option value="interval">{t.interval}</option>
-					</select>
+
+			<fieldset class="oc-form__section">
+				<legend>{t.secBasic}</legend>
+				<label class="oc-field">
+					<span>{t.name}</span>
+					<input bind:value={scheduleForm.name} required />
 				</label>
-				<label>
-					<span>{t.timezone}</span>
-					<input bind:value={scheduleForm.timezone} />
+				<label class="oc-field">
+					<span>{t.topic}</span>
+					<textarea bind:value={scheduleForm.topic} rows="2" required></textarea>
 				</label>
-			</div>
-			{#if scheduleForm.scheduleType === 'daily'}
-				<label>
-					<span>{t.dailyTimes}</span>
-					<input bind:value={scheduleForm.dailyTimes} placeholder="09:00, 15:30" />
-				</label>
-			{:else if scheduleForm.scheduleType === 'weekly'}
-				<div class="weekday-row">
-					{#each [0, 1, 2, 3, 4, 5, 6] as day}
-						<button
-							type="button"
-							class:active={scheduleForm.daysOfWeek.includes(day)}
-							onclick={() => toggleWeekday(day)}
-						>
-							{day}
-						</button>
-					{/each}
-				</div>
-				<label>
-					<span>{t.weeklyTimes}</span>
-					<input bind:value={scheduleForm.weeklyTimes} placeholder="09:00" />
-				</label>
-			{:else}
-				<div class="form-grid">
-					<label>
-						<span>{t.every}</span>
-						<input type="number" min="1" bind:value={scheduleForm.intervalValue} />
-					</label>
-					<label>
-						<span>{t.unit}</span>
-						<select bind:value={scheduleForm.intervalUnit}>
-							<option value="minutes">{t.minutes}</option>
-							<option value="hours">{t.hours}</option>
-							<option value="days">{t.days}</option>
+			</fieldset>
+
+			<fieldset class="oc-form__section">
+				<legend>{t.secSchedule}</legend>
+				<div class="oc-form__grid">
+					<label class="oc-field">
+						<span>{t.type}</span>
+						<select bind:value={scheduleForm.scheduleType}>
+							<option value="daily">{t.daily}</option>
+							<option value="weekly">{t.weekly}</option>
+							<option value="interval">{t.interval}</option>
 						</select>
 					</label>
+					<label class="oc-field">
+						<span>{t.timezone}</span>
+						<input bind:value={scheduleForm.timezone} />
+					</label>
 				</div>
-			{/if}
-			<div class="form-grid">
-				<label>
+				{#if scheduleForm.scheduleType === 'daily'}
+					<label class="oc-field">
+						<span>{t.dailyTimes}</span>
+						<input bind:value={scheduleForm.dailyTimes} placeholder="09:00, 15:30" />
+						<small class="oc-field__hint">{t.dailyTimesHint}</small>
+					</label>
+				{:else if scheduleForm.scheduleType === 'weekly'}
+					<div class="oc-field">
+						<span>{t.weekly}</span>
+						<div class="oc-weekdays">
+							{#each [0, 1, 2, 3, 4, 5, 6] as day}
+								<button
+									type="button"
+									class="oc-weekday"
+									class:is-active={scheduleForm.daysOfWeek.includes(day)}
+									onclick={() => toggleWeekday(day)}
+								>
+									{t.weekdays[day]}
+								</button>
+							{/each}
+						</div>
+					</div>
+					<label class="oc-field">
+						<span>{t.weeklyTimes}</span>
+						<input bind:value={scheduleForm.weeklyTimes} placeholder="09:00" />
+						<small class="oc-field__hint">{t.weeklyTimesHint}</small>
+					</label>
+				{:else}
+					<div class="oc-form__grid">
+						<label class="oc-field">
+							<span>{t.every}</span>
+							<input type="number" min="1" bind:value={scheduleForm.intervalValue} />
+						</label>
+						<label class="oc-field">
+							<span>{t.unit}</span>
+							<select bind:value={scheduleForm.intervalUnit}>
+								<option value="minutes">{t.minutes}</option>
+								<option value="hours">{t.hours}</option>
+								<option value="days">{t.days}</option>
+							</select>
+						</label>
+					</div>
+				{/if}
+				<div class="oc-form__grid">
+					<label class="oc-field">
+						<span>{t.startAt}</span>
+						<input type="datetime-local" bind:value={scheduleForm.startAt} />
+					</label>
+					<label class="oc-field">
+						<span>{t.endAt}</span>
+						<input type="datetime-local" bind:value={scheduleForm.endAt} />
+					</label>
+				</div>
+				<small class="oc-field__hint oc-field__hint--block">{t.windowHint}</small>
+				<label class="oc-field oc-field--narrow">
 					<span>{t.runLimit}</span>
 					<input type="number" min="0" bind:value={scheduleForm.runLimit} />
 				</label>
-				<label>
+			</fieldset>
+
+			<fieldset class="oc-form__section">
+				<legend>{t.secContent}</legend>
+				<label class="oc-field">
 					<span>{t.category}</span>
 					<select bind:value={scheduleForm.categoryKey}>
 						<option value="guide">guide</option>
@@ -528,42 +589,35 @@
 						<option value="design">design</option>
 					</select>
 				</label>
-			</div>
-			<div class="form-grid">
-				<label>
-					<span>{t.startAt}</span>
-					<input type="datetime-local" bind:value={scheduleForm.startAt} />
+				<label class="oc-field">
+					<span>{t.primaryKeyword}</span>
+					<input bind:value={scheduleForm.primaryKeyword} />
 				</label>
-				<label>
-					<span>{t.endAt}</span>
-					<input type="datetime-local" bind:value={scheduleForm.endAt} />
+				<label class="oc-field">
+					<span>{t.secondaryKeywords}</span>
+					<input bind:value={scheduleForm.secondaryKeywords} />
 				</label>
-			</div>
-			<label>
-				<span>{t.primaryKeyword}</span>
-				<input bind:value={scheduleForm.primaryKeyword} />
-			</label>
-			<label>
-				<span>{t.secondaryKeywords}</span>
-				<input bind:value={scheduleForm.secondaryKeywords} />
-			</label>
-			<label>
-				<span>{t.extra}</span>
-				<textarea bind:value={scheduleForm.prompt} rows="3"></textarea>
-			</label>
-			<div class="switch-row">
-				<label>
+				<label class="oc-field">
+					<span>{t.extra}</span>
+					<textarea bind:value={scheduleForm.prompt} rows="3"></textarea>
+				</label>
+			</fieldset>
+
+			<fieldset class="oc-form__section">
+				<legend>{t.secPublishing}</legend>
+				<label class="oc-check">
 					<input type="checkbox" bind:checked={scheduleForm.enabled} />
 					<span>{t.enabledSwitch}</span>
 				</label>
-				<label>
+				<label class="oc-check">
 					<input type="checkbox" bind:checked={scheduleForm.autoPublish} />
 					<span>{t.autoPublishSwitch}</span>
 				</label>
-			</div>
-			<div class="schedule-form__actions">
-				<button type="button" class="console-btn secondary" onclick={() => fillScheduleForm(null)}>{t.reset}</button>
-				<button type="submit" class="console-btn dark" disabled={busyScheduleAction === 'save'}>
+			</fieldset>
+
+			<div class="oc-form__footer">
+				<button type="button" class="oc-btn oc-btn--ghost" onclick={() => fillScheduleForm(null)}>{t.reset}</button>
+				<button type="submit" class="oc-btn oc-btn--primary" disabled={busyScheduleAction === 'save'}>
 					{busyScheduleAction === 'save' ? t.saving : t.save}
 				</button>
 			</div>
@@ -572,274 +626,594 @@
 </section>
 
 <style>
-	.schedule-panel {
-		border: 1px solid var(--line, rgba(23, 32, 27, 0.12));
-		background: var(--panel, #fbfbf7);
-		border-radius: 8px;
-		padding: 1rem;
+	.oc-schedules {
+		--oc-surface: var(--admin-surface, #ffffff);
+		--oc-surface-2: #f9fafb;
+		--oc-border: var(--admin-border, #e5e7eb);
+		--oc-border-soft: rgba(17, 24, 39, 0.07);
+		--oc-text: var(--admin-ink, #1a1f2e);
+		--oc-muted: var(--admin-muted, #6b7280);
+		--oc-primary: var(--admin-accent, #0f766e);
+		--oc-primary-strong: var(--admin-accent-strong, #065f5a);
+		--oc-primary-soft: var(--admin-accent-soft, rgba(15, 118, 110, 0.08));
+		--oc-danger: var(--admin-danger, #dc2626);
+		--oc-radius: var(--admin-radius, 12px);
+		--oc-radius-sm: 9px;
+		--oc-shadow: var(--admin-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
+		background: var(--oc-surface);
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius);
+		box-shadow: var(--oc-shadow);
+		padding: clamp(16px, 1.6vw, 20px);
 		display: grid;
-		gap: 0.75rem;
+		gap: 14px;
 		min-width: 0;
-		color: var(--ink, #17201b);
+		color: var(--oc-text);
 	}
 
-	.console-alert {
-		padding: 0.9rem 1rem;
-		border-radius: 8px;
-		border: 1px solid rgba(180, 35, 24, 0.25);
-		background: #fff1ef;
-		color: var(--bad, #b42318);
+	.oc-schedules h2,
+	.oc-schedules h3 {
+		margin: 0;
 	}
 
-	.panel-head {
+	.oc-panel__head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 0.85rem;
+		gap: 12px;
 	}
 
-	.panel-head h2 {
-		margin: 0;
+	.oc-panel__head h2 {
 		font-size: 1rem;
+		font-weight: 700;
 	}
 
-	.panel-head span,
-	.schedule-card__main small,
-	.execution-row small,
-	.schedule-form label span,
-	.switch-row span {
-		color: var(--muted, #607067);
+	.oc-count {
+		font-size: 0.75rem;
+		font-weight: 700;
+		color: var(--oc-muted);
+		background: var(--oc-surface-2);
+		border: 1px solid var(--oc-border);
+		padding: 3px 9px;
+		border-radius: 999px;
+		white-space: nowrap;
+	}
+
+	.oc-alert {
+		padding: 12px 16px;
+		border-radius: var(--oc-radius);
+		border: 1px solid rgba(220, 38, 38, 0.2);
+		background: rgba(220, 38, 38, 0.08);
+		color: #991b1b;
+		font-size: 0.9rem;
+	}
+
+	/* ── Buttons ── */
+	.oc-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		min-height: 40px;
+		padding: 0 16px;
+		border-radius: 10px;
+		border: 1px solid transparent;
+		font: inherit;
+		font-weight: 600;
+		font-size: 0.88rem;
+		cursor: pointer;
+		transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+			transform 0.18s ease;
+	}
+
+	.oc-btn--sm {
+		min-height: 34px;
+		padding: 0 12px;
 		font-size: 0.82rem;
 	}
 
-	.good {
-		color: var(--good, #13795b);
-	}
-
-	.bad {
-		color: var(--bad, #b42318);
-	}
-
-	.console-btn {
-		border: 1px solid var(--line, rgba(23, 32, 27, 0.12));
-		background: #fff;
-		color: var(--ink, #17201b);
-		border-radius: 8px;
-		padding: 0.65rem 0.9rem;
-		font-weight: 800;
-		cursor: pointer;
-	}
-
-	.console-btn.dark {
-		background: #17201b;
+	.oc-btn--primary {
+		background: var(--oc-primary);
+		border-color: var(--oc-primary);
 		color: #fff;
+		box-shadow: 0 2px 8px rgba(15, 118, 110, 0.16);
 	}
 
-	.console-btn.secondary:hover {
-		border-color: rgba(19, 121, 91, 0.45);
-		background: #f7fbf8;
+	.oc-btn--primary:hover:not(:disabled) {
+		background: var(--oc-primary-strong);
+		border-color: var(--oc-primary-strong);
+		transform: translateY(-1px);
 	}
 
-	.schedule-layout {
+	.oc-btn--ghost {
+		background: var(--oc-surface);
+		border-color: var(--oc-border);
+		color: var(--oc-text);
+	}
+
+	.oc-btn--ghost:hover:not(:disabled) {
+		border-color: var(--oc-primary);
+		background: var(--oc-primary-soft);
+		color: var(--oc-primary-strong);
+	}
+
+	.oc-btn:disabled {
+		opacity: 0.6;
+		cursor: wait;
+	}
+
+	.oc-btn:focus-visible,
+	.oc-chip-btn:focus-visible,
+	.oc-weekday:focus-visible,
+	.oc-sched-card__main:focus-visible {
+		outline: 2px solid var(--oc-primary);
+		outline-offset: 2px;
+	}
+
+	/* ── Badges ── */
+	.oc-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		width: fit-content;
+		padding: 3px 9px;
+		border-radius: 999px;
+		font-size: 0.72rem;
+		font-weight: 700;
+		font-style: normal;
+		background: rgba(107, 114, 128, 0.12);
+		color: #4b5563;
+		border: 1px solid rgba(107, 114, 128, 0.16);
+	}
+
+	.oc-badge .oc-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: currentColor;
+		flex-shrink: 0;
+	}
+
+	.oc-badge.is-good {
+		background: rgba(5, 150, 105, 0.12);
+		color: #047857;
+		border-color: rgba(5, 150, 105, 0.22);
+	}
+
+	.oc-badge.is-danger {
+		background: rgba(220, 38, 38, 0.12);
+		color: #b91c1c;
+		border-color: rgba(220, 38, 38, 0.22);
+	}
+
+	.oc-badge.is-muted {
+		background: rgba(107, 114, 128, 0.1);
+		color: #4b5563;
+		border-color: rgba(107, 114, 128, 0.18);
+	}
+
+	/* ── Layout ── */
+	.oc-sched-layout {
 		display: grid;
-		grid-template-columns: minmax(320px, 0.95fr) minmax(340px, 1.05fr);
-		gap: 1rem;
+		grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.2fr);
+		gap: 16px;
 		align-items: start;
 	}
 
-	.schedule-list {
+	.oc-sched-side {
 		display: grid;
-		gap: 0.75rem;
+		gap: 12px;
+		min-width: 0;
 	}
 
-	.schedule-list__head,
-	.schedule-actions,
-	.schedule-form__actions,
-	.switch-row,
-	.weekday-row {
+	.oc-sched-toolbar {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 8px;
 		flex-wrap: wrap;
+		justify-content: flex-end;
 	}
 
-	.schedule-card,
-	.execution-box,
-	.schedule-form {
-		border: 1px solid var(--line, rgba(23, 32, 27, 0.12));
-		border-radius: 8px;
-		background: #fff;
-	}
-
-	.schedule-card {
-		padding: 0.75rem;
+	/* ── Schedule cards ── */
+	.oc-sched-list {
 		display: grid;
-		gap: 0.65rem;
+		gap: 10px;
+		max-height: 480px;
+		overflow: auto;
+		padding-right: 2px;
 	}
 
-	.schedule-card.selected {
-		border-color: rgba(19, 121, 91, 0.45);
-		background: #f8fbf7;
+	.oc-sched-card {
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface);
+		padding: 12px;
+		display: grid;
+		gap: 10px;
+		transition: border-color 0.18s ease, box-shadow 0.18s ease;
 	}
 
-	.schedule-card__main {
+	.oc-sched-card.is-selected {
+		border-color: var(--oc-primary);
+		box-shadow: inset 3px 0 0 var(--oc-primary);
+	}
+
+	.oc-sched-card__main {
 		border: 0;
 		background: transparent;
 		color: inherit;
 		text-align: left;
 		display: grid;
-		gap: 0.22rem;
+		gap: 8px;
 		cursor: pointer;
+		padding: 0;
 	}
 
-	.schedule-card__main span {
-		width: fit-content;
-		border-radius: 999px;
-		background: var(--field, #f1f5ee);
-		padding: 0.14rem 0.5rem;
-		font-size: 0.72rem;
-		font-weight: 850;
+	.oc-sched-card__top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
 	}
 
-	.schedule-card__main strong,
-	.execution-row span {
+	.oc-sched-card__top strong {
+		font-size: 0.92rem;
 		overflow-wrap: anywhere;
 	}
 
-	.schedule-actions button,
-	.execution-box button,
-	.weekday-row button {
-		border: 1px solid var(--line, rgba(23, 32, 27, 0.12));
+	.oc-sched-card__meta {
+		display: grid;
+		gap: 4px;
+		margin: 0;
+	}
+
+	.oc-sched-card__meta > div {
+		display: grid;
+		grid-template-columns: 74px minmax(0, 1fr);
+		gap: 8px;
+		align-items: baseline;
+	}
+
+	.oc-sched-card__meta dt {
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--oc-muted);
+	}
+
+	.oc-sched-card__meta dd {
+		margin: 0;
+		font-size: 0.8rem;
+		overflow-wrap: anywhere;
+	}
+
+	.oc-sched-card__actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		flex-wrap: wrap;
+		border-top: 1px solid var(--oc-border-soft);
+		padding-top: 10px;
+	}
+
+	.oc-chip-btn {
+		border: 1px solid var(--oc-border);
 		border-radius: 8px;
-		background: #fff;
-		padding: 0.45rem 0.6rem;
+		background: var(--oc-surface);
+		color: var(--oc-text);
+		padding: 6px 10px;
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 600;
 		cursor: pointer;
-		font-weight: 750;
+		transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 	}
 
-	.schedule-actions button:hover,
-	.execution-box button:hover,
-	.weekday-row button:hover {
-		border-color: rgba(19, 121, 91, 0.45);
+	.oc-chip-btn:hover:not(:disabled) {
+		border-color: var(--oc-primary);
+		background: var(--oc-primary-soft);
+		color: var(--oc-primary-strong);
 	}
 
-	.schedule-actions button:disabled {
-		opacity: 0.6;
+	.oc-chip-btn:disabled {
+		opacity: 0.55;
 		cursor: wait;
 	}
 
-	.schedule-actions .run-this {
-		border-color: rgba(19, 121, 91, 0.5);
-		color: var(--good, #13795b);
-		font-weight: 850;
+	.oc-chip-btn--run {
+		border-color: rgba(15, 118, 110, 0.4);
+		color: var(--oc-primary-strong);
+		font-weight: 700;
 	}
 
-	.weekday-row button.active {
-		background: #17201b;
-		color: #fff;
+	.oc-chip-btn--danger:hover:not(:disabled) {
+		border-color: rgba(220, 38, 38, 0.5);
+		background: rgba(220, 38, 38, 0.06);
+		color: #b91c1c;
 	}
 
-	.execution-box {
-		padding: 0.85rem;
-	}
-
-	.panel-head.compact {
-		margin-bottom: 0.65rem;
-	}
-
-	.panel-head.compact h3 {
-		margin: 0;
-		font-size: 0.95rem;
-	}
-
-	.execution-list {
+	/* ── Executions ── */
+	.oc-exec {
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
+		padding: 12px;
 		display: grid;
-		gap: 0.5rem;
-		max-height: 330px;
+		gap: 10px;
+	}
+
+	.oc-exec__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
+	}
+
+	.oc-exec__head h3 {
+		font-size: 0.9rem;
+		font-weight: 700;
+	}
+
+	.oc-exec__list {
+		display: grid;
+		gap: 8px;
+		max-height: 320px;
 		overflow: auto;
 	}
 
-	.execution-row {
+	.oc-exec__row {
 		display: grid;
 		grid-template-columns: auto minmax(0, 1fr);
-		gap: 0.2rem 0.65rem;
-		padding: 0.65rem;
-		border: 1px solid rgba(23, 32, 27, 0.08);
+		gap: 4px 10px;
+		padding: 10px;
+		border: 1px solid var(--oc-border);
 		border-radius: 8px;
-		background: #fbfbf7;
+		background: var(--oc-surface);
+		font-size: 0.8rem;
 	}
 
-	.execution-row a {
-		color: var(--good, #13795b);
-		font-weight: 800;
+	.oc-exec__row small {
+		color: var(--oc-muted);
+		font-size: 0.74rem;
+	}
+
+	.oc-exec__title {
+		overflow-wrap: anywhere;
+		font-weight: 600;
+	}
+
+	.oc-exec__error {
+		color: #b91c1c !important;
+	}
+
+	.oc-exec__row a {
+		color: var(--oc-primary);
+		font-weight: 700;
 		text-decoration: none;
 	}
 
-	.schedule-form {
-		padding: 1rem;
+	.oc-exec__row a:hover {
+		text-decoration: underline;
+	}
+
+	/* ── Form ── */
+	.oc-form {
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface);
+		padding: 16px;
 		display: grid;
-		gap: 0.75rem;
+		gap: 16px;
+		min-width: 0;
 	}
 
-	.schedule-form label {
+	.oc-form__head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 10px;
+		flex-wrap: wrap;
+	}
+
+	.oc-form__head h3 {
+		font-size: 0.95rem;
+		font-weight: 700;
+	}
+
+	.oc-form__head span {
+		font-size: 0.78rem;
+		color: var(--oc-muted);
+	}
+
+	.oc-form__section {
+		border: 0;
+		border-top: 1px solid var(--oc-border-soft);
+		margin: 0;
+		padding: 14px 0 0;
 		display: grid;
-		gap: 0.35rem;
+		gap: 12px;
 	}
 
-	.schedule-form input,
-	.schedule-form select,
-	.schedule-form textarea {
-		width: 100%;
-		border: 1px solid var(--line, rgba(23, 32, 27, 0.12));
-		border-radius: 8px;
-		background: #fff;
-		color: var(--ink, #17201b);
-		padding: 0.65rem 0.7rem;
-		font: inherit;
+	.oc-form__section legend {
+		padding: 0;
+		font-size: 0.72rem;
+		font-weight: 800;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		color: var(--oc-muted);
 	}
 
-	.schedule-form textarea {
-		resize: vertical;
-		min-height: 80px;
-	}
-
-	.form-grid {
+	.oc-form__grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.75rem;
+		gap: 12px;
 	}
 
-	.switch-row label {
+	.oc-field {
+		display: grid;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	.oc-field--narrow {
+		max-width: 200px;
+	}
+
+	.oc-field > span {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--oc-text);
+	}
+
+	.oc-field input,
+	.oc-field select,
+	.oc-field textarea {
+		width: 100%;
+		border: 1px solid var(--oc-border);
+		border-radius: 9px;
+		background: var(--oc-surface);
+		color: var(--oc-text);
+		padding: 9px 11px;
+		font: inherit;
+		font-size: 0.86rem;
+		transition: border-color 0.18s ease, box-shadow 0.18s ease;
+	}
+
+	.oc-field input:focus,
+	.oc-field select:focus,
+	.oc-field textarea:focus {
+		outline: none;
+		border-color: var(--oc-primary);
+		box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+	}
+
+	.oc-field textarea {
+		resize: vertical;
+		min-height: 76px;
+	}
+
+	.oc-field__hint {
+		font-size: 0.74rem;
+		line-height: 1.4;
+		color: var(--oc-muted);
+	}
+
+	.oc-field__hint--block {
+		margin-top: -4px;
+	}
+
+	.oc-weekdays {
 		display: flex;
-		align-items: center;
-		gap: 0.45rem;
+		gap: 6px;
+		flex-wrap: wrap;
 	}
 
-	.switch-row input {
-		width: auto;
-	}
-
-	.schedule-form__actions {
-		justify-content: end;
-	}
-
-	.empty-state {
-		padding: 1rem;
+	.oc-weekday {
+		min-width: 42px;
+		border: 1px solid var(--oc-border);
 		border-radius: 8px;
-		background: var(--field, #f1f5ee);
-		color: var(--muted, #607067);
+		background: var(--oc-surface);
+		color: var(--oc-text);
+		padding: 7px 4px;
+		font: inherit;
+		font-size: 0.78rem;
+		font-weight: 600;
+		cursor: pointer;
+		transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 	}
 
-	@media (max-width: 1180px) {
-		.schedule-layout {
+	.oc-weekday:hover {
+		border-color: var(--oc-primary);
+	}
+
+	.oc-weekday.is-active {
+		background: var(--oc-primary);
+		border-color: var(--oc-primary);
+		color: #fff;
+	}
+
+	.oc-check {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+		padding: 10px 12px;
+		border: 1px solid var(--oc-border);
+		border-radius: 9px;
+		background: var(--oc-surface-2);
+		cursor: pointer;
+	}
+
+	.oc-check input {
+		width: 18px;
+		height: 18px;
+		margin: 1px 0 0;
+		accent-color: var(--oc-primary);
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.oc-check span {
+		font-size: 0.84rem;
+		line-height: 1.4;
+	}
+
+	.oc-form__footer {
+		display: flex;
+		justify-content: flex-end;
+		gap: 10px;
+		padding-top: 4px;
+	}
+
+	/* ── Empty state ── */
+	.oc-empty {
+		display: grid;
+		gap: 6px;
+		justify-items: center;
+		align-content: center;
+		text-align: center;
+		padding: 24px 16px;
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
+		border: 1px dashed var(--oc-border);
+		color: var(--oc-muted);
+	}
+
+	.oc-empty--sm {
+		padding: 16px;
+	}
+
+	.oc-empty svg {
+		width: 26px;
+		height: 26px;
+		opacity: 0.55;
+	}
+
+	.oc-empty p {
+		margin: 0;
+		font-weight: 600;
+		color: var(--oc-text);
+		font-size: 0.88rem;
+	}
+
+	/* ── Responsive ── */
+	@media (max-width: 960px) {
+		.oc-sched-layout {
 			grid-template-columns: 1fr;
 		}
 	}
 
-	@media (max-width: 720px) {
-		.form-grid {
+	@media (max-width: 560px) {
+		.oc-form__grid {
 			grid-template-columns: 1fr;
+		}
+
+		.oc-field--narrow {
+			max-width: none;
+		}
+
+		.oc-form__footer .oc-btn {
+			flex: 1 1 auto;
 		}
 	}
 </style>

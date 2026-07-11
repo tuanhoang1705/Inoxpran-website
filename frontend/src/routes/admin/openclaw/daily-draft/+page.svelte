@@ -192,120 +192,143 @@
 </svelte:head>
 
 <section class="openclaw-console daily-draft">
-	<a class="back-link" href="/admin/openclaw">← {t.back}</a>
+	<a class="oc-back" href="/admin/openclaw">
+		<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+		<span>{t.back}</span>
+	</a>
 
-	<header class="dd-head">
-		<div>
-			<p class="openclaw-kicker">OpenClaw</p>
+	<header class="oc-header dd-header">
+		<div class="oc-header__intro">
+			<p class="oc-eyebrow">OpenClaw</p>
 			<h1>{t.title}</h1>
-			<p>{t.subtitle}</p>
+			<p class="oc-header__sub">{t.subtitle}</p>
 		</div>
+		<span class="oc-badge dd-header__badge" class:is-good={automation.enabled} class:is-muted={!automation.enabled}>
+			<span class="oc-dot"></span>{t.seoAgent}: {automation.enabled ? t.enabled : t.disabled}
+		</span>
 	</header>
 
 	{#if pageError}
-		<div class="console-alert">{pageError}</div>
+		<div class="oc-alert" role="alert">{pageError}</div>
 	{/if}
 
 	<div class="dd-grid">
-		<section class="console-panel run-now-panel">
-			<div class="panel-head">
-				<h2>{t.runSectionTitle}</h2>
+		<section class="oc-panel dd-run">
+			<div class="dd-run__intro">
+				<span class="dd-run__icon" aria-hidden="true">
+					<svg viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+				</span>
+				<div>
+					<h2>{t.runSectionTitle}</h2>
+					<p class="oc-muted">{t.runSectionHint}</p>
+				</div>
 			</div>
-			<p class="muted">{t.runSectionHint}</p>
 
-			<button type="button" class="console-btn dark run-now-btn" onclick={() => (confirmOpen = true)} disabled={running}>
-				{running ? t.running : t.runNow}
-			</button>
+			<div class="dd-run__mode">
+				<span class="oc-muted">{t.publishingMode}</span>
+				<span class="oc-badge" class:is-warn={automation.autoPublish} class:is-good={!automation.autoPublish}>
+					<span class="oc-dot"></span>{automation.autoPublish ? t.autoPublish : t.draftOnly}
+				</span>
+			</div>
+
+			<div class="dd-run__cta">
+				<button type="button" class="oc-btn oc-btn--primary" onclick={() => (confirmOpen = true)} disabled={running}>
+					{running ? t.running : t.runNow}
+				</button>
+			</div>
 
 			{#if runError}
-				<div class="console-alert">{runError}</div>
+				<div class="oc-alert" role="alert">{runError}</div>
 			{/if}
 
 			{#if activeRun}
-				<div class="run-result">
-					<div class="run-result__row">
+				<div class="dd-result">
+					<div class="dd-result__row">
 						<span>{t.runStatus}</span>
-						<strong
-							class:good={activeRun.status === 'completed'}
-							class:bad={activeRun.status === 'failed' || activeRun.status === 'timed_out'}
+						<b
+							class="oc-badge"
+							class:is-good={activeRun.status === 'completed'}
+							class:is-danger={activeRun.status === 'failed' || activeRun.status === 'timed_out'}
+							class:is-muted={activeRun.status !== 'completed' && activeRun.status !== 'failed' && activeRun.status !== 'timed_out'}
 						>
 							{runStatusLabel(activeRun.status)}
-						</strong>
+						</b>
 					</div>
-					<div class="run-result__row">
+					<div class="dd-result__row">
 						<span>{t.executionId}</span>
 						<code>{activeRun.id}</code>
 					</div>
-					<div class="run-result__row">
+					<div class="dd-result__row">
 						<span>{isEn ? 'Started' : 'Bắt đầu'}</span>
 						<strong>{formatDateTime(activeRun.startedAt)}</strong>
 					</div>
-					<div class="run-result__links">
+					<div class="dd-result__links">
 						{#if generatedBlogEditPath}
-							<a class="console-btn secondary" href={generatedBlogEditPath} target="_blank" rel="noreferrer">
+							<a class="oc-btn oc-btn--ghost oc-btn--sm" href={generatedBlogEditPath} target="_blank" rel="noreferrer">
 								{t.openDraft}
 							</a>
 						{/if}
-						<a class="console-btn secondary" href="/admin/blogs" target="_blank" rel="noreferrer">
+						<a class="oc-btn oc-btn--ghost oc-btn--sm" href="/admin/blogs" target="_blank" rel="noreferrer">
 							{t.openBlogs}
 						</a>
 					</div>
-					<small class="muted">{t.draftHint}</small>
+					<small class="oc-muted">{t.draftHint}</small>
 					{#if activeRun.output || activeRun.error}
-						<details>
+						<details class="dd-result__log">
 							<summary>{t.output}</summary>
-							<pre>{activeRun.output || activeRun.error}</pre>
+							<pre class="oc-log">{activeRun.output || activeRun.error}</pre>
 						</details>
 					{/if}
 				</div>
 			{/if}
 		</section>
 
-		<section class="console-panel status-panel">
-			<div class="panel-head">
+		<aside class="oc-panel dd-status">
+			<div class="oc-panel__head">
 				<h2>{t.statusTitle}</h2>
 			</div>
-			<div class="status-list">
-				<div class="status-row">
+			<div class="dd-status__list">
+				<div class="dd-status__row">
 					<span>{t.seoAgent}</span>
-					<b class:good={automation.enabled} class:bad={!automation.enabled}>
-						{automation.enabled ? t.enabled : t.disabled}
+					<b class="oc-badge" class:is-good={automation.enabled} class:is-muted={!automation.enabled}>
+						<span class="oc-dot"></span>{automation.enabled ? t.enabled : t.disabled}
 					</b>
 				</div>
-				<div class="status-row">
+				<div class="dd-status__row">
 					<span>{t.blogCron}</span>
-					<b class:good={scheduleRuntime.cronEnabled} class:bad={!scheduleRuntime.cronEnabled}>
-						{scheduleRuntime.cronEnabled ? t.enabled : t.disabled}
+					<b class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>
+						<span class="oc-dot"></span>{scheduleRuntime.cronEnabled ? t.enabled : t.disabled}
 					</b>
 				</div>
-				<div class="status-row">
+				<div class="dd-status__row">
 					<span>{t.autoPublish}</span>
-					<b class:bad={automation.autoPublish} class:good={!automation.autoPublish}>
-						{automation.autoPublish ? t.autoPublish : t.draftOnly}
+					<b class="oc-badge" class:is-warn={automation.autoPublish} class:is-good={!automation.autoPublish}>
+						<span class="oc-dot"></span>{automation.autoPublish ? t.autoPublish : t.draftOnly}
 					</b>
 				</div>
-				<div class="status-row">
+				<div class="dd-status__row">
 					<span>{t.telegram}</span>
 					<b
-						class:good={telegramStatus.tone === 'good'}
-						class:bad={telegramStatus.tone === 'bad'}
-						class:warn={telegramStatus.tone === 'warn'}
+						class="oc-badge"
+						class:is-good={telegramStatus.tone === 'good'}
+						class:is-danger={telegramStatus.tone === 'bad'}
+						class:is-warn={telegramStatus.tone === 'warn'}
 					>
-						{telegramStatus.label}
+						<span class="oc-dot"></span>{telegramStatus.label}
 					</b>
 				</div>
-				<div class="status-row">
+				<div class="dd-status__row">
 					<span>{t.imagePipeline}</span>
-					<b class:good={automation.imagePipelineEnabled}>
-						{automation.imagePipelineEnabled ? t.enabled : t.disabled}
+					<b class="oc-badge" class:is-good={automation.imagePipelineEnabled} class:is-muted={!automation.imagePipelineEnabled}>
+						<span class="oc-dot"></span>{automation.imagePipelineEnabled ? t.enabled : t.disabled}
 					</b>
 				</div>
-				<div class="status-row">
+				<div class="dd-status__row dd-status__row--stack">
 					<span>{t.gateway}</span>
-					<b>{dashboard?.openclaw?.gatewayUrl || '--'}</b>
+					<code class="dd-status__gateway" title={dashboard?.openclaw?.gatewayUrl || '--'}>{dashboard?.openclaw?.gatewayUrl || '--'}</code>
 				</div>
 			</div>
-		</section>
+		</aside>
 	</div>
 
 	<BlogSchedulesPanel {initialSchedules} initialRuntime={scheduleRuntime} />
@@ -326,46 +349,46 @@
 	>
 		<div class="dd-modal__box" role="dialog" aria-modal="true" aria-label={t.confirmTitle}>
 			<h3>{t.confirmTitle}</h3>
-			<p class="muted">{t.confirmDescription}</p>
+			<p class="oc-muted">{t.confirmDescription}</p>
 
-			<div class="confirm-config">
-				<div>
+			<div class="dd-confirm">
+				<div class="dd-confirm__item">
 					<span>{t.publishingMode}</span>
-					<b class:bad={automation.autoPublish} class:good={!automation.autoPublish}>
+					<b class="oc-badge" class:is-warn={automation.autoPublish} class:is-good={!automation.autoPublish}>
 						{automation.autoPublish ? t.autoPublish : t.draftOnly}
 					</b>
 				</div>
-				<div>
+				<div class="dd-confirm__item">
 					<span>{t.imagePipeline}</span>
 					<b>{automation.imagePipelineEnabled ? t.on : t.off}</b>
 				</div>
-				<div>
+				<div class="dd-confirm__item">
 					<span>{t.imageSearch}</span>
 					<b>{automation.imageSearchProvider || 'disabled'}</b>
 				</div>
-				<div>
+				<div class="dd-confirm__item">
 					<span>{t.aiImage}</span>
 					<b>{automation.aiImageProvider || 'disabled'}</b>
 				</div>
-				<div>
+				<div class="dd-confirm__item">
 					<span>{t.minSeo}</span>
 					<b>{automation.minSeoScore || 85}+</b>
 				</div>
-				<div>
+				<div class="dd-confirm__item">
 					<span>{t.wordRange}</span>
 					<b>{automation.minWords || 800}–{automation.maxWords || 1800}</b>
 				</div>
 			</div>
 
 			{#if automation.autoPublish}
-				<div class="confirm-warning">{t.autoPublishWarning}</div>
+				<div class="dd-confirm__warning">{t.autoPublishWarning}</div>
 			{/if}
 
-			<small class="muted">{t.configNote}</small>
+			<small class="oc-muted">{t.configNote}</small>
 
 			<div class="dd-modal__actions">
-				<button type="button" class="console-btn secondary" onclick={() => (confirmOpen = false)}>{t.cancel}</button>
-				<button type="button" class="console-btn dark" onclick={confirmRun}>{t.confirmRun}</button>
+				<button type="button" class="oc-btn oc-btn--ghost" onclick={() => (confirmOpen = false)}>{t.cancel}</button>
+				<button type="button" class="oc-btn oc-btn--primary" onclick={confirmRun}>{t.confirmRun}</button>
 			</div>
 		</div>
 	</div>
@@ -373,218 +396,412 @@
 
 <style>
 	.openclaw-console {
-		--ink: #17201b;
-		--muted: #607067;
-		--line: rgba(23, 32, 27, 0.12);
-		--panel: #fbfbf7;
-		--field: #f1f5ee;
-		--good: #13795b;
-		--bad: #b42318;
-		--warn: #b45309;
+		--oc-surface: var(--admin-surface, #ffffff);
+		--oc-surface-2: #f9fafb;
+		--oc-border: var(--admin-border, #e5e7eb);
+		--oc-border-soft: rgba(17, 24, 39, 0.07);
+		--oc-text: var(--admin-ink, #1a1f2e);
+		--oc-muted: var(--admin-muted, #6b7280);
+		--oc-primary: var(--admin-accent, #0f766e);
+		--oc-primary-strong: var(--admin-accent-strong, #065f5a);
+		--oc-primary-soft: var(--admin-accent-soft, rgba(15, 118, 110, 0.08));
+		--oc-warning: var(--admin-warning, #d97706);
+		--oc-danger: var(--admin-danger, #dc2626);
+		--oc-radius: var(--admin-radius, 12px);
+		--oc-radius-sm: 9px;
+		--oc-shadow: var(--admin-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.05));
 		display: grid;
-		gap: 1rem;
-		color: var(--ink);
+		gap: clamp(14px, 1.8vw, 20px);
+		color: var(--oc-text);
+		min-width: 0;
 	}
 
-	.back-link {
+	.openclaw-console h1,
+	.openclaw-console h2 {
+		margin: 0;
+	}
+
+	/* ── Back link ── */
+	.oc-back {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
 		width: fit-content;
-		color: var(--good);
-		font-weight: 800;
+		color: var(--oc-primary);
+		font-weight: 700;
+		font-size: 0.86rem;
 		text-decoration: none;
 	}
 
-	.back-link:hover {
-		text-decoration: underline;
+	.oc-back svg {
+		width: 16px;
+		height: 16px;
 	}
 
-	.dd-head {
-		padding: 1.25rem;
-		background:
-			linear-gradient(135deg, rgba(19, 121, 91, 0.12), transparent 38%),
-			linear-gradient(90deg, #fcfbf4, #eef5f1);
-		border: 1px solid var(--line);
-		border-radius: 8px;
+	.oc-back:hover {
+		color: var(--oc-primary-strong);
 	}
 
-	.openclaw-kicker {
-		margin: 0 0 0.35rem;
-		color: var(--good);
-		font-size: 0.78rem;
+	.oc-back:focus-visible {
+		outline: 2px solid var(--oc-primary);
+		outline-offset: 3px;
+		border-radius: 4px;
+	}
+
+	/* ── Header ── */
+	.oc-header {
+		display: flex;
+		align-items: flex-end;
+		justify-content: space-between;
+		gap: 16px;
+		flex-wrap: wrap;
+		padding: clamp(16px, 2vw, 22px) clamp(18px, 2vw, 24px);
+		background: var(--oc-surface);
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius);
+		box-shadow: var(--oc-shadow);
+	}
+
+	.oc-eyebrow {
+		margin: 0 0 6px;
+		font-size: 0.7rem;
 		font-weight: 800;
+		letter-spacing: 0.12em;
 		text-transform: uppercase;
+		color: var(--oc-primary);
 	}
 
-	.dd-head h1 {
-		margin: 0;
-		font-size: clamp(1.7rem, 3vw, 2.55rem);
-		line-height: 1.05;
+	.oc-header__intro h1 {
+		font-size: clamp(1.4rem, 2vw, 1.85rem);
+		font-weight: 700;
+		line-height: 1.15;
 	}
 
-	.dd-head p {
-		margin: 0.45rem 0 0;
-		color: var(--muted);
+	.oc-header__sub {
+		margin: 6px 0 0;
+		color: var(--oc-muted);
+		font-size: 0.92rem;
 	}
 
-	.console-alert {
-		padding: 0.9rem 1rem;
-		border-radius: 8px;
-		border: 1px solid rgba(180, 35, 24, 0.25);
-		background: #fff1ef;
-		color: var(--bad);
+	.dd-header__badge {
+		font-size: 0.78rem;
+		padding: 5px 12px;
 	}
 
-	.dd-grid {
-		display: grid;
-		grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.8fr);
-		gap: 1rem;
-		align-items: start;
+	/* ── Badges & dots ── */
+	.oc-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		width: fit-content;
+		padding: 3px 9px;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		font-weight: 700;
+		font-style: normal;
+		background: rgba(107, 114, 128, 0.12);
+		color: #4b5563;
+		border: 1px solid rgba(107, 114, 128, 0.16);
 	}
 
-	.console-panel {
+	.oc-badge .oc-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: currentColor;
+		flex-shrink: 0;
+	}
+
+	.oc-badge.is-good {
+		background: rgba(5, 150, 105, 0.12);
+		color: #047857;
+		border-color: rgba(5, 150, 105, 0.22);
+	}
+
+	.oc-badge.is-warn {
+		background: rgba(217, 119, 6, 0.12);
+		color: #b45309;
+		border-color: rgba(217, 119, 6, 0.22);
+	}
+
+	.oc-badge.is-danger {
+		background: rgba(220, 38, 38, 0.12);
+		color: #b91c1c;
+		border-color: rgba(220, 38, 38, 0.22);
+	}
+
+	.oc-badge.is-muted {
+		background: rgba(107, 114, 128, 0.1);
+		color: #4b5563;
+		border-color: rgba(107, 114, 128, 0.18);
+	}
+
+	/* ── Alert ── */
+	.oc-alert {
+		padding: 12px 16px;
+		border-radius: var(--oc-radius);
+		border: 1px solid rgba(220, 38, 38, 0.2);
+		background: rgba(220, 38, 38, 0.08);
+		color: #991b1b;
+		font-size: 0.9rem;
+	}
+
+	/* ── Panels ── */
+	.oc-panel {
 		min-width: 0;
-		border: 1px solid var(--line);
-		background: var(--panel);
-		border-radius: 8px;
-		padding: 1rem;
+		background: var(--oc-surface);
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius);
+		box-shadow: var(--oc-shadow);
+		padding: clamp(16px, 1.6vw, 20px);
 	}
 
-	.panel-head {
+	.oc-panel__head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		margin-bottom: 0.85rem;
+		gap: 12px;
+		margin-bottom: 14px;
 	}
 
-	.panel-head h2 {
-		margin: 0;
+	.oc-panel__head h2 {
 		font-size: 1rem;
+		font-weight: 700;
 	}
 
-	.muted {
-		color: var(--muted);
+	.oc-muted {
+		color: var(--oc-muted);
 		font-size: 0.88rem;
 	}
 
-	.console-btn {
-		border: 1px solid var(--line);
-		background: #fff;
-		color: var(--ink);
-		border-radius: 8px;
-		padding: 0.65rem 0.9rem;
-		font-weight: 800;
+	/* ── Buttons ── */
+	.oc-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		min-height: 40px;
+		padding: 0 18px;
+		border-radius: 10px;
+		border: 1px solid transparent;
+		font: inherit;
+		font-weight: 600;
+		font-size: 0.88rem;
 		cursor: pointer;
 		text-decoration: none;
-		display: inline-block;
+		transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+			transform 0.18s ease;
 	}
 
-	.console-btn.dark {
-		background: #17201b;
+	.oc-btn--sm {
+		min-height: 34px;
+		padding: 0 12px;
+		font-size: 0.82rem;
+	}
+
+	.oc-btn--primary {
+		background: var(--oc-primary);
+		border-color: var(--oc-primary);
 		color: #fff;
+		box-shadow: 0 2px 8px rgba(15, 118, 110, 0.16);
 	}
 
-	.console-btn.secondary:hover {
-		border-color: rgba(19, 121, 91, 0.45);
-		background: #f7fbf8;
+	.oc-btn--primary:hover:not(:disabled) {
+		background: var(--oc-primary-strong);
+		border-color: var(--oc-primary-strong);
+		transform: translateY(-1px);
 	}
 
-	.console-btn:disabled {
+	.oc-btn--ghost {
+		background: var(--oc-surface);
+		border-color: var(--oc-border);
+		color: var(--oc-text);
+	}
+
+	.oc-btn--ghost:hover:not(:disabled) {
+		border-color: var(--oc-primary);
+		background: var(--oc-primary-soft);
+		color: var(--oc-primary-strong);
+	}
+
+	.oc-btn:disabled {
 		opacity: 0.62;
 		cursor: wait;
 	}
 
-	.run-now-btn {
-		margin-top: 0.85rem;
+	.oc-btn:focus-visible {
+		outline: 2px solid var(--oc-primary);
+		outline-offset: 2px;
 	}
 
-	.good {
-		color: var(--good);
-	}
-
-	.bad {
-		color: var(--bad);
-	}
-
-	.warn {
-		color: var(--warn);
-	}
-
-	.run-result {
-		margin-top: 1rem;
+	/* ── Grid ── */
+	.dd-grid {
 		display: grid;
-		gap: 0.5rem;
-		border: 1px solid var(--line);
-		border-radius: 8px;
-		background: #fff;
-		padding: 0.85rem;
+		grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+		gap: clamp(14px, 1.8vw, 20px);
+		align-items: start;
 	}
 
-	.run-result__row {
+	/* ── Run now ── */
+	.dd-run {
+		display: grid;
+		gap: 16px;
+		align-content: start;
+	}
+
+	.dd-run__intro {
+		display: flex;
+		align-items: flex-start;
+		gap: 13px;
+	}
+
+	.dd-run__icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 42px;
+		height: 42px;
+		flex-shrink: 0;
+		border-radius: 11px;
+		background: var(--oc-primary-soft);
+		color: var(--oc-primary);
+	}
+
+	.dd-run__icon svg {
+		width: 20px;
+		height: 20px;
+	}
+
+	.dd-run__intro h2 {
+		font-size: 1.02rem;
+		font-weight: 700;
+	}
+
+	.dd-run__intro p {
+		margin: 4px 0 0;
+	}
+
+	.dd-run__mode {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: 12px;
+		padding: 11px 14px;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
 	}
 
-	.run-result__row span {
-		color: var(--muted);
+	.dd-run__mode > span {
 		font-size: 0.82rem;
 	}
 
-	.run-result__row code {
-		overflow-wrap: anywhere;
-		color: #3e4c44;
-	}
-
-	.run-result__links {
+	.dd-run__cta {
 		display: flex;
-		gap: 0.5rem;
-		flex-wrap: wrap;
-		margin-top: 0.25rem;
+		justify-content: flex-end;
 	}
 
-	.run-result pre {
-		margin: 0.5rem 0 0;
-		max-height: 320px;
-		overflow: auto;
-		padding: 0.85rem;
-		border-radius: 8px;
-		background: #121813;
-		color: #dbeee2;
-		white-space: pre-wrap;
-		word-break: break-word;
-		font-size: 0.8rem;
-		line-height: 1.5;
-	}
-
-	.status-list {
+	/* ── Run result ── */
+	.dd-result {
 		display: grid;
-		gap: 0.4rem;
+		gap: 10px;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
+		padding: 14px;
 	}
 
-	.status-row {
+	.dd-result__row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.55rem 0;
-		border-bottom: 1px solid rgba(23, 32, 27, 0.08);
+		gap: 12px;
 	}
 
-	.status-row:last-child {
+	.dd-result__row span {
+		color: var(--oc-muted);
+		font-size: 0.8rem;
+	}
+
+	.dd-result__row code {
+		overflow-wrap: anywhere;
+		color: var(--oc-text);
+		font-size: 0.78rem;
+	}
+
+	.dd-result__links {
+		display: flex;
+		gap: 8px;
+		flex-wrap: wrap;
+		margin-top: 2px;
+	}
+
+	.dd-result__log summary {
+		cursor: pointer;
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--oc-primary);
+	}
+
+	.oc-log {
+		margin: 8px 0 0;
+		max-height: 320px;
+		overflow: auto;
+		padding: 14px;
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface);
+		color: #334155;
+		border: 1px solid var(--oc-border);
+		white-space: pre-wrap;
+		word-break: break-word;
+		font-size: 0.78rem;
+		line-height: 1.55;
+		font-family: 'Monaco', 'Courier New', monospace;
+	}
+
+	/* ── System status ── */
+	.dd-status {
+		align-self: start;
+	}
+
+	.dd-status__list {
+		display: grid;
+		gap: 0;
+	}
+
+	.dd-status__row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 0;
+		border-bottom: 1px solid var(--oc-border-soft);
+	}
+
+	.dd-status__row:last-child {
 		border-bottom: 0;
 	}
 
-	.status-row span {
-		color: var(--muted);
+	.dd-status__row > span {
+		color: var(--oc-muted);
 		font-size: 0.85rem;
 	}
 
-	.status-row b {
-		overflow-wrap: anywhere;
-		text-align: right;
+	.dd-status__row--stack {
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 5px;
 	}
 
+	.dd-status__gateway {
+		font-family: 'Monaco', 'Courier New', monospace;
+		font-size: 0.76rem;
+		color: var(--oc-text);
+		overflow-wrap: anywhere;
+		max-width: 100%;
+	}
+
+	/* ── Modal ── */
 	.dd-modal {
 		position: fixed;
 		inset: 0;
@@ -592,72 +809,87 @@
 		display: grid;
 		place-items: center;
 		padding: 1rem;
-		background: rgba(15, 23, 19, 0.55);
+		background: rgba(15, 23, 42, 0.5);
 	}
 
 	.dd-modal__box {
 		width: min(560px, 100%);
-		background: #fff;
-		border-radius: 12px;
-		border: 1px solid var(--line);
-		padding: 1.25rem;
+		background: var(--oc-surface);
+		border-radius: var(--oc-radius);
+		border: 1px solid var(--oc-border);
+		padding: 22px;
 		display: grid;
-		gap: 0.75rem;
-		box-shadow: 0 24px 60px rgba(15, 23, 19, 0.3);
+		gap: 12px;
+		box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
 	}
 
 	.dd-modal__box h3 {
-		margin: 0;
+		font-size: 1.1rem;
+		font-weight: 700;
 	}
 
-	.confirm-config {
+	.dd-confirm {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 0.5rem 1rem;
-		padding: 0.75rem;
-		border: 1px solid var(--line);
-		border-radius: 8px;
-		background: var(--field);
+		gap: 8px 16px;
+		padding: 14px;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
 	}
 
-	.confirm-config div {
+	.dd-confirm__item {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
+		gap: 10px;
 	}
 
-	.confirm-config span {
-		color: var(--muted);
-		font-size: 0.82rem;
+	.dd-confirm__item span {
+		color: var(--oc-muted);
+		font-size: 0.8rem;
 	}
 
-	.confirm-warning {
-		padding: 0.75rem 0.9rem;
-		border-radius: 8px;
-		background: #fff7ed;
-		border: 1px solid rgba(180, 83, 9, 0.3);
-		color: var(--warn);
-		font-weight: 700;
-		font-size: 0.9rem;
+	.dd-confirm__item b {
+		font-size: 0.84rem;
+		text-align: right;
+	}
+
+	.dd-confirm__warning {
+		padding: 12px 14px;
+		border-radius: var(--oc-radius-sm);
+		background: rgba(217, 119, 6, 0.09);
+		border: 1px solid rgba(217, 119, 6, 0.28);
+		color: #b45309;
+		font-weight: 600;
+		font-size: 0.88rem;
 	}
 
 	.dd-modal__actions {
 		display: flex;
-		justify-content: end;
-		gap: 0.5rem;
-		margin-top: 0.25rem;
+		justify-content: flex-end;
+		gap: 10px;
+		margin-top: 4px;
 	}
 
-	@media (max-width: 1180px) {
+	/* ── Responsive ── */
+	@media (max-width: 1080px) {
 		.dd-grid {
 			grid-template-columns: 1fr;
 		}
 	}
 
-	@media (max-width: 720px) {
-		.confirm-config {
+	@media (max-width: 640px) {
+		.dd-confirm {
 			grid-template-columns: 1fr;
+		}
+
+		.dd-run__cta .oc-btn {
+			width: 100%;
+		}
+
+		.dd-modal__actions .oc-btn {
+			flex: 1 1 auto;
 		}
 	}
 </style>
