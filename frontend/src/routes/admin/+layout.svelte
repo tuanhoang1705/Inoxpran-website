@@ -32,6 +32,11 @@
 				label: 'OpenClaw AI',
 				roles: ['ADMIN', 'SUPER_ADMIN']
 			},
+			{
+				href: '/admin/openclaw/google-intelligence',
+				label: $locale === 'en' ? 'Google Intelligence' : 'Google Intelligence',
+				roles: ['ADMIN', 'SUPER_ADMIN']
+			},
 			{ href: '/admin/best-selling', label: $t('admin.nav.bestSelling') },
 			{
 				href: '/admin/home-slides',

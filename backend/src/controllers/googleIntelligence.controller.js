@@ -77,6 +77,11 @@ class GoogleIntelligenceController {
         message: 'Get Google Intelligence executions success',
         metadata: await GoogleIntelligenceService.listExecutions(req.query || {})
     }).send(res);
+
+    listRelatedBlogs = async (req, res) => new SuccessResponse({
+        message: 'Get Google Intelligence related blogs success',
+        metadata: await GoogleIntelligenceService.listRelatedBlogs(req.query || {})
+    }).send(res);
 }
 
 module.exports = new GoogleIntelligenceController();

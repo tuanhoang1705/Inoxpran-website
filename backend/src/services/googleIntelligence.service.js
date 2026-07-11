@@ -6,6 +6,7 @@ const { GoogleIntelligenceRun } = require('../models/googleIntelligenceRun.model
 const { GoogleIntelligenceSnapshot } = require('../models/googleIntelligenceSnapshot.model');
 const { GoogleIntelligenceChange } = require('../models/googleIntelligenceChange.model');
 const { GoogleIntelligenceSchedule } = require('../models/googleIntelligenceSchedule.model');
+const { blog: Blog } = require('../models/blog.model');
 const AdminAuditLog = require('../models/adminAuditLog.model');
 const Admin = require('../models/admin.model');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
@@ -596,6 +597,24 @@ class GoogleIntelligenceService {
             changesDetected: run.changesDetected, criticalChanges: run.criticalChanges,
             triggeredBy: run.triggeredBy, error: run.error || '', sourceResults: run.sourceResults || []
         })) };
+    }
+
+    static async listRelatedBlogs({ limit = 30 } = {}) {
+        const blogs = await Blog.find({ googleIntelSnapshotId: { $ne: null } })
+            .sort({ createdAt: -1 })
+            .limit(Math.min(Math.max(Number(limit) || 30, 1), MAX_LIST_LIMIT))
+            .select('_id blog_title isDraft isPublished googleIntelSnapshotId googleIntelSnapshotDate googleIntelStatus researchBundleId editorialStyleProfileId strategyPlanId agenticExecutionId structuralFingerprint createdAt updatedAt')
+            .lean();
+        return {
+            blogs: blogs.map((item) => ({
+                id: String(item._id), title: item.blog_title, isDraft: Boolean(item.isDraft), isPublished: Boolean(item.isPublished),
+                googleIntelSnapshotId: String(item.googleIntelSnapshotId || ''), googleIntelSnapshotDate: item.googleIntelSnapshotDate || '',
+                googleIntelStatus: item.googleIntelStatus || '', researchBundleId: String(item.researchBundleId || ''),
+                editorialStyleProfileId: String(item.editorialStyleProfileId || ''), strategyPlanId: String(item.strategyPlanId || ''),
+                agenticExecutionId: String(item.agenticExecutionId || ''), structuralFingerprint: item.structuralFingerprint || null,
+                createdAt: item.createdAt, updatedAt: item.updatedAt
+            }))
+        };
     }
 
     static async claimDueSchedule({ workerId, now = new Date() }) {

@@ -186,6 +186,11 @@ router.get(
   asyncHandler(googleIntelligenceController.listExecutions),
 );
 router.get(
+  "/openclaw/google-intelligence/related-blogs",
+  requireAdminPermission(["google_intelligence.view"]),
+  asyncHandler(googleIntelligenceController.listRelatedBlogs),
+);
+router.get(
   "/openclaw/editorial-styles",
   requireAdminPermission(["editorial_style.view"]),
   asyncHandler(agenticBlogCoreController.listStyles),
