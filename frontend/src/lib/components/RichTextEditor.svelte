@@ -1,5 +1,5 @@
 <script>
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount, onDestroy, untrack } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { t, locale } from '$lib/i18n/admin/index.js';
 	import { Editor } from '@tiptap/core';
@@ -515,12 +515,21 @@
 		const nextValue = normalizeLegacyBlogContent(value || '');
 		if (!ready || !editor) return;
 		const currentValue = editor.getHTML();
-		const isSame = currentValue === nextValue || (editor.isEmpty && !nextValue);
+		const normalizedCurrentValue = normalizeLegacyBlogContent(currentValue);
+		const isSame =
+			currentValue === nextValue ||
+			normalizedCurrentValue === nextValue ||
+			(editor.isEmpty && !nextValue);
 		if (isSame) return;
-		isUpdatingFromProp = true;
-		editor.commands.setContent(nextValue, false);
-		isUpdatingFromProp = false;
-		txCount += 1;
+		untrack(() => {
+			isUpdatingFromProp = true;
+			try {
+				editor.commands.setContent(nextValue, false);
+			} finally {
+				isUpdatingFromProp = false;
+			}
+			txCount += 1;
+		});
 	});
 </script>
 

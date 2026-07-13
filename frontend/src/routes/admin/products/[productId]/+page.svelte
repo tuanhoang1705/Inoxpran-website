@@ -139,6 +139,20 @@
 		return path.replace(/^\/admin(?=\/|$)/, '') || '/';
 	};
 
+	const resolveCropSourceUrl = (sourceUrl) => {
+		if (!browser || !sourceUrl) return sourceUrl;
+		try {
+			const parsed = new URL(sourceUrl, window.location.origin);
+			if (!['http:', 'https:'].includes(parsed.protocol)) return sourceUrl;
+			if (parsed.origin === window.location.origin) return sourceUrl;
+			return resolveAdminPath(
+				`/admin/api/image-proxy?url=${encodeURIComponent(parsed.href)}`
+			);
+		} catch {
+			return sourceUrl;
+		}
+	};
+
 	const cleanupPendingUploads = () => {
 		if (!uploadSessionId || isSavingProduct || typeof window === 'undefined') return;
 		fetch(resolveAdminPath(`/admin/uploads/pending/${encodeURIComponent(uploadSessionId)}`), {
@@ -584,7 +598,7 @@
 		if (!sourceUrl) return;
 		cropMode = mode;
 		cropTargetIndex = Number.isFinite(index) ? index : -1;
-		cropSourceUrl = sourceUrl;
+		cropSourceUrl = resolveCropSourceUrl(sourceUrl);
 		cropFileName = fileName || '';
 		if (mode === 'thumb') {
 			if (thumbCropState) {
@@ -620,7 +634,9 @@
 		const imageWidth = cropImageEl.naturalWidth;
 		const imageHeight = cropImageEl.naturalHeight;
 		if (!frameWidth || !frameHeight || !imageWidth || !imageHeight) return;
-		cropBaseScale = Math.max(frameWidth / imageWidth, frameHeight / imageHeight);
+		// Start with the whole image visible on a white square canvas. Zooming can
+		// then either add more whitespace or enlarge the image past the crop frame.
+		cropBaseScale = Math.min(frameWidth / imageWidth, frameHeight / imageHeight);
 		const clamped = clampCropOffsets(cropOffsetX, cropOffsetY);
 		cropOffsetX = clamped.x;
 		cropOffsetY = clamped.y;
@@ -638,8 +654,8 @@
 		const scale = cropBaseScale * cropZoom;
 		const scaledWidth = imageWidth * scale;
 		const scaledHeight = imageHeight * scale;
-		const maxX = Math.max(0, (scaledWidth - frameWidth) / 2);
-		const maxY = Math.max(0, (scaledHeight - frameHeight) / 2);
+		const maxX = Math.abs(scaledWidth - frameWidth) / 2;
+		const maxY = Math.abs(scaledHeight - frameHeight) / 2;
 		return {
 			x: Math.min(maxX, Math.max(-maxX, nextX)),
 			y: Math.min(maxY, Math.max(-maxY, nextY))
@@ -685,11 +701,6 @@
 		const topLeftX = (frameWidth - scaledWidth) / 2 + cropOffsetX;
 		const topLeftY = (frameHeight - scaledHeight) / 2 + cropOffsetY;
 
-		const cropX = Math.max(0, -topLeftX / scale);
-		const cropY = Math.max(0, -topLeftY / scale);
-		const cropWidth = Math.min(imageWidth, frameWidth / scale);
-		const cropHeight = Math.min(imageHeight, frameHeight / scale);
-
 		const outputWidth =
 			cropMode === 'gallery' ? GALLERY_MAX_WIDTH : MAX_IMAGE_WIDTH;
 		const outputHeight =
@@ -699,16 +710,17 @@
 		canvas.height = outputHeight;
 		const ctx = canvas.getContext('2d');
 		if (!ctx) return;
+		ctx.fillStyle = '#ffffff';
+		ctx.fillRect(0, 0, outputWidth, outputHeight);
+
+		const outputScaleX = outputWidth / frameWidth;
+		const outputScaleY = outputHeight / frameHeight;
 		ctx.drawImage(
 			cropImageEl,
-			cropX,
-			cropY,
-			cropWidth,
-			cropHeight,
-			0,
-			0,
-			outputWidth,
-			outputHeight
+			topLeftX * outputScaleX,
+			topLeftY * outputScaleY,
+			scaledWidth * outputScaleX,
+			scaledHeight * outputScaleY
 		);
 		const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
@@ -2107,12 +2119,15 @@
 				</div>
 				<div class="cropper-controls">
 					<div class="cropper-zoom">
-						<label for="edit-product-crop-zoom">{$t('admin.blogEditor.cropZoom')}</label>
+						<div class="cropper-zoom-label">
+							<label for="edit-product-crop-zoom">{$t('admin.blogEditor.cropZoom')}</label>
+							<span>{Math.round(cropZoom * 100)}%</span>
+						</div>
 						<input
 							id="edit-product-crop-zoom"
 							type="range"
-							min="1"
-							max="3"
+							min="0.5"
+							max="5"
 							step="0.01"
 							bind:value={cropZoom}
 							oninput={() => {
@@ -2498,7 +2513,7 @@
 		align-items: center;
 		justify-content: center;
 		text-align: center;
-		background: var(--bg-light);
+		background: #fff;
 		transition: all 0.3s ease;
 		cursor: pointer;
 		min-height: 112px;
@@ -3058,6 +3073,20 @@
 	.cropper-zoom {
 		display: grid;
 		gap: 8px;
+	}
+
+	.cropper-zoom-label {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+	}
+
+	.cropper-zoom-label span {
+		color: var(--primary-color);
+		font-size: 0.78rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
 	}
 
 	.cropper-zoom label {

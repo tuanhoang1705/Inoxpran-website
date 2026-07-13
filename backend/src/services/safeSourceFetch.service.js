@@ -5,7 +5,29 @@ const { canonicalizeUrl, isPrivateIp } = require('../utils/googleIntelligence.ut
 
 const DEFAULT_MAX_BYTES = 750_000;
 const BLOCKED_HOSTS = new Set(['localhost', 'localhost.localdomain', 'metadata.google.internal', '169.254.169.254']);
-const ALLOWED_MIME = ['text/html', 'text/plain', 'application/json', 'application/xml', 'text/xml', 'application/rss+xml', 'application/atom+xml'];
+const ALLOWED_MIME = ['text/html', 'application/xhtml+xml', 'text/plain', 'application/json', 'application/xml', 'text/xml', 'application/rss+xml', 'application/atom+xml'];
+const UNDECLARED_MIME = new Set(['', 'none']);
+
+const inferTextContentType = (body, expectedMode = '') => {
+    const text = String(body || '').replace(/^\uFEFF/, '').trimStart();
+    if (!text || text.includes('\u0000')) return '';
+    const mode = String(expectedMode || '').trim().toLowerCase();
+    if (mode === 'rss') {
+        return /^(?:<\?xml\b[^>]*>\s*)?<(?:rss|feed)\b/i.test(text) ? 'application/rss+xml' : '';
+    }
+    if (mode === 'json') {
+        try {
+            JSON.parse(text);
+            return 'application/json';
+        } catch {
+            return '';
+        }
+    }
+    if (mode === 'html') {
+        return /^(?:<!doctype\s+html\b|<html\b|<head\b|<body\b)/i.test(text) ? 'text/html' : '';
+    }
+    return '';
+};
 
 const assertSafeUrl = async (input, { resolveHostname = dns.lookup, allowHttp = false } = {}) => {
     const canonicalUrl = canonicalizeUrl(input);
@@ -74,7 +96,8 @@ const safeSourceFetch = async ({
     fetchImpl = global.fetch,
     resolveHostname = dns.lookup,
     checkRobots = true,
-    allowHttp = false
+    allowHttp = false,
+    expectedMode = ''
 }) => {
     if (typeof fetchImpl !== 'function') throw new Error('fetch_not_available');
     const canonicalUrl = await assertSafeUrl(url, { resolveHostname, allowHttp });
@@ -98,18 +121,26 @@ const safeSourceFetch = async ({
         const response = await fetchImpl(canonicalUrl, {
             headers: {
                 accept: 'text/html,application/rss+xml,application/atom+xml,application/json,text/plain;q=0.8',
+                'accept-language': 'en-US,en;q=0.9',
                 'user-agent': 'InoxpranGoogleIntelligence/1.0 (+https://inoxpran.com)'
             },
             redirect: 'error',
             signal: controller.signal
         });
         if (!response.ok) throw new Error(`source_http_${response.status}`);
-        const contentType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-        if (!ALLOWED_MIME.includes(contentType)) throw new Error('source_mime_not_allowed');
+        const declaredContentType = String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+        if (!ALLOWED_MIME.includes(declaredContentType) && !UNDECLARED_MIME.has(declaredContentType)) {
+            throw new Error('source_mime_not_allowed');
+        }
+        const body = await readLimitedBody(response, maxBytes);
+        const contentType = ALLOWED_MIME.includes(declaredContentType)
+            ? declaredContentType
+            : inferTextContentType(body, expectedMode);
+        if (!contentType) throw new Error('source_mime_not_allowed');
         return {
             canonicalUrl,
             contentType,
-            body: await readLimitedBody(response, maxBytes),
+            body,
             fetchedAt: new Date(),
             etag: String(response.headers.get('etag') || ''),
             lastModified: String(response.headers.get('last-modified') || '')
@@ -125,6 +156,7 @@ const safeSourceFetch = async ({
 module.exports = {
     ALLOWED_MIME,
     assertSafeUrl,
+    inferTextContentType,
     isPathDisallowedByRobots,
     readLimitedBody,
     safeSourceFetch

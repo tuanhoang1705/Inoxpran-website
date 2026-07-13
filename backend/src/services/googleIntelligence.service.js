@@ -26,6 +26,8 @@ const LEASE_MS = 10 * 60 * 1000;
 const CONCURRENT_SNAPSHOT_WAIT_MS = 30_000;
 const CONCURRENT_SNAPSHOT_POLL_MS = 250;
 const MAX_LIST_LIMIT = 100;
+const DEFAULT_SOURCE_MAX_BYTES = 750_000;
+const OFFICIAL_SOURCE_MAX_BYTES = 2_000_000;
 const DEFAULT_SOURCES = [
     {
         name: 'Google Search documentation updates',
@@ -327,10 +329,12 @@ class GoogleIntelligenceService {
                 const fetched = await safeSourceFetch({
                     url: source.baseUrl,
                     timeoutMs: fetchOptions.timeoutMs,
+                    maxBytes: fetchOptions.maxBytes || (source.official ? OFFICIAL_SOURCE_MAX_BYTES : DEFAULT_SOURCE_MAX_BYTES),
                     fetchImpl: fetchOptions.fetchImpl,
                     resolveHostname: fetchOptions.resolveHostname,
                     checkRobots: fetchOptions.checkRobots !== false,
-                    allowHttp: Boolean(fetchOptions.allowHttp)
+                    allowHttp: Boolean(fetchOptions.allowHttp),
+                    expectedMode: source.fetchMode
                 });
                 const normalizedText = stripMarkup(fetched.body).slice(0, 120_000);
                 const currentHash = sha256(normalizedText);

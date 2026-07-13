@@ -1,398 +1,303 @@
 {
-  // TODO: Verify this schema against the installed OpenClaw version on the VPS.
-  version: "1.0",
-  project: "inoxpran-seo-automation",
-  timezone: "Asia/Ho_Chi_Minh",
-  stateDir: "/data",
-  workspacesRoot: "/workspaces",
   gateway: {
-    mode: "local"
-  },
-  dashboard: {
-    public: false,
-    // Bound inside the Docker network only. The compose service does not publish
-    // this port and Nginx returns 403 for dashboard/public paths.
-    bindHost: "0.0.0.0",
-    port: 18789
-  },
-  security: {
-    sandbox: {
-      enabled: true,
-      defaultNetwork: "limited",
-      denySecretsInLogs: true
-    },
-    disallowDirectDatabaseAccess: true,
-    disallowAdminUiPublishing: true,
-    defaultPublishMode: "draft"
+    mode: "local",
   },
   skills: {
-    localDirectories: [
-      "/workspaces/shared-skills"
-    ],
-    // Core ClawHub skills must pass `openclaw skills verify` before install.
-    // Do not add a skill here if verify returns fail/pending.
-    globalAllowlist: [
-      "skill-vetter",
-      "ddg-search",
-      "firecrawl",
-      "Market Research",
-      "research-agent",
-      "content-generation",
-      "AI Image Generation",
-      "google-search-console-seo",
-      "sharpagent-content-safety",
-      "inoxpran-search-console",
-      "google-search-source-policy",
-      "google-intelligence-snapshot",
-      "inoxpran-editorial-style-rotation",
-      "inoxpran-originality-gate",
-      "inoxpran-people-first-review",
-      "inoxpran-blog-strategy-contract",
-      "inoxpran-source-attribution",
-      "inoxpran-telegram-approval-contract",
-      "inoxpran-brand-voice",
-      "inoxpran-seo-research-brief",
-      "inoxpran-positioning",
-      "inoxpran-topic-planner",
-      "inoxpran-blog-image-brief",
-      "inoxpran-visual-plan",
-      "inoxpran-image-quality",
-      "inoxpran-image-metadata",
-      "inoxpran-publisher-gate",
-      "inoxpran-seo-publisher",
-      "inoxpran-seo-review",
-      "inoxpran-blog-editor-schema"
-    ]
+    load: {
+      extraDirs: ["/workspaces/shared-skills"],
+      watch: true,
+    },
   },
-  agents: [
-    {
-      name: "seo-orchestrator",
-      workspace: "/workspaces/seo-orchestrator",
-      promptFile: "/workspaces/prompts/daily-seo-blog.md",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+  agents: {
+    list: [
+      {
+        id: "seo-orchestrator",
+        workspace: "/workspaces/seo-orchestrator",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "skill-vetter",
+          "sharpagent-content-safety",
+          "inoxpran-brand-voice",
+          "inoxpran-seo-review",
+          "inoxpran-blog-editor-schema",
+        ],
       },
-      skillAllowlist: [
-        "skill-vetter",
-        "sharpagent-content-safety",
-        "inoxpran-brand-voice",
-        "inoxpran-seo-review",
-        "inoxpran-blog-editor-schema"
-      ]
-    },
-    {
-      name: "market-insight-analyst",
-      workspace: "/workspaces/market-insight-analyst",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "market-insight-analyst",
+        workspace: "/workspaces/market-insight-analyst",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "ddg-search",
+          "firecrawl",
+          "Market Research",
+          "research-agent",
+          "inoxpran-search-console",
+          "inoxpran-seo-research-brief",
+          "inoxpran-positioning",
+        ],
       },
-      skillAllowlist: [
-        "ddg-search",
-        "firecrawl",
-        "Market Research",
-        "research-agent",
-        "inoxpran-search-console",
-        "inoxpran-seo-research-brief",
-        "inoxpran-positioning"
-      ]
-    },
-    {
-      name: "keyword-researcher",
-      workspace: "/workspaces/keyword-researcher",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "keyword-researcher",
+        workspace: "/workspaces/keyword-researcher",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "ddg-search",
+          "firecrawl",
+          "inoxpran-search-console",
+          "inoxpran-seo-research-brief",
+        ],
       },
-      skillAllowlist: [
-        "ddg-search",
-        "firecrawl",
-        "inoxpran-search-console",
-        "inoxpran-seo-research-brief"
-      ]
-    },
-    {
-      name: "content-ideator",
-      workspace: "/workspaces/content-ideator",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "content-ideator",
+        workspace: "/workspaces/content-ideator",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "Market Research",
+          "content-generation",
+          "inoxpran-brand-voice",
+          "inoxpran-positioning",
+          "inoxpran-topic-planner",
+        ],
       },
-      skillAllowlist: [
-        "Market Research",
-        "content-generation",
-        "inoxpran-brand-voice",
-        "inoxpran-positioning",
-        "inoxpran-topic-planner"
-      ]
-    },
-    {
-      name: "seo-strategist",
-      workspace: "/workspaces/seo-strategist",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "seo-strategist",
+        workspace: "/workspaces/seo-strategist",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "Market Research",
+          "content-generation",
+          "inoxpran-brand-voice",
+          "inoxpran-positioning",
+          "inoxpran-topic-planner",
+          "inoxpran-seo-review",
+        ],
       },
-      skillAllowlist: [
-        "Market Research",
-        "content-generation",
-        "inoxpran-brand-voice",
-        "inoxpran-positioning",
-        "inoxpran-topic-planner",
-        "inoxpran-seo-review"
-      ]
-    },
-    {
-      name: "content-writer",
-      workspace: "/workspaces/content-writer",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "content-writer",
+        workspace: "/workspaces/content-writer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "content-generation",
+          "inoxpran-brand-voice",
+          "inoxpran-positioning",
+          "inoxpran-blog-editor-schema",
+          "inoxpran-blog-strategy-contract",
+          "inoxpran-editorial-style-rotation",
+          "inoxpran-source-attribution",
+        ],
       },
-      skillAllowlist: [
-        "content-generation",
-        "inoxpran-brand-voice",
-        "inoxpran-positioning",
-        "inoxpran-blog-editor-schema",
-        "inoxpran-blog-strategy-contract",
-        "inoxpran-editorial-style-rotation",
-        "inoxpran-source-attribution"
-      ]
-    },
-    {
-      name: "image-planner",
-      workspace: "/workspaces/image-planner",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "image-planner",
+        workspace: "/workspaces/image-planner",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "AI Image Generation",
+          "inoxpran-brand-voice",
+          "inoxpran-blog-image-brief",
+        ],
       },
-      skillAllowlist: [
-        "AI Image Generation",
-        "inoxpran-brand-voice",
-        "inoxpran-blog-image-brief"
-      ]
-    },
-    {
-      name: "visual-planner",
-      workspace: "/workspaces/visual-planner",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-visual-plan", "inoxpran-blog-editor-schema"]
-    },
-    {
-      name: "image-researcher",
-      workspace: "/workspaces/image-researcher",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-visual-plan", "inoxpran-image-quality"]
-    },
-    {
-      name: "image-prompt-builder",
-      workspace: "/workspaces/image-prompt-builder",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-visual-plan", "inoxpran-blog-image-brief"]
-    },
-    {
-      name: "image-quality-reviewer",
-      workspace: "/workspaces/image-quality-reviewer",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-image-quality"]
-    },
-    {
-      name: "seo-image-metadata",
-      workspace: "/workspaces/seo-image-metadata",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-image-metadata"]
-    },
-    {
-      name: "publisher-gatekeeper",
-      workspace: "/workspaces/publisher-gatekeeper",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: [
-        "inoxpran-publisher-gate",
-        "inoxpran-seo-review",
-        "google-intelligence-snapshot",
-        "inoxpran-originality-gate",
-        "inoxpran-people-first-review"
-      ]
-    },
-    {
-      name: "search-console-reporter",
-      workspace: "/workspaces/search-console-reporter",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["google-search-console-seo", "inoxpran-search-console"]
-    },
-    {
-      name: "seo-reviewer",
-      workspace: "/workspaces/seo-reviewer",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "visual-planner",
+        workspace: "/workspaces/visual-planner",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-visual-plan", "inoxpran-blog-editor-schema"],
       },
-      skillAllowlist: [
-        "skill-vetter",
-        "sharpagent-content-safety",
-        "inoxpran-brand-voice",
-        "inoxpran-seo-review",
-        "inoxpran-blog-editor-schema"
-      ]
-    },
-    {
-      name: "publisher",
-      workspace: "/workspaces/publisher",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "image-researcher",
+        workspace: "/workspaces/image-researcher",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-visual-plan", "inoxpran-image-quality"],
       },
-      skillAllowlist: [
-        "inoxpran-seo-publisher"
-      ],
-      publishPolicy: {
-        defaultMode: "draft",
-        requireReviewerPass: true,
-        minSeoScoreEnv: "SEO_AGENT_MIN_SEO_SCORE",
-        autoPublishEnv: "SEO_AGENT_AUTO_PUBLISH"
-      }
-    },
-    {
-      name: "qa-agent",
-      workspace: "/workspaces/qa-agent",
-      tools: {
-        shell: false,
-        browser: true,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "image-prompt-builder",
+        workspace: "/workspaces/image-prompt-builder",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-visual-plan", "inoxpran-blog-image-brief"],
       },
-      skillAllowlist: [
-        "ddg-search",
-        "firecrawl"
-      ]
-    },
-    {
-      name: "google-source-monitor",
-      workspace: "/workspaces/google-source-monitor",
-      tools: { shell: false, browser: true, mongodb: false, adminUi: false },
-      skillAllowlist: ["google-search-source-policy"]
-    },
-    {
-      name: "google-change-detector",
-      workspace: "/workspaces/google-change-detector",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["google-search-source-policy", "google-intelligence-snapshot"]
-    },
-    {
-      name: "google-policy-analyst",
-      workspace: "/workspaces/google-policy-analyst",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["google-search-source-policy", "inoxpran-source-attribution"]
-    },
-    {
-      name: "google-intelligence-reviewer",
-      workspace: "/workspaces/google-intelligence-reviewer",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["google-search-source-policy", "google-intelligence-snapshot", "inoxpran-source-attribution"]
-    },
-    {
-      name: "google-intelligence-gatekeeper",
-      workspace: "/workspaces/google-intelligence-gatekeeper",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["google-intelligence-snapshot"]
-    },
-    {
-      name: "seo-aeo-geo-strategist",
-      workspace: "/workspaces/seo-aeo-geo-strategist",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["google-intelligence-snapshot", "inoxpran-source-attribution", "inoxpran-seo-review"]
-    },
-    {
-      name: "topic-opportunity-researcher",
-      workspace: "/workspaces/topic-opportunity-researcher",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-topic-planner", "inoxpran-blog-strategy-contract", "inoxpran-search-console"]
-    },
-    {
-      name: "industry-content-researcher",
-      workspace: "/workspaces/industry-content-researcher",
-      tools: { shell: false, browser: true, mongodb: false, adminUi: false },
-      skillAllowlist: ["ddg-search", "firecrawl", "google-search-source-policy", "inoxpran-source-attribution"]
-    },
-    {
-      name: "search-intent-analyst",
-      workspace: "/workspaces/search-intent-analyst",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-blog-strategy-contract"]
-    },
-    {
-      name: "editorial-style-planner",
-      workspace: "/workspaces/editorial-style-planner",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-editorial-style-rotation"]
-    },
-    {
-      name: "content-strategist",
-      workspace: "/workspaces/content-strategist",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-blog-strategy-contract", "inoxpran-brand-voice", "inoxpran-source-attribution"]
-    },
-    {
-      name: "content-architect",
-      workspace: "/workspaces/content-architect",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-blog-strategy-contract", "inoxpran-editorial-style-rotation", "inoxpran-blog-editor-schema"]
-    },
-    {
-      name: "originality-reviewer",
-      workspace: "/workspaces/originality-reviewer",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-originality-gate"]
-    },
-    {
-      name: "spam-risk-reviewer",
-      workspace: "/workspaces/spam-risk-reviewer",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-people-first-review", "google-intelligence-snapshot"]
-    },
-    {
-      name: "fact-checker",
-      workspace: "/workspaces/fact-checker",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-source-attribution", "inoxpran-brand-voice"]
-    },
-    {
-      name: "brand-voice-reviewer",
-      workspace: "/workspaces/brand-voice-reviewer",
-      tools: { shell: false, browser: false, mongodb: false, adminUi: false },
-      skillAllowlist: ["inoxpran-brand-voice"]
-    },
-    {
-      name: "reporter",
-      workspace: "/workspaces/reporter",
-      tools: {
-        shell: false,
-        browser: false,
-        mongodb: false,
-        adminUi: false
+      {
+        id: "image-quality-reviewer",
+        workspace: "/workspaces/image-quality-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-image-quality"],
       },
-      skillAllowlist: [
-        "skill-vetter"
-      ]
-    }
-  ]
+      {
+        id: "seo-image-metadata",
+        workspace: "/workspaces/seo-image-metadata",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-image-metadata"],
+      },
+      {
+        id: "publisher-gatekeeper",
+        workspace: "/workspaces/publisher-gatekeeper",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-publisher-gate",
+          "inoxpran-seo-review",
+          "google-intelligence-snapshot",
+          "inoxpran-originality-gate",
+          "inoxpran-people-first-review",
+        ],
+      },
+      {
+        id: "search-console-reporter",
+        workspace: "/workspaces/search-console-reporter",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["google-search-console-seo", "inoxpran-search-console"],
+      },
+      {
+        id: "seo-reviewer",
+        workspace: "/workspaces/seo-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "skill-vetter",
+          "sharpagent-content-safety",
+          "inoxpran-brand-voice",
+          "inoxpran-seo-review",
+          "inoxpran-blog-editor-schema",
+        ],
+      },
+      {
+        id: "publisher",
+        workspace: "/workspaces/publisher",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-seo-publisher"],
+      },
+      {
+        id: "qa-agent",
+        workspace: "/workspaces/qa-agent",
+        tools: { deny: ["exec", "process"] },
+        skills: ["ddg-search", "firecrawl"],
+      },
+      {
+        id: "google-source-monitor",
+        workspace: "/workspaces/google-source-monitor",
+        tools: { deny: ["exec", "process"] },
+        skills: ["google-search-source-policy"],
+      },
+      {
+        id: "google-change-detector",
+        workspace: "/workspaces/google-change-detector",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["google-search-source-policy", "google-intelligence-snapshot"],
+      },
+      {
+        id: "google-policy-analyst",
+        workspace: "/workspaces/google-policy-analyst",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["google-search-source-policy", "inoxpran-source-attribution"],
+      },
+      {
+        id: "google-intelligence-reviewer",
+        workspace: "/workspaces/google-intelligence-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "google-search-source-policy",
+          "google-intelligence-snapshot",
+          "inoxpran-source-attribution",
+        ],
+      },
+      {
+        id: "google-intelligence-gatekeeper",
+        workspace: "/workspaces/google-intelligence-gatekeeper",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["google-intelligence-snapshot"],
+      },
+      {
+        id: "seo-aeo-geo-strategist",
+        workspace: "/workspaces/seo-aeo-geo-strategist",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "google-intelligence-snapshot",
+          "inoxpran-source-attribution",
+          "inoxpran-seo-review",
+        ],
+      },
+      {
+        id: "topic-opportunity-researcher",
+        workspace: "/workspaces/topic-opportunity-researcher",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-topic-planner",
+          "inoxpran-blog-strategy-contract",
+          "inoxpran-search-console",
+        ],
+      },
+      {
+        id: "industry-content-researcher",
+        workspace: "/workspaces/industry-content-researcher",
+        tools: { deny: ["exec", "process"] },
+        skills: [
+          "ddg-search",
+          "firecrawl",
+          "google-search-source-policy",
+          "inoxpran-source-attribution",
+        ],
+      },
+      {
+        id: "search-intent-analyst",
+        workspace: "/workspaces/search-intent-analyst",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-blog-strategy-contract"],
+      },
+      {
+        id: "editorial-style-planner",
+        workspace: "/workspaces/editorial-style-planner",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-editorial-style-rotation"],
+      },
+      {
+        id: "content-strategist",
+        workspace: "/workspaces/content-strategist",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-blog-strategy-contract",
+          "inoxpran-brand-voice",
+          "inoxpran-source-attribution",
+        ],
+      },
+      {
+        id: "content-architect",
+        workspace: "/workspaces/content-architect",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-blog-strategy-contract",
+          "inoxpran-editorial-style-rotation",
+          "inoxpran-blog-editor-schema",
+        ],
+      },
+      {
+        id: "originality-reviewer",
+        workspace: "/workspaces/originality-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-originality-gate"],
+      },
+      {
+        id: "spam-risk-reviewer",
+        workspace: "/workspaces/spam-risk-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-people-first-review",
+          "google-intelligence-snapshot",
+        ],
+      },
+      {
+        id: "fact-checker",
+        workspace: "/workspaces/fact-checker",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-source-attribution", "inoxpran-brand-voice"],
+      },
+      {
+        id: "brand-voice-reviewer",
+        workspace: "/workspaces/brand-voice-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-brand-voice"],
+      },
+      {
+        id: "reporter",
+        workspace: "/workspaces/reporter",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["skill-vetter"],
+      },
+    ],
+  },
 }

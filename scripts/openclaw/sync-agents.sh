@@ -6,10 +6,20 @@ AGENTS_DIR="${ROOT_DIR}/deploy/openclaw/agents"
 WORKSPACES_DIR="${ROOT_DIR}/deploy/openclaw/workspaces"
 PROFILE="${OPENCLAW_PROFILE:-inoxpran}"
 
-if ! command -v openclaw >/dev/null 2>&1; then
-  echo "NOT RUN: openclaw command is unavailable."
-  exit 0
-fi
+run_openclaw() {
+  if command -v openclaw >/dev/null 2>&1; then
+    openclaw "$@"
+    return
+  fi
+
+  if command -v docker >/dev/null 2>&1 && docker inspect app_openclaw >/dev/null 2>&1; then
+    docker exec app_openclaw openclaw "$@"
+    return
+  fi
+
+  echo "OpenClaw CLI is unavailable on the host and app_openclaw is not running." >&2
+  return 127
+}
 
 if [ ! -d "${AGENTS_DIR}" ]; then
   echo "Missing OpenClaw agents directory: ${AGENTS_DIR}"
@@ -18,7 +28,7 @@ fi
 
 mkdir -p "${WORKSPACES_DIR}"
 
-agents_list="$(openclaw --profile "${PROFILE}" agents list 2>&1 || true)"
+agents_list="$(run_openclaw --profile "${PROFILE}" agents list 2>&1 || true)"
 
 for agent_file in "${AGENTS_DIR}"/*.md; do
   [ -f "${agent_file}" ] || continue
@@ -58,13 +68,13 @@ The user owns the Inoxpran website and wants a conservative daily SEO blog autom
 Never expose credentials. Never publish directly unless backend safety gates and reviewer conditions pass.
 EOF
 
-  if printf '%s\n' "${agents_list}" | grep -Eq "^[[:space:]]*-[[:space:]]+${agent_id}\\b"; then
+  if printf '%s\n' "${agents_list}" | grep -Eq "^[[:space:]]*-[[:space:]]+${agent_id}([[:space:]]|$)"; then
     echo "Agent already registered: ${agent_id}"
     continue
   fi
 
   echo "Registering OpenClaw agent: ${agent_id}"
-  openclaw --profile "${PROFILE}" agents add --workspace "${workspace}" --non-interactive "${agent_id}"
+  run_openclaw --profile "${PROFILE}" agents add --workspace "${workspace}" --non-interactive "${agent_id}"
 done
 
 echo "OpenClaw agent sync complete for profile '${PROFILE}'."

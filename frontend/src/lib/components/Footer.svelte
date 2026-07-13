@@ -170,7 +170,7 @@
 					<li><a class="footer-link" href={returnsPolicyHref}>{$t('footer.policyReturns')}</a></li>
 					<li>
 						<a class="footer-link" href={warrantyPolicyHref}>
-							{$locale === 'en' ? 'Warranty policy' : 'ChÃ­nh sÃ¡ch báº£o hÃ nh'}
+							{$locale === 'en' ? 'Warranty policy' : 'Chính sách bảo hành'}
 						</a>
 					</li>
 				</ul>

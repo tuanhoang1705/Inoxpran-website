@@ -161,6 +161,39 @@ describe('safe source fetch controls', () => {
         })).rejects.toThrow('source_mime_not_allowed');
     });
 
+    it('accepts a valid RSS body when an official endpoint declares MIME as None', async () => {
+        const fetchImpl = vi.fn(async (url) => {
+            if (String(url).endsWith('/robots.txt')) return new Response('', { status: 404 });
+            return new Response('<?xml version="1.0"?><rss version="2.0"><channel><title>Updates</title></channel></rss>', {
+                status: 200,
+                headers: { 'content-type': 'None' }
+            });
+        });
+        const result = await safeSourceFetch({
+            url: 'https://developers.google.com/search/updates/search_docs_updates.rss',
+            fetchImpl,
+            resolveHostname: publicDns,
+            expectedMode: 'rss'
+        });
+        expect(result.contentType).toBe('application/rss+xml');
+        expect(result.body).toContain('<rss');
+    });
+
+    it('does not MIME-sniff explicitly declared binary content', async () => {
+        const fetchImpl = vi.fn(async (url) => String(url).endsWith('/robots.txt')
+            ? new Response('', { status: 404 })
+            : new Response('<?xml version="1.0"?><rss></rss>', {
+                status: 200,
+                headers: { 'content-type': 'application/octet-stream' }
+            }));
+        await expect(safeSourceFetch({
+            url: 'https://developers.google.com/search/updates/search_docs_updates.rss',
+            fetchImpl,
+            resolveHostname: publicDns,
+            expectedMode: 'rss'
+        })).rejects.toThrow('source_mime_not_allowed');
+    });
+
     it('returns bounded text for an allowed official response', async () => {
         const fetchImpl = vi.fn(async (url) => {
             if (String(url).endsWith('/robots.txt')) return new Response('User-agent: *\nDisallow:', { status: 200, headers: { 'content-type': 'text/plain' } });
