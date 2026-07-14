@@ -1,6 +1,31 @@
 {
+  // Docker images are updated by the isolated Inoxpran updater service.
+  // Disable the package self-updater/banner because it cannot replace a running image.
+  update: {
+    channel: "stable",
+    checkOnStart: false,
+    auto: { enabled: false },
+  },
   gateway: {
     mode: "local",
+    auth: {
+      mode: "token",
+      // Current Control UI assets are counted by the gateway auth limiter.
+      rateLimit: {
+        maxAttempts: 1000,
+        windowMs: 60000,
+        lockoutMs: 60000,
+        exemptLoopback: true,
+      },
+    },
+    controlUi: {
+      enabled: true,
+      basePath: "/openclaw-dashboard",
+      allowedOrigins: ["https://admin.inoxpran.com"],
+      dangerouslyAllowHostHeaderOriginFallback: false,
+      allowInsecureAuth: false,
+      dangerouslyDisableDeviceAuth: false,
+    },
   },
   skills: {
     load: {

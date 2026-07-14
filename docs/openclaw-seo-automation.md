@@ -188,7 +188,7 @@ docker compose config
 docker compose up -d backend openclaw nginx
 ```
 
-`docker-compose.yml` includes `openclaw/openclaw:latest` with a TODO because the official OpenClaw deployment image must be verified on the VPS. Replace the image if actual OpenClaw docs specify another image.
+`docker-compose.yml` uses the official Docker Hub mirror `openclaw/openclaw:latest`. OpenClaw's container documentation requires replacing the image for upgrades; the package self-updater inside Control UI cannot replace its own running container.
 
 The OpenClaw service intentionally does not use `env_file`. Compose can read root `.env` for variable substitution, but the container only receives the explicit environment variables it needs. This avoids passing MongoDB, OpenAI, Telegram, or unrelated service credentials into the automation runtime.
 
@@ -198,6 +198,31 @@ Runtime directories are ignored:
 - `deploy/openclaw/workspaces/`
 - `deploy/openclaw/reports/`
 
+### One-click Docker update
+
+The admin OpenClaw console exposes `Update OpenClaw` only when `OPENCLAW_UPDATE_ENABLED=true`. The backend writes a fixed-schema request into `deploy/openclaw/update-runtime/`; it never receives the Docker socket.
+
+The `openclaw-updater` Compose profile consumes that request through an isolated container with:
+
+- no network and no published ports;
+- a read-only filesystem and all Linux capabilities dropped;
+- Docker socket access confined to this updater only;
+- a fixed allowlist for the official stable image;
+- a state/config backup before replacement;
+- container health and CLI health verification;
+- automatic image rollback when verification fails.
+
+On the VPS set:
+
+```dotenv
+COMPOSE_PROFILES=vps
+OPENCLAW_UPDATE_ENABLED=true
+OPENCLAW_HOST_PROJECT_PATH=/var/www/project/Inoxpran-Website
+DOCKER_GID=<numeric group id of /var/run/docker.sock>
+```
+
+Then start the updater with `docker compose --profile vps up -d --build openclaw-updater`. Runtime requests and backups are ignored by Git.
+
 ## Nginx And Certificate
 
 Nginx adds:
@@ -205,7 +230,7 @@ Nginx adds:
 - HTTP redirect for `seo-agent.inoxpran.com`
 - HTTPS block for `seo-agent.inoxpran.com`
 - `X-Robots-Tag: noindex, nofollow, noarchive`
-- `/hooks/` proxy to `openclaw:18789`
+- `/hooks/` proxy to the unique `app_openclaw:18789` container endpoint
 - default 403 for dashboard and all other paths
 
 The current certificate path is reused, but certificate SAN coverage for `seo-agent.inoxpran.com` is not verified. Reissue the certificate before production enablement:
@@ -248,7 +273,7 @@ docker compose stop openclaw
 
 ## Known Limitations
 
-- OpenClaw image and config schema must be verified on the VPS.
+- OpenClaw releases can introduce config migrations; the updater keeps a pre-update state archive and verifies health before accepting a new image.
 - ClawHub skill availability is unknown until `install-skills.sh` runs with both CLIs installed.
 - Some relevant ClawHub SEO skills were not installed because `openclaw skills verify` returned fail/pending on 2026-07-07. Re-verify before reconsidering them.
 - Search Console is a local placeholder skill until a verified integration exists.

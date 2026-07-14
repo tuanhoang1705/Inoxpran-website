@@ -8,16 +8,48 @@ const { randomUUID } = require('node:crypto');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { TelegramApprovalService } = require('./telegramApproval.service');
 
-const REPO_ROOT = path.resolve(__dirname, '../../..');
-const OPENCLAW_ROOT = path.join(REPO_ROOT, 'deploy', 'openclaw');
+const REPO_ROOT = path.resolve(process.env.OPENCLAW_REPO_ROOT || path.resolve(__dirname, '../../..'));
+const OPENCLAW_ROOT = path.resolve(process.env.OPENCLAW_ASSET_ROOT || path.join(REPO_ROOT, 'deploy', 'openclaw'));
 const REPORT_FILE = path.join(OPENCLAW_ROOT, 'SKILL_INSTALL_REPORT.md');
 const SCRIPT_ROOT = path.join(REPO_ROOT, 'scripts', 'openclaw');
 const DEFAULT_PROFILE = process.env.OPENCLAW_PROFILE || 'inoxpran';
 const MAX_RUNS = 30;
 const MAX_LOG_CHARS = 18000;
+const DOCKER_UNAVAILABLE_ACTIONS = new Set(['stop-openclaw', 'install-skills', 'sync-agents', 'smoke-test']);
+const DOCKER_UPDATE_ACTIVE_STATES = new Set(['queued', 'running']);
+const DOCKER_UPDATE_TERMINAL_STATES = new Set(['completed', 'failed', 'rolled_back']);
+
+const isDockerManaged = () => String(process.env.OPENCLAW_DEPLOYMENT_MODE || '').trim().toLowerCase() === 'docker';
+const isDockerUpdateEnabled = () => isDockerManaged() &&
+    ['1', 'true', 'yes', 'on'].includes(String(process.env.OPENCLAW_UPDATE_ENABLED || '').trim().toLowerCase());
+const getGatewayHttpUrl = () => String(
+    process.env.OPENCLAW_GATEWAY_HTTP_URL ||
+    (isDockerManaged() ? 'http://app_openclaw:18789' : 'http://127.0.0.1:18789')
+).replace(/\/+$/, '');
+
+const getConfiguredDashboardUrl = () => {
+    const rawUrl = String(
+        process.env.OPENCLAW_DASHBOARD_URL || (isDockerManaged() ? '' : 'http://127.0.0.1:18789/')
+    ).trim();
+    if (!rawUrl) return '';
+
+    let parsed;
+    try {
+        parsed = new URL(rawUrl);
+    } catch {
+        return '';
+    }
+    if (!['http:', 'https:'].includes(parsed.protocol)) return '';
+    if (isDockerManaged() && parsed.protocol !== 'https:') return '';
+
+    const baseUrl = parsed.toString().replace(/#.*$/, '');
+    const gatewayToken = String(process.env.OPENCLAW_GATEWAY_TOKEN || '').trim();
+    if (!isDockerManaged() || !gatewayToken) return baseUrl;
+    return `${baseUrl}#token=${encodeURIComponent(gatewayToken)}`;
+};
 
 const runStore = new Map();
-let lastDashboardUrl = process.env.OPENCLAW_DASHBOARD_URL || 'http://127.0.0.1:18789/';
+let lastDashboardUrl = getConfiguredDashboardUrl();
 
 const ACTIONS = {
     'start-openclaw': {
@@ -47,6 +79,10 @@ const ACTIONS = {
     'daily-draft': {
         label: 'Run daily draft workflow',
         timeoutMs: 35 * 60 * 1000
+    },
+    'update-openclaw': {
+        label: 'Update OpenClaw Docker image',
+        timeoutMs: 20 * 60 * 1000
     }
 };
 
@@ -88,14 +124,125 @@ const parseBoolean = (value) => {
     return ['1', 'true', 'yes', 'on'].includes(normalized);
 };
 
+const readJsonIfExists = (filePath) => {
+    const content = readFileIfExists(filePath);
+    if (!content) return null;
+    try {
+        return JSON.parse(content);
+    } catch {
+        return null;
+    }
+};
+
+const writeJsonAtomic = (filePath, payload) => {
+    const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+    fs.writeFileSync(tempPath, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o660 });
+    fs.renameSync(tempPath, filePath);
+};
+
+const getDockerUpdateRuntimeDir = (runtimeDir) => path.resolve(
+    runtimeDir || process.env.OPENCLAW_UPDATE_RUNTIME_DIR || path.join(REPO_ROOT, 'deploy', 'openclaw', 'update-runtime')
+);
+
+const queueDockerUpdateRequest = ({ runId, runtimeDir, now = new Date() }) => {
+    const updateDir = getDockerUpdateRuntimeDir(runtimeDir);
+    fs.mkdirSync(updateDir, { recursive: true, mode: 0o770 });
+
+    const requestFile = path.join(updateDir, 'request.json');
+    const processingFile = path.join(updateDir, 'processing.json');
+    const statusFile = path.join(updateDir, 'status.json');
+    const existingStatus = readJsonIfExists(statusFile);
+    const existingUpdatedAt = new Date(existingStatus?.updatedAt || 0).getTime();
+    const activeStatusIsFresh = DOCKER_UPDATE_ACTIVE_STATES.has(existingStatus?.state) &&
+        Number.isFinite(existingUpdatedAt) && now.getTime() - existingUpdatedAt < ACTIONS['update-openclaw'].timeoutMs;
+
+    if (activeStatusIsFresh || fs.existsSync(requestFile) || fs.existsSync(processingFile)) {
+        throw new BadRequestError('An OpenClaw Docker update is already queued or running');
+    }
+
+    const request = {
+        schemaVersion: 1,
+        action: 'update-openclaw',
+        requestId: runId,
+        requestedAt: now.toISOString()
+    };
+    const queuedStatus = {
+        schemaVersion: 1,
+        requestId: runId,
+        state: 'queued',
+        phase: 'queued',
+        message: 'Update request accepted. Waiting for the isolated Docker updater.',
+        fromVersion: '',
+        toVersion: '',
+        backupDir: '',
+        error: '',
+        startedAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+        finishedAt: ''
+    };
+
+    writeJsonAtomic(statusFile, queuedStatus);
+    writeJsonAtomic(requestFile, request);
+    return { request, status: queuedStatus, requestFile, statusFile };
+};
+
+const formatDockerUpdateStatus = (status) => {
+    const lines = [];
+    if (status?.message) lines.push(status.message);
+    if (status?.fromVersion) lines.push(`From: ${status.fromVersion}`);
+    if (status?.toVersion) lines.push(`To: ${status.toVersion}`);
+    if (status?.backupDir) lines.push(`Backup: ${status.backupDir}`);
+    if (status?.error) lines.push(`Error: ${status.error}`);
+    return redactForDashboard(lines.join('\n'));
+};
+
+const probeOpenClawGateway = async ({ fetchImpl = global.fetch, timeoutMs = 5000 } = {}) => {
+    if (typeof fetchImpl !== 'function') {
+        return { reachable: false, live: false, ready: false, error: 'fetch_not_available' };
+    }
+    const baseUrl = getGatewayHttpUrl();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000));
+    try {
+        const check = async (pathName) => {
+            const response = await fetchImpl(`${baseUrl}/${pathName}`, {
+                headers: { accept: 'application/json,text/plain;q=0.8' },
+                redirect: 'error',
+                signal: controller.signal
+            });
+            return { ok: response.ok, status: response.status };
+        };
+        const [liveness, readiness] = await Promise.all([check('healthz'), check('readyz')]);
+        return {
+            reachable: true,
+            live: liveness.ok,
+            ready: readiness.ok,
+            livenessStatus: liveness.status,
+            readinessStatus: readiness.status,
+            checkedAt: new Date().toISOString(),
+            error: ''
+        };
+    } catch (error) {
+        return {
+            reachable: false,
+            live: false,
+            ready: false,
+            checkedAt: new Date().toISOString(),
+            error: error?.name === 'AbortError' ? 'gateway_health_timeout' : 'gateway_unreachable'
+        };
+    } finally {
+        clearTimeout(timeout);
+    }
+};
+
 const redactForDashboard = (value) => {
     let output = String(value || '');
     output = output.replace(/sk-[A-Za-z0-9_-]{12,}/g, '[redacted-openai-key]');
     output = output.replace(/mongodb(\+srv)?:\/\/[^\s"']+/gi, '[redacted-mongodb-uri]');
     output = output.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
-    output = output.replace(/([?&](?:token|auth|access_token)=)[^&\s"']+/gi, '$1[redacted]');
+    output = output.replace(/([?#&](?:token|auth|access_token)=)[^&#\s"']+/gi, '$1[redacted]');
     output = output.replace(
-        /\b(API_KEY|SEO_AGENT_API_KEY|SEO_AGENT_HMAC_SECRET|OPENCLAW_GATEWAY_TOKEN|OPENAI_API_KEY|MONGODB_URI|TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET)(\s*[:=]\s*)([^\s"']+)/gi,
+        /\b(API_KEY|SEO_AGENT_API_KEY|SEO_AGENT_HMAC_SECRET|OPENCLAW_GATEWAY_TOKEN|OPENAI_API_KEY|FIRECRAWL_API_KEY|IMAGE_SEARCH_API_KEY|AI_IMAGE_API_KEY|MONGODB_URI|TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET)(\s*[:=]\s*)([^\s"']+)/gi,
         '$1$2[redacted]'
     );
     output = output.replace(
@@ -202,7 +349,26 @@ const getScriptPath = (baseName) => {
 const buildCommand = ({ action, profile }) => {
     const activeProfile = normalizeProfile(profile);
 
+    if (action === 'update-openclaw') {
+        if (!isDockerUpdateEnabled()) {
+            throw new BadRequestError('The isolated OpenClaw Docker updater is not enabled for this deployment');
+        }
+        return {
+            internal: 'docker-update-request',
+            display: 'OpenClaw Docker updater: pull stable image, health-check, rollback on failure'
+        };
+    }
+
     if (action === 'status' || action === 'start-openclaw' || action === 'stop-openclaw') {
+        if (isDockerManaged()) {
+            if (action === 'stop-openclaw') {
+                throw new BadRequestError('OpenClaw is managed by Docker Compose; stopping it from the web console is disabled');
+            }
+            return {
+                internal: 'gateway-probe',
+                display: `GET ${getGatewayHttpUrl()}/healthz + /readyz`
+            };
+        }
         const gatewayActionByDashboardAction = {
             'start-openclaw': ['dashboard', '--yes', '--no-open'],
             'stop-openclaw': ['gateway', 'stop']
@@ -291,6 +457,7 @@ const buildDashboard = () => {
         'API_KEY',
         'SEO_AGENT_API_KEY',
         'SEO_AGENT_HMAC_SECRET',
+        'OPENAI_API_KEY',
         'OPENCLAW_GATEWAY_TOKEN',
         'FIRECRAWL_API_KEY',
         'IMAGE_SEARCH_API_KEY',
@@ -328,18 +495,22 @@ const buildDashboard = () => {
         telegram: TelegramApprovalService.status(),
         env: Object.fromEntries(requiredEnv.map((name) => [name, Boolean(process.env[name])])),
         openclaw: {
-            dashboardUrl: lastDashboardUrl,
-            gatewayUrl: 'ws://127.0.0.1:18789',
+            dashboardUrl: lastDashboardUrl || getConfiguredDashboardUrl(),
+            gatewayUrl: isDockerManaged() ? 'ws://app_openclaw:18789' : 'ws://127.0.0.1:18789',
+            deploymentMode: isDockerManaged() ? 'docker' : 'local',
             configPath: path.relative(REPO_ROOT, path.join(OPENCLAW_ROOT, 'openclaw.json5')),
             promptPath: path.relative(REPO_ROOT, path.join(OPENCLAW_ROOT, 'prompts', 'daily-seo-blog.md')),
             configExists: fs.existsSync(path.join(OPENCLAW_ROOT, 'openclaw.json5')),
             promptExists: fs.existsSync(path.join(OPENCLAW_ROOT, 'prompts', 'daily-seo-blog.md'))
         },
-        actions: Object.entries(ACTIONS).map(([id, action]) => ({
-            id,
-            label: action.label,
-            timeoutMs: action.timeoutMs
-        })),
+        actions: Object.entries(ACTIONS)
+            .filter(([id]) => !isDockerManaged() || !DOCKER_UNAVAILABLE_ACTIONS.has(id))
+            .filter(([id]) => id !== 'update-openclaw' || isDockerUpdateEnabled())
+            .map(([id, action]) => ({
+                id,
+                label: action.label,
+                timeoutMs: action.timeoutMs
+            })),
         agents: localAgents,
         localSkills,
         skillReport,
@@ -348,8 +519,10 @@ const buildDashboard = () => {
 };
 
 class OpenClawDashboardService {
-    static dashboard() {
-        return buildDashboard();
+    static async dashboard() {
+        const dashboard = buildDashboard();
+        dashboard.openclaw.health = await probeOpenClawGateway();
+        return dashboard;
     }
 
     static listRuns() {
@@ -384,6 +557,71 @@ class OpenClawDashboardService {
         };
         runStore.set(run.id, run);
         trimRunStore();
+
+        if (command.internal === 'gateway-probe') {
+            Promise.resolve().then(async () => {
+                const health = await probeOpenClawGateway({ timeoutMs: ACTIONS[normalizedAction].timeoutMs });
+                run.finishedAt = new Date().toISOString();
+                run.exitCode = health.ready ? 0 : 1;
+                run.status = health.ready ? 'completed' : 'failed';
+                run.output = redactForDashboard([
+                    health.ready
+                        ? 'OpenClaw Docker gateway is running and ready.'
+                        : 'OpenClaw Docker gateway is not ready.',
+                    JSON.stringify(health, null, 2)
+                ].join('\n'));
+                run.error = health.ready ? '' : redactForDashboard(health.error || 'gateway_not_ready');
+                if (health.ready && lastDashboardUrl) run.dashboardUrl = lastDashboardUrl;
+            });
+            return normalizeRun(run);
+        }
+
+        if (command.internal === 'docker-update-request') {
+            Promise.resolve().then(async () => {
+                try {
+                    const queued = queueDockerUpdateRequest({ runId: run.id });
+                    const deadline = Date.now() + ACTIONS[normalizedAction].timeoutMs;
+                    let lastPhase = '';
+                    const progressLines = [];
+
+                    while (Date.now() < deadline) {
+                        const status = readJsonIfExists(queued.statusFile);
+                        if (status?.requestId === run.id) {
+                            const phase = `${status.state || ''}:${status.phase || ''}:${status.updatedAt || ''}`;
+                            if (phase !== lastPhase) {
+                                const formatted = formatDockerUpdateStatus(status);
+                                if (formatted) progressLines.push(`[${status.phase || status.state}] ${formatted}`);
+                                lastPhase = phase;
+                                run.rawOutput = progressLines.join('\n\n');
+                                run.output = redactForDashboard(run.rawOutput);
+                            }
+
+                            if (DOCKER_UPDATE_TERMINAL_STATES.has(status.state)) {
+                                run.finishedAt = status.finishedAt || new Date().toISOString();
+                                run.exitCode = status.state === 'completed' ? 0 : 1;
+                                run.status = status.state === 'completed' ? 'completed' : 'failed';
+                                run.error = status.state === 'completed'
+                                    ? ''
+                                    : redactForDashboard(status.error || status.message || 'OpenClaw update failed');
+                                return;
+                            }
+                        }
+                        await new Promise((resolve) => setTimeout(resolve, 2000));
+                    }
+
+                    run.status = 'timed_out';
+                    run.exitCode = 1;
+                    run.error = 'OpenClaw Docker update timed out';
+                    run.finishedAt = new Date().toISOString();
+                } catch (error) {
+                    run.status = 'failed';
+                    run.exitCode = 1;
+                    run.error = redactForDashboard(error.message);
+                    run.finishedAt = new Date().toISOString();
+                }
+            });
+            return normalizeRun(run);
+        }
 
         let child;
         try {
@@ -449,5 +687,9 @@ class OpenClawDashboardService {
 module.exports = {
     OpenClawDashboardService,
     extractDashboardUrl,
+    getConfiguredDashboardUrl,
+    formatDockerUpdateStatus,
+    probeOpenClawGateway,
+    queueDockerUpdateRequest,
     redactForDashboard
 };

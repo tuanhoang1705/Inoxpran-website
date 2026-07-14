@@ -26,6 +26,13 @@
 	const agents = $derived(Array.isArray(dashboard?.agents) ? dashboard.agents : []);
 	const localSkills = $derived(Array.isArray(dashboard?.localSkills) ? dashboard.localSkills : []);
 	const skillReport = $derived(dashboard?.skillReport || {});
+	const telegramConfigured = $derived(
+		Boolean(
+			env.TELEGRAM_BOT_TOKEN &&
+				env.TELEGRAM_WEBHOOK_SECRET &&
+				(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)
+		)
+	);
 	const activeRuns = $derived(runs.filter((run) => run.status === 'running'));
 	const selectedRun = $derived(
 		runs.find((run) => run.id === selectedRunId) || runs[0] || null
@@ -34,7 +41,7 @@
 		selectedRun?.dashboardUrl ||
 			runs.find((run) => run.dashboardUrl)?.dashboardUrl ||
 			dashboard?.openclaw?.dashboardUrl ||
-			'http://127.0.0.1:18789/'
+			''
 	);
 
 	const copy = $derived({
@@ -88,6 +95,12 @@
 		status: {
 			label: isEn ? 'Status' : 'Kiểm tra status',
 			detail: isEn ? 'Gateway, model, profile' : 'Gateway, model, profile'
+		},
+		'update-openclaw': {
+			label: isEn ? 'Update OpenClaw' : 'Cập nhật OpenClaw',
+			detail: isEn
+				? 'Pull stable image, health-check, auto rollback'
+				: 'Tải bản stable, kiểm tra health, tự rollback'
 		},
 		'install-skills': {
 			label: isEn ? 'Install skills' : 'Cài skills',
@@ -190,6 +203,14 @@
 
 	const startRun = async (action) => {
 		if (busyAction) return;
+		if (
+			action === 'update-openclaw' &&
+			!window.confirm(
+				isEn
+					? 'Update OpenClaw to the latest stable Docker image now? The Gateway may be unavailable briefly and will roll back automatically if health checks fail.'
+					: 'Cập nhật OpenClaw lên Docker image stable mới nhất ngay bây giờ? Gateway có thể gián đoạn ngắn và sẽ tự rollback nếu health check thất bại.'
+			)
+		) return;
 		busyAction = action;
 		pageError = '';
 
@@ -241,10 +262,16 @@
 				<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.3M21 12a9 9 0 0 1-15.5 6.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 3v3.5H14.5M6 21v-3.5H9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
 				<span>{copy.refresh}</span>
 			</button>
-			<a class="oc-btn oc-btn--primary" href={dashboardUrl} target="_blank" rel="noreferrer">
-				<span>{copy.dashboard}</span>
-				<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-			</a>
+			{#if dashboardUrl}
+				<a class="oc-btn oc-btn--primary" href={dashboardUrl} target="_blank" rel="noreferrer">
+					<span>{copy.dashboard}</span>
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+				</a>
+			{:else}
+				<button class="oc-btn oc-btn--primary" type="button" disabled title="OpenClaw Control UI chỉ được mở qua SSH tunnel hoặc mạng riêng">
+					<span>{isEn ? 'Private dashboard' : 'Dashboard nội bộ'}</span>
+				</button>
+			{/if}
 		</div>
 	</header>
 
@@ -275,7 +302,7 @@
 			<div class="oc-status__item">
 				<span class="oc-status__label">Telegram</span>
 				<span class="oc-badge" class:is-good={scheduleRuntime.telegramEnabled} class:is-muted={!scheduleRuntime.telegramEnabled}>
-					<span class="oc-dot"></span>{scheduleRuntime.telegramEnabled ? 'ON' : 'OFF'}
+					<span class="oc-dot"></span>{scheduleRuntime.telegramEnabled ? 'ON' : 'OPTIONAL'}
 				</span>
 			</div>
 			<div class="oc-status__item">
@@ -306,11 +333,12 @@
 				<div class="oc-actions__group">
 					<p class="oc-actions__label">{copy.groupGateway}</p>
 					<div class="oc-actions__grid">
-						{#each actions.filter((a) => ['start-openclaw', 'stop-openclaw', 'status'].includes(a.id)) as action (action.id)}
+						{#each actions.filter((a) => ['start-openclaw', 'stop-openclaw', 'status', 'update-openclaw'].includes(a.id)) as action (action.id)}
 							<button
 								type="button"
 								class="oc-action"
 								class:oc-action--warn={action.id === 'stop-openclaw'}
+								class:oc-action--update={action.id === 'update-openclaw'}
 								disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
 								onclick={() =>
 									action.id === 'daily-draft'
@@ -374,11 +402,11 @@
 					</div>
 				</div>
 
-				{#if actions.filter((a) => !['start-openclaw', 'stop-openclaw', 'status', 'install-skills', 'sync-agents', 'smoke-test', 'daily-draft'].includes(a.id)).length}
+				{#if actions.filter((a) => !['start-openclaw', 'stop-openclaw', 'status', 'update-openclaw', 'install-skills', 'sync-agents', 'smoke-test', 'daily-draft'].includes(a.id)).length}
 					<div class="oc-actions__group">
 						<p class="oc-actions__label">{copy.groupOther}</p>
 						<div class="oc-actions__grid">
-							{#each actions.filter((a) => !['start-openclaw', 'stop-openclaw', 'status', 'install-skills', 'sync-agents', 'smoke-test', 'daily-draft'].includes(a.id)) as action (action.id)}
+						{#each actions.filter((a) => !['start-openclaw', 'stop-openclaw', 'status', 'update-openclaw', 'install-skills', 'sync-agents', 'smoke-test', 'daily-draft'].includes(a.id)) as action (action.id)}
 								<button
 									type="button"
 									class="oc-action"
@@ -415,7 +443,7 @@
 				</div>
 				<div class="oc-gate__row">
 					<span>SEO_AGENT_AUTO_PUBLISH</span>
-					<b class="oc-badge" class:is-good={!automation.autoPublish} class:is-warn={automation.autoPublish}>{automation.autoPublish ? 'true' : 'false'}</b>
+					<b class="oc-badge" class:is-good={!automation.autoPublish} class:is-warn={automation.autoPublish}>{automation.autoPublish ? 'enabled' : 'draft review'}</b>
 				</div>
 				<div class="oc-gate__row">
 					<span>API_KEY</span>
@@ -428,6 +456,14 @@
 				<div class="oc-gate__row">
 					<span>SEO_AGENT_HMAC_SECRET</span>
 					<b class="oc-badge" class:is-good={env.SEO_AGENT_HMAC_SECRET} class:is-warn={!env.SEO_AGENT_HMAC_SECRET}>{env.SEO_AGENT_HMAC_SECRET ? 'set' : 'missing'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>OPENAI_API_KEY</span>
+					<b class="oc-badge" class:is-good={env.OPENAI_API_KEY} class:is-warn={!env.OPENAI_API_KEY}>{env.OPENAI_API_KEY ? 'set' : 'missing'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>OPENCLAW_GATEWAY_TOKEN</span>
+					<b class="oc-badge" class:is-good={env.OPENCLAW_GATEWAY_TOKEN} class:is-warn={!env.OPENCLAW_GATEWAY_TOKEN}>{env.OPENCLAW_GATEWAY_TOKEN ? 'set' : 'missing'}</b>
 				</div>
 			</div>
 
@@ -463,20 +499,27 @@
 				</div>
 				<div class="oc-gate__row">
 					<span>TELEGRAM_BOT_ENABLED</span>
-					<b class="oc-badge" class:is-good={scheduleRuntime.telegramEnabled} class:is-muted={!scheduleRuntime.telegramEnabled}>{scheduleRuntime.telegramEnabled ? 'true' : 'false'}</b>
+					<b class="oc-badge" class:is-good={scheduleRuntime.telegramEnabled} class:is-muted={!scheduleRuntime.telegramEnabled}>{scheduleRuntime.telegramEnabled ? 'enabled' : 'optional / off'}</b>
 				</div>
-				<div class="oc-gate__row">
-					<span>TELEGRAM_BOT_TOKEN</span>
-					<b class="oc-badge" class:is-good={env.TELEGRAM_BOT_TOKEN} class:is-warn={!env.TELEGRAM_BOT_TOKEN}>{env.TELEGRAM_BOT_TOKEN ? 'set' : 'missing'}</b>
-				</div>
-				<div class="oc-gate__row">
-					<span>TELEGRAM_WEBHOOK_SECRET</span>
-					<b class="oc-badge" class:is-good={env.TELEGRAM_WEBHOOK_SECRET} class:is-warn={!env.TELEGRAM_WEBHOOK_SECRET}>{env.TELEGRAM_WEBHOOK_SECRET ? 'set' : 'missing'}</b>
-				</div>
-				<div class="oc-gate__row">
-					<span>TELEGRAM_ALLOWLIST</span>
-					<b class="oc-badge" class:is-good={env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS} class:is-warn={!(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)}>{env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS ? 'set' : 'missing'}</b>
-				</div>
+				{#if scheduleRuntime.telegramEnabled || telegramConfigured}
+					<div class="oc-gate__row">
+						<span>TELEGRAM_BOT_TOKEN</span>
+						<b class="oc-badge" class:is-good={env.TELEGRAM_BOT_TOKEN} class:is-warn={!env.TELEGRAM_BOT_TOKEN}>{env.TELEGRAM_BOT_TOKEN ? 'set' : 'missing'}</b>
+					</div>
+					<div class="oc-gate__row">
+						<span>TELEGRAM_WEBHOOK_SECRET</span>
+						<b class="oc-badge" class:is-good={env.TELEGRAM_WEBHOOK_SECRET} class:is-warn={!env.TELEGRAM_WEBHOOK_SECRET}>{env.TELEGRAM_WEBHOOK_SECRET ? 'set' : 'missing'}</b>
+					</div>
+					<div class="oc-gate__row">
+						<span>TELEGRAM_ALLOWLIST</span>
+						<b class="oc-badge" class:is-good={env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS} class:is-warn={!(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)}>{env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS ? 'set' : 'missing'}</b>
+					</div>
+				{:else}
+					<div class="oc-gate__row">
+						<span>TELEGRAM_APPROVAL</span>
+						<b class="oc-badge is-muted">{isEn ? 'optional / not configured' : 'tùy chọn / chưa cấu hình'}</b>
+					</div>
+				{/if}
 			</div>
 		</aside>
 	</div>
@@ -942,6 +985,11 @@
 	.oc-action--warn:hover {
 		border-color: var(--oc-warning);
 		background: rgba(217, 119, 6, 0.07);
+	}
+
+	.oc-action--update {
+		border-color: color-mix(in srgb, var(--oc-primary) 42%, var(--oc-border));
+		background: var(--oc-primary-soft);
 	}
 
 	.oc-action--link {

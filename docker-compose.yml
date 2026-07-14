@@ -19,6 +19,12 @@
       APP_BASE_URL: ${APP_BASE_URL}
       OPENCLAW_BLOG_CRON_ENABLED: ${OPENCLAW_BLOG_CRON_ENABLED:-false}
       OPENCLAW_BLOG_CRON_POLL_MS: ${OPENCLAW_BLOG_CRON_POLL_MS:-30000}
+      OPENCLAW_DEPLOYMENT_MODE: docker
+      OPENCLAW_GATEWAY_HTTP_URL: http://app_openclaw:18789
+      OPENCLAW_UPDATE_ENABLED: ${OPENCLAW_UPDATE_ENABLED:-false}
+      OPENCLAW_UPDATE_RUNTIME_DIR: /openclaw-update-runtime
+      OPENCLAW_ASSET_ROOT: /openclaw-assets
+      OPENCLAW_DASHBOARD_URL: ${OPENCLAW_DASHBOARD_URL:-https://admin.inoxpran.com/openclaw-dashboard/}
       TELEGRAM_BOT_ENABLED: ${TELEGRAM_BOT_ENABLED:-false}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_NOTIFY_CHAT_IDS: ${TELEGRAM_NOTIFY_CHAT_IDS:-}
@@ -26,6 +32,13 @@
       TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
       TELEGRAM_APPROVAL_TTL_HOURS: ${TELEGRAM_APPROVAL_TTL_HOURS:-72}
+    volumes:
+      - ./deploy/openclaw/agents:/openclaw-assets/agents:ro
+      - ./deploy/openclaw/skills:/openclaw-assets/skills:ro
+      - ./deploy/openclaw/prompts:/openclaw-assets/prompts:ro
+      - ./deploy/openclaw/openclaw.json5:/openclaw-assets/openclaw.json5:ro
+      - ./deploy/openclaw/SKILL_INSTALL_REPORT.md:/openclaw-assets/SKILL_INSTALL_REPORT.md:ro
+      - ./deploy/openclaw/update-runtime:/openclaw-update-runtime
     restart: unless-stopped
     networks:
       - appnet
@@ -77,6 +90,8 @@
       OPENCLAW_STATE_DIR: /data
       OPENCLAW_CONFIG_PATH: /data/openclaw.json5
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_NO_AUTO_UPDATE: "1"
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       INOXPRAN_BACKEND_API_BASE: http://backend:3056/v1/api
       INOXPRAN_PUBLIC_SITE_URL: https://inoxpran.com
       INOXPRAN_SEO_AGENT_AUTO_PUBLISH: ${SEO_AGENT_AUTO_PUBLISH:-false}
@@ -91,11 +106,51 @@
       - ./deploy/openclaw/skills:/workspaces/shared-skills:ro
       - ./deploy/openclaw/prompts:/workspaces/prompts:ro
     restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://127.0.0.1:18789/healthz').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
     networks:
       - appnet
     depends_on:
       - backend
       - redis
+
+  openclaw-updater:
+    profiles:
+      - vps
+    build: ./deploy/openclaw/updater
+    image: inoxpran/openclaw-updater:local
+    container_name: app_openclaw_updater
+    user: "1000:1000"
+    group_add:
+      - "${DOCKER_GID:-991}"
+    environment:
+      OPENCLAW_PROJECT_ROOT: ${OPENCLAW_HOST_PROJECT_PATH:-/workspace}
+      OPENCLAW_UPDATE_RUNTIME_DIR: ${OPENCLAW_HOST_PROJECT_PATH:-/workspace}/deploy/openclaw/update-runtime
+      OPENCLAW_UPDATE_BACKUP_DIR: ${OPENCLAW_HOST_PROJECT_PATH:-/workspace}/deploy/openclaw/update-backups
+      OPENCLAW_UPDATE_IMAGE: openclaw/openclaw:latest
+      OPENCLAW_UPDATE_POLL_MS: 2000
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${OPENCLAW_HOST_PROJECT_PATH:-.}:${OPENCLAW_HOST_PROJECT_PATH:-/workspace}:ro
+      - ./deploy/openclaw/update-runtime:${OPENCLAW_HOST_PROJECT_PATH:-/workspace}/deploy/openclaw/update-runtime:rw
+      - ./deploy/openclaw/update-backups:${OPENCLAW_HOST_PROJECT_PATH:-/workspace}/deploy/openclaw/update-backups:rw
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    depends_on:
+      - openclaw
 
   frontend:
     build: ./frontend

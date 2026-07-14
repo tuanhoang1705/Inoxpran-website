@@ -7,7 +7,7 @@ class OpenClawDashboardController {
     getDashboard = async (req, res) => {
         new SuccessResponse({
             message: 'Get OpenClaw dashboard success',
-            metadata: OpenClawDashboardService.dashboard()
+            metadata: await OpenClawDashboardService.dashboard()
         }).send(res);
     };
 
