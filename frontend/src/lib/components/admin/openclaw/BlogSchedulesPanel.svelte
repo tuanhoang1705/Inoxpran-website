@@ -496,7 +496,8 @@
 				</label>
 				<label class="oc-field">
 					<span>{t.topic}</span>
-					<textarea bind:value={scheduleForm.topic} rows="2" required></textarea>
+					<textarea bind:value={scheduleForm.topic} rows="2" maxlength="300" required></textarea>
+					<small class="oc-topic-count" style="display:block;text-align:right;font-size:0.72rem;opacity:0.65;{(scheduleForm.topic || '').length > 300 ? 'color:#c0392b;opacity:1;font-weight:700;' : ''}">{(scheduleForm.topic || '').length}/300</small>
 				</label>
 			</fieldset>
 

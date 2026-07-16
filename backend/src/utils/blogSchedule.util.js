@@ -97,10 +97,16 @@ const intervalToMinutes = ({ value, unit }) => {
     return 0;
 };
 
+const MAX_AGENT_TOPIC_LENGTH = 300;
+
 const normalizeAgentConfig = (value = {}) => {
     const config = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+    const topic = normalizeString(config.topic || config.primaryKeyword || 'noi inox cho gia dinh');
+    if (topic.length > MAX_AGENT_TOPIC_LENGTH) {
+        throw new BadRequestError(`Topic must be at most ${MAX_AGENT_TOPIC_LENGTH} characters (received ${topic.length}). Use a short subject phrase.`);
+    }
     return {
-        topic: normalizeString(config.topic || config.primaryKeyword || 'noi inox cho gia dinh'),
+        topic,
         primaryKeyword: normalizeString(config.primaryKeyword || config.topic || 'noi inox'),
         secondaryKeywords: Array.isArray(config.secondaryKeywords)
             ? config.secondaryKeywords.map((item) => normalizeString(item)).filter(Boolean).slice(0, 12)

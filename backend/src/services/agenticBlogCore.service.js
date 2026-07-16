@@ -98,6 +98,17 @@ const synthesizePatterns = (patterns) => {
     };
 };
 
+const MAX_PIPELINE_TOPIC_LENGTH = 180;
+const boundTopic = (value) => {
+    const cleaned = normalizeString(value).replace(/\s+/g, ' ');
+    if (cleaned.length <= MAX_PIPELINE_TOPIC_LENGTH) return cleaned;
+    const firstSentence = cleaned.split(/(?<=[.!?…])\s/)[0];
+    if (firstSentence.length >= 20 && firstSentence.length <= MAX_PIPELINE_TOPIC_LENGTH) return firstSentence.trim();
+    const cut = cleaned.slice(0, MAX_PIPELINE_TOPIC_LENGTH);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace > 60 ? cut.slice(0, lastSpace) : cut).trim();
+};
+
 const decideTopicAction = ({ topic, existing = [], now = new Date() }) => {
     const scored = existing.map((item) => ({
         item,
@@ -339,7 +350,7 @@ class AgenticBlogCoreService {
 
     static async runPipeline({ schedule, executionKey, executionId, now = new Date() }) {
         const config = schedule.agentConfig || {};
-        const topic = normalizeString(config.topic || config.primaryKeyword || schedule.name || 'đồ gia dụng inox cho gia đình');
+        const topic = boundTopic(config.topic || config.primaryKeyword || schedule.name || 'đồ gia dụng inox cho gia đình');
         const primaryKeyword = normalizeString(config.primaryKeyword || topic);
         const context = await AgenticBlogCoreService.prepareContext({ topic, primaryKeyword, articleType: config.articleType, now, sourceUrls: Array.isArray(config.researchSources) ? config.researchSources : [] });
         if (context.opportunity.decision === 'skip') return { skipped: true, reason: context.opportunity.reason, context };
