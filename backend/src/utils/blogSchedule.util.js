@@ -3,6 +3,7 @@
 const { BadRequestError } = require('../core/error.response');
 const { normalizeString } = require('./seoBlogSanitizer');
 const { buildEnvProductSeedingConfig, normalizeProductSeedingOptions } = require('../config/productSeeding.config');
+const { buildEnvProductPlacementConfig, normalizeProductPlacementOptions } = require('../config/productPlacement.config');
 
 const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const MAX_TIMES_PER_SCHEDULE = 12;
@@ -132,7 +133,12 @@ const normalizeAgentConfig = (value = {}) => {
         productSeeding: normalizeProductSeedingOptions(
             config.productSeeding || {},
             buildEnvProductSeedingConfig()
-        )
+        ),
+        productPlacement: normalizeProductPlacementOptions(
+            config.productPlacement || {},
+            buildEnvProductPlacementConfig()
+        ),
+        rankingEvidence: config.rankingEvidence && typeof config.rankingEvidence === 'object' ? config.rankingEvidence : null
     };
 };
 

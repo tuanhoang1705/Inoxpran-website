@@ -1,5 +1,9 @@
 # Agentic Blog Core V2
 
+## Editorial product placement artifact
+
+The current order is Google Intelligence → catalog/relevance → Product Seed Plan → Editorial Product Placement Plan → opportunity/research/style → Blog Strategy → Content Architecture → writer → deterministic reviews → publisher. When product mode is enabled, catalog, seed and placement IDs must match the execution and strategy. The writer cannot choose placement; the backend materializes and revalidates the persisted contract. See `openclaw-editorial-product-placement-strategy.md`.
+
 ## Execution order
 
 1. Daily Google Intelligence gate.

@@ -1,5 +1,7 @@
 # OpenClaw Product Relevance and Contextual Seeding Intelligence
 
+> Placement boundary: this layer selects eligible products and safe catalog claims only. It no longer decides section/ranking position, disclosure, CTA placement or product-image placement. Those decisions belong to the independently persisted `EditorialProductPlacementPlan`; see `openclaw-editorial-product-placement-strategy.md`.
+
 ## 1. Architecture and workflow
 
 This additive, backend-controlled layer runs: `Google Intelligence strict gate → Product Catalog Snapshot → deterministic relevance/cooldown → Product Seed Plan → existing Agentic Blog Core → product and existing review gates → draft/publish`. Google is the first awaited operation. Required mode can stop before research/writing. OpenClaw never reads MongoDB or product-admin APIs.

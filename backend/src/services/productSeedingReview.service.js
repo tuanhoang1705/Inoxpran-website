@@ -9,17 +9,17 @@ const strip = (value) => sanitizeHtml(String(value || ''), { allowedTags: [], al
 
 const extractProductBlocks = (html) => {
     const blocks = [];
-    const pattern = /<section\b([^>]*\bdata-block-type=["']product-recommendation["'][^>]*)>([\s\S]*?)<\/section>/gi;
+    const pattern = /<(section|p)\b([^>]*\bdata-block-type=["']product-(?:recommendation|inline-example)["'][^>]*)>([\s\S]*?)<\/\1>/gi;
     let match;
     while ((match = pattern.exec(String(html || ''))) !== null) {
-        const attributes = match[1];
+        const attributes = match[2];
         const productId = attributes.match(/\bdata-product-id=["']([a-f0-9]{24})["']/i)?.[1] || '';
-        const links = [...match[2].matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)].map((link) => ({
+        const links = [...match[3].matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)].map((link) => ({
             href: link[1].match(/\bhref=["']([^"']+)["']/i)?.[1] || '',
             linkType: link[1].match(/\bdata-link-type=["']([^"']+)["']/i)?.[1] || '',
             anchor: strip(link[2])
         }));
-        blocks.push({ productId, html: match[0], bodyHtml: match[2], text: strip(match[2]), links, index: match.index });
+        blocks.push({ productId, html: match[0], bodyHtml: match[3], text: strip(match[3]), links, index: match.index });
     }
     return blocks;
 };
@@ -93,7 +93,7 @@ const reviewProductSeeding = ({ html, plan, minIndependentWords = 150 }) => {
     const products = selectedProducts(plan);
     const density = plan.commercialDensityLimits || {};
     const plain = normalize(strip(source));
-    const withoutProducts = source.replace(/<section\b[^>]*\bdata-block-type=["']product-recommendation["'][^>]*>[\s\S]*?<\/section>/gi, '');
+    const withoutProducts = source.replace(/<(section|p)\b[^>]*\bdata-block-type=["']product-(?:recommendation|inline-example)["'][^>]*>[\s\S]*?<\/\1>/gi, '');
     const independentWordCount = strip(withoutProducts).split(/\s+/).filter(Boolean).length;
     const totalWordCount = strip(source).split(/\s+/).filter(Boolean).length;
     const productMentions = products.reduce((sum, item) => sum + countOccurrences(plain, normalize(item.name)), 0);

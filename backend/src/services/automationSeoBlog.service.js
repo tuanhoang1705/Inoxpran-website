@@ -5,6 +5,7 @@ const { blog } = require('../models/blog.model');
 const { BlogAutomationExecution } = require('../models/blogAutomationExecution.model');
 const { ProductSeedPlan } = require('../models/productSeedPlan.model');
 const { ProductSeedExposure } = require('../models/productSeedExposure.model');
+const { EditorialProductPlacementPlan } = require('../models/editorialProductPlacementPlan.model');
 const { BadRequestError } = require('../core/error.response');
 const { normalizeString } = require('../utils/seoBlogSanitizer');
 const { validateAutomationPayload } = require('../utils/seoBlogValidation');
@@ -12,7 +13,9 @@ const { runImagePipeline } = require('./openclaw/imagePipeline.service');
 const { GoogleIntelligenceService } = require('./googleIntelligence.service');
 const { AgenticBlogCoreService } = require('./agenticBlogCore.service');
 const { ProductSeedPlanningService } = require('./productSeedPlanning.service');
+const { EditorialProductPlacementPlanningService } = require('./editorialProductPlacementPlanning.service');
 const { extractProductBlocks, reviewProductLayer } = require('./productSeedingReview.service');
+const { extractPlacementBlocks, reviewEditorialProductPlacement } = require('./editorialProductPlacementReview.service');
 
 const WORDS_PER_MINUTE = 220;
 const DEFAULT_SITE_URL = 'https://inoxpran.com';
@@ -59,9 +62,11 @@ const createBlogDocument = ({ normalized, shouldPublish, imagePipeline }) => ({
     productSeedingDecision: normalized.productSeedingDecision,
     productCatalogSnapshotId: normalized.productCatalogSnapshotId || null,
     productSeedPlanId: normalized.productSeedPlanId || null,
+    editorialProductPlacementPlanId: normalized.editorialProductPlacementPlanId || null,
     seededProductIds: normalized.seededProductIds || [],
     productSeedingReview: normalized.productSeedingReview,
     productClaimReview: normalized.productClaimReview,
+    editorialProductPlacementReview: normalized.editorialProductPlacementReview,
     contentDecision: normalized.contentDecision,
     structuralFingerprint: normalized.structuralFingerprint,
     agenticReviews: normalized.agenticReviews,
@@ -109,6 +114,8 @@ class AutomationSeoBlogService {
             articleType: normalizeString(payload.articleType),
             sourceUrls: Array.isArray(payload.researchSources) ? payload.researchSources : [],
             productSeeding: payload.productSeeding || {},
+            productPlacement: payload.productPlacement || {},
+            rankingEvidence: payload.rankingEvidence || null,
             language: normalizeString(payload.language || 'vi'),
             categoryKey: normalizeString(payload.categoryKey || 'guide'),
             secondaryKeywords: Array.isArray(payload.secondaryKeywords) ? payload.secondaryKeywords : []
@@ -125,6 +132,7 @@ class AutomationSeoBlogService {
             strategyPlanId: context.strategy?._id || null,
             productCatalogSnapshotId: context.productSeedPlan.productCatalogSnapshotId || null,
             productSeedPlanId: context.productSeedPlan._id,
+            editorialProductPlacementPlanId: context.editorialPlacementPlan?._id || null,
             productSeedingMode: context.productSeedPlan.mode,
             productSeedingDecision: context.productSeedPlan.decision,
             seededProductIds: [context.productSeedPlan.primaryProduct, ...(context.productSeedPlan.supportingProducts || [])].filter(Boolean).map((item) => item.productId),
@@ -132,23 +140,26 @@ class AutomationSeoBlogService {
             agentSteps: context.blocked
                 ? ['google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan', 'blocked']
                 : context.strategy.decision === 'skip'
-                    ? ['google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan', 'topic-opportunity-research', 'skip']
-                    : ['google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan', 'topic-opportunity-research', 'industry-content-research', 'editorial-style-planning', 'content-strategy-plan', 'content-architecture'],
+                    ? ['google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan', 'editorial-product-placement-plan', 'topic-opportunity-research', 'skip']
+                    : ['google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan', 'editorial-product-placement-plan', 'topic-opportunity-research', 'industry-content-research', 'editorial-style-planning', 'content-strategy-plan', 'content-architecture'],
             publisherDecision: context.blocked || context.strategy?.decision === 'skip'
                 ? { allowed: false, reason: context.blocked ? context.blockReason : context.strategy.decisionReason }
                 : {},
             metadata: {
-                trigger: 'external_prepare', pipelineVersion: 'agentic-blog-core-v3-product-seeding',
+                trigger: 'external_prepare', pipelineVersion: 'agentic-blog-core-v4-editorial-product-placement',
                 productSeeding: {
                     selectedProducts: [context.productSeedPlan.primaryProduct, ...(context.productSeedPlan.supportingProducts || [])].filter(Boolean),
                     rejectedCandidates: context.productSeedPlan.rejectedCandidates || [],
                     candidateScores: context.productSeedPlan.candidateScores || [],
-                    placementPlan: context.productSeedPlan.placementPlan || [],
+                    editorialProductPlacementPlanId: context.editorialPlacementPlan?._id || null,
+                    placementPlan: context.editorialPlacementPlan?.placementSequence || [],
+                    placementStyle: context.editorialPlacementPlan?.placementStyle || 'no-product',
                     warnings: context.productSeedPlan.warnings || []
                 }
             }
         });
         await ProductSeedPlanningService.attachExecution({ planId: context.productSeedPlan._id, executionId: execution._id });
+        await EditorialProductPlacementPlanningService.attachRelations({ planId: context.editorialPlacementPlan?._id, executionId: execution._id, strategyPlanId: context.strategy?._id });
         if (context.blocked) throw new BadRequestError(context.blockReason || 'Required product integration has no suitable product');
         const selectedProducts = [context.productSeedPlan.primaryProduct, ...(context.productSeedPlan.supportingProducts || [])].filter(Boolean);
         return {
@@ -175,6 +186,7 @@ class AutomationSeoBlogService {
             agenticExecutionId: String(execution._id),
             productCatalogSnapshotId: context.productSeedPlan.productCatalogSnapshotId ? String(context.productSeedPlan.productCatalogSnapshotId) : '',
             productSeedPlanId: String(context.productSeedPlan._id),
+            editorialProductPlacementPlanId: String(context.editorialPlacementPlan?._id || ''),
             productSeeding: {
                 mode: context.productSeedPlan.mode,
                 intensity: context.productSeedPlan.intensity,
@@ -188,6 +200,26 @@ class AutomationSeoBlogService {
                 claimConstraints: selectedProducts.map((item) => ({ productId: String(item.productId), allowedClaims: item.allowedClaims, forbiddenClaims: item.forbiddenClaims })),
                 commercialDensityLimits: context.productSeedPlan.commercialDensityLimits || {}
             },
+            editorialProductPlacement: context.editorialPlacementPlan ? {
+                id: String(context.editorialPlacementPlan._id),
+                decision: context.editorialPlacementPlan.decision,
+                placementStyle: context.editorialPlacementPlan.placementStyle,
+                effectiveTopic: context.editorialPlacementPlan.effectiveTopic,
+                ownedProductPositionPolicy: context.editorialPlacementPlan.ownedProductPositionPolicy,
+                firstProductMention: context.editorialPlacementPlan.firstProductMention,
+                placementSequence: context.editorialPlacementPlan.placementSequence,
+                rankingStrategy: context.editorialPlacementPlan.rankingStrategy,
+                rankingClaimReview: context.editorialPlacementPlan.rankingClaimReview,
+                commercialDensity: context.editorialPlacementPlan.commercialDensity,
+                visualPlacement: context.editorialPlacementPlan.visualPlacement,
+                disclosure: context.editorialPlacementPlan.disclosure,
+                ctaStrategy: context.editorialPlacementPlan.ctaStrategy,
+                forbiddenPatterns: context.editorialPlacementPlan.forbiddenPatterns,
+                reviewRules: context.editorialPlacementPlan.reviewRules,
+                alternativesRejected: context.editorialPlacementPlan.alternativesRejected,
+                reason: context.editorialPlacementPlan.reason,
+                warnings: context.editorialPlacementPlan.warnings
+            } : null,
             strategy: {
                 decision: context.strategy.decision,
                 decisionReason: context.strategy.decisionReason,
@@ -214,18 +246,27 @@ class AutomationSeoBlogService {
         }
 
         let verifiedProductPlan = null;
+        let verifiedPlacementPlan = null;
         if (normalized.productSeedingMode !== 'off') {
-            const [execution, plan] = await Promise.all([
+            const [execution, plan, placementPlan] = await Promise.all([
                 BlogAutomationExecution.findById(normalized.agenticExecutionId).lean(),
-                ProductSeedPlan.findById(normalized.productSeedPlanId).lean()
+                ProductSeedPlan.findById(normalized.productSeedPlanId).lean(),
+                EditorialProductPlacementPlan.findById(normalized.editorialProductPlacementPlanId).lean()
             ]);
             if (!execution) throw new BadRequestError('Agentic execution was not found for product validation');
             if (!plan) throw new BadRequestError('Product Seed Plan was not found');
+            if (!placementPlan) throw new BadRequestError('Editorial Product Placement Plan was not found');
             const idChecks = [
                 ['productSeedPlanId', execution.productSeedPlanId, normalized.productSeedPlanId],
+                ['editorialProductPlacementPlanId', execution.editorialProductPlacementPlanId, normalized.editorialProductPlacementPlanId],
+                ['strategyPlanId', execution.strategyPlanId, normalized.strategyPlanId],
                 ['productCatalogSnapshotId', execution.productCatalogSnapshotId, normalized.productCatalogSnapshotId],
                 ['googleIntelSnapshotId', plan.googleIntelSnapshotId, normalized.googleIntelSnapshotId],
-                ['productCatalogSnapshotId', plan.productCatalogSnapshotId, normalized.productCatalogSnapshotId]
+                ['productCatalogSnapshotId', plan.productCatalogSnapshotId, normalized.productCatalogSnapshotId],
+                ['placementProductSeedPlanId', placementPlan.productSeedPlanId, normalized.productSeedPlanId],
+                ['placementGoogleIntelSnapshotId', placementPlan.googleIntelSnapshotId, normalized.googleIntelSnapshotId],
+                ['placementProductCatalogSnapshotId', placementPlan.productCatalogSnapshotId, normalized.productCatalogSnapshotId],
+                ['placementStrategyPlanId', placementPlan.strategyPlanId, normalized.strategyPlanId]
             ];
             const mismatch = idChecks.find(([, actual, expected]) => String(actual || '') !== String(expected || ''));
             if (mismatch) throw new BadRequestError(`${mismatch[0]} does not match the current execution and product plan`);
@@ -239,10 +280,27 @@ class AutomationSeoBlogService {
             if (!productReviews.productSeedingReview.pass) appendDraftReason(normalized.publishGate.reasons, 'product_seeding_review_not_pass');
             if (!productReviews.productClaimReview.pass) appendDraftReason(normalized.publishGate.reasons, 'product_claim_review_not_pass');
             if (productReviews.productSeedingReview.commercialPressure === 'high') appendDraftReason(normalized.publishGate.reasons, 'product_commercial_pressure_high');
+            const editorialPlacementReview = reviewEditorialProductPlacement({ html: normalized.contentHtml, title: normalized.title, productSeedPlan: plan, placementPlan });
+            normalized.editorialProductPlacementReview = editorialPlacementReview;
+            if (!editorialPlacementReview.pass) appendDraftReason(normalized.publishGate.reasons, 'editorial_product_placement_review_not_pass');
+            if (['high', 'critical'].includes(editorialPlacementReview.riskLevel)) appendDraftReason(normalized.publishGate.reasons, `editorial_product_placement_risk_${editorialPlacementReview.riskLevel}`);
             normalized.publishGate.passes = normalized.publishGate.reasons.length === 0;
             verifiedProductPlan = plan;
-        } else if (extractProductBlocks(normalized.contentHtml).length) {
-            throw new BadRequestError('Draft contains a product block while product seeding mode is off');
+            verifiedPlacementPlan = placementPlan;
+        } else {
+            if (extractProductBlocks(normalized.contentHtml).length || extractPlacementBlocks(normalized.contentHtml).length) {
+                throw new BadRequestError('Draft contains a product block while product seeding mode is off');
+            }
+            if (normalized.editorialProductPlacementPlanId) {
+                const placementPlan = await EditorialProductPlacementPlan.findById(normalized.editorialProductPlacementPlanId).lean();
+                if (!placementPlan) throw new BadRequestError('Editorial Product Placement Plan was not found');
+                if (placementPlan.decision !== 'no_product') throw new BadRequestError('Product seeding mode is off but placement plan authorizes a product');
+                if ((normalized.productSeedPlanId && String(placementPlan.productSeedPlanId || '') !== String(normalized.productSeedPlanId)) || String(placementPlan.googleIntelSnapshotId || '') !== String(normalized.googleIntelSnapshotId) || String(placementPlan.strategyPlanId || '') !== String(normalized.strategyPlanId)) {
+                    throw new BadRequestError('Editorial Product Placement Plan does not match the current snapshot and strategy');
+                }
+                normalized.editorialProductPlacementReview = reviewEditorialProductPlacement({ html: normalized.contentHtml, title: normalized.title, productSeedPlan: { mode: 'off', decision: 'no_seed' }, placementPlan });
+                verifiedPlacementPlan = placementPlan;
+            }
         }
 
         const existing = await blog.findOne({ blog_slug: normalized.slug }).select('_id').lean();
@@ -274,7 +332,8 @@ class AutomationSeoBlogService {
                 contentHtml: normalized.contentHtml,
                 primaryKeyword: normalized.primaryKeyword,
                 articleType: normalized.articleType,
-                imageSearchQuery: normalizeString(payload.imageSearchQuery || '')
+                imageSearchQuery: normalizeString(payload.imageSearchQuery || ''),
+                editorialProductPlacement: verifiedPlacementPlan
             });
         } catch (error) {
             imagePipeline = {
@@ -324,8 +383,12 @@ class AutomationSeoBlogService {
         const blogId = String(createdObject?._id || createdObject?.id || '');
         const mode = shouldPublish ? 'publish' : 'draft';
 
+        if (verifiedPlacementPlan && blogId) {
+            await EditorialProductPlacementPlanningService.attachRelations({ planId: verifiedPlacementPlan._id, executionId: normalized.agenticExecutionId, strategyPlanId: normalized.strategyPlanId, blogId });
+        }
+
         if (verifiedProductPlan && blogId) {
-            const blocks = extractProductBlocks(normalized.contentHtml);
+            const blocks = extractPlacementBlocks(normalized.contentHtml);
             const selected = [verifiedProductPlan.primaryProduct, ...(verifiedProductPlan.supportingProducts || [])].filter(Boolean);
             await Promise.all(selected.map((item) => {
                 const productBlocks = blocks.filter((block) => String(block.productId) === String(item.productId));
@@ -338,8 +401,14 @@ class AutomationSeoBlogService {
                             executionId: normalized.agenticExecutionId,
                             categoryKey: item.category?.id || '',
                             articleType: normalized.articleType,
-                            placementTypes: (verifiedProductPlan.placementPlan || []).filter((placement) => String(placement.productId) === String(item.productId)).map((placement) => placement.placementType),
-                            placementFingerprint: crypto.createHash('sha256').update(JSON.stringify(verifiedProductPlan.placementPlan || [])).digest('hex'),
+                            placementTypes: (verifiedPlacementPlan?.placementSequence || []).filter((placement) => String(placement.productId) === String(item.productId)).map((placement) => placement.presentation),
+                            placementFingerprint: crypto.createHash('sha256').update(JSON.stringify(verifiedPlacementPlan?.placementSequence || [])).digest('hex'),
+                            editorialProductPlacementPlanId: verifiedPlacementPlan?._id || null,
+                            placementStyle: verifiedPlacementPlan?.placementStyle || '',
+                            ownedProductPosition: verifiedPlacementPlan?.ownedProductPositionPolicy || 'none',
+                            firstMentionPercent: normalized.editorialProductPlacementReview?.firstProductMention?.progressPercent || 0,
+                            productBlockCount: productBlocks.length,
+                            productImageCount: normalized.editorialProductPlacementReview?.metrics?.productImages || 0,
                             mentionCount,
                             linkCount,
                             ctaMode: verifiedProductPlan.ctaPlan?.mode || 'none',
@@ -364,9 +433,12 @@ class AutomationSeoBlogService {
                     reviewerDecisions: normalized.agenticReviews || normalized.metadata?.reviewerDecisions || {},
                     productSeedingReview: normalized.productSeedingReview,
                     productClaimReview: normalized.productClaimReview,
+                    editorialProductPlacementReview: normalized.editorialProductPlacementReview,
                     publisherDecision: { allowed: shouldPublish, reasons },
                     'metadata.resultReasons': reasons,
-                    'metadata.imagePipelineStatus': imagePipeline.status
+                    'metadata.imagePipelineStatus': imagePipeline.status,
+                    'metadata.editorialProductPlacementPlanId': normalized.editorialProductPlacementPlanId || '',
+                    'metadata.editorialProductPlacementReview': normalized.editorialProductPlacementReview || null
                 }
             }
         );
@@ -386,6 +458,8 @@ class AutomationSeoBlogService {
             coverImage: imagePipeline.coverImage,
             contentImages: imagePipeline.contentImages,
             contentDecision: normalized.contentDecision,
+            editorialProductPlacementPlanId: normalized.editorialProductPlacementPlanId || '',
+            editorialProductPlacementReview: normalized.editorialProductPlacementReview,
             updatedExisting: isUpdate
         };
     }

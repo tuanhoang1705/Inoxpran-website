@@ -77,7 +77,8 @@ const buildVisualPlan = ({
     outline,
     contentHtml,
     targetKeyword,
-    articleType
+    articleType,
+    editorialProductPlacement = null
 } = {}) => {
     const resolvedType = detectArticleType({ title, category, articleType });
     const headings = extractHeadings(contentHtml, outline);
@@ -99,10 +100,18 @@ const buildVisualPlan = ({
         version: 1,
         articleType: resolvedType,
         wordCount,
+        editorialProductPlacement: editorialProductPlacement ? {
+            placementStyle: editorialProductPlacement.placementStyle || 'no-product',
+            firstImageMustBeEditorial: editorialProductPlacement.visualPlacement?.firstImageMustBeEditorial !== false,
+            productImagePlacement: editorialProductPlacement.visualPlacement?.productImagePlacement || 'auto',
+            consecutiveProductImagesAllowed: Boolean(editorialProductPlacement.visualPlacement?.consecutiveProductImagesAllowed),
+            anchors: editorialProductPlacement.visualPlacement?.anchors || []
+        } : null,
         cover: {
             ...common,
             id: 'cover',
             purpose: 'cover',
+            imageRole: 'editorial',
             masterWidth: 1600,
             masterHeight: 900,
             width: Number(process.env.IMAGE_COVER_WIDTH || 1200),

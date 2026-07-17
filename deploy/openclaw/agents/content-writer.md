@@ -2,7 +2,7 @@
 
 Write one Vietnamese blog article from the approved SEO brief.
 
-Do not run unless `googleIntelSnapshotId`, `researchBundleId`, `editorialStyleProfileId`, and `strategyPlanId` are present. When product mode is not `off`, also require `productCatalogSnapshotId` and `productSeedPlanId`. Follow the strategy architecture and active style sub-variant; do not reuse a permanent article template.
+Do not run unless `googleIntelSnapshotId`, `researchBundleId`, `editorialStyleProfileId`, and `strategyPlanId` are present. When product mode is not `off`, also require `productCatalogSnapshotId`, `productSeedPlanId`, and `editorialProductPlacementPlanId`. Follow the strategy architecture and active style sub-variant; do not reuse a permanent article template.
 
 Follow the `inoxpran-blog-editor-schema` skill for the exact content contract. The output must be compatible with the Inoxpran professional editor and pass the backend sanitizer without losing content.
 
@@ -19,11 +19,11 @@ Rules:
 - Do not put explanations, notes, or raw JSON inside `contentHtml`.
 - Do not embed images yourself; the visual pipeline injects `figure`/`img`/`figcaption` with `data-image-id` and `data-review-status="pending_review"`. Leave clear heading anchors so images can be placed after the right sections.
 - Do not invent product origin, material guarantees, technology claims, or warranty claims.
-- Use only product IDs and claims from Product Seed Plan. Never silently choose, replace, or add a product. Product context follows objective guidance, discloses INOXPRAN ownership, and obeys mention/link/heading/CTA limits.
+- Product Seed Plan is selection-only and Editorial Product Placement Plan is a locked placement contract. Never mention, rank, link, place or image a product yourself; leave placement materialization to the backend applicator. Never invent or alter a placement ID.
 - Do not copy or closely paraphrase source articles, headings, tables, examples, or experiences. Use sources for verified facts and abstract patterns only.
 - Keep the article within the backend word-count limits from `SEO_AGENT_MIN_WORDS` and `SEO_AGENT_MAX_WORDS`.
 - Include the primary keyword naturally in the title, first section, and at least one `H2` when it reads naturally.
 - Return `contentHtml`, `excerpt`, `seoTitle`, `seoDescription`, `tags`, `faq`, and `contentSchemaVersion: "blog-content-v2"`.
-- Return every required context ID unchanged so downstream gates can verify it, including both product artifact IDs when enabled.
+- Return every required context ID unchanged so downstream gates can verify it, including catalog, seed and editorial-placement artifact IDs when enabled.
 - Do not publish.
 - Do not use the admin UI.

@@ -9,6 +9,9 @@ const { BlogStrategyPlan } = require('../models/blogStrategyPlan.model');
 const { GoogleIntelligenceService } = require('./googleIntelligence.service');
 const { ProductSeedPlanningService } = require('./productSeedPlanning.service');
 const { reviewProductLayer } = require('./productSeedingReview.service');
+const { EditorialProductPlacementPlanningService } = require('./editorialProductPlacementPlanning.service');
+const { applyEditorialProductPlacementPlanToHtml } = require('./editorialProductPlacement.service');
+const { reviewEditorialProductPlacement } = require('./editorialProductPlacementReview.service');
 const { safeSourceFetch } = require('./safeSourceFetch.service');
 const { dateInTimezone } = require('../utils/googleIntelligence.util');
 const { normalizeSlug, normalizeString } = require('../utils/seoBlogSanitizer');
@@ -136,7 +139,7 @@ const sanitizeLlmHtml = (html) => {
     return output;
 };
 
-const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles = [], attempt, productSeedPlan = null }) => {
+const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles = [], attempt, productSeedPlan = null, editorialPlacementPlan = null, architecture = null }) => {
     const system = [
         'Bạn là biên tập viên nội dung cho INOXPRAN (inoxpran.com), thương hiệu đồ gia dụng Việt Nam.',
         'Viết bài blog tiếng Việt chuẩn xuất bản, bám sát 100% chủ đề được yêu cầu; tuyệt đối không chèn nội dung về danh mục sản phẩm không liên quan đến chủ đề.',
@@ -168,12 +171,27 @@ const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, artic
             id: String(productSeedPlan._id || productSeedPlan.id || ''),
             mode: productSeedPlan.mode,
             decision: productSeedPlan.decision,
-            rule: 'Use only planned products. Explain objective criteria before any product context; the backend inserts the semantic product block.',
+            rule: 'Product selection only. Do not mention, rank, link or place any product yourself; the backend applies the separate EditorialProductPlacementPlan.',
             selectedProducts: [productSeedPlan.primaryProduct, ...(productSeedPlan.supportingProducts || [])]
                 .filter(Boolean)
                 .map((item) => ({ productId: String(item.productId), name: item.name })),
             placementPlan: productSeedPlan.placementPlan || [],
             commercialDensityLimits: productSeedPlan.commercialDensityLimits || {}
+        } : null,
+        editorialProductPlacementPlan: editorialPlacementPlan ? {
+            id: String(editorialPlacementPlan._id || editorialPlacementPlan.id || ''),
+            placementStyle: editorialPlacementPlan.placementStyle,
+            decision: editorialPlacementPlan.decision,
+            firstProductMention: editorialPlacementPlan.firstProductMention,
+            placementSequence: editorialPlacementPlan.placementSequence,
+            disclosure: editorialPlacementPlan.disclosure,
+            rankingStrategy: editorialPlacementPlan.rankingStrategy,
+            visualPlacement: editorialPlacementPlan.visualPlacement,
+            rule: 'This is a locked backend contract. Write independent editorial sections only. Never invent a placement, placementId, product claim, ranking position, product image or CTA.'
+        } : null,
+        contentArchitecture: architecture ? {
+            headings: architecture.headings,
+            productPlacementContract: architecture.productPlacement
         } : null,
         variation: attempt > 0 ? `Lần viết lại thứ ${attempt}: thay đổi hẳn bộ heading, cách mở bài và cách diễn đạt so với các lần trước.` : ''
     });
@@ -183,12 +201,12 @@ const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, artic
 const generateLlmDraft = async ({
     topic, primaryKeyword, secondaryKeywords = [], articleType = '', style = {},
     headingCount = 5, language = 'vi', tone = 'practical', attempt = 0, recentTitles = [],
-    fetchImpl = global.fetch, timeoutMs = LLM_DRAFT_TIMEOUT_MS, productSeedPlan = null
+    fetchImpl = global.fetch, timeoutMs = LLM_DRAFT_TIMEOUT_MS, productSeedPlan = null, editorialPlacementPlan = null, architecture = null
 }) => {
     const apiKey = normalizeString(process.env.OPENAI_API_KEY);
     if (!apiKey || typeof fetchImpl !== 'function') return null;
     const model = normalizeString(process.env.OPENAI_CHAT_MODEL) || 'gpt-4o-mini';
-    const messages = buildLlmDraftMessages({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles, attempt, productSeedPlan });
+    const messages = buildLlmDraftMessages({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles, attempt, productSeedPlan, editorialPlacementPlan, architecture });
     const requestOnce = async (body, signal) => fetchImpl('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
@@ -269,11 +287,26 @@ const headingSetForStyle = ({ styleFamily, topic }) => {
     return sets[styleFamily] || [`Hiểu đúng nhu cầu về ${topicLabel}`, 'Tiêu chí thực tế cho gia đình Việt', 'Cách sử dụng an toàn và bền lâu', 'Tự đánh giá trước khi quyết định'];
 };
 
-const buildArchitecture = ({ topic, style, decision, researchBundle, productSeedPlan = null }) => {
+const buildArchitecture = ({ topic, style, decision, researchBundle, productSeedPlan = null, editorialPlacementPlan = null }) => {
     const headings = headingSetForStyle({ styleFamily: style.styleFamily, topic });
+    const placementSequence = editorialPlacementPlan?.placementSequence || [];
+    const minimumSections = Number(editorialPlacementPlan?.firstProductMention?.minimumSectionsBeforeProduct || 0);
+    const allowedIds = placementSequence.map((item) => String(item.productId));
+    const sectionContracts = headings.map((heading, index) => ({
+        level: 2,
+        heading,
+        sectionKey: `editorial-section-${index + 1}`,
+        purpose: index < minimumSections ? 'Deliver independent context, criteria and practical guidance before any product.' : 'Continue the independent answer and apply planned context only when explicitly allowed.',
+        evidenceKey: `evidence-${index + 1}`,
+        answerBlock: index === 0 || index === 3,
+        productPlacementAllowed: placementSequence.some((item) => Number(item.afterMinimumSection) === index + 1),
+        allowedProductIds: placementSequence.some((item) => Number(item.afterMinimumSection) === index + 1) ? allowedIds : [],
+        commercialRole: placementSequence.some((item) => Number(item.afterMinimumSection) === index + 1) ? 'planned-product-context' : 'independent-editorial',
+        mustPrecedeProduct: index < minimumSections
+    }));
     return {
         opening: { mode: style.openingMode, purpose: 'Answer the primary household problem without a generic definition.' },
-        headings: headings.map((heading, index) => ({ level: 2, heading, evidenceKey: `evidence-${index + 1}`, answerBlock: index === 0 || index === 3 })),
+        headings: sectionContracts,
         evidenceMap: (researchBundle.sourceAttributions || []).slice(0, 6),
         imagePlan: { mode: style.visualPlanMode, cover: true, inlineCount: 2, mustBeReviewed: true },
         internalLinkPlan: [],
@@ -283,9 +316,18 @@ const buildArchitecture = ({ topic, style, decision, researchBundle, productSeed
         productSeeding: productSeedPlan ? {
             productSeedPlanId: String(productSeedPlan._id || productSeedPlan.id || ''),
             decision: productSeedPlan.decision,
-            placementPlan: productSeedPlan.placementPlan || [],
             commercialDensityLimits: productSeedPlan.commercialDensityLimits || {},
-            rule: 'Answer the reader and explain objective criteria before applying any product placement.'
+            rule: 'This artifact selects eligible products; it does not choose editorial placement.'
+        } : null,
+        productPlacement: editorialPlacementPlan ? {
+            editorialProductPlacementPlanId: String(editorialPlacementPlan._id || editorialPlacementPlan.id || ''),
+            placementStyle: editorialPlacementPlan.placementStyle,
+            firstProductMention: editorialPlacementPlan.firstProductMention,
+            placementSequence,
+            rankingStrategy: editorialPlacementPlan.rankingStrategy,
+            disclosure: editorialPlacementPlan.disclosure,
+            visualPlacement: editorialPlacementPlan.visualPlacement,
+            rule: 'Only the backend placement applicator may materialize this locked contract.'
         } : null
     };
 };
@@ -371,19 +413,29 @@ const applyProductSeedPlanToHtml = ({ html, plan }) => {
     if (!plan || !['contextual_seed', 'product_led'].includes(plan.decision)) return String(html || '');
     const products = plannedProducts(plan);
     const density = plan.commercialDensityLimits || {};
-    const maxMentions = Math.max(0, Number(density.maxProductMentions) || 0);
-    const maxLinks = Math.max(0, Number(density.maxProductLinks) || 0);
-    if (!products.length || maxMentions === 0) return String(html || '');
-    const anchors = ['Xem thông tin sản phẩm', 'Xem một mẫu phù hợp', 'View product information'];
-    const blocks = products.slice(0, Math.min(products.length, maxMentions)).map((item, index) =>
-        buildProductRecommendationHtml({ item, includeLink: index < maxLinks, anchor: anchors[index % anchors.length] })
-    ).join('');
-    const source = String(html || '');
-    const headingMatches = [...source.matchAll(/<h2\b[^>]*>/gi)];
-    const insertAt = headingMatches[1]?.index;
-    if (Number.isInteger(insertAt)) return `${source.slice(0, insertAt)}${blocks}${source.slice(insertAt)}`;
-    const closeArticle = source.toLowerCase().lastIndexOf('</article>');
-    return closeArticle >= 0 ? `${source.slice(0, closeArticle)}${blocks}${source.slice(closeArticle)}` : `${source}${blocks}`;
+    const maxBlocks = Math.min(products.length, Math.max(0, Number(density.maxProductMentions) || 0));
+    if (!maxBlocks) return String(html || '');
+    const placementPlan = {
+        decision: 'place_product',
+        placementStyle: plan.decision === 'product_led' ? 'product-led-editorial' : 'criteria-first-recommendation',
+        ownedProductPositionPolicy: 'none',
+        firstProductMention: { minimumSectionsBeforeProduct: 1, minimumWordsBeforeProduct: 0, minimumProgressPercent: 0, introAllowed: false },
+        placementSequence: products.slice(0, maxBlocks).map((item, index) => ({
+            placementId: plan.placementPlan?.[index]?.placementId || `product-placement-${index + 1}`,
+            productId: String(item.productId),
+            sectionKey: plan.placementPlan?.[index]?.afterHeadingKey || `product-context-${index + 1}`,
+            sectionPurpose: plan.placementPlan?.[index]?.sectionPurpose || 'Apply objective criteria to a selected product.',
+            presentation: 'recommendation', commercialRole: index ? 'supporting-owned-example' : 'primary-owned-example',
+            rankPosition: 'none', afterMinimumSection: index + 1, linkAllowed: index < Number(density.maxProductLinks || 0),
+            ctaAllowed: index === 0 && Number(density.maxCtaCount || 0) > 0, disclosureRequired: true
+        })),
+        rankingStrategy: { enabled: false, methodologyRequired: false },
+        disclosure: { required: true, text: 'Minh bạch: sản phẩm được nhắc đến thuộc INOXPRAN và chỉ là ví dụ để đối chiếu theo các tiêu chí đã nêu.' },
+        ctaStrategy: { maxCount: Number(density.maxCtaCount || 0) },
+        commercialDensity: { maxBlocks, maxCtaCount: Number(density.maxCtaCount || 0), allowConsecutiveProductBlocks: false, allowConsecutiveProductImages: false },
+        visualPlacement: { consecutiveProductImagesAllowed: false, firstImageMustBeEditorial: true }
+    };
+    return applyEditorialProductPlacementPlanToHtml({ html, productSeedPlan: plan, placementPlan });
 };
 
 class AgenticBlogCoreService {
@@ -486,7 +538,7 @@ class AgenticBlogCoreService {
         return bundle.toObject();
     }
 
-    static async prepareContext({ topic, primaryKeyword, articleType, now = new Date(), sourceUrls = [], productSeeding = {}, language = 'vi', categoryKey = 'guide', secondaryKeywords = [] }) {
+    static async prepareContext({ topic, primaryKeyword, articleType, now = new Date(), sourceUrls = [], productSeeding = {}, productPlacement = {}, language = 'vi', categoryKey = 'guide', secondaryKeywords = [], rankingEvidence = null }) {
         const snapshot = await GoogleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate({ now });
         const productSeedPlan = await ProductSeedPlanningService.createPlan({
             brief: { topic, primaryKeyword, secondaryKeywords, articleType, language, categoryKey, productSeeding },
@@ -496,23 +548,31 @@ class AgenticBlogCoreService {
         if (productSeedPlan.decision === 'blocked_no_suitable_product') {
             return { snapshot, productSeedPlan, blocked: true, blockReason: productSeedPlan.decisionReason, primaryKeyword };
         }
+        const editorialPlacementPlan = await EditorialProductPlacementPlanningService.createPlan({
+            brief: { topic, primaryKeyword, secondaryKeywords, articleType, language, categoryKey, productPlacement, rankingEvidence },
+            productSeedPlan,
+            now
+        });
+        const effectiveTopic = editorialPlacementPlan.effectiveTopic || topic;
         const existing = await blog.find({}).sort({ updatedAt: -1 }).limit(100).select('_id blog_title blog_slug blog_tags blog_content isDraft isPublished updatedAt createdAt structuralFingerprint').lean();
-        const opportunity = decideTopicAction({ topic, existing, now });
-        const researchBundle = await AgenticBlogCoreService.researchIndustry({ topic, sourceUrls });
+        const opportunity = decideTopicAction({ topic: effectiveTopic, existing, now });
+        const researchBundle = await AgenticBlogCoreService.researchIndustry({ topic: effectiveTopic, sourceUrls });
         const style = await AgenticBlogCoreService.chooseStyleProfile({ now, timezone: snapshot.timezone });
         const chosenArticleType = opportunity.decision === 'update' || opportunity.decision === 'merge'
             ? 'existing-article-update'
             : ARTICLE_TYPES.includes(articleType) ? articleType : ARTICLE_TYPES[Math.abs(Number.parseInt(sha256(`${topic}:${style.styleFamily}`).slice(0, 8), 16)) % ARTICLE_TYPES.length];
-        const architecture = buildArchitecture({ topic, style, decision: opportunity.decision, researchBundle, productSeedPlan });
+        const architecture = buildArchitecture({ topic: effectiveTopic, style, decision: opportunity.decision, researchBundle, productSeedPlan, editorialPlacementPlan });
         const selectedProducts = [productSeedPlan.primaryProduct, ...(productSeedPlan.supportingProducts || [])].filter(Boolean);
         const strategy = await BlogStrategyPlan.create({
-            googleIntelSnapshotId: snapshot.id, topic, decision: opportunity.decision,
+            googleIntelSnapshotId: snapshot.id, topic: effectiveTopic, decision: opportunity.decision,
             productCatalogSnapshotId: productSeedPlan.productCatalogSnapshotId || null,
             productSeedPlanId: productSeedPlan._id,
+            editorialProductPlacementPlanId: editorialPlacementPlan._id,
+            productPlacementStyle: editorialPlacementPlan.placementStyle,
             productSeedingMode: productSeedPlan.mode,
             productSeedingDecision: productSeedPlan.decision,
             selectedProductIds: selectedProducts.map((item) => item.productId),
-            productPlacementConstraints: productSeedPlan.placementPlan || [],
+            productPlacementConstraints: editorialPlacementPlan.placementSequence || [],
             productClaimEvidence: selectedProducts.flatMap((item) => item.allowedClaims || []),
             commercialDensityLimit: productSeedPlan.commercialDensityLimits || {},
             productReviewPlan: { claimVerification: true, naturalness: true, linkSafety: true, commercialDensity: true },
@@ -521,8 +581,8 @@ class AgenticBlogCoreService {
             searchIntent: { primary: 'informational', secondary: opportunity.decision === 'new' ? 'commercial-investigation' : 'content-maintenance', confidence: 0.82 },
             userProblems: ['Need verifiable material guidance', 'Need a choice that matches the household stove and cooking habits', 'Need practical care instructions'],
             contentGap: researchBundle.researchCoverage === 'low' ? 'External research coverage is low; use conservative internal guidance and require editorial verification.' : 'Combine verified guidance with a Vietnamese household decision framework.',
-            primaryQuestion: `Làm thế nào để đánh giá ${topic} theo nhu cầu thực tế?`,
-            supportingQuestions: [`${topic} phù hợp loại bếp nào?`, 'Cần kiểm tra vật liệu và cấu tạo ra sao?', 'Cách sử dụng và bảo quản nào thực tế?'],
+            primaryQuestion: `Làm thế nào để đánh giá ${effectiveTopic} theo nhu cầu thực tế?`,
+            supportingQuestions: [`${effectiveTopic} phù hợp loại bếp nào?`, 'Cần kiểm tra vật liệu và cấu tạo ra sao?', 'Cách sử dụng và bảo quản nào thực tế?'],
             articleType: chosenArticleType, editorialStyleProfileId: style._id,
             researchBundleId: researchBundle._id,
             evidenceRequirements: ['Attribute externally sourced facts', 'Do not invent tests, certifications or statistics', 'Mark uncertainty when source coverage is low'],
@@ -533,7 +593,8 @@ class AgenticBlogCoreService {
             contentArchitecture: architecture,
             reviewerPlan: { factCheck: true, originality: true, seoAeoGeo: true, peopleFirstSpam: true, brandVoice: true }
         });
-        return { snapshot, productSeedPlan, opportunity, researchBundle, style, strategy: strategy.toObject(), architecture, primaryKeyword, blocked: false };
+        await EditorialProductPlacementPlanningService.attachRelations({ planId: editorialPlacementPlan._id, strategyPlanId: strategy._id });
+        return { snapshot, productSeedPlan, editorialPlacementPlan, opportunity, researchBundle, style, strategy: strategy.toObject(), architecture, primaryKeyword, effectiveTopic, blocked: false };
     }
 
     static async runPipeline({ schedule, executionKey, executionId, now = new Date() }) {
@@ -543,8 +604,8 @@ class AgenticBlogCoreService {
         const context = await AgenticBlogCoreService.prepareContext({
             topic, primaryKeyword, articleType: config.articleType, now,
             sourceUrls: Array.isArray(config.researchSources) ? config.researchSources : [],
-            productSeeding: config.productSeeding || {}, language: config.language || 'vi', categoryKey: config.categoryKey || 'guide',
-            secondaryKeywords: Array.isArray(config.secondaryKeywords) ? config.secondaryKeywords : []
+            productSeeding: config.productSeeding || {}, productPlacement: config.productPlacement || {}, language: config.language || 'vi', categoryKey: config.categoryKey || 'guide',
+            secondaryKeywords: Array.isArray(config.secondaryKeywords) ? config.secondaryKeywords : [], rankingEvidence: config.rankingEvidence || null
         });
         if (context.blocked) return { skipped: true, blocked: true, reason: context.blockReason, context };
         if (context.opportunity.decision === 'skip') return { skipped: true, reason: context.opportunity.reason, context };
@@ -565,7 +626,7 @@ class AgenticBlogCoreService {
             let generated = null;
             try {
                 generated = await generateLlmDraft({
-                    topic,
+                    topic: context.effectiveTopic || topic,
                     primaryKeyword,
                     secondaryKeywords: Array.isArray(config.secondaryKeywords) ? config.secondaryKeywords.slice(0, 8) : [],
                     articleType: context.strategy.articleType,
@@ -575,7 +636,9 @@ class AgenticBlogCoreService {
                     tone: normalizeString(config.tone) || 'practical',
                     recentTitles,
                     attempt,
-                    productSeedPlan: context.productSeedPlan
+                    productSeedPlan: context.productSeedPlan,
+                    editorialPlacementPlan: context.editorialPlacementPlan,
+                    architecture: context.architecture
                 });
             } catch (error) {
                 llmGenerationError = normalizeString(error?.message).slice(0, 300);
@@ -590,7 +653,7 @@ class AgenticBlogCoreService {
                     variantIndex: Number(context.style.activeVariant?.usageIndex || 0) + attempt
                 });
             }
-            contentHtml = applyProductSeedPlanToHtml({ html: contentHtml, plan: context.productSeedPlan });
+            contentHtml = applyEditorialProductPlacementPlanToHtml({ html: contentHtml, productSeedPlan: context.productSeedPlan, placementPlan: context.editorialPlacementPlan });
             originality = reviewOriginality({ title: llmDraft?.title || topic, contentHtml, existing: comparisonCorpus });
             if (originality.passed) break;
         }
@@ -598,6 +661,7 @@ class AgenticBlogCoreService {
         const peopleSpam = reviewPeopleFirstAndSpam({ html: contentHtml, primaryKeyword });
         const brandVoice = reviewBrandVoice(contentHtml);
         const productReviews = reviewProductLayer({ html: contentHtml, plan: context.productSeedPlan });
+        const editorialPlacementReview = reviewEditorialProductPlacement({ html: contentHtml, title: llmDraft?.title || context.effectiveTopic || topic, productSeedPlan: context.productSeedPlan, placementPlan: context.editorialPlacementPlan });
         const wordCount = normalizeForSimilarity(contentHtml).split(' ').filter(Boolean).length;
         const seoAeoGeo = {
             passed: (context.architecture.headings || []).length >= 4 && /answer-block/.test(contentHtml),
@@ -607,15 +671,15 @@ class AgenticBlogCoreService {
             generativeSearchReady: factuality.passed && brandVoice.passed,
             promisesInclusion: false
         };
-        const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed || !productReviews.pass;
+        const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed || !productReviews.pass || !editorialPlacementReview.pass;
         const target = context.opportunity.targets[0];
         const date = dateInTimezone(now, context.snapshot.timezone);
         const targetKeepsTitle = Boolean(target && target.isPublished);
         const title = targetKeepsTitle
             ? target.blog_title
-            : (llmDraft?.title || target?.blog_title || topic);
-        const slug = target?.blog_slug || normalizeSlug(`${llmDraft?.title || topic}-${date}-${sha256(executionKey).slice(0, 6)}`);
-        const excerpt = (llmDraft?.excerpt || `Hướng dẫn thực tế về ${topic} cho gia đình Việt: tiêu chí lựa chọn, cách sử dụng và lưu ý an toàn.`).slice(0, 240);
+            : (llmDraft?.title || target?.blog_title || context.effectiveTopic || topic);
+        const slug = target?.blog_slug || normalizeSlug(`${llmDraft?.title || context.effectiveTopic || topic}-${date}-${sha256(executionKey).slice(0, 6)}`);
+        const excerpt = (llmDraft?.excerpt || `Hướng dẫn thực tế về ${context.effectiveTopic || topic} cho gia đình Việt: tiêu chí lựa chọn, cách sử dụng và lưu ý an toàn.`).slice(0, 240);
         const payload = {
             mode: Boolean(schedule.autoPublish) && !highRisk ? 'publish' : 'draft',
             source: 'openclaw-daily-seo', primaryKeyword, secondaryKeywords: config.secondaryKeywords || [],
@@ -638,28 +702,41 @@ class AgenticBlogCoreService {
             agenticExecutionId: String(executionId || ''),
             productCatalogSnapshotId: context.productSeedPlan.productCatalogSnapshotId ? String(context.productSeedPlan.productCatalogSnapshotId) : '',
             productSeedPlanId: String(context.productSeedPlan._id || ''),
+            editorialProductPlacementPlanId: String(context.editorialPlacementPlan._id || ''),
             productSeedingMode: context.productSeedPlan.mode,
             productSeedingDecision: context.productSeedPlan.decision,
             seededProductIds: plannedProducts(context.productSeedPlan).map((item) => String(item.productId)),
             productSeedingReview: productReviews.productSeedingReview,
             productClaimReview: productReviews.productClaimReview,
+            editorialProductPlacementReview: editorialPlacementReview,
             structuralFingerprint: originality.fingerprint,
-            agenticReviews: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview },
+            agenticReviews: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview, editorialProductPlacement: editorialPlacementReview },
             metadata: {
                 provider: 'openclaw', executionKey, pipelineVersion: 'agentic-blog-core-v2',
                 googleIntelSnapshotId: context.snapshot.id, researchBundleId: String(context.researchBundle._id),
                 editorialStyleProfileId: String(context.style._id), strategyPlanId: String(context.strategy._id),
                 productCatalogSnapshotId: context.productSeedPlan.productCatalogSnapshotId ? String(context.productSeedPlan.productCatalogSnapshotId) : '',
                 productSeedPlanId: String(context.productSeedPlan._id || ''),
+                editorialProductPlacementPlanId: String(context.editorialPlacementPlan._id || ''),
                 productSeedingMode: context.productSeedPlan.mode,
                 productSeedingDecision: context.productSeedPlan.decision,
                 productSeedingReview: productReviews.productSeedingReview,
                 productClaimReview: productReviews.productClaimReview,
+                editorialProductPlacementReview: editorialPlacementReview,
+                editorialProductPlacement: {
+                    placementStyle: context.editorialPlacementPlan.placementStyle,
+                    placementSequence: context.editorialPlacementPlan.placementSequence,
+                    firstProductMention: context.editorialPlacementPlan.firstProductMention,
+                    rankingStrategy: context.editorialPlacementPlan.rankingStrategy,
+                    disclosure: context.editorialPlacementPlan.disclosure,
+                    visualPlacement: context.editorialPlacementPlan.visualPlacement,
+                    rankingClaimReview: context.editorialPlacementPlan.rankingClaimReview
+                },
                 styleFamily: context.style.styleFamily, styleVariant: context.style.activeVariant,
                 researchCoverage: context.researchBundle.researchCoverage,
                 searchConsoleFallback: context.researchBundle.searchConsole?.fallback !== false,
                 decision: context.opportunity.decision, decisionReason: context.opportunity.reason,
-                reviewerDecisions: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview },
+                reviewerDecisions: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview, editorialProductPlacement: editorialPlacementReview },
                 originalityAttempts, originalityRetryExhausted: !originality.passed,
                 wordCount,
                 draftGenerator: llmDraft ? `openai:${llmDraft.model}` : 'template-fallback',
@@ -720,8 +797,10 @@ module.exports = {
     ARTICLE_TYPES,
     AgenticBlogCoreService,
     STYLE_FAMILIES,
+    applyEditorialProductPlacementPlanToHtml,
     applyProductSeedPlanToHtml,
     buildArchitecture,
+    buildLlmDraftMessages,
     buildDraft,
     buildProductRecommendationHtml,
     buildSearchConsoleContext,

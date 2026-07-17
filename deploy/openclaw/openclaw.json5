@@ -50,6 +50,9 @@
           "inoxpran-contextual-product-seeding",
           "inoxpran-product-claim-safety",
           "inoxpran-product-seeding-review",
+          "inoxpran-editorial-product-placement",
+          "inoxpran-ranking-evidence-safety",
+          "inoxpran-editorial-product-placement-review",
         ],
       },
       {
@@ -69,6 +72,29 @@
         workspace: "/workspaces/contextual-seeding-strategist",
         tools: { deny: ["exec", "process", "browser"] },
         skills: ["inoxpran-product-relevance-scoring", "inoxpran-contextual-product-seeding"],
+      },
+      {
+        id: "editorial-product-placement-planner",
+        workspace: "/workspaces/editorial-product-placement-planner",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-editorial-product-placement", "inoxpran-ranking-evidence-safety"],
+      },
+      {
+        id: "ranking-evidence-reviewer",
+        workspace: "/workspaces/ranking-evidence-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-ranking-evidence-safety"],
+      },
+      {
+        id: "editorial-product-placement-reviewer",
+        workspace: "/workspaces/editorial-product-placement-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-editorial-product-placement",
+          "inoxpran-ranking-evidence-safety",
+          "inoxpran-editorial-product-placement-review",
+          "inoxpran-product-claim-safety",
+        ],
       },
       {
         id: "product-claim-verifier",
@@ -145,6 +171,8 @@
           "inoxpran-editorial-style-rotation",
           "inoxpran-source-attribution",
           "inoxpran-contextual-product-seeding",
+          "inoxpran-editorial-product-placement",
+          "inoxpran-ranking-evidence-safety",
         ],
       },
       {
@@ -199,6 +227,9 @@
           "inoxpran-people-first-review",
           "inoxpran-product-claim-safety",
           "inoxpran-product-seeding-review",
+          "inoxpran-editorial-product-placement",
+          "inoxpran-ranking-evidence-safety",
+          "inoxpran-editorial-product-placement-review",
         ],
       },
       {
@@ -317,6 +348,8 @@
           "inoxpran-brand-voice",
           "inoxpran-source-attribution",
           "inoxpran-contextual-product-seeding",
+          "inoxpran-editorial-product-placement",
+          "inoxpran-ranking-evidence-safety",
         ],
       },
       {
@@ -328,6 +361,7 @@
           "inoxpran-editorial-style-rotation",
           "inoxpran-blog-editor-schema",
           "inoxpran-contextual-product-seeding",
+          "inoxpran-editorial-product-placement",
         ],
       },
       {

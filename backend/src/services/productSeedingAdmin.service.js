@@ -4,9 +4,11 @@ const Admin = require('../models/admin.model');
 const AdminAuditLog = require('../models/adminAuditLog.model');
 const { ProductSeedPlan } = require('../models/productSeedPlan.model');
 const { ProductSeedExposure } = require('../models/productSeedExposure.model');
+const { EditorialProductPlacementPlan } = require('../models/editorialProductPlacementPlan.model');
 const { ProductSeedingConfigService } = require('./productSeedingConfig.service');
 const { ProductSeedPlanningService } = require('./productSeedPlanning.service');
 const { ProductCatalogIntelligenceService } = require('./productCatalogIntelligence.service');
+const { EditorialProductPlacementPlanningService } = require('./editorialProductPlacementPlanning.service');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
 
 const pageValues = (query = {}) => ({
@@ -57,14 +59,43 @@ class ProductSeedingAdminService {
         const plan = await ProductSeedPlanningService.createPlan({
             brief: { ...payload, topic }, googleIntelSnapshotId, persist: false
         });
+        const previewSeedPlan = { ...plan, id: '000000000000000000000001', googleIntelSnapshotId };
+        const placementPlan = await EditorialProductPlacementPlanningService.createPlan({
+            brief: { ...payload, topic, productPlacement: payload.productPlacement || {} },
+            productSeedPlan: previewSeedPlan,
+            persist: false
+        });
         return {
             mode: plan.mode, intensity: plan.intensity, decision: plan.decision,
             decisionReason: plan.decisionReason,
             selectedProducts: [plan.primaryProduct, ...(plan.supportingProducts || [])].filter(Boolean),
             topCandidates: (plan.candidateScores || []).slice(0, 10),
             rejectedCandidates: (plan.rejectedCandidates || []).slice(0, 10),
-            placementPlan: plan.placementPlan || [], warnings: plan.warnings || [],
-            commercialDensityLimits: plan.commercialDensityLimits || {}
+            placementPlan: placementPlan.placementSequence || [], warnings: [...(plan.warnings || []), ...(placementPlan.warnings || [])],
+            commercialDensityLimits: plan.commercialDensityLimits || {},
+            editorialProductPlacement: placementPlan,
+            editorialOutline: {
+                generatedWithoutWriter: true,
+                opening: 'Independent answer and reader context; product placement is forbidden.',
+                prerequisites: Array.from({ length: Math.max(placementPlan.firstProductMention?.minimumSectionsBeforeProduct || 0, 0) }, (_, index) => ({
+                    sectionKey: `editorial-section-${index + 1}`,
+                    purpose: index === 0 ? 'Explain the reader problem and decision context.' : 'State objective criteria and evidence limits.',
+                    productPlacementAllowed: false,
+                    allowedProductIds: [],
+                    commercialRole: 'independent-editorial',
+                    mustPrecedeProduct: true
+                })),
+                placements: (placementPlan.placementSequence || []).map((item) => ({
+                    sectionKey: item.sectionKey,
+                    purpose: item.sectionPurpose,
+                    productPlacementAllowed: true,
+                    allowedProductIds: [item.productId],
+                    commercialRole: item.commercialRole,
+                    mustPrecedeProduct: false,
+                    placementId: item.placementId,
+                    rankPosition: item.rankPosition
+                }))
+            }
         };
     }
 
@@ -84,6 +115,25 @@ class ProductSeedingAdminService {
         if (!/^[a-f0-9]{24}$/i.test(String(planId || ''))) throw new BadRequestError('Invalid Product Seed Plan id');
         const item = await ProductSeedPlan.findById(planId).lean();
         if (!item) throw new NotFoundError('Product Seed Plan not found');
+        return { ...item, id: String(item._id) };
+    }
+
+    static async listPlacementPlans(query = {}) {
+        const { page, limit } = pageValues(query);
+        const filter = {};
+        if (query.style) filter.placementStyle = String(query.style).trim();
+        if (query.decision && ['place_product', 'no_product'].includes(query.decision)) filter.decision = query.decision;
+        const [items, total] = await Promise.all([
+            EditorialProductPlacementPlan.find(filter).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
+            EditorialProductPlacementPlan.countDocuments(filter)
+        ]);
+        return { plans: items.map((item) => ({ ...item, id: String(item._id) })), pagination: { page, limit, total, pages: Math.max(1, Math.ceil(total / limit)) } };
+    }
+
+    static async getPlacementPlan({ planId }) {
+        if (!/^[a-f0-9]{24}$/i.test(String(planId || ''))) throw new BadRequestError('Invalid Editorial Product Placement Plan id');
+        const item = await EditorialProductPlacementPlan.findById(planId).lean();
+        if (!item) throw new NotFoundError('Editorial Product Placement Plan not found');
         return { ...item, id: String(item._id) };
     }
 

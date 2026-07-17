@@ -235,7 +235,8 @@ const runImagePipeline = async ({
     contentHtml,
     primaryKeyword,
     articleType,
-    imageSearchQuery = ''
+    imageSearchQuery = '',
+    editorialProductPlacement = null
 } = {}) => {
     const visualPlan = buildVisualPlan({
         title,
@@ -245,7 +246,8 @@ const runImagePipeline = async ({
         outline,
         contentHtml,
         targetKeyword: primaryKeyword,
-        articleType
+        articleType,
+        editorialProductPlacement
     });
     const planItems = [visualPlan.cover, ...visualPlan.inline];
     const normalizedImageQuery = String(imageSearchQuery || '').trim();
