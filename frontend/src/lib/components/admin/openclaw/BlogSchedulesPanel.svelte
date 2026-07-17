@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { locale } from '$lib/i18n/admin/index.js';
 
 	let { initialSchedules = [], initialRuntime = {} } = $props();
@@ -272,6 +272,9 @@
 			return;
 		}
 		scheduleExecutions = Array.isArray(payload?.executions) ? payload.executions : [];
+		if (scheduleExecutions.some((item) => item.status === 'running')) {
+			ensureExecutionPolling(scheduleId);
+		}
 	};
 
 	const saveSchedule = async (event) => {
@@ -304,6 +307,32 @@
 		}
 	};
 
+	let executionPollTimer = null;
+	let executionPollStartedAt = 0;
+
+	const stopExecutionPolling = () => {
+		if (executionPollTimer) {
+			clearInterval(executionPollTimer);
+			executionPollTimer = null;
+		}
+	};
+
+	const ensureExecutionPolling = (scheduleId) => {
+		if (executionPollTimer || !scheduleId) return;
+		executionPollStartedAt = Date.now();
+		executionPollTimer = setInterval(async () => {
+			if (Date.now() - executionPollStartedAt > 12 * 60 * 1000 || selectedScheduleId !== scheduleId) {
+				stopExecutionPolling();
+				return;
+			}
+			await loadScheduleExecutions(scheduleId);
+			if (!scheduleExecutions.some((item) => item.status === 'running')) {
+				stopExecutionPolling();
+				await refreshSchedules();
+			}
+		}, 6000);
+	};
+
 	const scheduleOperation = async (scheduleId, operation) => {
 		if (!scheduleId || busyScheduleAction) return;
 		busyScheduleAction = `${operation}:${scheduleId}`;
@@ -321,6 +350,7 @@
 			if (operation === 'run-now') {
 				await loadScheduleExecutions(scheduleId);
 				await refreshSchedules();
+				ensureExecutionPolling(scheduleId);
 				return;
 			}
 			upsertSchedule(payload);
@@ -363,6 +393,10 @@
 
 	onMount(() => {
 		if (selectedScheduleId) loadScheduleExecutions(selectedScheduleId);
+	});
+
+	onDestroy(() => {
+		stopExecutionPolling();
 	});
 </script>
 

@@ -59,11 +59,9 @@ const pendingMetadata = ({ planItem, prompt, seo, reason }) => ({
 });
 
 const resolveSourceImage = async ({ planItem, prompt, warnings }) => {
-    const query = [
-        planItem.articleTitle,
-        planItem.afterHeading,
-        'realistic stainless steel cookware Vietnamese home kitchen'
-    ].filter(Boolean).join(' ');
+    const query = planItem.imageSearchQuery
+        ? planItem.imageSearchQuery
+        : [planItem.articleTitle, planItem.afterHeading].filter(Boolean).join(' ');
     try {
         const search = await searchImages({ query, limit: 5 });
         if (search.reason) warnings.push(search.reason);
@@ -236,7 +234,8 @@ const runImagePipeline = async ({
     outline,
     contentHtml,
     primaryKeyword,
-    articleType
+    articleType,
+    imageSearchQuery = ''
 } = {}) => {
     const visualPlan = buildVisualPlan({
         title,
@@ -249,6 +248,8 @@ const runImagePipeline = async ({
         articleType
     });
     const planItems = [visualPlan.cover, ...visualPlan.inline];
+    const normalizedImageQuery = String(imageSearchQuery || '').trim();
+    for (const planItem of planItems) planItem.imageSearchQuery = normalizedImageQuery;
     const warnings = [];
     const enabled = parseBoolean(process.env.OPENCLAW_IMAGE_PIPELINE_ENABLED, true);
 

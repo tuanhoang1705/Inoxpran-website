@@ -267,7 +267,7 @@ class AgenticImageReviewService {
     });
     const searchQuery =
       String(query || "").trim() ||
-      `${resolved.image.afterHeading || post.blog_title} stainless steel kitchen`;
+      String(resolved.image.afterHeading || post.blog_title || "").trim();
     const result = await searchPexelsImages({
       query: searchQuery,
       page,

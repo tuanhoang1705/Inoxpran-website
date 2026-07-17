@@ -134,16 +134,18 @@ const sanitizeLlmHtml = (html) => {
     return output;
 };
 
-const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, attempt }) => {
+const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles = [], attempt }) => {
     const system = [
         'Bạn là biên tập viên nội dung cho INOXPRAN (inoxpran.com), thương hiệu đồ gia dụng Việt Nam.',
         'Viết bài blog tiếng Việt chuẩn xuất bản, bám sát 100% chủ đề được yêu cầu; tuyệt đối không chèn nội dung về danh mục sản phẩm không liên quan đến chủ đề.',
         'Cấm tuyệt đối: số liệu, chứng nhận, kết quả thử nghiệm hoặc trải nghiệm bịa đặt; các cụm "100%", "được chứng nhận", "tốt nhất Việt Nam", "tốt nhất thế giới", "nghiên cứu cho thấy", "thử nghiệm của chúng tôi", "chuyên gia INOXPRAN khẳng định", "hoàn hảo tuyệt đối"; hứa hẹn thứ hạng Google; tên đối thủ cạnh tranh.',
         'Không kể chuyện về khách hàng hoặc nhân vật cụ thể (tên riêng, địa chỉ, quận/huyện) như thể có thật; nếu cần minh họa, chỉ dùng tình huống chung chung không danh tính.',
         'Giọng văn: thực tế, rõ ràng, đáng tin cậy, hướng đến hộ gia đình Việt Nam.',
-        'Chỉ trả về JSON hợp lệ dạng: {"title": string, "excerpt": string, "html": string}.',
-        '"title": tối đa 110 ký tự, tự nhiên và hấp dẫn, không emoji, không dấu ngoặc kép.',
+        'Chỉ trả về JSON hợp lệ dạng: {"title": string, "excerpt": string, "imageQuery": string, "html": string}.',
+        'Trường "topic" trong yêu cầu chỉ là BRIEF định hướng nội bộ, không phải tiêu đề. TUYỆT ĐỐI không dùng nguyên văn hoặc gần nguyên văn brief làm "title".',
+        '"title": tối đa 110 ký tự, tự nhiên và hấp dẫn, không emoji, không dấu ngoặc kép; phải khác hẳn brief và khác mọi tiêu đề trong "recentTitles".',
         '"excerpt": 1-2 câu tóm tắt bài viết, tối đa 200 ký tự.',
+        '"imageQuery": 3-6 từ TIẾNG ANH mô tả hình ảnh minh họa đúng chủ đề bài viết (ví dụ "portable rechargeable fan student desk"), không chứa tên thương hiệu.',
         '"html": bài viết hoàn chỉnh bọc trong <article>...</article>, dài 900-1400 từ, chỉ dùng các thẻ <h2> <h3> <p> <ul> <ol> <li> <table> <thead> <tbody> <tr> <th> <td> <strong> <em> và <aside class="answer-block">.',
         'Cấu trúc bắt buộc: 1 đoạn mở đầu không có heading; các mục <h2> bám sát chủ đề theo số lượng headingCount; ít nhất 2 khối <aside class="answer-block"><strong>Trả lời nhanh:</strong> ...</aside> trong đó 1 khối nằm gần đầu bài; 1 danh sách <ul> dạng checklist thực hành; 1 mục <h2>Câu hỏi thường gặp</h2> chứa 2-3 câu hỏi <h3> kèm trả lời; 1 đoạn kết ngắn gọn.',
         'Không dùng <img>, không chèn link, không inline style, không markdown.'
@@ -159,6 +161,7 @@ const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, artic
         openingMode: style?.openingMode || '',
         ctaMode: style?.ctaMode || '',
         headingCount,
+        recentTitles: (recentTitles || []).slice(0, 10),
         variation: attempt > 0 ? `Lần viết lại thứ ${attempt}: thay đổi hẳn bộ heading, cách mở bài và cách diễn đạt so với các lần trước.` : ''
     });
     return [{ role: 'system', content: system }, { role: 'user', content: user }];
@@ -166,13 +169,13 @@ const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, artic
 
 const generateLlmDraft = async ({
     topic, primaryKeyword, secondaryKeywords = [], articleType = '', style = {},
-    headingCount = 5, language = 'vi', tone = 'practical', attempt = 0,
+    headingCount = 5, language = 'vi', tone = 'practical', attempt = 0, recentTitles = [],
     fetchImpl = global.fetch, timeoutMs = LLM_DRAFT_TIMEOUT_MS
 }) => {
     const apiKey = normalizeString(process.env.OPENAI_API_KEY);
     if (!apiKey || typeof fetchImpl !== 'function') return null;
     const model = normalizeString(process.env.OPENAI_CHAT_MODEL) || 'gpt-4o-mini';
-    const messages = buildLlmDraftMessages({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, attempt });
+    const messages = buildLlmDraftMessages({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles, attempt });
     const requestOnce = async (body, signal) => fetchImpl('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
@@ -202,6 +205,7 @@ const generateLlmDraft = async ({
             html,
             title: normalizeString(parsed.title).replace(/["“”]/g, '').slice(0, 110),
             excerpt: normalizeString(parsed.excerpt).slice(0, 220),
+            imageQuery: normalizeString(parsed.imageQuery).replace(/["“”]/g, '').slice(0, 90),
             model,
             wordCount: words
         };
@@ -422,7 +426,7 @@ class AgenticBlogCoreService {
 
     static async prepareContext({ topic, primaryKeyword, articleType, now = new Date(), sourceUrls = [] }) {
         const snapshot = await GoogleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate({ now });
-        const existing = await blog.find({}).sort({ updatedAt: -1 }).limit(100).select('_id blog_title blog_slug blog_tags blog_content updatedAt createdAt structuralFingerprint').lean();
+        const existing = await blog.find({}).sort({ updatedAt: -1 }).limit(100).select('_id blog_title blog_slug blog_tags blog_content isDraft isPublished updatedAt createdAt structuralFingerprint').lean();
         const opportunity = decideTopicAction({ topic, existing, now });
         const researchBundle = await AgenticBlogCoreService.researchIndustry({ topic, sourceUrls });
         const style = await AgenticBlogCoreService.chooseStyleProfile({ now, timezone: snapshot.timezone });
@@ -460,6 +464,10 @@ class AgenticBlogCoreService {
         if (context.opportunity.decision === 'skip') return { skipped: true, reason: context.opportunity.reason, context };
         const targetIds = new Set(context.opportunity.targets.map((item) => String(item._id)));
         const comparisonCorpus = await blog.find({ _id: { $nin: Array.from(targetIds) } }).sort({ updatedAt: -1 }).limit(50).select('_id blog_title blog_content structuralFingerprint').lean();
+        const recentTitles = [
+            ...context.opportunity.targets.map((item) => item.blog_title),
+            ...comparisonCorpus.map((item) => item.blog_title)
+        ].filter(Boolean).slice(0, 10);
         const maxOriginalityAttempts = 3;
         let contentHtml = '';
         let originality = null;
@@ -479,6 +487,7 @@ class AgenticBlogCoreService {
                     headingCount: Math.min(Math.max((context.architecture.headings || []).length, 4), 6),
                     language: normalizeString(config.language) || 'vi',
                     tone: normalizeString(config.tone) || 'practical',
+                    recentTitles,
                     attempt
                 });
             } catch (error) {
@@ -512,13 +521,17 @@ class AgenticBlogCoreService {
         const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed;
         const target = context.opportunity.targets[0];
         const date = dateInTimezone(now, context.snapshot.timezone);
-        const title = target?.blog_title || llmDraft?.title || topic;
+        const targetKeepsTitle = Boolean(target && target.isPublished);
+        const title = targetKeepsTitle
+            ? target.blog_title
+            : (llmDraft?.title || target?.blog_title || topic);
         const slug = target?.blog_slug || normalizeSlug(`${llmDraft?.title || topic}-${date}-${sha256(executionKey).slice(0, 6)}`);
         const excerpt = (llmDraft?.excerpt || `Hướng dẫn thực tế về ${topic} cho gia đình Việt: tiêu chí lựa chọn, cách sử dụng và lưu ý an toàn.`).slice(0, 240);
         const payload = {
             mode: Boolean(schedule.autoPublish) && !highRisk ? 'publish' : 'draft',
             source: 'openclaw-daily-seo', primaryKeyword, secondaryKeywords: config.secondaryKeywords || [],
             title, slug, excerpt, contentHtml,
+            imageSearchQuery: llmDraft?.imageQuery || '',
             seoTitle: title.slice(0, 60), seoDescription: excerpt.slice(0, 155),
             categoryKey: config.categoryKey || 'guide', tags: [primaryKeyword, 'Inoxpran', context.strategy.articleType].filter(Boolean),
             authorName: process.env.SEO_AGENT_DEFAULT_AUTHOR || 'Inoxpran Editorial Team',

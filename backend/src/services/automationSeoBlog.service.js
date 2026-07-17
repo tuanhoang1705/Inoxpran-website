@@ -189,7 +189,8 @@ class AutomationSeoBlogService {
                 outline: normalized.outline,
                 contentHtml: normalized.contentHtml,
                 primaryKeyword: normalized.primaryKeyword,
-                articleType: normalized.articleType
+                articleType: normalized.articleType,
+                imageSearchQuery: normalizeString(payload.imageSearchQuery || '')
             });
         } catch (error) {
             imagePipeline = {

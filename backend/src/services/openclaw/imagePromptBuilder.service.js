@@ -33,7 +33,9 @@ const buildImagePrompt = (planItem = {}) => {
             purposeDirection,
             `Topic: ${normalizeString(planItem.articleTitle)}.`,
             `Visual rule: ${normalizeString(planItem.visualRule)}.`,
-            'Realistic Vietnamese home kitchen, natural window light, real countertops, practical stainless steel cookware, believable proportions and materials.',
+            planItem.imageSearchQuery
+                ? `Scene guidance: ${normalizeString(planItem.imageSearchQuery)}. Realistic Vietnamese home setting, natural window light, believable proportions and materials.`
+                : 'Realistic Vietnamese home kitchen, natural window light, real countertops, practical stainless steel cookware, believable proportions and materials.',
             careDirection,
             'Natural editorial photography, restrained color, no visible brand marks, no text inside the image.'
         ].filter(Boolean).join(' '),
