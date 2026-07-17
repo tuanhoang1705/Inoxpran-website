@@ -90,20 +90,23 @@ const sanitizeSeoBlogHtml = (value) => {
             'img',
             'figure',
             'figcaption',
+            'aside',
             'section',
             'div'
         ],
         allowedAttributes: {
-            a: ['href', 'title', 'data-link-type'],
-            img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding', 'data-image-id', 'data-source-type', 'data-review-status'],
-            figure: ['data-image-id', 'data-source-type', 'data-review-status'],
+            a: ['href', 'title', 'data-link-type', 'data-cta-type'],
+            p: ['data-block-type', 'data-product-id', 'data-placement-id', 'data-section-key', 'data-commercial-role', 'data-rank-position'],
+            img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding', 'data-image-id', 'data-source-type', 'data-review-status', 'data-product-id', 'data-image-role', 'data-placement-id'],
+            figure: ['data-image-id', 'data-source-type', 'data-review-status', 'data-product-id', 'data-image-role', 'data-placement-id'],
             figcaption: [],
             ul: ['data-type'],
             li: ['data-type', 'data-checked'],
             th: ['colspan', 'rowspan'],
             td: ['colspan', 'rowspan'],
             div: [],
-            section: ['data-block-type', 'data-product-id']
+            aside: ['data-disclosure-type'],
+            section: ['data-block-type', 'data-product-id', 'data-placement-id', 'data-section-key', 'data-commercial-role', 'data-rank-position', 'data-editorial-role']
         },
         allowedSchemes: ['http', 'https'],
         allowProtocolRelative: false,
@@ -118,17 +121,61 @@ const sanitizeSeoBlogHtml = (value) => {
                     attribs: {
                         href,
                         ...(attribs.title ? { title: escapeHtmlAttribute(attribs.title) } : {}),
-                        ...(attribs['data-link-type'] === 'product' ? { 'data-link-type': 'product' } : {})
+                        ...(attribs['data-link-type'] === 'product' ? { 'data-link-type': 'product' } : {}),
+                        ...(attribs['data-cta-type'] === 'product-soft' ? { 'data-cta-type': 'product-soft' } : {})
                     }
                 };
             },
             section: (tagName, attribs) => {
                 const isProductBlock = attribs['data-block-type'] === 'product-recommendation';
+                if (attribs['data-editorial-role'] === 'ranking-methodology') {
+                    return { tagName, attribs: { 'data-editorial-role': 'ranking-methodology' } };
+                }
                 const productId = normalizeString(attribs['data-product-id']);
                 if (!isProductBlock) return { tagName, attribs: {} };
                 if (!/^[a-f0-9]{24}$/i.test(productId)) return { tagName, attribs: {} };
-                return { tagName, attribs: { 'data-block-type': 'product-recommendation', 'data-product-id': productId } };
+                return {
+                    tagName,
+                    attribs: {
+                        'data-block-type': 'product-recommendation',
+                        'data-product-id': productId,
+                        ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-placement-id'] || '') ? { 'data-placement-id': attribs['data-placement-id'] } : {}),
+                        ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-section-key'] || '') ? { 'data-section-key': attribs['data-section-key'] } : {}),
+                        ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-commercial-role'] || '') ? { 'data-commercial-role': attribs['data-commercial-role'] } : {}),
+                        ...(/^(none|first|last|middle)$/.test(attribs['data-rank-position'] || '') ? { 'data-rank-position': attribs['data-rank-position'] } : {})
+                    }
+                };
             },
+            p: (tagName, attribs) => {
+                if (attribs['data-block-type'] !== 'product-inline-example') return { tagName, attribs: {} };
+                const productId = normalizeString(attribs['data-product-id']);
+                if (!/^[a-f0-9]{24}$/i.test(productId)) return { tagName, attribs: {} };
+                return {
+                    tagName,
+                    attribs: {
+                        'data-block-type': 'product-inline-example',
+                        'data-product-id': productId,
+                        ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-placement-id'] || '') ? { 'data-placement-id': attribs['data-placement-id'] } : {}),
+                        ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-section-key'] || '') ? { 'data-section-key': attribs['data-section-key'] } : {}),
+                        ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-commercial-role'] || '') ? { 'data-commercial-role': attribs['data-commercial-role'] } : {}),
+                        ...(/^(none|first|last|middle)$/.test(attribs['data-rank-position'] || '') ? { 'data-rank-position': attribs['data-rank-position'] } : {})
+                    }
+                };
+            },
+            aside: (tagName, attribs) => attribs['data-disclosure-type'] === 'owned-product'
+                ? { tagName, attribs: { 'data-disclosure-type': 'owned-product' } }
+                : { tagName, attribs: {} },
+            figure: (tagName, attribs) => ({
+                tagName,
+                attribs: {
+                    ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-image-id'] || '') ? { 'data-image-id': attribs['data-image-id'] } : {}),
+                    ...(/^[a-z0-9_-]{1,40}$/i.test(attribs['data-source-type'] || '') ? { 'data-source-type': attribs['data-source-type'] } : {}),
+                    ...(/^(pending_review|approved|rejected|replaced)$/.test(attribs['data-review-status'] || '') ? { 'data-review-status': attribs['data-review-status'] } : {}),
+                    ...(/^[a-f0-9]{24}$/i.test(attribs['data-product-id'] || '') ? { 'data-product-id': attribs['data-product-id'] } : {}),
+                    ...(attribs['data-image-role'] === 'product' ? { 'data-image-role': 'product' } : {}),
+                    ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-placement-id'] || '') ? { 'data-placement-id': attribs['data-placement-id'] } : {})
+                }
+            }),
             img: (tagName, attribs) => {
                 const src = normalizeString(attribs.src);
                 if (!isAllowedImage(src)) {
@@ -154,7 +201,10 @@ const sanitizeSeoBlogHtml = (value) => {
                             attribs['data-review-status'] || ''
                         )
                             ? { 'data-review-status': attribs['data-review-status'] }
-                            : {})
+                            : {}),
+                        ...(/^[a-f0-9]{24}$/i.test(attribs['data-product-id'] || '') ? { 'data-product-id': attribs['data-product-id'] } : {}),
+                        ...(attribs['data-image-role'] === 'product' ? { 'data-image-role': 'product' } : {}),
+                        ...(/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(attribs['data-placement-id'] || '') ? { 'data-placement-id': attribs['data-placement-id'] } : {})
                     }
                 };
             }

@@ -7,6 +7,8 @@ const strategyPlanSchema = new Schema(
         googleIntelSnapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', required: true, index: true },
         productCatalogSnapshotId: { type: Schema.Types.ObjectId, ref: 'ProductCatalogSnapshot', default: null, index: true },
         productSeedPlanId: { type: Schema.Types.ObjectId, ref: 'ProductSeedPlan', default: null, index: true },
+        editorialProductPlacementPlanId: { type: Schema.Types.ObjectId, ref: 'EditorialProductPlacementPlan', default: null, index: true },
+        productPlacementStyle: { type: String, default: '', index: true },
         productSeedingMode: { type: String, enum: ['off', 'auto', 'required'], default: 'off' },
         productSeedingDecision: { type: String, enum: ['no_seed', 'contextual_seed', 'product_led', 'blocked_no_suitable_product'], default: 'no_seed' },
         selectedProductIds: { type: [{ type: Schema.Types.ObjectId, ref: 'Product' }], default: [] },

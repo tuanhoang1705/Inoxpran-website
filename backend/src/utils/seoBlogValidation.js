@@ -143,6 +143,7 @@ const validateAutomationPayload = (payload = {}) => {
     }
     const productCatalogSnapshotId = normalizeString(payload.productCatalogSnapshotId || payload.metadata?.productCatalogSnapshotId);
     const productSeedPlanId = normalizeString(payload.productSeedPlanId || payload.metadata?.productSeedPlanId);
+    const editorialProductPlacementPlanId = normalizeString(payload.editorialProductPlacementPlanId || payload.metadata?.editorialProductPlacementPlanId);
     const productSeedingDecision = normalizeString(payload.productSeedingDecision || payload.metadata?.productSeedingDecision || 'no_seed');
     const seededProductIds = normalizeStringArray(payload.seededProductIds, 10);
     const productSeedingReview = payload.productSeedingReview && typeof payload.productSeedingReview === 'object'
@@ -151,12 +152,17 @@ const validateAutomationPayload = (payload = {}) => {
     const productClaimReview = payload.productClaimReview && typeof payload.productClaimReview === 'object'
         ? payload.productClaimReview
         : payload.metadata?.productClaimReview || null;
+    const editorialProductPlacementReview = payload.editorialProductPlacementReview && typeof payload.editorialProductPlacementReview === 'object'
+        ? payload.editorialProductPlacementReview
+        : payload.metadata?.editorialProductPlacementReview || null;
     if (productSeedingMode !== 'off') {
         const missingProductContext = [
             !productCatalogSnapshotId ? 'productCatalogSnapshotId' : '',
             !productSeedPlanId ? 'productSeedPlanId' : '',
+            !editorialProductPlacementPlanId ? 'editorialProductPlacementPlanId' : '',
             !productSeedingReview ? 'productSeedingReview' : '',
-            !productClaimReview ? 'productClaimReview' : ''
+            !productClaimReview ? 'productClaimReview' : '',
+            !editorialProductPlacementReview ? 'editorialProductPlacementReview' : ''
         ].filter(Boolean);
         if (missingProductContext.length) throw new BadRequestError(`Product writer context is missing: ${missingProductContext.join(', ')}`);
     }
@@ -168,6 +174,8 @@ const validateAutomationPayload = (payload = {}) => {
         if (productSeedingReview?.pass !== true) reviewGate.reasons.push('product_seeding_review_not_pass');
         if (productClaimReview?.pass !== true) reviewGate.reasons.push('product_claim_review_not_pass');
         if (productSeedingReview?.commercialPressure === 'high') reviewGate.reasons.push('product_commercial_pressure_high');
+        if (editorialProductPlacementReview?.pass !== true) reviewGate.reasons.push('editorial_product_placement_review_not_pass');
+        if (['high', 'critical'].includes(editorialProductPlacementReview?.riskLevel)) reviewGate.reasons.push('editorial_product_placement_risk_high');
         reviewGate.passes = reviewGate.reasons.length === 0;
     }
 
@@ -195,11 +203,13 @@ const validateAutomationPayload = (payload = {}) => {
         ...context,
         productCatalogSnapshotId,
         productSeedPlanId,
+        editorialProductPlacementPlanId,
         productSeedingMode,
         productSeedingDecision,
         seededProductIds,
         productSeedingReview,
         productClaimReview,
+        editorialProductPlacementReview,
         structuralFingerprint: payload.structuralFingerprint && typeof payload.structuralFingerprint === 'object' ? payload.structuralFingerprint : null,
         agenticReviews: payload.agenticReviews && typeof payload.agenticReviews === 'object' ? payload.agenticReviews : null,
         metadata: payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {},

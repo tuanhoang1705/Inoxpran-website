@@ -7,6 +7,7 @@ const AutomationSeoBlogService = require('./automationSeoBlog.service');
 const { AgenticBlogCoreService } = require('./agenticBlogCore.service');
 const { TelegramApprovalService } = require('./telegramApproval.service');
 const { ProductSeedPlanningService } = require('./productSeedPlanning.service');
+const { EditorialProductPlacementPlanningService } = require('./editorialProductPlacementPlanning.service');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { convertToObjectIdMongodb } = require('../utils');
 const {
@@ -75,11 +76,13 @@ const mapExecution = (execution) => {
         strategyPlanId: execution.strategyPlanId ? String(execution.strategyPlanId) : '',
         productCatalogSnapshotId: execution.productCatalogSnapshotId ? String(execution.productCatalogSnapshotId) : '',
         productSeedPlanId: execution.productSeedPlanId ? String(execution.productSeedPlanId) : '',
+        editorialProductPlacementPlanId: execution.editorialProductPlacementPlanId ? String(execution.editorialProductPlacementPlanId) : '',
         productSeedingMode: execution.productSeedingMode || 'off',
         productSeedingDecision: execution.productSeedingDecision || '',
         seededProductIds: (execution.seededProductIds || []).map(String),
         productSeedingReview: execution.productSeedingReview || null,
         productClaimReview: execution.productClaimReview || null,
+        editorialProductPlacementReview: execution.editorialProductPlacementReview || null,
         correlationId: execution.correlationId || '',
         agentSteps: execution.agentSteps || [],
         reviewerDecisions: execution.reviewerDecisions || {},
@@ -129,6 +132,10 @@ const mergeSchedulePatch = (current, patch = {}) => {
             productSeeding: {
                 ...(base.agentConfig?.productSeeding || {}),
                 ...(patch.agentConfig?.productSeeding || {})
+            },
+            productPlacement: {
+                ...(base.agentConfig?.productPlacement || {}),
+                ...(patch.agentConfig?.productPlacement || {})
             }
         }
     };
@@ -382,6 +389,9 @@ class BlogAutomationScheduleService {
             if (pipeline.context?.productSeedPlan?._id) {
                 await ProductSeedPlanningService.attachExecution({ planId: pipeline.context.productSeedPlan._id, executionId: execution._id });
             }
+            if (pipeline.context?.editorialPlacementPlan?._id) {
+                await EditorialProductPlacementPlanningService.attachRelations({ planId: pipeline.context.editorialPlacementPlan._id, executionId: execution._id, strategyPlanId: pipeline.context.strategy?._id });
+            }
             if (pipeline.skipped) {
                 const completedAt = new Date();
                 const nextRunAt = calculateNextRun({
@@ -397,6 +407,7 @@ class BlogAutomationScheduleService {
                         strategyPlanId: pipeline.context.strategy?._id || null,
                         productCatalogSnapshotId: pipeline.context.productSeedPlan?.productCatalogSnapshotId || null,
                         productSeedPlanId: pipeline.context.productSeedPlan?._id || null,
+                        editorialProductPlacementPlanId: pipeline.context.editorialPlacementPlan?._id || null,
                         productSeedingMode: pipeline.context.productSeedPlan?.mode || 'off',
                         productSeedingDecision: pipeline.context.productSeedPlan?.decision || '',
                         seededProductIds: [pipeline.context.productSeedPlan?.primaryProduct, ...(pipeline.context.productSeedPlan?.supportingProducts || [])].filter(Boolean).map((item) => item.productId),
@@ -410,7 +421,8 @@ class BlogAutomationScheduleService {
                                 selectedProducts: [pipeline.context.productSeedPlan?.primaryProduct, ...(pipeline.context.productSeedPlan?.supportingProducts || [])].filter(Boolean),
                                 rejectedCandidates: pipeline.context.productSeedPlan?.rejectedCandidates || [],
                                 candidateScores: pipeline.context.productSeedPlan?.candidateScores || [],
-                                placementPlan: pipeline.context.productSeedPlan?.placementPlan || [],
+                                placementPlan: pipeline.context.editorialPlacementPlan?.placementSequence || [],
+                                placementStyle: pipeline.context.editorialPlacementPlan?.placementStyle || 'no-product',
                                 warnings: pipeline.context.productSeedPlan?.warnings || [],
                                 errorCodes: pipeline.context.productSeedPlan?.errorCodes || []
                             }
@@ -429,16 +441,18 @@ class BlogAutomationScheduleService {
                     strategyPlanId: payload.strategyPlanId,
                     productCatalogSnapshotId: payload.productCatalogSnapshotId || null,
                     productSeedPlanId: payload.productSeedPlanId || null,
+                    editorialProductPlacementPlanId: payload.editorialProductPlacementPlanId || null,
                     productSeedingMode: payload.productSeedingMode || 'off',
                     productSeedingDecision: payload.productSeedingDecision || '',
                     seededProductIds: payload.seededProductIds || [],
                     productSeedingReview: payload.productSeedingReview || null,
                     productClaimReview: payload.productClaimReview || null,
+                    editorialProductPlacementReview: payload.editorialProductPlacementReview || null,
                     agentSteps: [
                         'google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan',
-                        'topic-opportunity-research', 'industry-content-research',
+                        'editorial-product-placement-plan', 'topic-opportunity-research', 'industry-content-research',
                         'editorial-style-planning', 'content-strategy-plan', 'content-architecture', 'draft-generation',
-                        'product-claim-review', 'product-seeding-review', 'fact-review', 'originality-review', 'seo-aeo-geo-review', 'people-first-spam-review',
+                        'product-claim-review', 'product-seeding-review', 'editorial-product-placement-review', 'fact-review', 'originality-review', 'seo-aeo-geo-review', 'people-first-spam-review',
                         'brand-voice-review', 'publisher-gate'
                     ],
                     reviewerDecisions: pipeline.reviews,
@@ -473,13 +487,18 @@ class BlogAutomationScheduleService {
                             strategyPlanId: payload.strategyPlanId
                             , productCatalogSnapshotId: payload.productCatalogSnapshotId || ''
                             , productSeedPlanId: payload.productSeedPlanId || ''
+                            , editorialProductPlacementPlanId: payload.editorialProductPlacementPlanId || ''
                             , productSeedingMode: payload.productSeedingMode || 'off'
                             , productSeedingDecision: payload.productSeedingDecision || ''
                             , productSeeding: {
                                 selectedProducts: [pipeline.context.productSeedPlan?.primaryProduct, ...(pipeline.context.productSeedPlan?.supportingProducts || [])].filter(Boolean),
                                 rejectedCandidates: pipeline.context.productSeedPlan?.rejectedCandidates || [],
                                 candidateScores: pipeline.context.productSeedPlan?.candidateScores || [],
-                                placementPlan: pipeline.context.productSeedPlan?.placementPlan || [],
+                                placementPlan: pipeline.context.editorialPlacementPlan?.placementSequence || [],
+                                placementStyle: pipeline.context.editorialPlacementPlan?.placementStyle || 'no-product',
+                                firstProductMention: pipeline.context.editorialPlacementPlan?.firstProductMention || {},
+                                rankingStrategy: pipeline.context.editorialPlacementPlan?.rankingStrategy || {},
+                                disclosure: pipeline.context.editorialPlacementPlan?.disclosure || {},
                                 warnings: pipeline.context.productSeedPlan?.warnings || []
                             }
                         }

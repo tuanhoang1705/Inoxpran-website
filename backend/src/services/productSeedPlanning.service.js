@@ -117,17 +117,6 @@ const buildPlanDocument = ({ brief, googleIntelSnapshotId, snapshot, ranked = []
     const supportingProducts = supportingEntries.map((entry) => selectedProduct({ ...entry, brief }));
     const allSelected = [primaryProduct, ...supportingProducts].filter(Boolean);
     const density = commercialDensityFor(brief.productSeeding.intensity, config);
-    const placementPlan = allSelected.map((item, index) => ({
-        placementId: `product-placement-${index + 1}`,
-        sectionPurpose: index === 0 ? 'Present a verified option only after objective criteria and user guidance.' : 'Offer a supporting option for a distinct verified use case.',
-        afterHeadingKey: index === 0 ? 'objective-criteria' : `use-case-${index + 1}`,
-        placementType: index === 0 && productLed ? 'recommendation_block' : index === 0 ? 'contextual_example' : 'solution_example',
-        productId: item.productId,
-        messageGoal: 'Explain fit using catalog evidence without promising outcomes or availability.',
-        maxMentions: index === 0 ? Math.min(2, density.maxProductMentions) : 1,
-        linkAllowed: index < density.maxProductLinks,
-        requiredDisclosure: true
-    }));
     const failureReason = blocked
         ? 'Required product integration was blocked because no eligible product met the relevance threshold.'
         : hasProduct
@@ -145,7 +134,7 @@ const buildPlanDocument = ({ brief, googleIntelSnapshotId, snapshot, ranked = []
         supportingProducts,
         candidateScores: ranked.slice(0, 20).map(({ candidate, score }) => ({ productId: candidate.productId, name: candidate.name, ...score, exposure: exposures[candidate.productId] || {} })),
         rejectedCandidates: ranked.filter((entry) => !entry.score.eligible).slice(0, 20).map(({ candidate, score }) => ({ productId: candidate.productId, name: candidate.name, totalScore: score.totalScore, rejectionReasons: score.rejectionReasons, penalties: score.penalties })),
-        placementPlan,
+        placementPlan: [],
         ctaPlan: {
             enabled: hasProduct && density.maxCtaCount > 0,
             mode: hasProduct ? (productLed ? 'product_detail' : 'soft') : 'none',

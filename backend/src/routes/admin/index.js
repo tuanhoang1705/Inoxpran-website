@@ -242,6 +242,16 @@ router.get(
   asyncHandler(productSeedingAdminController.getPlan),
 );
 router.get(
+  "/openclaw/product-placement/plans",
+  requireAdminPermission(["product_seeding.view"]),
+  asyncHandler(productSeedingAdminController.listPlacementPlans),
+);
+router.get(
+  "/openclaw/product-placement/plans/:id",
+  requireAdminPermission(["product_seeding.view"]),
+  asyncHandler(productSeedingAdminController.getPlacementPlan),
+);
+router.get(
   "/openclaw/product-seeding/exposures",
   requireAdminPermission(["product_seeding.view"]),
   asyncHandler(productSeedingAdminController.listExposures),
