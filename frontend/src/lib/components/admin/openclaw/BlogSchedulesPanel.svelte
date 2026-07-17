@@ -27,7 +27,18 @@
 		categoryKey: 'guide',
 		articleType: 'how-to',
 		language: 'vi',
-		prompt: ''
+		prompt: '',
+		productSeedingEnabled: true,
+		productSeedingMode: 'auto',
+		productSeedingIntensity: 'light',
+		maxPrimaryProducts: 1,
+		maxSupportingProducts: 2,
+		preferredCategoryIds: '',
+		preferredProductIds: '',
+		excludedProductIds: '',
+		allowOutOfStock: false,
+		productRelevanceThreshold: 0.72,
+		allowInformationalFallback: true
 	});
 
 	// svelte-ignore state_referenced_locally
@@ -41,6 +52,8 @@
 	let editingScheduleId = $state('');
 	let busyScheduleAction = $state('');
 	let pageError = $state('');
+	let productPreview = $state(null);
+	let previewBusy = $state(false);
 
 	const selectedSchedule = $derived(
 		schedules.find((schedule) => schedule.id === selectedScheduleId) || schedules[0] || null
@@ -115,6 +128,34 @@
 		windowHint: isEn
 			? 'Active window for this schedule — leave empty to run indefinitely.'
 			: 'Khoảng thời gian lịch có hiệu lực — để trống nếu muốn chạy vô thời hạn.'
+	});
+
+	const productT = $derived({
+		section: isEn ? 'Product Integration' : 'Tích hợp sản phẩm',
+		enabled: isEn ? 'Enable Product Integration' : 'Bật tích hợp sản phẩm',
+		mode: isEn ? 'Mode' : 'Chế độ',
+		modeOff: isEn ? 'Off — pure informational content' : 'Tắt — nội dung thuần thông tin',
+		modeAuto: isEn ? 'Auto — only when genuinely relevant' : 'Tự động — chỉ khi thật sự liên quan',
+		modeRequired: isEn ? 'Required — block without a suitable product' : 'Bắt buộc — chặn khi không có sản phẩm phù hợp',
+		intensity: isEn ? 'Intensity' : 'Mức độ thương mại',
+		light: isEn ? 'Light' : 'Nhẹ',
+		balanced: isEn ? 'Balanced' : 'Cân bằng',
+		commercial: isEn ? 'Commercial' : 'Thương mại',
+		maxPrimary: isEn ? 'Maximum primary products' : 'Số sản phẩm chính tối đa',
+		maxSupporting: isEn ? 'Maximum supporting products' : 'Số sản phẩm hỗ trợ tối đa',
+		preferredCategories: isEn ? 'Preferred categories (comma-separated)' : 'Danh mục ưu tiên (phân cách bằng dấu phẩy)',
+		preferredProducts: isEn ? 'Preferred product IDs (comma-separated)' : 'ID sản phẩm ưu tiên (phân cách bằng dấu phẩy)',
+		excludedProducts: isEn ? 'Excluded product IDs (comma-separated)' : 'ID sản phẩm loại trừ (phân cách bằng dấu phẩy)',
+		allowOutOfStock: isEn ? 'Allow out-of-stock products as technical examples' : 'Cho phép sản phẩm hết hàng làm ví dụ kỹ thuật',
+		threshold: isEn ? 'Product relevance threshold' : 'Ngưỡng liên quan sản phẩm',
+		fallback: isEn ? 'Allow pure informational fallback in Auto mode' : 'Cho phép chuyển sang bài thuần thông tin ở chế độ Tự động',
+		preview: isEn ? 'Preview suitable products' : 'Xem trước sản phẩm phù hợp',
+		previewing: isEn ? 'Matching…' : 'Đang đối chiếu…',
+		decision: isEn ? 'Decision' : 'Quyết định',
+		selected: isEn ? 'Selected products' : 'Sản phẩm được chọn',
+		candidates: isEn ? 'Top candidates' : 'Ứng viên hàng đầu',
+		rejected: isEn ? 'Rejected candidates' : 'Ứng viên bị loại',
+		warnings: isEn ? 'Warnings' : 'Cảnh báo'
 	});
 
 	const formatDateTime = (value) => {
@@ -210,7 +251,18 @@
 			categoryKey: schedule.agentConfig?.categoryKey || 'guide',
 			articleType: schedule.agentConfig?.articleType || 'how-to',
 			language: schedule.agentConfig?.language || 'vi',
-			prompt: schedule.agentConfig?.prompt || ''
+			prompt: schedule.agentConfig?.prompt || '',
+			productSeedingEnabled: schedule.agentConfig?.productSeeding?.enabled !== false,
+			productSeedingMode: schedule.agentConfig?.productSeeding?.mode || 'auto',
+			productSeedingIntensity: schedule.agentConfig?.productSeeding?.intensity || 'light',
+			maxPrimaryProducts: schedule.agentConfig?.productSeeding?.maxPrimaryProducts ?? 1,
+			maxSupportingProducts: schedule.agentConfig?.productSeeding?.maxSupportingProducts ?? 2,
+			preferredCategoryIds: (schedule.agentConfig?.productSeeding?.preferredCategoryIds || []).join(', '),
+			preferredProductIds: (schedule.agentConfig?.productSeeding?.preferredProductIds || []).join(', '),
+			excludedProductIds: (schedule.agentConfig?.productSeeding?.excludedProductIds || []).join(', '),
+			allowOutOfStock: Boolean(schedule.agentConfig?.productSeeding?.allowOutOfStock),
+			productRelevanceThreshold: schedule.agentConfig?.productSeeding?.relevanceThreshold ?? 0.72,
+			allowInformationalFallback: schedule.agentConfig?.productSeeding?.allowInformationalFallback !== false
 		};
 		editingScheduleId = schedule.id;
 	};
@@ -241,9 +293,53 @@
 			categoryKey: scheduleForm.categoryKey,
 			articleType: scheduleForm.articleType,
 			language: scheduleForm.language,
-			prompt: scheduleForm.prompt
+			prompt: scheduleForm.prompt,
+			productSeeding: {
+				enabled: scheduleForm.productSeedingEnabled,
+				mode: scheduleForm.productSeedingEnabled ? scheduleForm.productSeedingMode : 'off',
+				intensity: scheduleForm.productSeedingIntensity,
+				maxPrimaryProducts: Number(scheduleForm.maxPrimaryProducts) || 0,
+				maxSupportingProducts: Number(scheduleForm.maxSupportingProducts) || 0,
+				preferredCategoryIds: splitCsv(scheduleForm.preferredCategoryIds),
+				preferredProductIds: splitCsv(scheduleForm.preferredProductIds),
+				excludedProductIds: splitCsv(scheduleForm.excludedProductIds),
+				allowOutOfStock: scheduleForm.allowOutOfStock,
+				relevanceThreshold: Number(scheduleForm.productRelevanceThreshold) || 0.72,
+				allowInformationalFallback: scheduleForm.allowInformationalFallback
+			}
 		}
 	});
+
+	const previewProductMatching = async () => {
+		if (previewBusy) return;
+		previewBusy = true;
+		pageError = '';
+		productPreview = null;
+		try {
+			const schedulePayload = buildSchedulePayload();
+			const response = await fetch(resolveAdminPath('/admin/api/openclaw/product-seeding/preview'), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					topic: schedulePayload.agentConfig.topic,
+					primaryKeyword: schedulePayload.agentConfig.primaryKeyword,
+					secondaryKeywords: schedulePayload.agentConfig.secondaryKeywords,
+					articleType: schedulePayload.agentConfig.articleType,
+					categoryKey: schedulePayload.agentConfig.categoryKey,
+					language: schedulePayload.agentConfig.language,
+					productSeeding: schedulePayload.agentConfig.productSeeding
+				})
+			});
+			const payload = await response.json().catch(() => null);
+			if (!response.ok) {
+				pageError = payload?.error || (isEn ? 'Unable to preview product matching' : 'Không thể xem trước đối chiếu sản phẩm');
+				return;
+			}
+			productPreview = payload;
+		} finally {
+			previewBusy = false;
+		}
+	};
 
 	const refreshSchedules = async () => {
 		pageError = '';
@@ -502,6 +598,23 @@
 								{#if execution.telegramNotificationStatus}
 									<small>Telegram: {execution.telegramNotificationStatus}</small>
 								{/if}
+								{#if execution.productSeedPlanId}
+									<details class="oc-exec__product">
+										<summary>{productT.section}: {execution.productSeedingMode} / {execution.productSeedingDecision}</summary>
+										<small>Catalog: {execution.productCatalogSnapshotId || '--'}</small>
+										<small>Plan: {execution.productSeedPlanId}</small>
+										{#if execution.seededProductIds?.length}<small>Product IDs: {execution.seededProductIds.join(', ')}</small>{/if}
+										{#if execution.metadata?.productSeeding?.candidateScores?.length}
+											<ul>{#each execution.metadata.productSeeding.candidateScores.slice(0, 5) as item}<li>{item.name}: {Math.round((item.totalScore || 0) * 100)}% — {(item.matchedEvidence || []).join(', ')}</li>{/each}</ul>
+										{/if}
+										{#if execution.metadata?.productSeeding?.rejectedCandidates?.length}
+											<small>{productT.rejected}: {execution.metadata.productSeeding.rejectedCandidates.map((item) => `${item.name}: ${(item.rejectionReasons || []).join('/')}`).join('; ')}</small>
+										{/if}
+										{#if execution.metadata?.productSeeding?.placementPlan?.length}<small>Placement: {execution.metadata.productSeeding.placementPlan.map((item) => item.placementType).join(', ')}</small>{/if}
+										{#if execution.productClaimReview}<small>Claims: {execution.productClaimReview.pass ? 'pass' : 'fail'} — rejected {(execution.productClaimReview.rejectedClaims || []).length}</small>{/if}
+										{#if execution.productSeedingReview}<small>Naturalness: {execution.productSeedingReview.naturalnessScore ?? '--'} · pressure {execution.productSeedingReview.commercialPressure || '--'} · mentions {execution.productSeedingReview.metrics?.productMentions ?? 0} · links {execution.productSeedingReview.metrics?.productLinks ?? 0}</small>{/if}
+									</details>
+								{/if}
 								{#if execution.error}
 									<small class="oc-exec__error">{execution.error}</small>
 								{/if}
@@ -636,6 +749,66 @@
 					<span>{t.extra}</span>
 					<textarea bind:value={scheduleForm.prompt} rows="3"></textarea>
 				</label>
+			</fieldset>
+
+			<fieldset class="oc-form__section">
+				<legend>{productT.section}</legend>
+				<label class="oc-check">
+					<input type="checkbox" bind:checked={scheduleForm.productSeedingEnabled} />
+					<span>{productT.enabled}</span>
+				</label>
+				<div class="oc-form__grid">
+					<label class="oc-field">
+						<span>{productT.mode}</span>
+						<select bind:value={scheduleForm.productSeedingMode} disabled={!scheduleForm.productSeedingEnabled}>
+							<option value="off">{productT.modeOff}</option>
+							<option value="auto">{productT.modeAuto}</option>
+							<option value="required">{productT.modeRequired}</option>
+						</select>
+					</label>
+					<label class="oc-field">
+						<span>{productT.intensity}</span>
+						<select bind:value={scheduleForm.productSeedingIntensity} disabled={!scheduleForm.productSeedingEnabled}>
+							<option value="light">{productT.light}</option>
+							<option value="balanced">{productT.balanced}</option>
+							<option value="commercial">{productT.commercial}</option>
+						</select>
+					</label>
+				</div>
+				<div class="oc-form__grid">
+					<label class="oc-field"><span>{productT.maxPrimary}</span><input type="number" min="0" max="5" bind:value={scheduleForm.maxPrimaryProducts} /></label>
+					<label class="oc-field"><span>{productT.maxSupporting}</span><input type="number" min="0" max="10" bind:value={scheduleForm.maxSupportingProducts} /></label>
+				</div>
+				<label class="oc-field"><span>{productT.preferredCategories}</span><input bind:value={scheduleForm.preferredCategoryIds} placeholder="Electronics, Inoxs" /></label>
+				<label class="oc-field"><span>{productT.preferredProducts}</span><input bind:value={scheduleForm.preferredProductIds} /></label>
+				<label class="oc-field"><span>{productT.excludedProducts}</span><input bind:value={scheduleForm.excludedProductIds} /></label>
+				<label class="oc-field">
+					<span>{productT.threshold}</span>
+					<input type="number" min="0" max="1" step="0.01" bind:value={scheduleForm.productRelevanceThreshold} />
+				</label>
+				<label class="oc-check"><input type="checkbox" bind:checked={scheduleForm.allowOutOfStock} /><span>{productT.allowOutOfStock}</span></label>
+				<label class="oc-check"><input type="checkbox" bind:checked={scheduleForm.allowInformationalFallback} /><span>{productT.fallback}</span></label>
+				<button type="button" class="oc-btn oc-btn--ghost" onclick={previewProductMatching} disabled={previewBusy}>
+					{previewBusy ? productT.previewing : productT.preview}
+				</button>
+				{#if productPreview}
+					<div class="oc-product-preview">
+						<p><strong>{productT.decision}:</strong> {productPreview.decision} — {productPreview.decisionReason}</p>
+						{#if productPreview.selectedProducts?.length}
+							<h4>{productT.selected}</h4>
+							<ul>{#each productPreview.selectedProducts as item}<li>{item.name} — {Math.round((item.relevanceScore || 0) * 100)}%</li>{/each}</ul>
+						{/if}
+						{#if productPreview.topCandidates?.length}
+							<h4>{productT.candidates}</h4>
+							<ul>{#each productPreview.topCandidates as item}<li><strong>{item.name}</strong> — {Math.round((item.totalScore || 0) * 100)}% · {Object.entries(item.scoreBreakdown || {}).map(([key, value]) => `${key}: ${Math.round(value * 100)}%`).join(', ')}</li>{/each}</ul>
+						{/if}
+						{#if productPreview.rejectedCandidates?.length}
+							<h4>{productT.rejected}</h4>
+							<ul>{#each productPreview.rejectedCandidates as item}<li>{item.name}: {(item.rejectionReasons || []).join(', ')}</li>{/each}</ul>
+						{/if}
+						{#if productPreview.warnings?.length}<p><strong>{productT.warnings}:</strong> {productPreview.warnings.join(', ')}</p>{/if}
+					</div>
+				{/if}
 			</fieldset>
 
 			<fieldset class="oc-form__section">
@@ -1232,6 +1405,29 @@
 	}
 
 	/* ── Responsive ── */
+	.oc-product-preview,
+	.oc-exec__product {
+		display: grid;
+		gap: 7px;
+		padding: 12px;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-primary-soft);
+		font-size: 0.8rem;
+	}
+
+	.oc-product-preview p,
+	.oc-product-preview h4,
+	.oc-product-preview ul,
+	.oc-exec__product ul {
+		margin: 0;
+	}
+
+	.oc-exec__product summary {
+		cursor: pointer;
+		font-weight: 700;
+	}
+
 	@media (max-width: 960px) {
 		.oc-sched-layout {
 			grid-template-columns: 1fr;

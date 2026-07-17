@@ -7,6 +7,7 @@ const openclawDashboardController = require("../../controllers/openclawDashboard
 const blogAutomationScheduleController = require("../../controllers/blogAutomationSchedule.controller");
 const googleIntelligenceController = require("../../controllers/googleIntelligence.controller");
 const agenticBlogCoreController = require("../../controllers/agenticBlogCore.controller");
+const productSeedingAdminController = require("../../controllers/productSeedingAdmin.controller");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
 const { upload, uploadLarge } = require("../../middleware/upload");
@@ -214,6 +215,46 @@ router.get(
   "/openclaw/blog-strategies/:strategyId",
   requireAdminPermission(["google_intelligence.view"]),
   asyncHandler(agenticBlogCoreController.getStrategy),
+);
+router.get(
+  "/openclaw/product-seeding/config",
+  requireAdminPermission(["product_seeding.view"]),
+  asyncHandler(productSeedingAdminController.getConfig),
+);
+router.patch(
+  "/openclaw/product-seeding/config",
+  requireAdminPermission(["product_seeding.manage"]),
+  asyncHandler(productSeedingAdminController.updateConfig),
+);
+router.post(
+  "/openclaw/product-seeding/preview",
+  requireAdminPermission(["product_seeding.preview"]),
+  asyncHandler(productSeedingAdminController.preview),
+);
+router.get(
+  "/openclaw/product-seeding/plans",
+  requireAdminPermission(["product_seeding.view"]),
+  asyncHandler(productSeedingAdminController.listPlans),
+);
+router.get(
+  "/openclaw/product-seeding/plans/:id",
+  requireAdminPermission(["product_seeding.view"]),
+  asyncHandler(productSeedingAdminController.getPlan),
+);
+router.get(
+  "/openclaw/product-seeding/exposures",
+  requireAdminPermission(["product_seeding.view"]),
+  asyncHandler(productSeedingAdminController.listExposures),
+);
+router.get(
+  "/openclaw/product-catalog/status",
+  requireAdminPermission(["product_catalog_snapshot.view"]),
+  asyncHandler(productSeedingAdminController.catalogStatus),
+);
+router.post(
+  "/openclaw/product-catalog/rebuild",
+  requireAdminPermission(["product_catalog_snapshot.rebuild"]),
+  asyncHandler(productSeedingAdminController.rebuildCatalog),
 );
 router.get(
   "/openclaw/blog-schedules",

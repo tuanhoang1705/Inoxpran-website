@@ -137,9 +137,39 @@ const validateAutomationPayload = (payload = {}) => {
     const missingContext = requiredContext.filter((key) => !context[key]);
     if (missingContext.length) throw new BadRequestError(`Agentic writer context is missing: ${missingContext.join(', ')}`);
 
+    const productSeedingMode = normalizeString(payload.productSeedingMode || payload.metadata?.productSeedingMode || 'off').toLowerCase();
+    if (!['off', 'auto', 'required'].includes(productSeedingMode)) {
+        throw new BadRequestError('productSeedingMode must be off, auto, or required');
+    }
+    const productCatalogSnapshotId = normalizeString(payload.productCatalogSnapshotId || payload.metadata?.productCatalogSnapshotId);
+    const productSeedPlanId = normalizeString(payload.productSeedPlanId || payload.metadata?.productSeedPlanId);
+    const productSeedingDecision = normalizeString(payload.productSeedingDecision || payload.metadata?.productSeedingDecision || 'no_seed');
+    const seededProductIds = normalizeStringArray(payload.seededProductIds, 10);
+    const productSeedingReview = payload.productSeedingReview && typeof payload.productSeedingReview === 'object'
+        ? payload.productSeedingReview
+        : payload.metadata?.productSeedingReview || null;
+    const productClaimReview = payload.productClaimReview && typeof payload.productClaimReview === 'object'
+        ? payload.productClaimReview
+        : payload.metadata?.productClaimReview || null;
+    if (productSeedingMode !== 'off') {
+        const missingProductContext = [
+            !productCatalogSnapshotId ? 'productCatalogSnapshotId' : '',
+            !productSeedPlanId ? 'productSeedPlanId' : '',
+            !productSeedingReview ? 'productSeedingReview' : '',
+            !productClaimReview ? 'productClaimReview' : ''
+        ].filter(Boolean);
+        if (missingProductContext.length) throw new BadRequestError(`Product writer context is missing: ${missingProductContext.join(', ')}`);
+    }
+
     const wordCount = countWords(sanitizedContentHtml);
     const thresholds = getSeoThresholds();
     const reviewGate = isPublishReviewPassing({ review, wordCount, thresholds });
+    if (productSeedingMode !== 'off') {
+        if (productSeedingReview?.pass !== true) reviewGate.reasons.push('product_seeding_review_not_pass');
+        if (productClaimReview?.pass !== true) reviewGate.reasons.push('product_claim_review_not_pass');
+        if (productSeedingReview?.commercialPressure === 'high') reviewGate.reasons.push('product_commercial_pressure_high');
+        reviewGate.passes = reviewGate.reasons.length === 0;
+    }
 
     return {
         mode,
@@ -163,6 +193,13 @@ const validateAutomationPayload = (payload = {}) => {
         contentDecision: normalizeString(payload.contentDecision || 'new').toLowerCase(),
         targetBlogId: normalizeString(payload.targetBlogId),
         ...context,
+        productCatalogSnapshotId,
+        productSeedPlanId,
+        productSeedingMode,
+        productSeedingDecision,
+        seededProductIds,
+        productSeedingReview,
+        productClaimReview,
         structuralFingerprint: payload.structuralFingerprint && typeof payload.structuralFingerprint === 'object' ? payload.structuralFingerprint : null,
         agenticReviews: payload.agenticReviews && typeof payload.agenticReviews === 'object' ? payload.agenticReviews : null,
         metadata: payload.metadata && typeof payload.metadata === 'object' ? payload.metadata : {},

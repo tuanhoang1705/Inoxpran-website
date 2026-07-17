@@ -6,6 +6,7 @@ const { BlogAutomationExecution } = require('../models/blogAutomationExecution.m
 const AutomationSeoBlogService = require('./automationSeoBlog.service');
 const { AgenticBlogCoreService } = require('./agenticBlogCore.service');
 const { TelegramApprovalService } = require('./telegramApproval.service');
+const { ProductSeedPlanningService } = require('./productSeedPlanning.service');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { convertToObjectIdMongodb } = require('../utils');
 const {
@@ -72,6 +73,13 @@ const mapExecution = (execution) => {
         researchBundleId: execution.researchBundleId ? String(execution.researchBundleId) : '',
         editorialStyleProfileId: execution.editorialStyleProfileId ? String(execution.editorialStyleProfileId) : '',
         strategyPlanId: execution.strategyPlanId ? String(execution.strategyPlanId) : '',
+        productCatalogSnapshotId: execution.productCatalogSnapshotId ? String(execution.productCatalogSnapshotId) : '',
+        productSeedPlanId: execution.productSeedPlanId ? String(execution.productSeedPlanId) : '',
+        productSeedingMode: execution.productSeedingMode || 'off',
+        productSeedingDecision: execution.productSeedingDecision || '',
+        seededProductIds: (execution.seededProductIds || []).map(String),
+        productSeedingReview: execution.productSeedingReview || null,
+        productClaimReview: execution.productClaimReview || null,
         correlationId: execution.correlationId || '',
         agentSteps: execution.agentSteps || [],
         reviewerDecisions: execution.reviewerDecisions || {},
@@ -117,7 +125,11 @@ const mergeSchedulePatch = (current, patch = {}) => {
         },
         agentConfig: {
             ...(base.agentConfig || {}),
-            ...(patch.agentConfig || {})
+            ...(patch.agentConfig || {}),
+            productSeeding: {
+                ...(base.agentConfig?.productSeeding || {}),
+                ...(patch.agentConfig?.productSeeding || {})
+            }
         }
     };
 };
@@ -367,6 +379,9 @@ class BlogAutomationScheduleService {
                 executionId: execution._id,
                 now
             });
+            if (pipeline.context?.productSeedPlan?._id) {
+                await ProductSeedPlanningService.attachExecution({ planId: pipeline.context.productSeedPlan._id, executionId: execution._id });
+            }
             if (pipeline.skipped) {
                 const completedAt = new Date();
                 const nextRunAt = calculateNextRun({
@@ -377,12 +392,29 @@ class BlogAutomationScheduleService {
                     $set: {
                         status: 'skipped', completedAt,
                         googleIntelSnapshotId: pipeline.context.snapshot.id,
-                        researchBundleId: pipeline.context.researchBundle._id,
-                        editorialStyleProfileId: pipeline.context.style._id,
-                        strategyPlanId: pipeline.context.strategy._id,
-                        agentSteps: ['google-intelligence-gate', 'topic-opportunity-research', 'skip'],
+                        researchBundleId: pipeline.context.researchBundle?._id || null,
+                        editorialStyleProfileId: pipeline.context.style?._id || null,
+                        strategyPlanId: pipeline.context.strategy?._id || null,
+                        productCatalogSnapshotId: pipeline.context.productSeedPlan?.productCatalogSnapshotId || null,
+                        productSeedPlanId: pipeline.context.productSeedPlan?._id || null,
+                        productSeedingMode: pipeline.context.productSeedPlan?.mode || 'off',
+                        productSeedingDecision: pipeline.context.productSeedPlan?.decision || '',
+                        seededProductIds: [pipeline.context.productSeedPlan?.primaryProduct, ...(pipeline.context.productSeedPlan?.supportingProducts || [])].filter(Boolean).map((item) => item.productId),
+                        agentSteps: pipeline.blocked
+                            ? ['google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan', 'blocked']
+                            : ['google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan', 'topic-opportunity-research', 'skip'],
                         publisherDecision: { allowed: false, reason: pipeline.reason },
-                        metadata: { trigger, dueAt, decision: 'skip', decisionReason: pipeline.reason }
+                        metadata: {
+                            trigger, dueAt, decision: 'skip', decisionReason: pipeline.reason,
+                            productSeeding: {
+                                selectedProducts: [pipeline.context.productSeedPlan?.primaryProduct, ...(pipeline.context.productSeedPlan?.supportingProducts || [])].filter(Boolean),
+                                rejectedCandidates: pipeline.context.productSeedPlan?.rejectedCandidates || [],
+                                candidateScores: pipeline.context.productSeedPlan?.candidateScores || [],
+                                placementPlan: pipeline.context.productSeedPlan?.placementPlan || [],
+                                warnings: pipeline.context.productSeedPlan?.warnings || [],
+                                errorCodes: pipeline.context.productSeedPlan?.errorCodes || []
+                            }
+                        }
                     }
                 });
                 await completeSchedule({ runCountDelta: 1, lastRunStatus: 'skipped', nextRunAt });
@@ -395,10 +427,18 @@ class BlogAutomationScheduleService {
                     researchBundleId: payload.researchBundleId,
                     editorialStyleProfileId: payload.editorialStyleProfileId,
                     strategyPlanId: payload.strategyPlanId,
+                    productCatalogSnapshotId: payload.productCatalogSnapshotId || null,
+                    productSeedPlanId: payload.productSeedPlanId || null,
+                    productSeedingMode: payload.productSeedingMode || 'off',
+                    productSeedingDecision: payload.productSeedingDecision || '',
+                    seededProductIds: payload.seededProductIds || [],
+                    productSeedingReview: payload.productSeedingReview || null,
+                    productClaimReview: payload.productClaimReview || null,
                     agentSteps: [
-                        'google-intelligence-gate', 'topic-opportunity-research', 'industry-content-research',
+                        'google-intelligence-gate', 'product-catalog-snapshot', 'product-relevance-analysis', 'product-seed-plan',
+                        'topic-opportunity-research', 'industry-content-research',
                         'editorial-style-planning', 'content-strategy-plan', 'content-architecture', 'draft-generation',
-                        'fact-review', 'originality-review', 'seo-aeo-geo-review', 'people-first-spam-review',
+                        'product-claim-review', 'product-seeding-review', 'fact-review', 'originality-review', 'seo-aeo-geo-review', 'people-first-spam-review',
                         'brand-voice-review', 'publisher-gate'
                     ],
                     reviewerDecisions: pipeline.reviews,
@@ -431,6 +471,17 @@ class BlogAutomationScheduleService {
                             researchBundleId: payload.researchBundleId,
                             editorialStyleProfileId: payload.editorialStyleProfileId,
                             strategyPlanId: payload.strategyPlanId
+                            , productCatalogSnapshotId: payload.productCatalogSnapshotId || ''
+                            , productSeedPlanId: payload.productSeedPlanId || ''
+                            , productSeedingMode: payload.productSeedingMode || 'off'
+                            , productSeedingDecision: payload.productSeedingDecision || ''
+                            , productSeeding: {
+                                selectedProducts: [pipeline.context.productSeedPlan?.primaryProduct, ...(pipeline.context.productSeedPlan?.supportingProducts || [])].filter(Boolean),
+                                rejectedCandidates: pipeline.context.productSeedPlan?.rejectedCandidates || [],
+                                candidateScores: pipeline.context.productSeedPlan?.candidateScores || [],
+                                placementPlan: pipeline.context.productSeedPlan?.placementPlan || [],
+                                warnings: pipeline.context.productSeedPlan?.warnings || []
+                            }
                         }
                     }
                 }

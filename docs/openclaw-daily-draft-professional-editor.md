@@ -1,5 +1,9 @@
 # OpenClaw Daily Draft + Professional Blog Editor
 
+## Product Integration in Blog Schedules
+
+The Daily Draft Schedule form persists `agentConfig.productSeeding`: enable/mode/intensity, selection maxima, preferred category/product IDs, exclusions, out-of-stock opt-in, threshold and Auto fallback. “Preview suitable products” calls the authenticated admin preview API and shows deterministic score evidence/rejections. Execution history exposes catalog/plan IDs and safe reviewer summaries. Recommendations remain semantic sanitized HTML; product images are not inserted by this feature. See `openclaw-product-seeding-intelligence.md`.
+
 Branch: `feature/openclaw-daily-draft-professional-editor`
 
 This change has two parts: (A) moving the OpenClaw Daily Draft + Blog Schedules into a dedicated child page, and (B) turning the blog editor into a professional editor whose output is compatible with the Agentic pipeline (C) and the public site (D).

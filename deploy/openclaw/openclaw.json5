@@ -45,7 +45,42 @@
           "inoxpran-brand-voice",
           "inoxpran-seo-review",
           "inoxpran-blog-editor-schema",
+          "inoxpran-product-catalog-contract",
+          "inoxpran-product-relevance-scoring",
+          "inoxpran-contextual-product-seeding",
+          "inoxpran-product-claim-safety",
+          "inoxpran-product-seeding-review",
         ],
+      },
+      {
+        id: "product-catalog-analyst",
+        workspace: "/workspaces/product-catalog-analyst",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-product-catalog-contract"],
+      },
+      {
+        id: "product-relevance-matcher",
+        workspace: "/workspaces/product-relevance-matcher",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-product-catalog-contract", "inoxpran-product-relevance-scoring"],
+      },
+      {
+        id: "contextual-seeding-strategist",
+        workspace: "/workspaces/contextual-seeding-strategist",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-product-relevance-scoring", "inoxpran-contextual-product-seeding"],
+      },
+      {
+        id: "product-claim-verifier",
+        workspace: "/workspaces/product-claim-verifier",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-product-catalog-contract", "inoxpran-product-claim-safety"],
+      },
+      {
+        id: "product-seeding-reviewer",
+        workspace: "/workspaces/product-seeding-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-contextual-product-seeding", "inoxpran-product-claim-safety", "inoxpran-product-seeding-review"],
       },
       {
         id: "market-insight-analyst",
@@ -109,6 +144,7 @@
           "inoxpran-blog-strategy-contract",
           "inoxpran-editorial-style-rotation",
           "inoxpran-source-attribution",
+          "inoxpran-contextual-product-seeding",
         ],
       },
       {
@@ -161,6 +197,8 @@
           "google-intelligence-snapshot",
           "inoxpran-originality-gate",
           "inoxpran-people-first-review",
+          "inoxpran-product-claim-safety",
+          "inoxpran-product-seeding-review",
         ],
       },
       {
@@ -278,6 +316,7 @@
           "inoxpran-blog-strategy-contract",
           "inoxpran-brand-voice",
           "inoxpran-source-attribution",
+          "inoxpran-contextual-product-seeding",
         ],
       },
       {
@@ -288,6 +327,7 @@
           "inoxpran-blog-strategy-contract",
           "inoxpran-editorial-style-rotation",
           "inoxpran-blog-editor-schema",
+          "inoxpran-contextual-product-seeding",
         ],
       },
       {
@@ -303,19 +343,20 @@
         skills: [
           "inoxpran-people-first-review",
           "google-intelligence-snapshot",
+          "inoxpran-product-seeding-review",
         ],
       },
       {
         id: "fact-checker",
         workspace: "/workspaces/fact-checker",
         tools: { deny: ["exec", "process", "browser"] },
-        skills: ["inoxpran-source-attribution", "inoxpran-brand-voice"],
+        skills: ["inoxpran-source-attribution", "inoxpran-brand-voice", "inoxpran-product-claim-safety"],
       },
       {
         id: "brand-voice-reviewer",
         workspace: "/workspaces/brand-voice-reviewer",
         tools: { deny: ["exec", "process", "browser"] },
-        skills: ["inoxpran-brand-voice"],
+        skills: ["inoxpran-brand-voice", "inoxpran-product-seeding-review"],
       },
       {
         id: "reporter",

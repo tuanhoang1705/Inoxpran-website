@@ -16,7 +16,10 @@ const blogMock = {
     findByIdAndUpdate: vi.fn()
 };
 const ensureGoogleSnapshotMock = vi.fn();
-const executionMock = { create: vi.fn(), updateOne: vi.fn() };
+const prepareContextMock = vi.fn();
+const executionMock = { create: vi.fn(), updateOne: vi.fn(), findById: vi.fn() };
+const productPlanMock = { findById: vi.fn(), updateOne: vi.fn() };
+const exposureMock = { updateOne: vi.fn() };
 
 const installMock = (modulePath, exports) => {
     const resolvedPath = require.resolve(modulePath);
@@ -36,11 +39,13 @@ const loadAutomationService = () => {
         }
     });
     installMock('../src/services/agenticBlogCore.service', {
-        AgenticBlogCoreService: { prepareContext: vi.fn() }
+        AgenticBlogCoreService: { prepareContext: prepareContextMock }
     });
     installMock('../src/models/blogAutomationExecution.model', {
         BlogAutomationExecution: executionMock
     });
+    installMock('../src/models/productSeedPlan.model', { ProductSeedPlan: productPlanMock });
+    installMock('../src/models/productSeedExposure.model', { ProductSeedExposure: exposureMock });
 
     [
         '../src/utils/seoBlogValidation',
@@ -149,6 +154,8 @@ beforeEach(() => {
         status: 'completed_no_change'
     });
     executionMock.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    productPlanMock.updateOne.mockResolvedValue({ modifiedCount: 1 });
+    exposureMock.updateOne.mockResolvedValue({ upsertedCount: 1 });
 
     blogMock.findOne.mockReturnValue({
         select: () => ({
@@ -232,9 +239,42 @@ describe('seoBlogSanitizer', () => {
         expect(result).not.toContain('onclick');
         expect(result).toContain('Safe');
     });
+
+    it('keeps only validated semantic product attributes and internal URLs', () => {
+        const result = sanitizeSeoBlogHtml('<section data-block-type="product-recommendation" data-product-id="507f1f77bcf86cd799439011" onclick="x()"><a href="/product/quat-mini" data-link-type="product">Xem sản phẩm</a></section>');
+        expect(result).toContain('data-block-type="product-recommendation"');
+        expect(result).toContain('data-product-id="507f1f77bcf86cd799439011"');
+        expect(result).toContain('data-link-type="product"');
+        expect(result).not.toContain('onclick');
+    });
 });
 
 describe('AutomationSeoBlogService.publishSeoBlog', () => {
+
+    const productPlan = {
+        _id: '507f1f77bcf86cd799439031',
+        googleIntelSnapshotId: '507f1f77bcf86cd799439021',
+        productCatalogSnapshotId: '507f1f77bcf86cd799439030',
+        mode: 'auto', intensity: 'light', decision: 'contextual_seed',
+        primaryProduct: {
+            productId: '507f1f77bcf86cd799439032', name: 'Quat tich dien mini', slug: 'quat-tich-dien-mini',
+            canonicalUrl: '/product/quat-tich-dien-mini', relevanceScore: 0.9,
+            allowedClaims: [{ key: 'feature', value: 'Pin sac', source: 'product_attributes' }]
+        },
+        supportingProducts: [],
+        placementPlan: [{ productId: '507f1f77bcf86cd799439032', placementType: 'contextual_example' }],
+        commercialDensityLimits: { maxProductMentions: 2, maxProductLinks: 1, maxProductHeadings: 0, maxCtaCount: 1 },
+        ctaPlan: { mode: 'soft', maxCount: 1 }
+    };
+
+    const productPayload = (contentExtra = '') => buildPayload({
+        productSeedingMode: 'auto', productSeedingDecision: 'contextual_seed',
+        productCatalogSnapshotId: '507f1f77bcf86cd799439030', productSeedPlanId: '507f1f77bcf86cd799439031',
+        seededProductIds: ['507f1f77bcf86cd799439032'],
+        productSeedingReview: { pass: true, commercialPressure: 'low' }, productClaimReview: { pass: true },
+        contentHtml: `<article><p>${'Huong dan khach quan cho nguoi doc truoc khi chon san pham. '.repeat(35)}</p><h2>Tieu chi khach quan</h2><p>${'Doi chieu nhu cau va thong tin co the kiem tra. '.repeat(25)}</p><section data-block-type="product-recommendation" data-product-id="507f1f77bcf86cd799439032"><h3>Mot lua chon phu hop</h3><p><strong>Quat tich dien mini</strong> co Pin sac. Day la san pham cua INOXPRAN. ${contentExtra}</p><a href="/product/quat-tich-dien-mini" data-link-type="product">Xem thong tin san pham</a></section><h2>Cach su dung</h2><p>${'Doc huong dan va danh gia gioi han thuc te. '.repeat(15)}</p><h2>Ket luan</h2><p>Uu tien gia tri thong tin.</p></article>`
+    });
+
     it('creates draft when SEO_AGENT_AUTO_PUBLISH=false', async () => {
         const AutomationSeoBlogService = loadAutomationService();
 
@@ -400,5 +440,80 @@ describe('AutomationSeoBlogService.publishSeoBlog', () => {
 
         expect(result.published).toBe(false);
         expect(result.reasons).toContain('image_pipeline_not_ready_for_publish');
+    });
+
+    it('validates product artifact IDs and persists exposure for a planned product', async () => {
+        process.env.SEO_AGENT_AUTO_PUBLISH = 'true';
+        process.env.OPENCLAW_IMAGE_PIPELINE_ENABLED = 'false';
+        process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH = 'false';
+        executionMock.findById.mockReturnValue({ lean: () => Promise.resolve({
+            productSeedPlanId: productPlan._id,
+            productCatalogSnapshotId: productPlan.productCatalogSnapshotId
+        }) });
+        productPlanMock.findById.mockReturnValue({ lean: () => Promise.resolve(productPlan) });
+        const AutomationSeoBlogService = loadAutomationService();
+        const result = await AutomationSeoBlogService.publishSeoBlog({ payload: productPayload() });
+        expect(result.published).toBe(true);
+        expect(exposureMock.updateOne).toHaveBeenCalledWith(
+            expect.objectContaining({ productId: productPlan.primaryProduct.productId }),
+            expect.any(Object),
+            { upsert: true }
+        );
+        expect(blogMock.create).toHaveBeenCalledWith(expect.objectContaining({
+            productSeedPlanId: productPlan._id,
+            seededProductIds: [productPlan.primaryProduct.productId]
+        }));
+    });
+
+    it('rejects an unplanned productId instead of silently accepting it', async () => {
+        executionMock.findById.mockReturnValue({ lean: () => Promise.resolve({ productSeedPlanId: productPlan._id, productCatalogSnapshotId: productPlan.productCatalogSnapshotId }) });
+        productPlanMock.findById.mockReturnValue({ lean: () => Promise.resolve(productPlan) });
+        const AutomationSeoBlogService = loadAutomationService();
+        await expect(AutomationSeoBlogService.publishSeoBlog({
+            payload: productPayload().constructor === Object
+                ? { ...productPayload(), contentHtml: productPayload().contentHtml.replace(/507f1f77bcf86cd799439032/g, '507f1f77bcf86cd799439099') }
+                : productPayload()
+        })).rejects.toThrow('unplanned productId');
+    });
+
+    it('recomputes product claims and prevents auto-publish on a fake certification', async () => {
+        process.env.SEO_AGENT_AUTO_PUBLISH = 'true';
+        process.env.OPENCLAW_IMAGE_PIPELINE_ENABLED = 'false';
+        process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH = 'false';
+        executionMock.findById.mockReturnValue({ lean: () => Promise.resolve({ productSeedPlanId: productPlan._id, productCatalogSnapshotId: productPlan.productCatalogSnapshotId }) });
+        productPlanMock.findById.mockReturnValue({ lean: () => Promise.resolve(productPlan) });
+        const AutomationSeoBlogService = loadAutomationService();
+        const result = await AutomationSeoBlogService.publishSeoBlog({ payload: productPayload('San pham duoc chung nhan ISO 9999.') });
+        expect(result.published).toBe(false);
+        expect(result.reasons).toContain('product_claim_review_not_pass');
+    });
+});
+
+describe('AutomationSeoBlogService.prepareAgenticContext', () => {
+    it('returns persisted product artifact IDs and a sanitized Product Seed Plan summary', async () => {
+        const context = {
+            snapshot: { id: '507f1f77bcf86cd799439021', snapshotDate: '2026-07-11', status: 'completed_no_change', contentGuidance: {} },
+            researchBundle: { _id: '507f1f77bcf86cd799439022', researchCoverage: 'high', editorialPatterns: {} },
+            style: { _id: '507f1f77bcf86cd799439023', styleFamily: 'answer-first', forbiddenRecentPatterns: [], brandVoiceConstraints: [] },
+            strategy: { _id: '507f1f77bcf86cd799439024', decision: 'new', decisionReason: 'new topic', targetBlogIds: [], searchIntent: {}, supportingQuestions: [], evidenceRequirements: [], riskFlags: [], contentArchitecture: {} },
+            productSeedPlan: {
+                _id: '507f1f77bcf86cd799439031', productCatalogSnapshotId: '507f1f77bcf86cd799439030',
+                mode: 'auto', intensity: 'light', decision: 'contextual_seed',
+                primaryProduct: { productId: '507f1f77bcf86cd799439032', name: 'Quat mini', slug: 'quat-mini', canonicalUrl: '/product/quat-mini', relevanceScore: 0.9, allowedClaims: [], forbiddenClaims: [] },
+                supportingProducts: [], placementPlan: [], commercialDensityLimits: {}
+            },
+            blocked: false
+        };
+        prepareContextMock.mockResolvedValue(context);
+        executionMock.create.mockResolvedValue({ _id: '507f1f77bcf86cd799439025' });
+        const AutomationSeoBlogService = loadAutomationService();
+        const result = await AutomationSeoBlogService.prepareAgenticContext({ payload: { topic: 'Quat tich dien', productSeeding: { mode: 'auto' } } });
+        expect(result).toMatchObject({
+            productCatalogSnapshotId: '507f1f77bcf86cd799439030',
+            productSeedPlanId: '507f1f77bcf86cd799439031',
+            productSeeding: { mode: 'auto', decision: 'contextual_seed' }
+        });
+        expect(result.productSeeding.selectedProducts[0]).not.toHaveProperty('product_reviews');
+        expect(productPlanMock.updateOne).toHaveBeenCalled();
     });
 });

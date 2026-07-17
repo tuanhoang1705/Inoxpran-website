@@ -3,23 +3,25 @@
 ## Execution order
 
 1. Daily Google Intelligence gate.
-2. Topic opportunity research.
-3. `new`, `update`, `merge`, or `skip` decision.
-4. Industry content research.
-5. Search-intent analysis.
-6. Daily editorial style and same-day sub-variant.
-7. Persisted Blog Strategy Plan.
-8. Content architecture and evidence map.
-9. Original draft generation.
-10. Existing image pipeline.
-11. Fact review.
-12. Originality and structural review.
-13. SEO/AEO/GEO review.
-14. People-first and spam-risk review.
-15. Brand voice review.
-16. Publisher gate.
+2. Product Catalog Snapshot, deterministic relevance/cooldown and persisted Product Seed Plan.
+3. Topic opportunity research.
+4. `new`, `update`, `merge`, or `skip` decision.
+5. Industry content research.
+6. Search-intent analysis.
+7. Daily editorial style and same-day sub-variant.
+8. Persisted Blog Strategy Plan with product constraints.
+9. Content architecture and evidence map.
+10. Original draft generation and planned semantic product placement.
+11. Product claim and naturalness review.
+12. Existing image pipeline.
+13. Fact review.
+14. Originality and structural review.
+15. SEO/AEO/GEO review.
+16. People-first and spam-risk review.
+17. Brand voice review.
+18. Publisher gate.
 
-The writer is rejected unless it receives `googleIntelSnapshotId`, `researchBundleId`, `editorialStyleProfileId`, and `strategyPlanId`. The publisher additionally requires snapshot date/status and `agenticExecutionId`.
+The writer is rejected unless it receives `googleIntelSnapshotId`, `researchBundleId`, `editorialStyleProfileId`, and `strategyPlanId`. When product mode is not `off`, it also requires `productCatalogSnapshotId` and `productSeedPlanId`. The publisher additionally requires snapshot date/status, `agenticExecutionId`, and passing server-recomputed product claim/seeding reviews. See `openclaw-product-seeding-intelligence.md`.
 
 ## External OpenClaw contract
 
