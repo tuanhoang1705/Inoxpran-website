@@ -1,6 +1,7 @@
 <script>
 	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
+	import { env } from '$env/dynamic/public';
 	import { locale, t } from '$lib/i18n/admin/index.js';
 	import {
 		getAdminBlogCategoryTranslationKey,
@@ -63,6 +64,10 @@
 	const getUpdatedLabel = (item) => formatDate(item?.updatedAt || item?.createdAt);
 
 	const getSlug = (item) => String(item?.slug || '').trim();
+	const publicSiteUrl = String(env.PUBLIC_SITE_URL || 'https://inoxpran.com')
+		.trim()
+		.replace(/\/+$/, '');
+	const getPublicBlogHref = (item) => `${publicSiteUrl}/blog/${encodeURIComponent(getSlug(item))}`;
 
 	const truncate = (value, limit = 180) => {
 		const text = String(value || '')
@@ -233,14 +238,17 @@
 								{$t('admin.blogs.edit')}
 							</a>
 							{#if item?.isPublished && getSlug(item)}
+								<!-- The public blog intentionally lives on a different origin than the admin app. -->
+								<!-- eslint-disable svelte/no-navigation-without-resolve -->
 								<a
 									class="btn btn-sm btn-outline-secondary"
-									href={resolve(`/blog/${getSlug(item)}`)}
+									href={getPublicBlogHref(item)}
 									target="_blank"
 									rel="noreferrer"
 								>
 									{$t('common.view')}
 								</a>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
 							{/if}
 						</div>
 
