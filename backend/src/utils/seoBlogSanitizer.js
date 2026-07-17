@@ -94,7 +94,7 @@ const sanitizeSeoBlogHtml = (value) => {
             'div'
         ],
         allowedAttributes: {
-            a: ['href', 'title'],
+            a: ['href', 'title', 'data-link-type'],
             img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'decoding', 'data-image-id', 'data-source-type', 'data-review-status'],
             figure: ['data-image-id', 'data-source-type', 'data-review-status'],
             figcaption: [],
@@ -103,7 +103,7 @@ const sanitizeSeoBlogHtml = (value) => {
             th: ['colspan', 'rowspan'],
             td: ['colspan', 'rowspan'],
             div: [],
-            section: []
+            section: ['data-block-type', 'data-product-id']
         },
         allowedSchemes: ['http', 'https'],
         allowProtocolRelative: false,
@@ -117,9 +117,17 @@ const sanitizeSeoBlogHtml = (value) => {
                     tagName,
                     attribs: {
                         href,
-                        ...(attribs.title ? { title: escapeHtmlAttribute(attribs.title) } : {})
+                        ...(attribs.title ? { title: escapeHtmlAttribute(attribs.title) } : {}),
+                        ...(attribs['data-link-type'] === 'product' ? { 'data-link-type': 'product' } : {})
                     }
                 };
+            },
+            section: (tagName, attribs) => {
+                const isProductBlock = attribs['data-block-type'] === 'product-recommendation';
+                const productId = normalizeString(attribs['data-product-id']);
+                if (!isProductBlock) return { tagName, attribs: {} };
+                if (!/^[a-f0-9]{24}$/i.test(productId)) return { tagName, attribs: {} };
+                return { tagName, attribs: { 'data-block-type': 'product-recommendation', 'data-product-id': productId } };
             },
             img: (tagName, attribs) => {
                 const src = normalizeString(attribs.src);

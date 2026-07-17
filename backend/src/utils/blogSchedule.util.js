@@ -2,6 +2,7 @@
 
 const { BadRequestError } = require('../core/error.response');
 const { normalizeString } = require('./seoBlogSanitizer');
+const { buildEnvProductSeedingConfig, normalizeProductSeedingOptions } = require('../config/productSeeding.config');
 
 const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const MAX_TIMES_PER_SCHEDULE = 12;
@@ -127,7 +128,11 @@ const normalizeAgentConfig = (value = {}) => {
                 .map((item) => normalizeString(item))
                 .filter(Boolean)
                 .slice(0, 12),
-        prompt: normalizeString(config.prompt || '')
+        prompt: normalizeString(config.prompt || ''),
+        productSeeding: normalizeProductSeedingOptions(
+            config.productSeeding || {},
+            buildEnvProductSeedingConfig()
+        )
     };
 };
 

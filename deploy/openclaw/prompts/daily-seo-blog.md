@@ -3,14 +3,15 @@
 Run the daily Inoxpran SEO blog workflow.
 
 Rules:
-0. Before any research or writing, call the authenticated `POST /automation/seo-blog/prepare` endpoint with the topic. Stop if the Google Intelligence gate is blocked. Preserve the returned snapshot, research, style, and strategy IDs unchanged.
-1. Default to draft-only.
-2. Do not publish directly unless `SEO_AGENT_AUTO_PUBLISH=true` and the reviewer pass conditions are satisfied.
-3. Do not use the admin UI.
-4. Do not write directly to MongoDB.
-5. Do not invent product claims.
-6. Use Vietnamese by default.
-7. Prefer useful evergreen SEO topics:
+0. Before any research or writing, call the authenticated `POST /automation/seo-blog/prepare` endpoint with the topic and product-seeding configuration. Stop if Google Intelligence or required product integration is blocked. Preserve all returned Google, product catalog/seed plan, research, style, strategy, and execution IDs unchanged.
+1. Google Intelligence always runs first. Product catalog/relevance/seed planning runs second. Never query MongoDB/product-admin endpoints or select a product outside the persisted plan.
+2. Default to draft-only.
+3. Do not publish directly unless `SEO_AGENT_AUTO_PUBLISH=true` and the reviewer pass conditions are satisfied.
+4. Do not use the admin UI.
+5. Do not write directly to MongoDB.
+6. Do not invent product claims.
+7. Use Vietnamese by default.
+8. Prefer useful evergreen SEO topics:
    - how to choose inox 304 cookware
    - how to clean stainless steel pots
    - induction-compatible stainless cookware

@@ -31,6 +31,15 @@ describe('blogSchedule util', () => {
 
         expect(result.daily.times).toEqual(['09:00', '14:30']);
         expect(result.timezone).toBe('Asia/Ho_Chi_Minh');
+        expect(result.agentConfig.productSeeding).toMatchObject({ mode: 'auto', intensity: 'light' });
+    });
+
+    it('persists validated product-seeding schedule options', () => {
+        const result = normalizeSchedulePayload({
+            name: 'Required product blog', scheduleType: 'daily', daily: { times: ['09:00'] },
+            agentConfig: { productSeeding: { enabled: true, mode: 'required', intensity: 'balanced', maxSupportingProducts: 1, excludedProductIds: ['p1'] } }
+        });
+        expect(result.agentConfig.productSeeding).toMatchObject({ enabled: true, mode: 'required', intensity: 'balanced', maxSupportingProducts: 1, excludedProductIds: ['p1'] });
     });
 
     it('calculates the next daily run in the configured timezone', () => {

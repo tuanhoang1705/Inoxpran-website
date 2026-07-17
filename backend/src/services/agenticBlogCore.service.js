@@ -7,6 +7,8 @@ const { EditorialStyleDefinition } = require('../models/editorialStyleDefinition
 const { EditorialStyleProfile } = require('../models/editorialStyleProfile.model');
 const { BlogStrategyPlan } = require('../models/blogStrategyPlan.model');
 const { GoogleIntelligenceService } = require('./googleIntelligence.service');
+const { ProductSeedPlanningService } = require('./productSeedPlanning.service');
+const { reviewProductLayer } = require('./productSeedingReview.service');
 const { safeSourceFetch } = require('./safeSourceFetch.service');
 const { dateInTimezone } = require('../utils/googleIntelligence.util');
 const { normalizeSlug, normalizeString } = require('../utils/seoBlogSanitizer');
@@ -134,7 +136,7 @@ const sanitizeLlmHtml = (html) => {
     return output;
 };
 
-const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles = [], attempt }) => {
+const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles = [], attempt, productSeedPlan = null }) => {
     const system = [
         'Bạn là biên tập viên nội dung cho INOXPRAN (inoxpran.com), thương hiệu đồ gia dụng Việt Nam.',
         'Viết bài blog tiếng Việt chuẩn xuất bản, bám sát 100% chủ đề được yêu cầu; tuyệt đối không chèn nội dung về danh mục sản phẩm không liên quan đến chủ đề.',
@@ -162,6 +164,17 @@ const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, artic
         ctaMode: style?.ctaMode || '',
         headingCount,
         recentTitles: (recentTitles || []).slice(0, 10),
+        productSeedPlan: productSeedPlan ? {
+            id: String(productSeedPlan._id || productSeedPlan.id || ''),
+            mode: productSeedPlan.mode,
+            decision: productSeedPlan.decision,
+            rule: 'Use only planned products. Explain objective criteria before any product context; the backend inserts the semantic product block.',
+            selectedProducts: [productSeedPlan.primaryProduct, ...(productSeedPlan.supportingProducts || [])]
+                .filter(Boolean)
+                .map((item) => ({ productId: String(item.productId), name: item.name })),
+            placementPlan: productSeedPlan.placementPlan || [],
+            commercialDensityLimits: productSeedPlan.commercialDensityLimits || {}
+        } : null,
         variation: attempt > 0 ? `Lần viết lại thứ ${attempt}: thay đổi hẳn bộ heading, cách mở bài và cách diễn đạt so với các lần trước.` : ''
     });
     return [{ role: 'system', content: system }, { role: 'user', content: user }];
@@ -170,12 +183,12 @@ const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, artic
 const generateLlmDraft = async ({
     topic, primaryKeyword, secondaryKeywords = [], articleType = '', style = {},
     headingCount = 5, language = 'vi', tone = 'practical', attempt = 0, recentTitles = [],
-    fetchImpl = global.fetch, timeoutMs = LLM_DRAFT_TIMEOUT_MS
+    fetchImpl = global.fetch, timeoutMs = LLM_DRAFT_TIMEOUT_MS, productSeedPlan = null
 }) => {
     const apiKey = normalizeString(process.env.OPENAI_API_KEY);
     if (!apiKey || typeof fetchImpl !== 'function') return null;
     const model = normalizeString(process.env.OPENAI_CHAT_MODEL) || 'gpt-4o-mini';
-    const messages = buildLlmDraftMessages({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles, attempt });
+    const messages = buildLlmDraftMessages({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles, attempt, productSeedPlan });
     const requestOnce = async (body, signal) => fetchImpl('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
@@ -256,7 +269,7 @@ const headingSetForStyle = ({ styleFamily, topic }) => {
     return sets[styleFamily] || [`Hiểu đúng nhu cầu về ${topicLabel}`, 'Tiêu chí thực tế cho gia đình Việt', 'Cách sử dụng an toàn và bền lâu', 'Tự đánh giá trước khi quyết định'];
 };
 
-const buildArchitecture = ({ topic, style, decision, researchBundle }) => {
+const buildArchitecture = ({ topic, style, decision, researchBundle, productSeedPlan = null }) => {
     const headings = headingSetForStyle({ styleFamily: style.styleFamily, topic });
     return {
         opening: { mode: style.openingMode, purpose: 'Answer the primary household problem without a generic definition.' },
@@ -266,7 +279,14 @@ const buildArchitecture = ({ topic, style, decision, researchBundle }) => {
         internalLinkPlan: [],
         ctaPlan: { mode: style.ctaMode, promise: 'Help the reader verify fit; do not pressure or promise outcomes.' },
         articleAction: decision,
-        answerBlocks: headings.slice(0, 2).map((heading) => ({ question: heading, format: style.answerBlockMode }))
+        answerBlocks: headings.slice(0, 2).map((heading) => ({ question: heading, format: style.answerBlockMode })),
+        productSeeding: productSeedPlan ? {
+            productSeedPlanId: String(productSeedPlan._id || productSeedPlan.id || ''),
+            decision: productSeedPlan.decision,
+            placementPlan: productSeedPlan.placementPlan || [],
+            commercialDensityLimits: productSeedPlan.commercialDensityLimits || {},
+            rule: 'Answer the reader and explain objective criteria before applying any product placement.'
+        } : null
     };
 };
 
@@ -322,6 +342,48 @@ const buildDraft = ({ topic, primaryKeyword, architecture, style, variantIndex =
     };
     const closing = ctaByMode[style.ctaMode] || 'Bước tiếp theo hợp lý là xác nhận thông tin còn thiếu, không mua hoặc thay đổi thói quen chỉ vì áp lực từ một lời khẳng định tuyệt đối.';
     return `<article><p>${intro}</p>${sections}${table}${faq}<section><h2>Bước tiếp theo phù hợp</h2><p>${paragraphs[(paragraphOffset + 11) % paragraphs.length]}</p><p>${closing}</p></section></article>`;
+};
+
+const escapeHtml = (value) => String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const plannedProducts = (plan = {}) => [plan.primaryProduct, ...(plan.supportingProducts || [])].filter(Boolean);
+
+const buildProductRecommendationHtml = ({ item, includeLink = true, anchor = 'Xem thông tin sản phẩm' }) => {
+    const evidence = (item.allowedClaims || [])
+        .filter((claim) => !['product_name', 'canonical_url'].includes(claim.key))
+        .slice(0, 2)
+        .map((claim) => `${escapeHtml(claim.key)}: ${escapeHtml(claim.value)}`);
+    const evidenceText = evidence.length
+        ? `Thông tin đã lưu trong catalog gồm ${evidence.join('; ')}.`
+        : 'Hãy đối chiếu thông tin chi tiết trên trang sản phẩm trước khi quyết định.';
+    const link = includeLink
+        ? `<a href="${escapeHtml(item.canonicalUrl)}" data-link-type="product">${escapeHtml(anchor)}</a>`
+        : '';
+    return `<section data-block-type="product-recommendation" data-product-id="${escapeHtml(item.productId)}"><h3>Một lựa chọn phù hợp với nhu cầu này</h3><p><strong>${escapeHtml(item.name)}</strong> có thể được xem như một ví dụ để đối chiếu sau khi bạn đã xác định tiêu chí sử dụng. ${evidenceText} Đây là sản phẩm của INOXPRAN; mức độ phù hợp còn tùy nhu cầu thực tế.</p>${link}</section>`;
+};
+
+const applyProductSeedPlanToHtml = ({ html, plan }) => {
+    if (!plan || !['contextual_seed', 'product_led'].includes(plan.decision)) return String(html || '');
+    const products = plannedProducts(plan);
+    const density = plan.commercialDensityLimits || {};
+    const maxMentions = Math.max(0, Number(density.maxProductMentions) || 0);
+    const maxLinks = Math.max(0, Number(density.maxProductLinks) || 0);
+    if (!products.length || maxMentions === 0) return String(html || '');
+    const anchors = ['Xem thông tin sản phẩm', 'Xem một mẫu phù hợp', 'View product information'];
+    const blocks = products.slice(0, Math.min(products.length, maxMentions)).map((item, index) =>
+        buildProductRecommendationHtml({ item, includeLink: index < maxLinks, anchor: anchors[index % anchors.length] })
+    ).join('');
+    const source = String(html || '');
+    const headingMatches = [...source.matchAll(/<h2\b[^>]*>/gi)];
+    const insertAt = headingMatches[1]?.index;
+    if (Number.isInteger(insertAt)) return `${source.slice(0, insertAt)}${blocks}${source.slice(insertAt)}`;
+    const closeArticle = source.toLowerCase().lastIndexOf('</article>');
+    return closeArticle >= 0 ? `${source.slice(0, closeArticle)}${blocks}${source.slice(closeArticle)}` : `${source}${blocks}`;
 };
 
 class AgenticBlogCoreService {
@@ -424,8 +486,16 @@ class AgenticBlogCoreService {
         return bundle.toObject();
     }
 
-    static async prepareContext({ topic, primaryKeyword, articleType, now = new Date(), sourceUrls = [] }) {
+    static async prepareContext({ topic, primaryKeyword, articleType, now = new Date(), sourceUrls = [], productSeeding = {}, language = 'vi', categoryKey = 'guide', secondaryKeywords = [] }) {
         const snapshot = await GoogleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate({ now });
+        const productSeedPlan = await ProductSeedPlanningService.createPlan({
+            brief: { topic, primaryKeyword, secondaryKeywords, articleType, language, categoryKey, productSeeding },
+            googleIntelSnapshotId: snapshot.id,
+            now
+        });
+        if (productSeedPlan.decision === 'blocked_no_suitable_product') {
+            return { snapshot, productSeedPlan, blocked: true, blockReason: productSeedPlan.decisionReason, primaryKeyword };
+        }
         const existing = await blog.find({}).sort({ updatedAt: -1 }).limit(100).select('_id blog_title blog_slug blog_tags blog_content isDraft isPublished updatedAt createdAt structuralFingerprint').lean();
         const opportunity = decideTopicAction({ topic, existing, now });
         const researchBundle = await AgenticBlogCoreService.researchIndustry({ topic, sourceUrls });
@@ -433,9 +503,19 @@ class AgenticBlogCoreService {
         const chosenArticleType = opportunity.decision === 'update' || opportunity.decision === 'merge'
             ? 'existing-article-update'
             : ARTICLE_TYPES.includes(articleType) ? articleType : ARTICLE_TYPES[Math.abs(Number.parseInt(sha256(`${topic}:${style.styleFamily}`).slice(0, 8), 16)) % ARTICLE_TYPES.length];
-        const architecture = buildArchitecture({ topic, style, decision: opportunity.decision, researchBundle });
+        const architecture = buildArchitecture({ topic, style, decision: opportunity.decision, researchBundle, productSeedPlan });
+        const selectedProducts = [productSeedPlan.primaryProduct, ...(productSeedPlan.supportingProducts || [])].filter(Boolean);
         const strategy = await BlogStrategyPlan.create({
             googleIntelSnapshotId: snapshot.id, topic, decision: opportunity.decision,
+            productCatalogSnapshotId: productSeedPlan.productCatalogSnapshotId || null,
+            productSeedPlanId: productSeedPlan._id,
+            productSeedingMode: productSeedPlan.mode,
+            productSeedingDecision: productSeedPlan.decision,
+            selectedProductIds: selectedProducts.map((item) => item.productId),
+            productPlacementConstraints: productSeedPlan.placementPlan || [],
+            productClaimEvidence: selectedProducts.flatMap((item) => item.allowedClaims || []),
+            commercialDensityLimit: productSeedPlan.commercialDensityLimits || {},
+            productReviewPlan: { claimVerification: true, naturalness: true, linkSafety: true, commercialDensity: true },
             decisionReason: opportunity.reason, targetBlogIds: opportunity.targets.map((item) => item._id),
             targetAudience: 'Vietnamese households seeking durable, safe and practical cookware guidance',
             searchIntent: { primary: 'informational', secondary: opportunity.decision === 'new' ? 'commercial-investigation' : 'content-maintenance', confidence: 0.82 },
@@ -453,14 +533,20 @@ class AgenticBlogCoreService {
             contentArchitecture: architecture,
             reviewerPlan: { factCheck: true, originality: true, seoAeoGeo: true, peopleFirstSpam: true, brandVoice: true }
         });
-        return { snapshot, opportunity, researchBundle, style, strategy: strategy.toObject(), architecture, primaryKeyword };
+        return { snapshot, productSeedPlan, opportunity, researchBundle, style, strategy: strategy.toObject(), architecture, primaryKeyword, blocked: false };
     }
 
     static async runPipeline({ schedule, executionKey, executionId, now = new Date() }) {
         const config = schedule.agentConfig || {};
         const topic = boundTopic(config.topic || config.primaryKeyword || schedule.name || 'đồ gia dụng inox cho gia đình');
         const primaryKeyword = normalizeString(config.primaryKeyword || topic);
-        const context = await AgenticBlogCoreService.prepareContext({ topic, primaryKeyword, articleType: config.articleType, now, sourceUrls: Array.isArray(config.researchSources) ? config.researchSources : [] });
+        const context = await AgenticBlogCoreService.prepareContext({
+            topic, primaryKeyword, articleType: config.articleType, now,
+            sourceUrls: Array.isArray(config.researchSources) ? config.researchSources : [],
+            productSeeding: config.productSeeding || {}, language: config.language || 'vi', categoryKey: config.categoryKey || 'guide',
+            secondaryKeywords: Array.isArray(config.secondaryKeywords) ? config.secondaryKeywords : []
+        });
+        if (context.blocked) return { skipped: true, blocked: true, reason: context.blockReason, context };
         if (context.opportunity.decision === 'skip') return { skipped: true, reason: context.opportunity.reason, context };
         const targetIds = new Set(context.opportunity.targets.map((item) => String(item._id)));
         const comparisonCorpus = await blog.find({ _id: { $nin: Array.from(targetIds) } }).sort({ updatedAt: -1 }).limit(50).select('_id blog_title blog_content structuralFingerprint').lean();
@@ -488,7 +574,8 @@ class AgenticBlogCoreService {
                     language: normalizeString(config.language) || 'vi',
                     tone: normalizeString(config.tone) || 'practical',
                     recentTitles,
-                    attempt
+                    attempt,
+                    productSeedPlan: context.productSeedPlan
                 });
             } catch (error) {
                 llmGenerationError = normalizeString(error?.message).slice(0, 300);
@@ -503,12 +590,14 @@ class AgenticBlogCoreService {
                     variantIndex: Number(context.style.activeVariant?.usageIndex || 0) + attempt
                 });
             }
+            contentHtml = applyProductSeedPlanToHtml({ html: contentHtml, plan: context.productSeedPlan });
             originality = reviewOriginality({ title: llmDraft?.title || topic, contentHtml, existing: comparisonCorpus });
             if (originality.passed) break;
         }
         const factuality = reviewFacts(contentHtml);
         const peopleSpam = reviewPeopleFirstAndSpam({ html: contentHtml, primaryKeyword });
         const brandVoice = reviewBrandVoice(contentHtml);
+        const productReviews = reviewProductLayer({ html: contentHtml, plan: context.productSeedPlan });
         const wordCount = normalizeForSimilarity(contentHtml).split(' ').filter(Boolean).length;
         const seoAeoGeo = {
             passed: (context.architecture.headings || []).length >= 4 && /answer-block/.test(contentHtml),
@@ -518,7 +607,7 @@ class AgenticBlogCoreService {
             generativeSearchReady: factuality.passed && brandVoice.passed,
             promisesInclusion: false
         };
-        const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed;
+        const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed || !productReviews.pass;
         const target = context.opportunity.targets[0];
         const date = dateInTimezone(now, context.snapshot.timezone);
         const targetKeepsTitle = Boolean(target && target.isPublished);
@@ -547,17 +636,30 @@ class AgenticBlogCoreService {
             editorialStyleProfileId: String(context.style._id),
             strategyPlanId: String(context.strategy._id),
             agenticExecutionId: String(executionId || ''),
+            productCatalogSnapshotId: context.productSeedPlan.productCatalogSnapshotId ? String(context.productSeedPlan.productCatalogSnapshotId) : '',
+            productSeedPlanId: String(context.productSeedPlan._id || ''),
+            productSeedingMode: context.productSeedPlan.mode,
+            productSeedingDecision: context.productSeedPlan.decision,
+            seededProductIds: plannedProducts(context.productSeedPlan).map((item) => String(item.productId)),
+            productSeedingReview: productReviews.productSeedingReview,
+            productClaimReview: productReviews.productClaimReview,
             structuralFingerprint: originality.fingerprint,
-            agenticReviews: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice },
+            agenticReviews: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview },
             metadata: {
                 provider: 'openclaw', executionKey, pipelineVersion: 'agentic-blog-core-v2',
                 googleIntelSnapshotId: context.snapshot.id, researchBundleId: String(context.researchBundle._id),
                 editorialStyleProfileId: String(context.style._id), strategyPlanId: String(context.strategy._id),
+                productCatalogSnapshotId: context.productSeedPlan.productCatalogSnapshotId ? String(context.productSeedPlan.productCatalogSnapshotId) : '',
+                productSeedPlanId: String(context.productSeedPlan._id || ''),
+                productSeedingMode: context.productSeedPlan.mode,
+                productSeedingDecision: context.productSeedPlan.decision,
+                productSeedingReview: productReviews.productSeedingReview,
+                productClaimReview: productReviews.productClaimReview,
                 styleFamily: context.style.styleFamily, styleVariant: context.style.activeVariant,
                 researchCoverage: context.researchBundle.researchCoverage,
                 searchConsoleFallback: context.researchBundle.searchConsole?.fallback !== false,
                 decision: context.opportunity.decision, decisionReason: context.opportunity.reason,
-                reviewerDecisions: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice },
+                reviewerDecisions: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview },
                 originalityAttempts, originalityRetryExhausted: !originality.passed,
                 wordCount,
                 draftGenerator: llmDraft ? `openai:${llmDraft.model}` : 'template-fallback',
@@ -567,7 +669,7 @@ class AgenticBlogCoreService {
                 seoScore: seoAeoGeo.seoScore,
                 brandSafety: brandVoice.passed ? 'pass' : 'fail',
                 duplicateRisk: originality.risk,
-                claimRisk: factuality.passed ? 'low' : 'high',
+                claimRisk: factuality.passed && productReviews.productClaimReview.pass ? 'low' : 'high',
                 imageSafety: 'pass',
                 factuality: factuality.passed ? 'pass' : 'fail',
                 originality: originality.passed ? 'pass' : 'fail',
@@ -618,8 +720,10 @@ module.exports = {
     ARTICLE_TYPES,
     AgenticBlogCoreService,
     STYLE_FAMILIES,
+    applyProductSeedPlanToHtml,
     buildArchitecture,
     buildDraft,
+    buildProductRecommendationHtml,
     buildSearchConsoleContext,
     decideTopicAction,
     inferAbstractPattern,
