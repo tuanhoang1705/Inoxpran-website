@@ -3,33 +3,36 @@
 const { buildEnvProductSeedingConfig } = require('../config/productSeeding.config');
 
 const normalizeText = (value) => String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
+    .normalize('NFC')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-const STOP_WORDS = new Set(['va', 'voi', 'cho', 'cua', 'mot', 'nhung', 'cac', 'the', 'and', 'for', 'with', 'how', 'cach', 'lam', 'khi', 'tu']);
+const STOP_WORDS = new Set([
+    'va', 'và', 'voi', 'với', 'cho', 'cua', 'của', 'mot', 'một', 'nhung', 'những', 'cac', 'các',
+    'the', 'and', 'for', 'with', 'how', 'cach', 'cách', 'lam', 'làm', 'khi', 'tu', 'từ',
+    'phu', 'phù', 'hop', 'hợp', 'dung', 'dụng', 'san', 'sản', 'pham', 'phẩm', 'gia', 'khong', 'không'
+]);
 const SEMANTIC_GROUPS = [
-    ['quat', 'fan', 'lam mat', 'gio'],
-    ['tich dien', 'sac', 'pin', 'rechargeable', 'mat dien'],
-    ['noi', 'cookware', 'nau', 'bep'],
-    ['chao', 'pan', 'chien', 'xao'],
-    ['inox', 'stainless', 'thep khong gi'],
-    ['am', 'kettle', 'dun nuoc'],
-    ['mini', 'nho gon', 'ca nhan', 'ban hoc'],
-    ['ve sinh', 'lam sach', 'bao quan', 'care'],
-    ['mua', 'chon', 'buying', 'so sanh', 'comparison']
+    ['quạt', 'quat', 'fan', 'làm mát', 'lam mat', 'gió', 'gio'],
+    ['tích điện', 'tich dien', 'sạc', 'sac', 'pin', 'rechargeable', 'mất điện', 'mat dien'],
+    ['nồi', 'noi', 'cookware', 'nấu', 'nau', 'bếp', 'bep'],
+    ['chảo', 'chao', 'pan', 'chiên', 'chien', 'xào', 'xao'],
+    ['inox', 'stainless', 'thép không gỉ', 'thep khong gi'],
+    ['ấm', 'am', 'kettle', 'đun nước', 'dun nuoc'],
+    ['mini', 'nhỏ gọn', 'nho gon', 'cá nhân', 'ca nhan', 'bàn học', 'ban hoc'],
+    ['vệ sinh', 've sinh', 'làm sạch', 'lam sach', 'bảo quản', 'bao quan', 'care'],
+    ['mua', 'chọn', 'chon', 'buying', 'so sánh', 'so sanh', 'comparison']
 ];
 
 const tokens = (value) => new Set(normalizeText(value).split(' ').filter((item) => item.length > 1 && !STOP_WORDS.has(item)));
 const expandSemanticTokens = (value) => {
     const normalized = normalizeText(value);
+    const padded = ` ${normalized} `;
     const result = tokens(normalized);
     SEMANTIC_GROUPS.forEach((group) => {
-        if (group.some((phrase) => normalized.includes(normalizeText(phrase)))) {
+        if (group.some((phrase) => padded.includes(` ${normalizeText(phrase)} `))) {
             group.forEach((phrase) => tokens(phrase).forEach((token) => result.add(token)));
         }
     });
@@ -74,6 +77,9 @@ const scoreCandidate = ({ candidate, brief = {}, exposure = {}, config = buildEn
     const preferredProducts = new Set((brief.preferredProductIds || []).map(String));
     const excludedProducts = new Set((brief.excludedProductIds || []).map(String));
     const topicIntent = overlapScore(topicQuery, corpus);
+    const identityTokens = tokens([candidate.name, candidate.category?.name, ...(candidate.verifiedFeatures || []), ...(candidate.supportedUseCases || [])].join(' '));
+    const anchorMatches = [...expandSemanticTokens([brief.topic, ...(brief.searchIntent || [])].join(' '))]
+        .filter((item) => item.length >= 3 && identityTokens.has(item));
     const userProblem = problemQuery ? overlapScore(problemQuery, corpus) : topicIntent;
     const categoryPreferred = preferredCategories.size > 0 && preferredCategories.has(normalizeText(candidate.category?.id));
     const categoryFeature = Number(Math.min(1, overlapScore(topicQuery, `${candidate.category?.name || ''} ${(candidate.verifiedFeatures || []).join(' ')}`) + (categoryPreferred ? 0.2 : 0)).toFixed(4));
@@ -107,12 +113,14 @@ const scoreCandidate = ({ candidate, brief = {}, exposure = {}, config = buildEn
         ...penalties.filter((item) => ['inactive_or_discontinued', 'invalid_canonical_url', 'explicitly_excluded'].includes(item.code)).map((item) => item.code)
     ];
     if (totalScore < (brief.productSeeding?.relevanceThreshold ?? config.minRelevanceScore)) rejectionReasons.push('below_relevance_threshold');
+    if (!anchorMatches.length) rejectionReasons.push('no_semantic_anchor');
     return {
         productId: String(candidate.productId || ''),
         totalScore,
         scoreBreakdown,
         penalties,
         matchedEvidence: [
+            ...anchorMatches.slice(0, 5).map((item) => `anchor:${item}`),
             ...(topicIntent > 0 ? [`topic:${candidate.name}`] : []),
             ...(categoryFeature > 0 ? [`category:${candidate.category?.name || ''}`] : []),
             ...(useCase > 0 ? (candidate.supportedUseCases || []).slice(0, 3).map((item) => `use_case:${item}`) : [])
