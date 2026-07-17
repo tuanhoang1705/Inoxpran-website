@@ -25,6 +25,7 @@
       OPENCLAW_UPDATE_RUNTIME_DIR: /openclaw-update-runtime
       OPENCLAW_ASSET_ROOT: /openclaw-assets
       OPENCLAW_DASHBOARD_URL: ${OPENCLAW_DASHBOARD_URL:-https://admin.inoxpran.com/openclaw-dashboard/}
+      TELEGRAM_API_BASE: ${TELEGRAM_API_BASE:-http://telegram-relay:8081}
       TELEGRAM_BOT_ENABLED: ${TELEGRAM_BOT_ENABLED:-false}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_NOTIFY_CHAT_IDS: ${TELEGRAM_NOTIFY_CHAT_IDS:-}
@@ -39,6 +40,15 @@
       - ./deploy/openclaw/openclaw.json5:/openclaw-assets/openclaw.json5:ro
       - ./deploy/openclaw/SKILL_INSTALL_REPORT.md:/openclaw-assets/SKILL_INSTALL_REPORT.md:ro
       - ./deploy/openclaw/update-runtime:/openclaw-update-runtime
+    restart: unless-stopped
+    networks:
+      - appnet
+
+  telegram-relay:
+    image: nginx:alpine
+    container_name: app_telegram_relay
+    volumes:
+      - ./deploy/telegram-relay/relay.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
     networks:
       - appnet

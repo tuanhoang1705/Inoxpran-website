@@ -109,6 +109,110 @@ const boundTopic = (value) => {
     return (lastSpace > 60 ? cut.slice(0, lastSpace) : cut).trim();
 };
 
+const LLM_DRAFT_TIMEOUT_MS = Math.min(Math.max(Number(process.env.OPENAI_DRAFT_TIMEOUT_MS || 90_000), 20_000), 240_000);
+
+const extractJsonObject = (text) => {
+    const cleaned = String(text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    try { return JSON.parse(cleaned); } catch { /* fall through */ }
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+        try { return JSON.parse(cleaned.slice(start, end + 1)); } catch { /* fall through */ }
+    }
+    return null;
+};
+
+const sanitizeLlmHtml = (html) => {
+    let output = String(html || '').trim();
+    output = output.replace(/<\/?(?:script|style|iframe|object|embed|form|input|button|link|meta|svg)\b[^>]*>/gi, '');
+    output = output.replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');
+    output = output.replace(/\sstyle\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');
+    output = output.replace(/\sclass\s*=\s*"([^"]*)"/gi, (match, value) => (/\banswer-block\b/.test(value) ? ' class="answer-block"' : ''));
+    output = output.replace(/<img\b[^>]*>/gi, '');
+    output = output.replace(/<a\b[^>]*>([\s\S]*?)<\/a>/gi, '$1');
+    if (!/^<article\b/i.test(output)) output = `<article>${output}</article>`;
+    return output;
+};
+
+const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, attempt }) => {
+    const system = [
+        'Bạn là biên tập viên nội dung cho INOXPRAN (inoxpran.com), thương hiệu đồ gia dụng Việt Nam.',
+        'Viết bài blog tiếng Việt chuẩn xuất bản, bám sát 100% chủ đề được yêu cầu; tuyệt đối không chèn nội dung về danh mục sản phẩm không liên quan đến chủ đề.',
+        'Cấm tuyệt đối: số liệu, chứng nhận, kết quả thử nghiệm hoặc trải nghiệm bịa đặt; các cụm "100%", "được chứng nhận", "tốt nhất Việt Nam", "tốt nhất thế giới", "nghiên cứu cho thấy", "thử nghiệm của chúng tôi", "chuyên gia INOXPRAN khẳng định", "hoàn hảo tuyệt đối"; hứa hẹn thứ hạng Google; tên đối thủ cạnh tranh.',
+        'Không kể chuyện về khách hàng hoặc nhân vật cụ thể (tên riêng, địa chỉ, quận/huyện) như thể có thật; nếu cần minh họa, chỉ dùng tình huống chung chung không danh tính.',
+        'Giọng văn: thực tế, rõ ràng, đáng tin cậy, hướng đến hộ gia đình Việt Nam.',
+        'Chỉ trả về JSON hợp lệ dạng: {"title": string, "excerpt": string, "html": string}.',
+        '"title": tối đa 110 ký tự, tự nhiên và hấp dẫn, không emoji, không dấu ngoặc kép.',
+        '"excerpt": 1-2 câu tóm tắt bài viết, tối đa 200 ký tự.',
+        '"html": bài viết hoàn chỉnh bọc trong <article>...</article>, dài 900-1400 từ, chỉ dùng các thẻ <h2> <h3> <p> <ul> <ol> <li> <table> <thead> <tbody> <tr> <th> <td> <strong> <em> và <aside class="answer-block">.',
+        'Cấu trúc bắt buộc: 1 đoạn mở đầu không có heading; các mục <h2> bám sát chủ đề theo số lượng headingCount; ít nhất 2 khối <aside class="answer-block"><strong>Trả lời nhanh:</strong> ...</aside> trong đó 1 khối nằm gần đầu bài; 1 danh sách <ul> dạng checklist thực hành; 1 mục <h2>Câu hỏi thường gặp</h2> chứa 2-3 câu hỏi <h3> kèm trả lời; 1 đoạn kết ngắn gọn.',
+        'Không dùng <img>, không chèn link, không inline style, không markdown.'
+    ].join('\n');
+    const user = JSON.stringify({
+        topic,
+        primaryKeyword,
+        secondaryKeywords,
+        articleType,
+        language,
+        tone,
+        styleFamily: style?.styleFamily || '',
+        openingMode: style?.openingMode || '',
+        ctaMode: style?.ctaMode || '',
+        headingCount,
+        variation: attempt > 0 ? `Lần viết lại thứ ${attempt}: thay đổi hẳn bộ heading, cách mở bài và cách diễn đạt so với các lần trước.` : ''
+    });
+    return [{ role: 'system', content: system }, { role: 'user', content: user }];
+};
+
+const generateLlmDraft = async ({
+    topic, primaryKeyword, secondaryKeywords = [], articleType = '', style = {},
+    headingCount = 5, language = 'vi', tone = 'practical', attempt = 0,
+    fetchImpl = global.fetch, timeoutMs = LLM_DRAFT_TIMEOUT_MS
+}) => {
+    const apiKey = normalizeString(process.env.OPENAI_API_KEY);
+    if (!apiKey || typeof fetchImpl !== 'function') return null;
+    const model = normalizeString(process.env.OPENAI_CHAT_MODEL) || 'gpt-4o-mini';
+    const messages = buildLlmDraftMessages({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, attempt });
+    const requestOnce = async (body, signal) => fetchImpl('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+        signal
+    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        let response = await requestOnce({ model, messages, response_format: { type: 'json_object' } }, controller.signal);
+        if (response.status === 400) {
+            const errorText = await response.text().catch(() => '');
+            if (!/response_format/i.test(errorText)) throw new Error(`openai_http_400:${errorText.slice(0, 180)}`);
+            response = await requestOnce({ model, messages }, controller.signal);
+        }
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(`openai_http_${response.status}:${errorText.slice(0, 180)}`);
+        }
+        const data = await response.json();
+        const parsed = extractJsonObject(data?.choices?.[0]?.message?.content || '');
+        if (!parsed || !normalizeString(parsed.html)) throw new Error('openai_invalid_draft_response');
+        const html = sanitizeLlmHtml(parsed.html);
+        const words = normalizeForSimilarity(html).split(' ').filter(Boolean).length;
+        if (words < 350) throw new Error(`openai_draft_too_short_${words}_words`);
+        return {
+            html,
+            title: normalizeString(parsed.title).replace(/["“”]/g, '').slice(0, 110),
+            excerpt: normalizeString(parsed.excerpt).slice(0, 220),
+            model,
+            wordCount: words
+        };
+    } catch (error) {
+        if (error?.name === 'AbortError') throw new Error('openai_draft_timeout');
+        throw error;
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
 const decideTopicAction = ({ topic, existing = [], now = new Date() }) => {
     const scored = existing.map((item) => ({
         item,
@@ -360,13 +464,37 @@ class AgenticBlogCoreService {
         let contentHtml = '';
         let originality = null;
         let originalityAttempts = 0;
+        let llmDraft = null;
+        let llmGenerationError = '';
         for (let attempt = 0; attempt < maxOriginalityAttempts; attempt += 1) {
             originalityAttempts = attempt + 1;
-            contentHtml = buildDraft({
-                topic, primaryKeyword, architecture: context.architecture, style: context.style,
-                variantIndex: Number(context.style.activeVariant?.usageIndex || 0) + attempt
-            });
-            originality = reviewOriginality({ title: topic, contentHtml, existing: comparisonCorpus });
+            let generated = null;
+            try {
+                generated = await generateLlmDraft({
+                    topic,
+                    primaryKeyword,
+                    secondaryKeywords: Array.isArray(config.secondaryKeywords) ? config.secondaryKeywords.slice(0, 8) : [],
+                    articleType: context.strategy.articleType,
+                    style: context.style,
+                    headingCount: Math.min(Math.max((context.architecture.headings || []).length, 4), 6),
+                    language: normalizeString(config.language) || 'vi',
+                    tone: normalizeString(config.tone) || 'practical',
+                    attempt
+                });
+            } catch (error) {
+                llmGenerationError = normalizeString(error?.message).slice(0, 300);
+            }
+            if (generated?.html) {
+                llmDraft = generated;
+                contentHtml = generated.html;
+            } else {
+                llmDraft = null;
+                contentHtml = buildDraft({
+                    topic, primaryKeyword, architecture: context.architecture, style: context.style,
+                    variantIndex: Number(context.style.activeVariant?.usageIndex || 0) + attempt
+                });
+            }
+            originality = reviewOriginality({ title: llmDraft?.title || topic, contentHtml, existing: comparisonCorpus });
             if (originality.passed) break;
         }
         const factuality = reviewFacts(contentHtml);
@@ -384,9 +512,9 @@ class AgenticBlogCoreService {
         const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed;
         const target = context.opportunity.targets[0];
         const date = dateInTimezone(now, context.snapshot.timezone);
-        const title = target?.blog_title || topic;
-        const slug = target?.blog_slug || normalizeSlug(`${topic}-${date}-${sha256(executionKey).slice(0, 6)}`);
-        const excerpt = `Hướng dẫn thực tế về ${topic}, tập trung vào độ phù hợp, vật liệu, cách dùng và bảo quản cho gia đình Việt.`.slice(0, 240);
+        const title = target?.blog_title || llmDraft?.title || topic;
+        const slug = target?.blog_slug || normalizeSlug(`${llmDraft?.title || topic}-${date}-${sha256(executionKey).slice(0, 6)}`);
+        const excerpt = (llmDraft?.excerpt || `Hướng dẫn thực tế về ${topic} cho gia đình Việt: tiêu chí lựa chọn, cách sử dụng và lưu ý an toàn.`).slice(0, 240);
         const payload = {
             mode: Boolean(schedule.autoPublish) && !highRisk ? 'publish' : 'draft',
             source: 'openclaw-daily-seo', primaryKeyword, secondaryKeywords: config.secondaryKeywords || [],
@@ -418,7 +546,9 @@ class AgenticBlogCoreService {
                 decision: context.opportunity.decision, decisionReason: context.opportunity.reason,
                 reviewerDecisions: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice },
                 originalityAttempts, originalityRetryExhausted: !originality.passed,
-                wordCount
+                wordCount,
+                draftGenerator: llmDraft ? `openai:${llmDraft.model}` : 'template-fallback',
+                llmGenerationError: llmDraft ? '' : llmGenerationError
             },
             review: {
                 seoScore: seoAeoGeo.seoScore,

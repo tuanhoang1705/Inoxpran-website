@@ -18,6 +18,7 @@ const {
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 const LEASE_MS = 5 * 60 * 1000;
+const MANUAL_RUN_ACTIVE_WINDOW_MS = 45 * 60 * 1000;
 
 const isCronEnabled = () => parseBoolean(process.env.OPENCLAW_BLOG_CRON_ENABLED, false);
 const isSeoAgentEnabled = () => process.env.SEO_AGENT_ENABLED === 'true';
@@ -260,11 +261,29 @@ class BlogAutomationScheduleService {
         if (!objectId) throw new BadRequestError('Invalid schedule id');
         const schedule = await BlogAutomationSchedule.findById(objectId).lean();
         if (!schedule) throw new NotFoundError('Schedule not found');
-        return BlogAutomationScheduleService.executeSchedule({
-            schedule,
-            trigger: 'manual',
-            dueAt: new Date()
-        });
+
+        const activeSince = new Date(Date.now() - MANUAL_RUN_ACTIVE_WINDOW_MS);
+        const activeRun = await BlogAutomationExecution.findOne({
+            scheduleId: objectId,
+            status: 'running',
+            startedAt: { $gte: activeSince }
+        }).select('_id startedAt').lean();
+        if (activeRun) {
+            throw new BadRequestError('Lịch này đang có một lần chạy chưa kết thúc. Theo dõi mục "Lịch sử chạy" và đợi lần chạy hiện tại hoàn tất.');
+        }
+
+        const dueAt = new Date();
+        Promise.resolve()
+            .then(() => BlogAutomationScheduleService.executeSchedule({ schedule, trigger: 'manual', dueAt }))
+            .catch((error) => {
+                console.error('Manual blog schedule run failed:', error?.message || error);
+            });
+        return {
+            queued: true,
+            scheduleId: String(objectId),
+            startedAt: dueAt.toISOString(),
+            message: 'Đã bắt đầu chạy trong nền. Theo dõi tiến trình ở mục Lịch sử chạy.'
+        };
     }
 
     static async claimDueSchedule({ workerId, now = new Date() } = {}) {

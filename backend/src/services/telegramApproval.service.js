@@ -11,7 +11,7 @@ const { normalizeString } = require('../utils/seoBlogSanitizer');
 const { validateTelegramImageUrl } = require('./telegramImageSafety.service');
 
 const DEFAULT_APPROVAL_TTL_HOURS = 72;
-const TELEGRAM_API_BASE = 'https://api.telegram.org';
+const TELEGRAM_API_BASE = String(process.env.TELEGRAM_API_BASE || '').trim().replace(/\/+$/, '') || 'https://api.telegram.org';
 const DEFAULT_ADMIN_BASE_URL = 'http://localhost:5173';
 
 const parseBoolean = (value, fallback = false) => {
@@ -127,22 +127,33 @@ const buildDraftLines = ({ approval, compact = false }) => {
 const buildDraftMessage = ({ approval }) => buildDraftLines({ approval, compact: false });
 const buildDraftCaption = ({ approval }) => buildDraftLines({ approval, compact: true }).slice(0, 1024);
 
-const postTelegram = async ({ token, method, body, fetchImpl = global.fetch, timeoutMs = 12_000 }) => {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    try {
-        const response = await fetchImpl(`${TELEGRAM_API_BASE}/bot${token}/${method}`, {
-            method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || payload?.ok === false) throw new Error(payload?.description || `telegram_${method}_failed`);
-        return payload.result || payload;
-    } catch (error) {
-        if (error?.name === 'AbortError') throw new Error(`telegram_${method}_timeout`);
-        throw error;
-    } finally {
-        clearTimeout(timeout);
+const TRANSIENT_TELEGRAM_ERROR = /timeout|fetch failed|econnres|etimedout|econnrefused|socket|network|und_err|eai_again/i;
+
+const postTelegram = async ({ token, method, body, fetchImpl = global.fetch, timeoutMs = 12_000, attempts = 3 }) => {
+    let lastError = null;
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const response = await fetchImpl(`${TELEGRAM_API_BASE}/bot${token}/${method}`, {
+                method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || payload?.ok === false) throw new Error(payload?.description || `telegram_${method}_failed`);
+            return payload.result || payload;
+        } catch (error) {
+            const causeCode = error?.cause?.code ? ` (${error.cause.code})` : '';
+            lastError = error?.name === 'AbortError'
+                ? new Error(`telegram_${method}_timeout`)
+                : new Error(`${error?.message || `telegram_${method}_failed`}${causeCode}`);
+            const retryable = error?.name === 'AbortError' || TRANSIENT_TELEGRAM_ERROR.test(`${error?.message || ''} ${error?.cause?.code || ''}`);
+            if (!retryable || attempt === attempts) throw lastError;
+            await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+        } finally {
+            clearTimeout(timeout);
+        }
     }
+    throw lastError;
 };
 
 const sendMessage = async ({ chatId, text, token = normalizeString(process.env.TELEGRAM_BOT_TOKEN), postTelegramImpl = postTelegram }) => {
@@ -290,7 +301,8 @@ class TelegramApprovalService {
         return {
             approvalId: String(approval._id), approvalCode: approval.approvalCode,
             status: sent.length ? 'sent' : 'failed', notificationType: approval.notificationType,
-            notificationStatus: approval.notificationStatus, sent, failed
+            notificationStatus: approval.notificationStatus, sent, failed,
+            reason: sent.length ? '' : (failed[0]?.error || approval.notificationError || 'telegram_send_failed')
         };
     }
 
