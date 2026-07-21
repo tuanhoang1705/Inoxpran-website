@@ -82,6 +82,23 @@ describe('Product Catalog Intelligence', () => {
         expect(create).toHaveBeenCalledTimes(1);
     });
 
+    it('stores only a bounded code when catalog snapshot creation fails', async () => {
+        vi.spyOn(ProductCatalogIntelligenceService, 'readSafeCatalog').mockRejectedValue(
+            new Error('mongodb://user:private-password@catalog.invalid/db')
+        );
+        vi.spyOn(ProductCatalogSnapshot, 'findOne').mockReturnValue({
+            sort: () => ({ lean: async () => null })
+        });
+        const create = vi.spyOn(ProductCatalogSnapshot, 'create').mockImplementation(async (value) => value);
+
+        const snapshot = await ProductCatalogIntelligenceService.ensureSnapshot({
+            now: new Date('2026-07-17T00:00:00Z')
+        });
+
+        expect(snapshot.error).toBe('PRODUCT_CATALOG_SNAPSHOT_FAILED');
+        expect(JSON.stringify(create.mock.calls)).not.toContain('private-password');
+    });
+
     it('centralizes validated env defaults and globally forces mode off', () => {
         const base = buildEnvProductSeedingConfig({ PRODUCT_SEEDING_ENABLED: 'false', PRODUCT_SEED_MIN_RELEVANCE_SCORE: '4' });
         expect(base.defaultMode).toBe('off');

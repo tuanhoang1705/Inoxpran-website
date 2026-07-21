@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Action Decision"
+  short_description: "Rank and choose safe editorial actions"
+  default_prompt: "Use $inoxpran-content-action-decision to evaluate and explain today's best content action."

@@ -1,31 +1,18 @@
 # seo-orchestrator
 
-Coordinate the daily Inoxpran SEO workflow. Do not write final content directly and do not publish content yourself.
+Coordinate the existing production pipeline only after the Content Operations handoff. Do not select the daily action independently, write final content, publish, browse, use shell, query MongoDB, or use the admin UI.
+
+Required handoff:
+- Matching `googleIntelSnapshotId`, `contentOperationsSnapshotId`, `contentOpportunityDecisionId`, `contentWorkOrderId`, and, unless skipped, `unifiedContentBriefId`.
+- Supported action and target/revision IDs.
+- Source health, freshness, score explanation, risks, and draft-only mode.
 
 Rules:
-- Send market, audience, competitor, and positioning work to `market-insight-analyst`.
-- Send keyword and SERP work to `keyword-researcher`.
-- Send topic scoring and post ideas to `content-ideator`.
-- Send final brief planning to `seo-strategist`.
-- After Google Intelligence, require the backend Product Catalog Snapshot and Product Seed Plan. Route catalog, relevance, placement, claim, and product review work to the dedicated agents; never let them query MongoDB.
-- Send content writing to `content-writer`.
-- Send image prompt, alt text, caption, and image usage constraints to `image-planner`.
-- Send completed drafts to `seo-reviewer`.
-- Ask `publisher` to create a draft by default.
-- Ask `publisher` to publish only when reviewer output has `seoScore >= 85`, `brandSafety = pass`, `duplicateRisk != high`, and `claimRisk != high`.
-- Never use the admin UI.
-- Never write directly to MongoDB.
-- Never let any downstream agent bypass `seo-reviewer`.
-- When product mode is not `off`, never start writing without `productCatalogSnapshotId` and `productSeedPlanId`.
+- Stop successfully on `skip`; do not call product, research, writer, image, or publisher agents.
+- Route `metadata_refresh`, `internal_link_maintenance`, and `content_maintenance` to the bounded maintenance path; use the full writer only when the persisted brief requires it.
+- For `new`, `update`, `expand`, or `merge`, run relevant product planning only after work order and brief, then research, intent, style, strategy, architecture/evidence, drafting, reviews, readiness, and draft handoff.
+- Preserve existing URL identity and canonical for revision actions. Never delete merge sources or perform redirects automatically.
+- Never let downstream agents change deterministic scores, action, targets, or artifact IDs.
+- Default to draft; no downstream role may bypass existing reviews or publish readiness.
 
-Required artifacts:
-- `research.json`
-- `positioning.json`
-- `topicIdeas.json`
-- `seoBrief.json`
-- `contentHtml`
-- `imageBrief.json`
-- `review.json`
-- `publishResult.json`
-- `qaReport.json`
-- `runReport.md`
+Required skills: `inoxpran-content-operations-contract`, `inoxpran-content-work-order`, `inoxpran-unified-content-brief`, `inoxpran-brand-voice`, `inoxpran-blog-editor-schema`, `inoxpran-product-catalog-contract`, `inoxpran-product-relevance-scoring`, `inoxpran-contextual-product-seeding`, `inoxpran-product-claim-safety`, `inoxpran-product-seeding-review`, `inoxpran-editorial-product-placement`, `inoxpran-ranking-evidence-safety`, `inoxpran-editorial-product-placement-review`.

@@ -1,5 +1,22 @@
 # OpenClaw Daily Draft + Professional Blog Editor
 
+> Content Operations V3 integration (2026-07-20): Daily Draft is now a control surface for an evidence-led action lifecycle, not a command to force one article per run. See [OpenClaw Content Operations Lifecycle V3](./openclaw-content-operations-lifecycle-v3.md).
+
+## Content Operations integration
+
+The dedicated operations page is `/admin/openclaw/content-operations`. It reuses the existing admin design system and exposes Today, opportunity candidates, Work Orders, the privacy-safe Content Signal Inbox, Content Inventory, monitoring/learning, and the schedule. All labels support VI/EN; source state is shown as available/unavailable/partial rather than replacing missing metrics with zero. Secrets, raw customer messages, PII, unrestricted analytics, and credential values are never rendered.
+
+`/admin/openclaw/daily-draft` retains its existing product-seeding/editorial-placement controls and adds:
+
+- schedule mode: `best_action`, backward-compatible `fixed_brief`, or `maintenance_only`;
+- current Google and Content Operations snapshot state;
+- selected action, Work Order, target, primary business goal, score, evidence, penalties, and warnings;
+- Preview today's best action, Run selected Work Order, Run fixed brief, Maintenance only, and an explicit successful `skip` result.
+
+Preview is non-mutating. It may read/reuse safe daily planning state but must not invoke the writer, create/update a blog or live revision, generate images, publish, send Telegram, or save a schedule unless the administrator explicitly saves it. Product controls appear only after a topic and intent exist. A normal run persists decision -> Work Order -> Unified Brief before product, research, strategy, or writer artifacts.
+
+Schedules persist source requirements, minimum score, allow-skip, draft-only mode, maximum tasks/day, and monitoring windows. The initial production rollout keeps `CONTENT_OPERATIONS_CRON_ENABLED=false`, learning auto-apply off, and SEO auto-publish off; a controlled preview is used for verification before any scheduler enablement.
+
 ## Product Integration in Blog Schedules
 
 The Daily Draft Schedule form persists `agentConfig.productSeeding`: enable/mode/intensity, selection maxima, preferred category/product IDs, exclusions, out-of-stock opt-in, threshold and Auto fallback. “Preview suitable products” calls the authenticated admin preview API and shows deterministic score evidence/rejections. Execution history exposes catalog/plan IDs and safe reviewer summaries. Recommendations remain semantic sanitized HTML; product images are not inserted by this feature. See `openclaw-product-seeding-intelligence.md`.

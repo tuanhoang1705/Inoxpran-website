@@ -12,13 +12,15 @@ const Admin = require('../models/admin.model');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { convertToObjectIdMongodb } = require('../utils');
 const { normalizeString } = require('../utils/seoBlogSanitizer');
+const { safeErrorCode, safeStoredErrorCode } = require('../utils/httpError.util');
 const { calculateNextRun, normalizeTimes, parseBoolean } = require('../utils/blogSchedule.util');
 const {
     calculateSnapshotStatus,
-    canonicalizeUrl,
     dateInTimezone,
     DEFAULT_TIMEZONE,
-    isSnapshotAcceptable
+    isSnapshotAcceptable,
+    assertPersistableSourceUrl,
+    sanitizeSourceUrlForRead
 } = require('../utils/googleIntelligence.util');
 const { safeSourceFetch } = require('./safeSourceFetch.service');
 
@@ -28,6 +30,202 @@ const CONCURRENT_SNAPSHOT_POLL_MS = 250;
 const MAX_LIST_LIMIT = 100;
 const DEFAULT_SOURCE_MAX_BYTES = 750_000;
 const OFFICIAL_SOURCE_MAX_BYTES = 2_000_000;
+const GOOGLE_BUILD_BUSY_CODE = 'GOOGLE_INTELLIGENCE_BUILD_BUSY';
+const GOOGLE_BUILD_LEASE_LOST_CODE = 'GOOGLE_INTELLIGENCE_BUILD_LEASE_LOST';
+const GOOGLE_BUILD_FAILED_CODE = 'GOOGLE_INTELLIGENCE_BUILD_FAILED';
+const GOOGLE_HISTORICAL_ERROR_CODE = 'GOOGLE_INTELLIGENCE_HISTORICAL_ERROR';
+const safeGoogleStoredError = (value) => safeStoredErrorCode(value, GOOGLE_HISTORICAL_ERROR_CODE);
+const safeGoogleWriteError = (value, fallback) => safeErrorCode({ code: value || fallback }).toUpperCase();
+const sanitizeSourceHealth = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+    ...item,
+    url: sanitizeSourceUrlForRead(item?.url),
+    error: safeGoogleStoredError(item?.error)
+}));
+const sanitizeSourceUrlItems = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+    ...item,
+    sourceUrl: sanitizeSourceUrlForRead(item?.sourceUrl)
+}));
+const normalizeExecutionKeyPart = (value, fallback) => String(value || fallback)
+    .trim()
+    .replace(/[^A-Za-z0-9_.:@+-]/g, '_')
+    .slice(0, 160);
+const buildGoogleExecutionSlotKey = ({ triggeredBy = 'gate', snapshotDate, timezone, dueAt } = {}) => {
+    if (triggeredBy === 'scheduled') {
+        const due = new Date(dueAt || 0);
+        if (!Number.isFinite(due.getTime())) throw new Error('GOOGLE_INTELLIGENCE_DUE_SLOT_INVALID');
+        return `google-intelligence:scheduled:${normalizeExecutionKeyPart(timezone, DEFAULT_TIMEZONE)}:${due.toISOString()}`;
+    }
+    const base = `google-intelligence:${normalizeExecutionKeyPart(snapshotDate, 'unknown-date')}:${normalizeExecutionKeyPart(timezone, DEFAULT_TIMEZONE)}`;
+    return `${base}:${normalizeExecutionKeyPart(triggeredBy, 'gate')}`;
+};
+const buildGoogleExecutionKey = ({ generation, nonce, ...input } = {}) => {
+    const slotKey = buildGoogleExecutionSlotKey(input);
+    if (input.triggeredBy === 'scheduled') {
+        // A due slot is a single logical execution even if its lease is reclaimed.
+        return { executionKey: slotKey, executionSlotKey: slotKey };
+    }
+    const suffix = input.triggeredBy === 'manual'
+        ? normalizeExecutionKeyPart(nonce || crypto.randomUUID(), 'manual')
+        : `g${Math.max(0, Number(generation) || 0)}`;
+    return { executionKey: `${slotKey}:${suffix}`, executionSlotKey: slotKey };
+};
+const createScheduleLeaseOwner = (workerId) => {
+    const normalizedWorkerId = String(workerId || 'google-intelligence-worker').trim().slice(0, 150) || 'google-intelligence-worker';
+    return `${normalizedWorkerId}:${crypto.randomUUID()}`.slice(0, 200);
+};
+const explicitOwnerUpdateFailed = (result) => Number.isFinite(result?.matchedCount)
+    ? result.matchedCount === 0
+    : result?.modifiedCount === 0;
+const createGoogleScheduleLeaseHeartbeat = ({
+    ScheduleModel = GoogleIntelligenceSchedule, scheduleId, ownerToken, leaseMs = LEASE_MS,
+    heartbeatMs = Math.max(1_000, Math.floor(leaseMs / 3)), clock = () => new Date(),
+    setIntervalFn = setInterval, clearIntervalFn = clearInterval
+} = {}) => {
+    let stopped = false;
+    let ownershipLost = false;
+    let pending = Promise.resolve();
+    const renew = async () => {
+        if (stopped || ownershipLost) return !ownershipLost;
+        const heartbeatAt = new Date(clock());
+        const result = await ScheduleModel.updateOne(
+            { _id: scheduleId, lockedBy: ownerToken },
+            { $set: { leaseUntil: new Date(heartbeatAt.getTime() + leaseMs) } }
+        );
+        if (explicitOwnerUpdateFailed(result)) ownershipLost = true;
+        return !ownershipLost;
+    };
+    const timer = setIntervalFn(() => {
+        pending = pending.then(renew).catch(() => { ownershipLost = true; });
+    }, heartbeatMs);
+    timer?.unref?.();
+    return {
+        beat: async () => {
+            await pending;
+            if (ownershipLost || stopped) return false;
+            return renew();
+        },
+        stop: async () => {
+            if (!stopped) {
+                stopped = true;
+                clearIntervalFn(timer);
+            }
+            await pending;
+        },
+        ownershipLost: () => ownershipLost
+    };
+};
+const createGoogleBuildLeaseHeartbeat = ({
+    SnapshotModel = GoogleIntelligenceSnapshot, snapshotKey, buildToken, buildGeneration,
+    leaseMs = LEASE_MS, heartbeatMs = Math.max(1_000, Math.floor(leaseMs / 3)),
+    clock = () => new Date(), setIntervalFn = setInterval, clearIntervalFn = clearInterval
+} = {}) => {
+    let stopped = false;
+    let ownershipLost = false;
+    let pending = Promise.resolve();
+    const ownerFilter = {
+        ...snapshotKey,
+        status: 'building',
+        buildToken,
+        buildGeneration
+    };
+    const renew = async () => {
+        if (stopped || ownershipLost) return !ownershipLost;
+        const heartbeatAt = new Date(clock());
+        const result = await SnapshotModel.updateOne(
+            ownerFilter,
+            { $set: { leaseUntil: new Date(heartbeatAt.getTime() + leaseMs) } }
+        );
+        if (explicitOwnerUpdateFailed(result)) ownershipLost = true;
+        return !ownershipLost;
+    };
+    const timer = setIntervalFn(() => {
+        pending = pending.then(renew).catch(() => { ownershipLost = true; });
+    }, heartbeatMs);
+    timer?.unref?.();
+    return {
+        beat: async () => {
+            await pending;
+            if (ownershipLost || stopped) return false;
+            return renew();
+        },
+        stop: async () => {
+            if (!stopped) {
+                stopped = true;
+                clearIntervalFn(timer);
+            }
+            await pending;
+        },
+        ownershipLost: () => ownershipLost
+    };
+};
+
+const leanQuery = async (query) => typeof query?.lean === 'function' ? query.lean() : query;
+const selectInternalBuildFields = (query) => typeof query?.select === 'function'
+    ? query.select('+buildToken +buildGeneration +completedGeneration +leaseUntil +lastBuildError')
+    : query;
+const googleBuildError = (code) => {
+    const error = new Error(code);
+    error.code = code;
+    return error;
+};
+const sourceGenerationFilter = ({ sourceId, snapshotDate, buildGeneration }) => ({
+    _id: sourceId,
+    $or: [
+        { baselineSnapshotDate: { $exists: false } },
+        { baselineSnapshotDate: '' },
+        { baselineSnapshotDate: { $lt: snapshotDate } },
+        { baselineSnapshotDate: snapshotDate, baselineGeneration: { $exists: false } },
+        { baselineSnapshotDate: snapshotDate, baselineGeneration: { $lte: buildGeneration } }
+    ]
+});
+const reconcileCompletedGoogleRun = async ({ RunModel = GoogleIntelligenceRun, snapshot, completedAt = new Date() } = {}) => {
+    const status = ['completed_with_changes', 'completed_no_change', 'partial'].includes(snapshot?.status)
+        ? snapshot.status
+        : '';
+    if (!status || !snapshot?._id || !snapshot?.runId) return false;
+    const completedChanges = [
+        ...(Array.isArray(snapshot.officialChanges) ? snapshot.officialChanges : []),
+        ...(Array.isArray(snapshot.thirdPartyObservations) ? snapshot.thirdPartyObservations : [])
+    ];
+    const changedSourceUrls = new Set(completedChanges
+        .map((item) => sanitizeSourceUrlForRead(item?.sourceUrl))
+        .filter(Boolean));
+    const sourceResults = (Array.isArray(snapshot.sourceHealth) ? snapshot.sourceHealth : [])
+        .slice(0, MAX_LIST_LIMIT)
+        .map((item) => ({
+            sourceId: String(item?.sourceId || '').slice(0, 128),
+            name: String(item?.name || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 180),
+            ok: item?.ok === true,
+            official: item?.official === true,
+            required: item?.required === true,
+            changed: changedSourceUrls.has(sanitizeSourceUrlForRead(item?.url)),
+            error: safeGoogleStoredError(item?.error)
+        }));
+    const generation = Math.max(0, Number(snapshot.completedGeneration || 0));
+    const generationFilter = generation > 0
+        ? { snapshotGeneration: generation }
+        : { $or: [{ snapshotGeneration: 0 }, { snapshotGeneration: { $exists: false } }] };
+    const result = await RunModel.updateOne(
+        {
+            _id: snapshot.runId,
+            status: 'running',
+            snapshotId: snapshot._id,
+            ...generationFilter
+        },
+        {
+            $set: {
+                status,
+                completedAt,
+                sourceResults,
+                changesDetected: completedChanges.length,
+                criticalChanges: completedChanges.filter((item) => item?.severity === 'critical').length,
+                error: ''
+            },
+            $unset: { buildToken: '' }
+        }
+    );
+    return !explicitOwnerUpdateFailed(result);
+};
 const DEFAULT_SOURCES = [
     {
         name: 'Google Search documentation updates',
@@ -143,7 +341,7 @@ const summarizeMaterialChange = ({ previousExcerpt = '', currentExcerpt = '', is
 };
 
 const assertConfiguredSourcePath = (source) => {
-    const pathname = new URL(canonicalizeUrl(source.baseUrl)).pathname;
+    const pathname = new URL(assertPersistableSourceUrl(source.baseUrl)).pathname;
     const allowPaths = Array.isArray(source.allowPaths) ? source.allowPaths.filter(Boolean) : [];
     const denyPaths = Array.isArray(source.denyPaths) ? source.denyPaths.filter(Boolean) : [];
     if (denyPaths.some((path) => pathname.startsWith(path))) throw new BadRequestError('source_path_denied');
@@ -178,8 +376,8 @@ const mapSource = (source) => ({
     id: String(source._id || source.id),
     name: source.name,
     sourceType: source.sourceType,
-    baseUrl: source.baseUrl,
-    canonicalUrl: source.canonicalUrl || source.baseUrl,
+    baseUrl: sanitizeSourceUrlForRead(source.baseUrl),
+    canonicalUrl: sanitizeSourceUrlForRead(source.canonicalUrl || source.baseUrl),
     official: Boolean(source.official),
     required: Boolean(source.required),
     priority: Number(source.priority || 100),
@@ -190,7 +388,7 @@ const mapSource = (source) => ({
     denyPaths: source.denyPaths || [],
     lastSuccessAt: source.lastSuccessAt,
     lastFailureAt: source.lastFailureAt,
-    lastError: source.lastError || '',
+    lastError: safeGoogleStoredError(source.lastError),
     lastFetchedAt: source.lastFetchedAt,
     lastPublishedAt: source.lastPublishedAt,
     lastDocumentUpdatedAt: source.lastDocumentUpdatedAt,
@@ -209,13 +407,13 @@ const mapSnapshot = (snapshot) => snapshot ? {
     failedSources: snapshot.failedSources,
     mandatorySourcesSucceeded: Boolean(snapshot.mandatorySourcesSucceeded),
     noMaterialChanges: Boolean(snapshot.noMaterialChanges),
-    sourceHealth: snapshot.sourceHealth || [],
-    officialChanges: snapshot.officialChanges || [],
-    thirdPartyObservations: snapshot.thirdPartyObservations || [],
+    sourceHealth: sanitizeSourceHealth(snapshot.sourceHealth),
+    officialChanges: sanitizeSourceUrlItems(snapshot.officialChanges),
+    thirdPartyObservations: sanitizeSourceUrlItems(snapshot.thirdPartyObservations),
     currentRules: snapshot.currentRules || [],
-    recommendations: snapshot.recommendations || [],
+    recommendations: sanitizeSourceUrlItems(snapshot.recommendations),
     risks: snapshot.risks || [],
-    requiredActions: snapshot.requiredActions || [],
+    requiredActions: sanitizeSourceUrlItems(snapshot.requiredActions),
     contentGuidance: snapshot.contentGuidance || {},
     reviewerResult: snapshot.reviewerResult || {},
     contentHash: snapshot.contentHash,
@@ -260,8 +458,9 @@ class GoogleIntelligenceService {
         return schedule;
     }
 
-    static async getGateConfig() {
-        const schedule = await GoogleIntelligenceService.getOrCreateSchedule();
+    static async getGateConfig({ createSchedule = true } = {}) {
+        const existing = await GoogleIntelligenceSchedule.findOne({ singletonKey: 'default' }).lean();
+        const schedule = existing || (createSchedule ? await GoogleIntelligenceService.getOrCreateSchedule() : buildDefaultSchedule());
         return {
             enabled: Boolean(schedule.enabled) || parseBoolean(process.env.GOOGLE_INTELLIGENCE_ENABLED, false),
             timezone: schedule.timezone || DEFAULT_TIMEZONE,
@@ -282,7 +481,12 @@ class GoogleIntelligenceService {
     }
 
     static async createSource({ payload = {} }) {
-        const baseUrl = canonicalizeUrl(payload.baseUrl);
+        let baseUrl;
+        try {
+            baseUrl = assertPersistableSourceUrl(payload.baseUrl);
+        } catch (error) {
+            throw new BadRequestError(safeErrorCode(error));
+        }
         if (!['https:'].includes(new URL(baseUrl).protocol)) throw new BadRequestError('source URL must use HTTPS');
         const official = Boolean(payload.official);
         if (official && !officialHostAllowed(baseUrl)) throw new BadRequestError('official sources must use an official Google domain');
@@ -322,11 +526,13 @@ class GoogleIntelligenceService {
 
     static async fetchSource({ source, fetchOptions = {} }) {
         const attempts = Math.max(1, Number(fetchOptions.retryCount || 0) + 1);
+        const sourceFetcher = fetchOptions.sourceFetcher || safeSourceFetch;
+        const observedAt = fetchOptions.now instanceof Date ? fetchOptions.now : new Date();
         let lastError;
         for (let attempt = 0; attempt < attempts; attempt += 1) {
             try {
                 assertConfiguredSourcePath(source);
-                const fetched = await safeSourceFetch({
+                const fetched = await sourceFetcher({
                     url: source.baseUrl,
                     timeoutMs: fetchOptions.timeoutMs,
                     maxBytes: fetchOptions.maxBytes || (source.official ? OFFICIAL_SOURCE_MAX_BYTES : DEFAULT_SOURCE_MAX_BYTES),
@@ -350,19 +556,20 @@ class GoogleIntelligenceService {
                     lastPublishedAt: documentDates.publishedAt,
                     lastDocumentUpdatedAt: documentDates.updatedAt
                 };
-                await GoogleIntelligenceSource.updateOne({ _id: source._id }, {
-                    $set: {
-                        canonicalUrl: fetched.canonicalUrl, lastSuccessAt: fetched.fetchedAt,
-                        lastFetchedAt: fetched.fetchedAt, lastError: '', lastTitle: title,
-                        ...baselineUpdate
-                    }
-                });
                 return {
                     ok: true, sourceId: String(source._id), sourceName: source.name,
                     sourceUrl: fetched.canonicalUrl, official: Boolean(source.official), required: Boolean(source.required),
                     title, previousHash, currentHash, previousExcerpt, changed, isNew,
                     publishedAt: documentDates.publishedAt, updatedAt: documentDates.updatedAt,
-                    excerpt: normalizedText.slice(0, 1200), fetchedAt: fetched.fetchedAt
+                    excerpt: normalizedText.slice(0, 1200), fetchedAt: fetched.fetchedAt,
+                    deferredSourceUpdate: {
+                        canonicalUrl: fetched.canonicalUrl,
+                        lastSuccessAt: fetched.fetchedAt,
+                        lastFetchedAt: fetched.fetchedAt,
+                        lastError: '',
+                        lastTitle: title,
+                        ...baselineUpdate
+                    }
                 };
             } catch (error) {
                 lastError = error;
@@ -371,50 +578,164 @@ class GoogleIntelligenceService {
                 }
             }
         }
-        const message = normalizeString(lastError?.message || 'source_fetch_failed').slice(0, 500);
-        await GoogleIntelligenceSource.updateOne({ _id: source._id }, {
-            $set: { lastFailureAt: new Date(), lastFetchedAt: new Date(), lastError: message }
-        });
-        return { ok: false, sourceId: String(source._id), sourceName: source.name, sourceUrl: source.baseUrl, official: Boolean(source.official), required: Boolean(source.required), error: message };
+        const message = safeGoogleWriteError(lastError?.code, 'GOOGLE_SOURCE_FETCH_FAILED');
+        return {
+            ok: false,
+            sourceId: String(source._id),
+            sourceName: source.name,
+            sourceUrl: sanitizeSourceUrlForRead(source.baseUrl),
+            official: Boolean(source.official),
+            required: Boolean(source.required),
+            error: message,
+            deferredSourceUpdate: { lastFailureAt: observedAt, lastFetchedAt: observedAt, lastError: message }
+        };
     }
 
-    static async executeWorkflow({ now = new Date(), triggeredBy = 'gate', adminId = null, force = false, fetchOptions = {} } = {}) {
-        await GoogleIntelligenceService.seedDefaultSources();
-        const config = await GoogleIntelligenceService.getGateConfig();
+    static async executeWorkflow({
+        now = new Date(), triggeredBy = 'gate', adminId = null, force = false,
+        fetchOptions = {}, dueAt = null
+    } = {}, dependencies = {}) {
+        const SourceModel = dependencies.SourceModel || GoogleIntelligenceSource;
+        const RunModel = dependencies.RunModel || GoogleIntelligenceRun;
+        const SnapshotModel = dependencies.SnapshotModel || GoogleIntelligenceSnapshot;
+        const ChangeModel = dependencies.ChangeModel || GoogleIntelligenceChange;
+        const clock = dependencies.clock || (() => new Date());
+        const sleep = dependencies.sleep || ((duration) => new Promise((resolve) => setTimeout(resolve, duration)));
+        const heartbeatFactory = dependencies.buildHeartbeatFactory || createGoogleBuildLeaseHeartbeat;
+        await (dependencies.seedDefaultSources || GoogleIntelligenceService.seedDefaultSources)();
+        const config = dependencies.config || await GoogleIntelligenceService.getGateConfig();
         const timezone = fetchOptions.timezone || config.timezone;
         const snapshotDate = dateInTimezone(now, timezone);
-        const existing = await GoogleIntelligenceSnapshot.findOne({ snapshotDate, timezone }).lean();
+        const snapshotKey = { snapshotDate, timezone };
+        let existingQuery = SnapshotModel.findOne(snapshotKey);
+        existingQuery = selectInternalBuildFields(existingQuery);
+        const existing = await leanQuery(existingQuery);
         if (!force && existing && isSnapshotAcceptable({ snapshot: existing, strictGate: config.strictGate, maxAgeHours: config.maxSnapshotAgeHours, now })) {
+            // A process may die after the authoritative snapshot CAS but before its
+            // run terminal CAS. Reconcile only the run linked to this exact completed
+            // generation; failure is best effort and never weakens the Google gate.
+            await reconcileCompletedGoogleRun({ RunModel, snapshot: existing, completedAt: new Date(clock()) }).catch(() => false);
             return { snapshot: mapSnapshot(existing), reused: true };
         }
 
-        const executionKey = triggeredBy === 'gate'
-            ? `google-intelligence:${snapshotDate}:${timezone}`
-            : `google-intelligence:${snapshotDate}:${triggeredBy}:${crypto.randomUUID()}`;
-        let run;
+        const buildToken = crypto.randomUUID();
+        const leaseMs = Math.max(1_000, Number(fetchOptions.leaseMs || LEASE_MS));
+        const leaseClaimedAt = new Date(clock());
+        const leaseUntil = new Date(leaseClaimedAt.getTime() + leaseMs);
+        const leaseFilter = {
+            ...snapshotKey,
+            $or: [
+                { leaseUntil: null },
+                { leaseUntil: { $exists: false } },
+                { leaseUntil: { $lte: leaseClaimedAt } }
+            ]
+        };
+        const leaseUpdate = {
+            $setOnInsert: {
+                ...snapshotKey,
+                checkedAt: now,
+                contentHash: sha256(`${snapshotDate}:${timezone}:building`)
+            },
+            $set: {
+                status: 'building',
+                buildToken,
+                leaseUntil,
+                lastBuildError: ''
+            },
+            $inc: { buildGeneration: 1 }
+        };
+        let claimed = null;
         try {
-            run = await GoogleIntelligenceRun.create({
-                executionKey, scheduledAt: now, startedAt: new Date(), timezone, snapshotDate,
-                status: 'running', triggeredBy, triggeredByAdminId: convertToObjectIdMongodb(adminId) || null,
-                correlationId: crypto.randomUUID()
+            let claimQuery = SnapshotModel.findOneAndUpdate(leaseFilter, leaseUpdate, {
+                upsert: !existing,
+                new: true,
+                setDefaultsOnInsert: true,
+                runValidators: true
             });
+            claimQuery = selectInternalBuildFields(claimQuery);
+            claimed = await leanQuery(claimQuery);
         } catch (error) {
             if (error?.code !== 11000) throw error;
-            const maxAttempts = Math.ceil(CONCURRENT_SNAPSHOT_WAIT_MS / CONCURRENT_SNAPSHOT_POLL_MS);
+        }
+        if (!claimed) {
+            const maxAttempts = Math.max(1, Number(dependencies.concurrentPollAttempts) || Math.ceil(CONCURRENT_SNAPSHOT_WAIT_MS / CONCURRENT_SNAPSHOT_POLL_MS));
             for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-                const completed = await GoogleIntelligenceSnapshot.findOne({ snapshotDate, timezone }).lean();
-                if (completed) return { snapshot: mapSnapshot(completed), reused: true, concurrent: true };
-                const concurrentRun = await GoogleIntelligenceRun.findOne({ executionKey }).select('status error').lean();
-                if (concurrentRun?.status === 'failed') throw new BadRequestError(concurrentRun.error || 'Concurrent Google Intelligence run failed');
-                await new Promise((resolve) => setTimeout(resolve, CONCURRENT_SNAPSHOT_POLL_MS));
+                const concurrent = await leanQuery(SnapshotModel.findOne(snapshotKey));
+                if (concurrent && concurrent.status !== 'building') {
+                    if (isSnapshotAcceptable({ snapshot: concurrent, strictGate: config.strictGate, maxAgeHours: config.maxSnapshotAgeHours, now })) {
+                        return { snapshot: mapSnapshot(concurrent), reused: true, concurrent: true };
+                    }
+                    if (concurrent.status === 'failed') throw googleBuildError(GOOGLE_BUILD_FAILED_CODE);
+                }
+                await sleep(Number(dependencies.concurrentPollMs) || CONCURRENT_SNAPSHOT_POLL_MS);
             }
-            throw new BadRequestError('Google Intelligence snapshot is already running');
+            throw googleBuildError(GOOGLE_BUILD_BUSY_CODE);
         }
 
+        const buildGeneration = Math.max(1, Number(claimed.buildGeneration || 0));
+        const heartbeat = heartbeatFactory({
+            SnapshotModel,
+            snapshotKey,
+            buildToken,
+            buildGeneration,
+            leaseMs,
+            clock
+        });
+        const assertLease = async () => {
+            if (!await heartbeat.beat()) throw googleBuildError(GOOGLE_BUILD_LEASE_LOST_CODE);
+        };
+        const { executionKey, executionSlotKey } = buildGoogleExecutionKey({
+            triggeredBy,
+            snapshotDate,
+            timezone,
+            dueAt: dueAt || now,
+            generation: buildGeneration
+        });
+        const startedAt = new Date(clock());
+        let run = null;
+        let snapshotCompleted = false;
         try {
+            let runQuery = RunModel.findOneAndUpdate(
+                {
+                    executionKey,
+                    $or: [
+                        { snapshotGeneration: { $exists: false } },
+                        { snapshotGeneration: { $lt: buildGeneration } },
+                        { snapshotGeneration: buildGeneration, buildToken }
+                    ]
+                },
+                {
+                    $setOnInsert: { executionKey },
+                    $set: {
+                        executionSlotKey,
+                        scheduledAt: dueAt || now,
+                        startedAt,
+                        completedAt: null,
+                        timezone,
+                        snapshotDate,
+                        status: 'running',
+                        triggeredBy,
+                        triggeredByAdminId: convertToObjectIdMongodb(adminId) || null,
+                        snapshotId: claimed._id,
+                        snapshotGeneration: buildGeneration,
+                        buildToken,
+                        error: '',
+                        correlationId: crypto.randomUUID()
+                    }
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+            );
+            if (typeof runQuery?.select === 'function') runQuery = runQuery.select('+buildToken');
+            run = await leanQuery(runQuery);
+            if (!run) throw googleBuildError(GOOGLE_BUILD_BUSY_CODE);
+
             const sourceQuery = { enabled: true };
             if (config.sourceGroups.length) sourceQuery.sourceGroups = { $in: config.sourceGroups };
-            const sources = await GoogleIntelligenceSource.find(sourceQuery).sort({ official: -1, priority: 1 }).select('+lastContentHash +lastExcerpt').lean();
+            let sourcesQuery = SourceModel.find(sourceQuery).sort({ official: -1, priority: 1 });
+            if (typeof sourcesQuery?.select === 'function') {
+                sourcesQuery = sourcesQuery.select('+lastContentHash +lastExcerpt +baselineSnapshotDate +baselineGeneration');
+            }
+            const sources = await leanQuery(sourcesQuery);
             const results = [];
             for (const source of sources) {
                 results.push(await GoogleIntelligenceService.fetchSource({
@@ -424,12 +745,15 @@ class GoogleIntelligenceService {
                         retryCount: fetchOptions.retryCount ?? config.retryCount,
                         retryDelayMs: fetchOptions.retryDelayMs || config.retryDelayMs,
                         fetchImpl: fetchOptions.fetchImpl,
+                        sourceFetcher: fetchOptions.sourceFetcher,
                         resolveHostname: fetchOptions.resolveHostname,
                         checkRobots: fetchOptions.checkRobots,
-                        allowHttp: fetchOptions.allowHttp
+                        allowHttp: fetchOptions.allowHttp,
+                        now
                     }
                 }));
-                if (results.length < sources.length) await new Promise((resolve) => setTimeout(resolve, 150));
+                await assertLease();
+                if (results.length < sources.length) await sleep(150);
             }
 
             const successful = results.filter((item) => item.ok);
@@ -511,34 +835,124 @@ class GoogleIntelligenceService {
                 contentHash: sha256(JSON.stringify(results.map((item) => [item.sourceId, item.currentHash || item.error]))),
                 runId: run._id
             };
-            const snapshot = await GoogleIntelligenceSnapshot.findOneAndUpdate(
-                { snapshotDate, timezone }, { $set: snapshotPayload }, { new: true, upsert: true, runValidators: true }
-            ).lean();
+            await assertLease();
+            const snapshot = await leanQuery(SnapshotModel.findOneAndUpdate(
+                {
+                    ...snapshotKey,
+                    status: 'building',
+                    buildToken,
+                    buildGeneration
+                },
+                {
+                    $set: {
+                        ...snapshotPayload,
+                        completedGeneration: buildGeneration,
+                        lastBuildError: ''
+                    },
+                    $unset: { buildToken: '', leaseUntil: '' }
+                },
+                { new: true, runValidators: true }
+            ));
+            if (!snapshot) throw googleBuildError(GOOGLE_BUILD_LEASE_LOST_CODE);
+            snapshotCompleted = true;
+            await heartbeat.stop();
+
+            let deferredError = '';
+            for (const result of results) {
+                try {
+                    await SourceModel.updateOne(
+                        sourceGenerationFilter({ sourceId: result.sourceId, snapshotDate, buildGeneration }),
+                        {
+                            $set: {
+                                ...(result.deferredSourceUpdate || {}),
+                                baselineSnapshotDate: snapshotDate,
+                                baselineGeneration: buildGeneration
+                            }
+                        }
+                    );
+                } catch (error) {
+                    deferredError ||= safeGoogleWriteError(error?.code, 'GOOGLE_SOURCE_BASELINE_COMMIT_FAILED');
+                }
+            }
 
             for (const draft of changeDrafts) {
-                await GoogleIntelligenceChange.updateOne(
-                    { fingerprint: draft.fingerprint },
-                    { $setOnInsert: { ...draft, snapshotId: snapshot._id } },
-                    { upsert: true }
-                );
+                try {
+                    await ChangeModel.updateOne(
+                        {
+                            fingerprint: draft.fingerprint,
+                            $or: [
+                                { snapshotId: snapshot._id, snapshotGeneration: { $exists: false } },
+                                { snapshotId: snapshot._id, snapshotGeneration: { $lte: buildGeneration } },
+                                { snapshotId: { $exists: false }, snapshotGeneration: { $exists: false } },
+                                { snapshotId: null, snapshotGeneration: { $exists: false } },
+                                { snapshotId: null, snapshotGeneration: { $lte: buildGeneration } }
+                            ]
+                        },
+                        { $set: { ...draft, snapshotId: snapshot._id, snapshotGeneration: buildGeneration } },
+                        { upsert: true }
+                    );
+                } catch (error) {
+                    if (error?.code !== 11000) {
+                        deferredError ||= safeGoogleWriteError(error?.code, 'GOOGLE_CHANGE_COMMIT_FAILED');
+                    }
+                }
             }
-            await GoogleIntelligenceRun.updateOne({ _id: run._id }, {
+            const runTerminal = await RunModel.updateOne({
+                _id: run._id,
+                status: 'running',
+                buildToken,
+                snapshotGeneration: buildGeneration
+            }, {
                 $set: {
-                    status, completedAt: new Date(), snapshotId: snapshot._id,
+                    status, completedAt: new Date(clock()), snapshotId: snapshot._id,
                     sourceResults: results.map((item) => ({ sourceId: item.sourceId, name: item.sourceName, ok: item.ok, official: item.official, required: item.required, changed: item.changed || item.isNew || false, error: item.error || '' })),
                     changesDetected: changeDrafts.length,
-                    criticalChanges: changeDrafts.filter((item) => item.severity === 'critical').length
-                }
+                    criticalChanges: changeDrafts.filter((item) => item.severity === 'critical').length,
+                    error: deferredError
+                },
+                $unset: { buildToken: '' }
             });
+            if (explicitOwnerUpdateFailed(runTerminal)) throw googleBuildError(GOOGLE_BUILD_LEASE_LOST_CODE);
             return { snapshot: mapSnapshot(snapshot), reused: false, runId: String(run._id) };
-        } catch (error) {
-            await GoogleIntelligenceRun.updateOne({ _id: run._id }, { $set: { status: 'failed', completedAt: new Date(), error: normalizeString(error?.message).slice(0, 1000) } });
-            throw error;
+        } catch (cause) {
+            await heartbeat.stop();
+            const errorCode = [GOOGLE_BUILD_BUSY_CODE, GOOGLE_BUILD_LEASE_LOST_CODE].includes(cause?.code)
+                ? cause.code
+                : GOOGLE_BUILD_FAILED_CODE;
+            if (!snapshotCompleted) {
+                try {
+                    await SnapshotModel.updateOne(
+                        { ...snapshotKey, status: 'building', buildToken, buildGeneration },
+                        {
+                            $set: { status: 'failed', checkedAt: now, lastBuildError: errorCode },
+                            $unset: { buildToken: '', leaseUntil: '' }
+                        }
+                    );
+                } catch (_snapshotFailure) {
+                    // Only bounded state is attempted; storage details are never persisted.
+                }
+            }
+            if (run?._id) {
+                try {
+                    await RunModel.updateOne(
+                        { _id: run._id, status: 'running', buildToken, snapshotGeneration: buildGeneration },
+                        {
+                            $set: { status: 'failed', completedAt: new Date(clock()), error: errorCode },
+                            $unset: { buildToken: '' }
+                        }
+                    );
+                } catch (_runFailure) {
+                    // The caller still receives the bounded workflow code.
+                }
+            }
+            throw googleBuildError(errorCode);
+        } finally {
+            await heartbeat.stop();
         }
     }
 
-    static async ensureGoogleIntelligenceSnapshotForDate({ now = new Date(), fetchOptions = {} } = {}) {
-        const config = await GoogleIntelligenceService.getGateConfig();
+    static async ensureGoogleIntelligenceSnapshotForDate({ now = new Date(), fetchOptions = {}, createSchedule = true } = {}) {
+        const config = await GoogleIntelligenceService.getGateConfig({ createSchedule });
         const snapshotDate = dateInTimezone(now, config.timezone);
         let snapshot = await GoogleIntelligenceSnapshot.findOne({ snapshotDate, timezone: config.timezone }).lean();
         if (!isSnapshotAcceptable({ snapshot, strictGate: config.strictGate, maxAgeHours: config.maxSnapshotAgeHours, now })) {
@@ -568,7 +982,7 @@ class GoogleIntelligenceService {
         return {
             enabled: config.enabled, strictGate: config.strictGate, gateOpen,
             snapshot: mapSnapshot(latestSnapshot),
-            latestRun: latestRun ? { id: String(latestRun._id), status: latestRun.status, startedAt: latestRun.startedAt, completedAt: latestRun.completedAt, changesDetected: latestRun.changesDetected, error: latestRun.error } : null,
+            latestRun: latestRun ? { id: String(latestRun._id), status: latestRun.status, startedAt: latestRun.startedAt, completedAt: latestRun.completedAt, changesDetected: latestRun.changesDetected, error: safeGoogleStoredError(latestRun.error) } : null,
             sourceSummary: sourceCounts[0] || { total: 0, enabled: 0, failing: 0 },
             schedule: GoogleIntelligenceService.mapSchedule(schedule),
             telegram: {
@@ -595,12 +1009,30 @@ class GoogleIntelligenceService {
     static async getSnapshot({ snapshotId }) {
         const objectId = convertToObjectIdMongodb(snapshotId);
         if (!objectId) throw new BadRequestError('Invalid snapshot id');
-        const [snapshot, changes] = await Promise.all([
-            GoogleIntelligenceSnapshot.findById(objectId).lean(),
-            GoogleIntelligenceChange.find({ snapshotId: objectId }).sort({ severity: 1, detectedAt: -1 }).lean()
-        ]);
+        let snapshotQuery = GoogleIntelligenceSnapshot.findById(objectId);
+        snapshotQuery = selectInternalBuildFields(snapshotQuery);
+        const snapshot = await leanQuery(snapshotQuery);
         if (!snapshot) throw new NotFoundError('Google Intelligence snapshot not found');
-        return { snapshot: mapSnapshot(snapshot), changes: changes.map((item) => ({ ...item, id: String(item._id), sourceId: String(item.sourceId), snapshotId: String(item.snapshotId) })) };
+        const completedGeneration = Number(snapshot.completedGeneration || 0);
+        const generationFilter = completedGeneration > 0
+            ? { snapshotGeneration: completedGeneration }
+            : { $or: [{ snapshotGeneration: 0 }, { snapshotGeneration: { $exists: false } }] };
+        let changesQuery = GoogleIntelligenceChange.find({
+            snapshotId: objectId,
+            ...generationFilter
+        }).sort({ severity: 1, detectedAt: -1 });
+        if (typeof changesQuery?.select === 'function') changesQuery = changesQuery.select('+snapshotGeneration');
+        const changes = await leanQuery(changesQuery);
+        return {
+            snapshot: mapSnapshot(snapshot),
+            changes: changes.map((item) => ({
+                ...item,
+                id: String(item._id),
+                sourceId: String(item.sourceId),
+                snapshotId: String(item.snapshotId),
+                sourceUrl: sanitizeSourceUrlForRead(item.sourceUrl)
+            }))
+        };
     }
 
     static mapSchedule(schedule) {
@@ -611,7 +1043,7 @@ class GoogleIntelligenceService {
             strictGate: Boolean(schedule.strictGate), allowLastSuccessfulSnapshot: Boolean(schedule.allowLastSuccessfulSnapshot),
             maxSnapshotAgeHours: schedule.maxSnapshotAgeHours, sourceTimeoutMs: schedule.sourceTimeoutMs,
             retryPolicy: schedule.retryPolicy || { count: 2, delayMs: 1000 }, lastRunAt: schedule.lastRunAt,
-            nextRunAt: schedule.nextRunAt, lastRunStatus: schedule.lastRunStatus || '', lastError: schedule.lastError || ''
+            nextRunAt: schedule.nextRunAt, lastRunStatus: schedule.lastRunStatus || '', lastError: safeGoogleStoredError(schedule.lastError)
         };
     }
 
@@ -712,7 +1144,12 @@ class GoogleIntelligenceService {
             id: String(run._id), executionKey: run.executionKey, snapshotDate: run.snapshotDate,
             timezone: run.timezone, status: run.status, startedAt: run.startedAt, completedAt: run.completedAt,
             changesDetected: run.changesDetected, criticalChanges: run.criticalChanges,
-            triggeredBy: run.triggeredBy, error: run.error || '', sourceResults: run.sourceResults || []
+            triggeredBy: run.triggeredBy,
+            error: safeGoogleStoredError(run.error),
+            sourceResults: (run.sourceResults || []).map((item) => ({
+                ...item,
+                error: safeGoogleStoredError(item?.error)
+            }))
         })) };
     }
 
@@ -738,25 +1175,48 @@ class GoogleIntelligenceService {
     static async claimDueSchedule({ workerId, now = new Date() }) {
         if (!parseBoolean(process.env.GOOGLE_INTELLIGENCE_ENABLED, false)) return null;
         await GoogleIntelligenceService.getOrCreateSchedule();
+        const ownerToken = createScheduleLeaseOwner(workerId);
         return GoogleIntelligenceSchedule.findOneAndUpdate(
             { singletonKey: 'default', enabled: true, nextRunAt: { $ne: null, $lte: now }, $or: [{ leaseUntil: null }, { leaseUntil: { $lte: now } }] },
-            { $set: { lockedBy: workerId, leaseUntil: new Date(now.getTime() + LEASE_MS) } },
+            { $set: { lockedBy: ownerToken, leaseUntil: new Date(now.getTime() + LEASE_MS) } },
             { new: true }
         ).lean();
     }
 
-    static async runDueOnce({ workerId, now = new Date() }) {
+    static async runDueOnce({ workerId, now = new Date() }, dependencies = {}) {
         const schedule = await GoogleIntelligenceService.claimDueSchedule({ workerId, now });
         if (!schedule) return null;
+        const ScheduleModel = dependencies.ScheduleModel || GoogleIntelligenceSchedule;
+        const heartbeatFactory = dependencies.heartbeatFactory || createGoogleScheduleLeaseHeartbeat;
+        const heartbeat = heartbeatFactory({
+            ScheduleModel, scheduleId: schedule._id, ownerToken: schedule.lockedBy,
+            leaseMs: LEASE_MS, clock: dependencies.clock || (() => new Date())
+        });
         try {
-            const result = await GoogleIntelligenceService.executeWorkflow({ now, triggeredBy: 'scheduled' });
+            const result = await GoogleIntelligenceService.executeWorkflow({
+                now,
+                triggeredBy: 'scheduled',
+                dueAt: schedule.nextRunAt || now
+            });
+            if (!await heartbeat.beat()) throw new Error('google_intelligence_schedule_lease_lost');
+            await heartbeat.stop();
             const nextRunAt = calculateNextRun({ schedule: { ...schedule, lastRunAt: now }, from: now });
-            await GoogleIntelligenceSchedule.updateOne({ _id: schedule._id }, { $set: { lastRunAt: now, nextRunAt, lastRunStatus: result.snapshot.status, lastError: '', leaseUntil: null, lockedBy: '' } });
+            const terminal = await ScheduleModel.updateOne(
+                { _id: schedule._id, lockedBy: schedule.lockedBy },
+                { $set: { lastRunAt: now, nextRunAt, lastRunStatus: result.snapshot.status, lastError: '', leaseUntil: null, lockedBy: '' } }
+            );
+            if (explicitOwnerUpdateFailed(terminal)) throw new Error('google_intelligence_schedule_lease_lost');
             return result;
         } catch (error) {
+            await heartbeat.stop();
             const nextRunAt = calculateNextRun({ schedule: { ...schedule, lastRunAt: now }, from: now });
-            await GoogleIntelligenceSchedule.updateOne({ _id: schedule._id }, { $set: { lastRunAt: now, nextRunAt, lastRunStatus: 'failed', lastError: normalizeString(error?.message).slice(0, 1000), leaseUntil: null, lockedBy: '' } });
+            await ScheduleModel.updateOne(
+                { _id: schedule._id, lockedBy: schedule.lockedBy },
+                { $set: { lastRunAt: now, nextRunAt, lastRunStatus: 'failed', lastError: safeGoogleWriteError(error?.code, 'GOOGLE_INTELLIGENCE_SCHEDULE_FAILED'), leaseUntil: null, lockedBy: '' } }
+            );
             throw error;
+        } finally {
+            await heartbeat.stop();
         }
     }
 }
@@ -764,11 +1224,20 @@ class GoogleIntelligenceService {
 module.exports = {
     DEFAULT_SOURCES,
     GoogleIntelligenceService,
+    buildGoogleExecutionKey,
+    buildGoogleExecutionSlotKey,
     classifyAffectedArea,
     classifySeverity,
+    createGoogleBuildLeaseHeartbeat,
+    createGoogleScheduleLeaseHeartbeat,
+    createScheduleLeaseOwner,
     extractDocumentDates,
     extractTitle,
+    mapSnapshot,
+    mapSource,
     officialHostAllowed,
+    reconcileCompletedGoogleRun,
+    sourceGenerationFilter,
     summarizeMaterialChange,
     stripMarkup
 };

@@ -1,7 +1,7 @@
 'use strict'
 
 const dns = require('node:dns').promises;
-const { canonicalizeUrl, isPrivateIp } = require('../utils/googleIntelligence.util');
+const { assertPersistableSourceUrl, isPrivateIp } = require('../utils/googleIntelligence.util');
 
 const DEFAULT_MAX_BYTES = 750_000;
 const BLOCKED_HOSTS = new Set(['localhost', 'localhost.localdomain', 'metadata.google.internal', '169.254.169.254']);
@@ -30,9 +30,8 @@ const inferTextContentType = (body, expectedMode = '') => {
 };
 
 const assertSafeUrl = async (input, { resolveHostname = dns.lookup, allowHttp = false } = {}) => {
-    const canonicalUrl = canonicalizeUrl(input);
+    const canonicalUrl = assertPersistableSourceUrl(input);
     const url = new URL(canonicalUrl);
-    if (url.username || url.password) throw new Error('source_url_credentials_not_allowed');
     if (url.protocol !== 'https:' && !(allowHttp && url.protocol === 'http:')) throw new Error('source_url_https_required');
     const hostname = url.hostname.toLowerCase();
     if (BLOCKED_HOSTS.has(hostname) || hostname.endsWith('.local') || hostname.endsWith('.internal')) {

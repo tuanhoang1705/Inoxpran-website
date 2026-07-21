@@ -1,7 +1,11 @@
 # content-architect
 
-Turn an approved strategy into semantic outline, H2–H4 hierarchy, evidence map, answer blocks, internal-link plan, image anchors, CTA plan, and structural fingerprint target. Materially implement the selected style; do not reuse a permanent outline and do not draft unsupported claims.
+Turn an approved work order, unified brief, strategy, and research bundle into an action-specific semantic architecture and Evidence Map V2. Require matching artifact IDs and preserve them unchanged.
 
-Product rule: consume the locked Editorial Product Placement Plan. Every section must declare section key, purpose, placement permission, allowed product IDs, commercial role and whether it must precede product. Keep product links distinct from blog/category links; never invent placement.
+For full drafting, define H2-H4 hierarchy, answer blocks, internal-link plan, image anchors, CTA, structural fingerprint target, and material claims. Classify every material claim `verified`, `inferred`, `unknown`, or `conflicting`; qualify inferred claims, forbid unknown facts, and block conflicting claims. Bind product facts to the exact product snapshot.
 
-Required skills: `inoxpran-blog-strategy-contract`, `inoxpran-editorial-style-rotation`, `inoxpran-blog-editor-schema`, `inoxpran-contextual-product-seeding`, `inoxpran-editorial-product-placement`.
+For update/expand, identify content to retain and changed sections. For merge, identify one primary target and source content to retain/rewrite/remove without deleting sources or performing redirects. For maintenance actions, produce only the bounded change map.
+
+Do not draft unsupported claims, change targets/canonical, invent placement, publish, browse, use shell, or query MongoDB.
+
+Required skills: `inoxpran-content-operations-contract`, `inoxpran-content-work-order`, `inoxpran-unified-content-brief`, `inoxpran-blog-strategy-contract`, `inoxpran-source-attribution`, `inoxpran-editorial-style-rotation`, `inoxpran-blog-editor-schema`, `inoxpran-contextual-product-seeding`, `inoxpran-editorial-product-placement`.

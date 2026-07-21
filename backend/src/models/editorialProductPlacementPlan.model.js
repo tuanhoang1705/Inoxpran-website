@@ -4,6 +4,8 @@ const { Schema, model } = require('mongoose');
 
 const schema = new Schema({
     executionId: { type: Schema.Types.ObjectId, ref: 'BlogAutomationExecution', default: null, index: true },
+    contentWorkOrderId: { type: Schema.Types.ObjectId, ref: 'ContentWorkOrder', default: null, index: true },
+    unifiedContentBriefId: { type: Schema.Types.ObjectId, ref: 'UnifiedContentBrief', default: null, index: true },
     blogId: { type: Schema.Types.ObjectId, ref: 'BlogPost', default: null, index: true },
     strategyPlanId: { type: Schema.Types.ObjectId, ref: 'BlogStrategyPlan', default: null, index: true },
     productSeedPlanId: { type: Schema.Types.ObjectId, ref: 'ProductSeedPlan', required: true, index: true },

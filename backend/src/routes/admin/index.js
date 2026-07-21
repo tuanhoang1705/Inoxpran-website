@@ -8,6 +8,7 @@ const blogAutomationScheduleController = require("../../controllers/blogAutomati
 const googleIntelligenceController = require("../../controllers/googleIntelligence.controller");
 const agenticBlogCoreController = require("../../controllers/agenticBlogCore.controller");
 const productSeedingAdminController = require("../../controllers/productSeedingAdmin.controller");
+const contentOperationsController = require("../../controllers/contentOperations.controller");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
 const { upload, uploadLarge } = require("../../middleware/upload");
@@ -115,6 +116,214 @@ router.post(
   "/openclaw/runs",
   requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
   asyncHandler(openclawDashboardController.startRun),
+);
+router.get(
+  "/openclaw/content-operations/status",
+  requireAdminPermission(["content_operations.view"]),
+  asyncHandler(contentOperationsController.status),
+);
+router.post(
+  "/openclaw/content-operations/preview",
+  requireAdminPermission(["content_operations.run"]),
+  asyncHandler(contentOperationsController.preview),
+);
+router.post(
+  "/openclaw/content-operations/run-now",
+  requireAdminPermission(["content_operations.run"]),
+  asyncHandler(contentOperationsController.runNow),
+);
+router.get(
+  "/openclaw/content-operations/snapshots",
+  requireAdminPermission(["content_operations.view"]),
+  asyncHandler(contentOperationsController.listSnapshots),
+);
+router.get(
+  "/openclaw/content-operations/snapshots/:snapshotId",
+  requireAdminPermission(["content_operations.view"]),
+  asyncHandler(contentOperationsController.getSnapshot),
+);
+router.get(
+  "/openclaw/content-operations/opportunities",
+  requireAdminPermission(["content_operations.view"]),
+  asyncHandler(contentOperationsController.listOpportunities),
+);
+router.get(
+  "/openclaw/content-operations/opportunities/:opportunityId",
+  requireAdminPermission(["content_operations.view"]),
+  asyncHandler(contentOperationsController.getOpportunity),
+);
+router.patch(
+  "/openclaw/content-operations/opportunities/:opportunityId",
+  requireAdminPermission(["content_operations.override_decision"]),
+  asyncHandler(contentOperationsController.updateOpportunity),
+);
+router.post(
+  "/openclaw/content-operations/opportunities/:opportunityId/:operation",
+  requireAdminPermission(["content_operations.override_decision"]),
+  asyncHandler(contentOperationsController.transitionOpportunity),
+);
+router.get(
+  "/openclaw/content-operations/work-orders",
+  requireAdminPermission(["content_work_order.view"]),
+  asyncHandler(contentOperationsController.listWorkOrders),
+);
+router.post(
+  "/openclaw/content-operations/work-orders",
+  requireAdminPermission(["content_work_order.manage"]),
+  asyncHandler(contentOperationsController.createWorkOrder),
+);
+router.get(
+  "/openclaw/content-operations/work-orders/:workOrderId",
+  requireAdminPermission(["content_work_order.view"]),
+  asyncHandler(contentOperationsController.getWorkOrder),
+);
+router.patch(
+  "/openclaw/content-operations/work-orders/:workOrderId",
+  requireAdminPermission(["content_work_order.manage"]),
+  asyncHandler(contentOperationsController.updateWorkOrder),
+);
+router.post(
+  "/openclaw/content-operations/work-orders/:workOrderId/approve",
+  requireAdminPermission(["content_work_order.approve"]),
+  asyncHandler(contentOperationsController.approveWorkOrder),
+);
+router.post(
+  "/openclaw/content-operations/work-orders/:workOrderId/run",
+  requireAdminPermission(["content_work_order.approve"]),
+  asyncHandler(contentOperationsController.runWorkOrder),
+);
+router.get(
+  "/openclaw/content-operations/signals",
+  requireAdminPermission(["content_signal.view"]),
+  asyncHandler(contentOperationsController.listSignals),
+);
+router.post(
+  "/openclaw/content-operations/signals",
+  requireAdminPermission(["content_signal.manage"]),
+  asyncHandler(contentOperationsController.createSignal),
+);
+router.patch(
+  "/openclaw/content-operations/signals/:signalId",
+  requireAdminPermission(["content_signal.manage"]),
+  asyncHandler(contentOperationsController.updateSignal),
+);
+router.get(
+  "/openclaw/content-operations/inventory",
+  requireAdminPermission(["content_inventory.view"]),
+  asyncHandler(contentOperationsController.inventory),
+);
+router.post(
+  "/openclaw/content-operations/inventory/rebuild",
+  requireAdminPermission(["content_inventory.rebuild"]),
+  asyncHandler(contentOperationsController.rebuildInventory),
+);
+router.get(
+  "/openclaw/content-operations/performance/:blogId",
+  requireAdminPermission(["content_performance.view"]),
+  asyncHandler(contentOperationsController.performance),
+);
+router.get(
+  "/openclaw/content-operations/learning/:blogId",
+  requireAdminPermission(["content_learning.view"]),
+  asyncHandler(contentOperationsController.learning),
+);
+router.get(
+  "/openclaw/content-operations/schedule",
+  requireAdminPermission(["content_operations.view"]),
+  asyncHandler(contentOperationsController.schedule),
+);
+router.patch(
+  "/openclaw/content-operations/schedule",
+  requireAdminPermission(["content_operations.manage_schedule"]),
+  asyncHandler(contentOperationsController.updateSchedule),
+);
+router.post(
+  "/openclaw/content-operations/schedule/enable",
+  requireAdminPermission(["content_operations.manage_schedule"]),
+  asyncHandler(contentOperationsController.enableSchedule),
+);
+router.post(
+  "/openclaw/content-operations/schedule/disable",
+  requireAdminPermission(["content_operations.manage_schedule"]),
+  asyncHandler(contentOperationsController.disableSchedule),
+);
+
+// Canonical Content Operations contracts. The nested routes above remain for
+// backward compatibility with the existing OpenClaw control-room client.
+router.get(
+  "/openclaw/content-opportunities",
+  requireAdminPermission(["content_operations.view"]),
+  asyncHandler(contentOperationsController.listOpportunities),
+);
+router.post(
+  "/openclaw/content-opportunities/preview",
+  requireAdminPermission(["content_operations.run"]),
+  asyncHandler(contentOperationsController.preview),
+);
+router.post(
+  "/openclaw/content-opportunities/:opportunityId/:operation",
+  requireAdminPermission(["content_operations.override_decision"]),
+  asyncHandler(contentOperationsController.transitionOpportunity),
+);
+router.get(
+  "/openclaw/content-work-orders",
+  requireAdminPermission(["content_work_order.view"]),
+  asyncHandler(contentOperationsController.listWorkOrders),
+);
+router.post(
+  "/openclaw/content-work-orders",
+  requireAdminPermission(["content_work_order.manage"]),
+  asyncHandler(contentOperationsController.createWorkOrder),
+);
+router.get(
+  "/openclaw/content-work-orders/:workOrderId",
+  requireAdminPermission(["content_work_order.view"]),
+  asyncHandler(contentOperationsController.getWorkOrder),
+);
+router.patch(
+  "/openclaw/content-work-orders/:workOrderId",
+  requireAdminPermission(["content_work_order.manage"]),
+  asyncHandler(contentOperationsController.updateWorkOrder),
+);
+router.post(
+  "/openclaw/content-work-orders/:workOrderId/approve",
+  requireAdminPermission(["content_work_order.approve"]),
+  asyncHandler(contentOperationsController.approveWorkOrder),
+);
+router.get(
+  "/openclaw/content-signals",
+  requireAdminPermission(["content_signal.view"]),
+  asyncHandler(contentOperationsController.listSignals),
+);
+router.post(
+  "/openclaw/content-signals",
+  requireAdminPermission(["content_signal.manage"]),
+  asyncHandler(contentOperationsController.createSignal),
+);
+router.patch(
+  "/openclaw/content-signals/:signalId",
+  requireAdminPermission(["content_signal.manage"]),
+  asyncHandler(contentOperationsController.updateSignal),
+);
+router.get(
+  "/openclaw/content-inventory",
+  requireAdminPermission(["content_inventory.view"]),
+  asyncHandler(contentOperationsController.inventory),
+);
+router.post(
+  "/openclaw/content-inventory/rebuild",
+  requireAdminPermission(["content_inventory.rebuild"]),
+  asyncHandler(contentOperationsController.rebuildInventory),
+);
+router.get(
+  "/openclaw/content-performance/:blogId",
+  requireAdminPermission(["content_performance.view"]),
+  asyncHandler(contentOperationsController.performance),
+);
+router.get(
+  "/openclaw/content-learning/:blogId",
+  requireAdminPermission(["content_learning.view"]),
+  asyncHandler(contentOperationsController.learning),
 );
 router.get(
   "/openclaw/google-intelligence/status",

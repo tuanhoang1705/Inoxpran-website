@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Learning Loop"
+  short_description: "Turn aggregate outcomes into review recommendations"
+  default_prompt: "Use $inoxpran-content-learning-loop to derive auditable recommendations from aggregate performance."

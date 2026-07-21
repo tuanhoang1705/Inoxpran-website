@@ -1,6 +1,10 @@
 <script>
 	import { onMount, onDestroy } from 'svelte';
 	import { locale } from '$lib/i18n/admin/index.js';
+	import {
+		CONTENT_SCHEDULE_MODES,
+		hasProductPlanningContext
+	} from '$lib/contentOperations/contracts.js';
 
 	let { initialSchedules = [], initialRuntime = {} } = $props();
 
@@ -21,6 +25,15 @@
 		startAt: '',
 		endAt: '',
 		autoPublish: false,
+		contentOperationsMode: 'fixed_brief',
+		sourceRequirements: 'content_inventory',
+		minimumOpportunityScore: 0.65,
+		allowSkip: true,
+		draftOnly: true,
+		maxTasksPerDay: 1,
+		monitoringWindows: '1d, 7d, 14d, 30d, 90d',
+		selectedAction: '',
+		selectedWorkOrderId: '',
 		topic: 'noi inox cho gia dinh Viet',
 		primaryKeyword: 'noi inox',
 		secondaryKeywords: 'noi inox 304, noi inox dung bep tu',
@@ -62,12 +75,34 @@
 	let pageError = $state('');
 	let productPreview = $state(null);
 	let previewBusy = $state(false);
+	const productPreviewReady = $derived(
+		hasProductPlanningContext({
+			mode: scheduleForm.contentOperationsMode,
+			topic: scheduleForm.topic,
+			action: scheduleForm.selectedAction,
+			workOrderId: scheduleForm.selectedWorkOrderId
+		})
+	);
 
 	const selectedSchedule = $derived(
 		schedules.find((schedule) => schedule.id === selectedScheduleId) || schedules[0] || null
 	);
 
 	const t = $derived({
+		secOperations: isEn ? 'Content Operations V3' : 'Vận hành nội dung V3',
+		operationsMode: isEn ? 'Decision mode' : 'Chế độ quyết định',
+		modeBest: isEn ? 'Best action' : 'Hành động tốt nhất',
+		modeFixed: isEn ? 'Fixed brief' : 'Brief cố định',
+		modeMaintenance: isEn ? 'Maintenance only' : 'Chỉ bảo trì',
+		sourceRequirements: isEn ? 'Required sources (comma-separated)' : 'Nguồn bắt buộc (phân cách bằng dấu phẩy)',
+		minimumScore: isEn ? 'Minimum opportunity score (0–1)' : 'Điểm cơ hội tối thiểu (0–1)',
+		allowSkip: isEn ? 'Allow an explicit skip' : 'Cho phép bỏ qua rõ ràng',
+		draftOnlyGuard: isEn ? 'Draft only — preserve editorial review' : 'Chỉ tạo bản nháp — giữ bước duyệt biên tập',
+		maxTasks: isEn ? 'Maximum tasks per day' : 'Tác vụ tối đa mỗi ngày',
+		monitoringWindows: isEn ? 'Monitoring windows in days' : 'Cửa sổ theo dõi theo ngày',
+		selectedAction: isEn ? 'Selected action context' : 'Hành động đã chọn',
+		selectedWorkOrder: isEn ? 'Selected work order ID' : 'ID work order đã chọn',
+		productPreviewGate: isEn ? 'Best-action product preview requires a topic, a non-skip action, and a work order.' : 'Preview sản phẩm ở chế độ hành động tốt nhất cần chủ đề, hành động không phải skip và work order.',
 		title: isEn ? 'Blog schedules' : 'Lịch tạo bài',
 		refresh: isEn ? 'Refresh' : 'Làm mới',
 		new: isEn ? 'New' : 'Tạo mới',
@@ -266,6 +301,7 @@
 			editingScheduleId = '';
 			return;
 		}
+		const contentOperations = schedule.contentOperations || schedule.agentConfig?.contentOperations || {};
 		scheduleForm = {
 			name: schedule.name || '',
 			description: schedule.description || '',
@@ -281,6 +317,17 @@
 			startAt: toInputDateTime(schedule.startAt),
 			endAt: toInputDateTime(schedule.endAt),
 			autoPublish: Boolean(schedule.autoPublish),
+			contentOperationsMode: CONTENT_SCHEDULE_MODES.includes(contentOperations.mode || schedule.mode)
+				? contentOperations.mode || schedule.mode
+				: 'fixed_brief',
+			sourceRequirements: (schedule.sourceRequirements || contentOperations.sourceRequirements || []).join(', '),
+			minimumOpportunityScore: schedule.minimumOpportunityScore ?? contentOperations.minimumOpportunityScore ?? 0.65,
+			allowSkip: (schedule.allowSkip ?? contentOperations.allowSkip) !== false,
+			draftOnly: (schedule.draftOnly ?? contentOperations.draftOnly) !== false && schedule.autoPublish !== true,
+			maxTasksPerDay: schedule.maximumTasksPerDay ?? contentOperations.maximumTasksPerDay ?? contentOperations.maxTasksPerDay ?? 1,
+			monitoringWindows: (schedule.monitoringWindows || contentOperations.monitoringWindows || ['1d', '7d', '14d', '30d', '90d']).join(', '),
+			selectedAction: schedule.agentConfig?.contentAction || contentOperations.selectedAction || '',
+			selectedWorkOrderId: schedule.agentConfig?.workOrderId || contentOperations.selectedWorkOrderId || '',
 			topic: schedule.agentConfig?.topic || '',
 			primaryKeyword: schedule.agentConfig?.primaryKeyword || '',
 			secondaryKeywords: (schedule.agentConfig?.secondaryKeywords || []).join(', '),
@@ -338,7 +385,14 @@
 		runLimit: Number(scheduleForm.runLimit) || 0,
 		startAt: fromInputDateTime(scheduleForm.startAt),
 		endAt: fromInputDateTime(scheduleForm.endAt),
-		autoPublish: scheduleForm.autoPublish,
+		autoPublish: scheduleForm.draftOnly ? false : scheduleForm.autoPublish,
+		mode: scheduleForm.contentOperationsMode,
+		sourceRequirements: splitCsv(scheduleForm.sourceRequirements),
+		minimumOpportunityScore: Math.min(1, Math.max(0, Number(scheduleForm.minimumOpportunityScore) || 0)),
+		allowSkip: scheduleForm.allowSkip,
+		draftOnly: scheduleForm.draftOnly,
+		maximumTasksPerDay: Math.min(24, Math.max(1, Number(scheduleForm.maxTasksPerDay) || 1)),
+		monitoringWindows: splitCsv(scheduleForm.monitoringWindows),
 		agentConfig: {
 			topic: scheduleForm.topic,
 			primaryKeyword: scheduleForm.primaryKeyword,
@@ -347,6 +401,8 @@
 			articleType: scheduleForm.articleType,
 			language: scheduleForm.language,
 			prompt: scheduleForm.prompt,
+			contentAction: scheduleForm.selectedAction || '',
+			workOrderId: scheduleForm.selectedWorkOrderId || '',
 			productSeeding: {
 				enabled: scheduleForm.productSeedingEnabled,
 				mode: scheduleForm.productSeedingEnabled ? scheduleForm.productSeedingMode : 'off',
@@ -376,7 +432,7 @@
 	});
 
 	const previewProductMatching = async () => {
-		if (previewBusy) return;
+		if (previewBusy || !productPreviewReady) return;
 		previewBusy = true;
 		pageError = '';
 		productPreview = null;
@@ -828,6 +884,40 @@
 				</label>
 			</fieldset>
 
+			<fieldset class="oc-form__section oc-form__section--operations">
+				<legend>{t.secOperations}</legend>
+				<div class="oc-form__grid">
+					<label class="oc-field">
+						<span>{t.operationsMode}</span>
+						<select bind:value={scheduleForm.contentOperationsMode}>
+							<option value="best_action">{t.modeBest}</option>
+							<option value="fixed_brief">{t.modeFixed}</option>
+							<option value="maintenance_only">{t.modeMaintenance}</option>
+						</select>
+					</label>
+					<label class="oc-field">
+						<span>{t.minimumScore}</span>
+						<input type="number" min="0" max="1" step="0.05" bind:value={scheduleForm.minimumOpportunityScore} />
+					</label>
+				</div>
+				<label class="oc-field">
+					<span>{t.sourceRequirements}</span>
+					<input bind:value={scheduleForm.sourceRequirements} placeholder="searchConsole, analytics, trends" />
+				</label>
+				<div class="oc-form__grid">
+					<label class="oc-field"><span>{t.maxTasks}</span><input type="number" min="1" max="10" bind:value={scheduleForm.maxTasksPerDay} /></label>
+					<label class="oc-field"><span>{t.monitoringWindows}</span><input bind:value={scheduleForm.monitoringWindows} placeholder="7, 14, 30" /></label>
+				</div>
+				{#if scheduleForm.contentOperationsMode !== 'fixed_brief'}
+					<div class="oc-form__grid">
+						<label class="oc-field"><span>{t.selectedAction}</span><select bind:value={scheduleForm.selectedAction}><option value="">--</option><option value="new">new</option><option value="update">update</option><option value="expand">expand</option><option value="merge">merge</option><option value="metadata_refresh">metadata_refresh</option><option value="internal_link_maintenance">internal_link_maintenance</option><option value="content_maintenance">content_maintenance</option><option value="skip">skip</option></select></label>
+						<label class="oc-field"><span>{t.selectedWorkOrder}</span><input bind:value={scheduleForm.selectedWorkOrderId} maxlength="128" /></label>
+					</div>
+				{/if}
+				<label class="oc-check"><input type="checkbox" bind:checked={scheduleForm.allowSkip} /><span>{t.allowSkip}</span></label>
+				<label class="oc-check"><input type="checkbox" bind:checked={scheduleForm.draftOnly} /><span>{t.draftOnlyGuard}</span></label>
+			</fieldset>
+
 			<fieldset class="oc-form__section">
 				<legend>{t.secSchedule}</legend>
 				<div class="oc-form__grid">
@@ -1102,10 +1192,13 @@
 					type="button"
 					class="oc-btn oc-btn--ghost"
 					onclick={previewProductMatching}
-					disabled={previewBusy}
+					disabled={previewBusy || !productPreviewReady}
 				>
 					{previewBusy ? productT.previewing : productT.preview}
 				</button>
+				{#if !productPreviewReady}
+					<small class="oc-field__hint oc-field__hint--block">{t.productPreviewGate}</small>
+				{/if}
 				{#if productPreview}
 					<div class="oc-product-preview">
 						<p>

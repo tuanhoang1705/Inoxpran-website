@@ -356,6 +356,7 @@ const mapBlogSummary = (item) => {
         tags: Array.isArray(item.blog_tags) ? item.blog_tags : [],
         seoTitle: item.blog_seo_title || '',
         seoDescription: item.blog_seo_description || '',
+        contentRevisionHash: item.contentRevisionHash || '',
         isPublished: Boolean(item.isPublished),
         isDraft: Boolean(item.isDraft),
         createdAt: item.createdAt,

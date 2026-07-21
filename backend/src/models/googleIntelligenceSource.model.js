@@ -29,12 +29,15 @@ const sourceSchema = new Schema(
         lastTitle: { type: String, default: '', maxlength: 300 },
         lastPublishedAt: { type: Date, default: null },
         lastDocumentUpdatedAt: { type: Date, default: null },
-        lastFetchedAt: { type: Date, default: null }
+        lastFetchedAt: { type: Date, default: null },
+        baselineSnapshotDate: { type: String, default: '', select: false },
+        baselineGeneration: { type: Number, default: 0, min: 0, select: false }
     },
     { collection: 'GoogleIntelligenceSources', timestamps: true }
 );
 
 sourceSchema.index({ enabled: 1, official: -1, priority: 1 });
+sourceSchema.index({ baselineSnapshotDate: 1, baselineGeneration: 1 });
 
 module.exports = {
     GoogleIntelligenceSource: model('GoogleIntelligenceSource', sourceSchema)

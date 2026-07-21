@@ -7,6 +7,7 @@ const changeSchema = new Schema(
         fingerprint: { type: String, required: true, unique: true, index: true },
         sourceId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSource', required: true, index: true },
         snapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', default: null, index: true },
+        snapshotGeneration: { type: Number, default: 0, min: 0, select: false },
         title: { type: String, required: true, maxlength: 300 },
         sourceUrl: { type: String, required: true },
         sourceLevel: { type: String, enum: ['official', 'third_party'], required: true },
@@ -30,5 +31,6 @@ const changeSchema = new Schema(
 );
 
 changeSchema.index({ detectedAt: -1, severity: 1 });
+changeSchema.index({ snapshotId: 1, snapshotGeneration: 1 });
 
 module.exports = { GoogleIntelligenceChange: model('GoogleIntelligenceChange', changeSchema) };

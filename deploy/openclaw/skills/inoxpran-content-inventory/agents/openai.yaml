@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Inventory"
+  short_description: "Audit content inventory and lifecycle health"
+  default_prompt: "Use $inoxpran-content-inventory to assess article freshness, links, and maintenance needs."

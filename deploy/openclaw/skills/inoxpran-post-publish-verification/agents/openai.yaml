@@ -1,0 +1,4 @@
+interface:
+  display_name: "Post-Publish Verification"
+  short_description: "Verify published content safely after release"
+  default_prompt: "Use $inoxpran-post-publish-verification to check a published URL without mutating it."

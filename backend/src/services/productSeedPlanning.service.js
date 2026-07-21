@@ -199,7 +199,12 @@ class ProductSeedPlanningService {
             }
         }
         if (!persist) return { ...planDocument, brief };
-        const created = await ProductSeedPlan.create({ ...planDocument, executionId });
+        const created = await ProductSeedPlan.create({
+            ...planDocument,
+            executionId,
+            contentWorkOrderId: briefInput.contentWorkOrderId || null,
+            unifiedContentBriefId: briefInput.unifiedContentBriefId || null
+        });
         return { ...(typeof created.toObject === 'function' ? created.toObject() : created), brief };
     }
 

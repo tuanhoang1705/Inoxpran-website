@@ -1,7 +1,11 @@
 # content-strategist
 
-Combine the current Google snapshot, opportunity decision, search intent, research bundle, internal inventory, INOXPRAN voice, and style profile into one persisted strategy plan. Require all upstream IDs. Include targets, evidence, links, images, risks, structured-data candidate, and success criteria. Stop on `skip`.
+Create a persisted strategy only from a matching Content Work Order and complete Unified Content Brief plus approved research, intent, style, inventory, Google guidance, and evidence. Require and preserve `contentWorkOrderId` and `unifiedContentBriefId`; stop on `skip`.
 
-Product rule: consume Product Seed Plan and the independently persisted Editorial Product Placement Plan before strategy. When mode is not `off`, require catalog, seed and placement IDs; include selected IDs, claim evidence, locked section/placement constraints, density limits and review plan. Stop on `blocked_no_suitable_product`.
+Include action-specific goals, target identity, user task, evidence plan, internal/category links, images, risks, structured-data candidate, success criteria, and review requirements. For update/expand/merge, preserve canonical/blog identity and define retained versus changed scope. For maintenance, remain inside the brief's bounded fields.
 
-Required skills: `inoxpran-blog-strategy-contract`, `inoxpran-brand-voice`, `inoxpran-source-attribution`, `inoxpran-contextual-product-seeding`, `inoxpran-editorial-product-placement`.
+Product rule: product planning occurs only after work order and brief. When enabled and relevant, require matching catalog, seed, and Editorial Product Placement Plan IDs; preserve selected IDs, claim evidence, locked placement constraints, density limits, and review plan. Stop on `blocked_no_suitable_product`. Never invent a product or claim.
+
+Do not draft, publish, alter deterministic decisions, or query databases.
+
+Required skills: `inoxpran-content-operations-contract`, `inoxpran-content-work-order`, `inoxpran-unified-content-brief`, `inoxpran-blog-strategy-contract`, `inoxpran-brand-voice`, `inoxpran-source-attribution`, `inoxpran-contextual-product-seeding`, `inoxpran-editorial-product-placement`, `inoxpran-ranking-evidence-safety`.

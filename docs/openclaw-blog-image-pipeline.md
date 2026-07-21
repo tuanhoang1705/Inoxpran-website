@@ -218,7 +218,7 @@ Web image search is not permission to use every returned image. The pipeline acc
 3. Add the Visual SEO variables to the VPS `.env`.
 4. Keep both providers `disabled` for the first deployment.
 5. Run backend tests and frontend build.
-6. Run `docker compose config`.
+6. Run `docker compose config --quiet`.
 7. Rebuild backend/frontend containers.
 8. Run the skill installer and agent sync inside the configured OpenClaw environment.
 9. Create one draft and verify `pending_generation`.

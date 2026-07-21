@@ -9,6 +9,24 @@ const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const MAX_TIMES_PER_SCHEDULE = 12;
 const MAX_RUN_LIMIT = 3650;
 const MIN_INTERVAL_MINUTES = 5;
+const SCHEDULE_MODES = Object.freeze(['best_action', 'fixed_brief', 'maintenance_only']);
+const MONITORING_WINDOWS = Object.freeze(['1d', '7d', '14d', '30d', '90d']);
+const SOURCE_REQUIREMENT_ALIASES = Object.freeze({
+    searchConsole: 'google_search_console', search_console: 'google_search_console',
+    analytics: 'first_party_aggregate_analytics',
+    contentInventory: 'content_inventory', content_inventory: 'content_inventory',
+    products: 'product_catalog', inventory: 'product_catalog',
+    salesSignals: 'content_signals', customerSupportSignals: 'content_signals',
+    internalSearchSignals: 'content_signals', campaignSignals: 'content_signals'
+});
+const SOURCE_REQUIREMENTS = Object.freeze([
+    'google_intelligence', 'google_search_console', 'first_party_aggregate_analytics',
+    'trends', 'content_inventory', 'product_catalog', 'content_signals'
+]);
+const CONTENT_ACTIONS = Object.freeze([
+    'new', 'update', 'expand', 'merge', 'metadata_refresh',
+    'internal_link_maintenance', 'content_maintenance', 'skip'
+]);
 
 const parseBoolean = (value, fallback = false) => {
     if (typeof value === 'boolean') return value;
@@ -101,12 +119,23 @@ const intervalToMinutes = ({ value, unit }) => {
 
 const MAX_AGENT_TOPIC_LENGTH = 300;
 
-const normalizeAgentConfig = (value = {}) => {
+const normalizeObjectId = (value, field) => {
+    const normalized = normalizeString(value || '');
+    if (normalized && !/^[a-f\d]{24}$/i.test(normalized)) throw new BadRequestError(`${field} is invalid`);
+    return normalized;
+};
+
+const normalizeAgentConfig = (value = {}, operations = {}) => {
     const config = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
     const topic = normalizeString(config.topic || config.primaryKeyword || 'noi inox cho gia dinh');
     if (topic.length > MAX_AGENT_TOPIC_LENGTH) {
         throw new BadRequestError(`Topic must be at most ${MAX_AGENT_TOPIC_LENGTH} characters (received ${topic.length}). Use a short subject phrase.`);
     }
+    const contentAction = normalizeString(config.contentAction || config.action || operations.selectedAction || '');
+    if (contentAction && !CONTENT_ACTIONS.includes(contentAction)) throw new BadRequestError('agentConfig.contentAction is invalid');
+    const mergeSourceBlogIds = Array.isArray(config.mergeSourceBlogIds)
+        ? [...new Set(config.mergeSourceBlogIds.map((item) => normalizeObjectId(item, 'agentConfig.mergeSourceBlogIds')).filter(Boolean))]
+        : [];
     return {
         topic,
         primaryKeyword: normalizeString(config.primaryKeyword || config.topic || 'noi inox'),
@@ -130,6 +159,12 @@ const normalizeAgentConfig = (value = {}) => {
                 .filter(Boolean)
                 .slice(0, 12),
         prompt: normalizeString(config.prompt || ''),
+        contentAction,
+        workOrderId: normalizeObjectId(config.workOrderId || config.selectedWorkOrderId || operations.selectedWorkOrderId, 'agentConfig.workOrderId'),
+        targetBlogId: normalizeObjectId(config.targetBlogId, 'agentConfig.targetBlogId'),
+        mergeSourceBlogIds,
+        primaryBusinessGoal: normalizeString(config.primaryBusinessGoal || ''),
+        successMetrics: Array.isArray(config.successMetrics) ? config.successMetrics.slice(0, 20) : [],
         productSeeding: normalizeProductSeedingOptions(
             config.productSeeding || {},
             buildEnvProductSeedingConfig()
@@ -143,6 +178,10 @@ const normalizeAgentConfig = (value = {}) => {
 };
 
 const normalizeSchedulePayload = (payload = {}) => {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new BadRequestError('schedule payload must be an object');
+    const operations = payload.contentOperations && typeof payload.contentOperations === 'object' && !Array.isArray(payload.contentOperations)
+        ? payload.contentOperations
+        : {};
     const name = normalizeString(payload.name);
     if (!name) throw new BadRequestError('name is required');
 
@@ -181,6 +220,40 @@ const normalizeSchedulePayload = (payload = {}) => {
         }
     }
 
+    const mode = normalizeString(payload.mode || operations.mode || 'fixed_brief').toLowerCase();
+    if (!SCHEDULE_MODES.includes(mode)) {
+        throw new BadRequestError(`mode must be one of: ${SCHEDULE_MODES.join(', ')}`);
+    }
+    const draftOnlyInput = payload.draftOnly ?? operations.draftOnly;
+    if (draftOnlyInput !== undefined && typeof draftOnlyInput !== 'boolean') throw new BadRequestError('draftOnly must be a boolean');
+    const draftOnly = draftOnlyInput === undefined ? true : draftOnlyInput;
+    const sourceInput = payload.sourceRequirements ?? operations.sourceRequirements ?? [];
+    if (!Array.isArray(sourceInput)) throw new BadRequestError('sourceRequirements must be an array');
+    const sourceRequirements = [...new Set(sourceInput.map((item) => {
+        const raw = normalizeString(item);
+        return SOURCE_REQUIREMENT_ALIASES[raw] || raw;
+    }).filter(Boolean))].slice(0, 12);
+    const invalidSource = sourceRequirements.find((item) => !SOURCE_REQUIREMENTS.includes(item));
+    if (invalidSource) throw new BadRequestError(`sourceRequirements contains unsupported source: ${invalidSource}`);
+    const monitoringInput = payload.monitoringWindows ?? operations.monitoringWindows ?? MONITORING_WINDOWS;
+    if (!Array.isArray(monitoringInput)) throw new BadRequestError('monitoringWindows must be an array');
+    const monitoringWindows = [...new Set(monitoringInput.map((item) => {
+        const raw = normalizeString(item).toLowerCase();
+        return /^\d+$/.test(raw) ? `${raw}d` : raw;
+    }))];
+    const invalidWindow = monitoringWindows.find((item) => !MONITORING_WINDOWS.includes(item));
+    if (invalidWindow) throw new BadRequestError(`monitoringWindows contains unsupported window: ${invalidWindow}`);
+    const minimumOpportunityScore = Number(payload.minimumOpportunityScore ?? operations.minimumOpportunityScore ?? 0.65);
+    if (!Number.isFinite(minimumOpportunityScore) || minimumOpportunityScore < 0 || minimumOpportunityScore > 1) {
+        throw new BadRequestError('minimumOpportunityScore must be between 0 and 1');
+    }
+    const allowSkipInput = payload.allowSkip ?? operations.allowSkip;
+    if (allowSkipInput !== undefined && typeof allowSkipInput !== 'boolean') throw new BadRequestError('allowSkip must be a boolean');
+    const maximumTasksPerDay = Number(payload.maximumTasksPerDay ?? payload.maxTasksPerDay ?? operations.maximumTasksPerDay ?? operations.maxTasksPerDay ?? 1);
+    if (!Number.isInteger(maximumTasksPerDay) || maximumTasksPerDay < 1 || maximumTasksPerDay > 24) {
+        throw new BadRequestError('maximumTasksPerDay must be an integer between 1 and 24');
+    }
+
     return {
         name,
         description: normalizeString(payload.description).slice(0, 500),
@@ -193,8 +266,15 @@ const normalizeSchedulePayload = (payload = {}) => {
         runLimit,
         startAt,
         endAt,
-        autoPublish: parseBoolean(payload.autoPublish, false),
-        agentConfig: normalizeAgentConfig(payload.agentConfig || {})
+        autoPublish: draftOnly ? false : parseBoolean(payload.autoPublish, false),
+        mode,
+        sourceRequirements,
+        minimumOpportunityScore,
+        allowSkip: allowSkipInput === undefined ? true : allowSkipInput,
+        draftOnly,
+        maximumTasksPerDay,
+        monitoringWindows: monitoringWindows.length ? monitoringWindows : [...MONITORING_WINDOWS],
+        agentConfig: normalizeAgentConfig(payload.agentConfig || {}, operations)
     };
 };
 
@@ -343,6 +423,9 @@ const describeSchedule = (schedule = {}) => {
 
 module.exports = {
     DEFAULT_TIMEZONE,
+    MONITORING_WINDOWS,
+    SCHEDULE_MODES,
+    SOURCE_REQUIREMENTS,
     calculateNextRun,
     describeSchedule,
     getZonedParts,

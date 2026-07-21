@@ -232,9 +232,11 @@
 
 	const lcpBlogImage = $derived(normalizeBlogImage(blogPost?.image, 0));
 	const seoTitle = $derived(
-		blogPost?.title ? `${blogPost.title} | Inoxpran Blog` : 'Inoxpran Blog'
+		blogPost?.seoTitle || (blogPost?.title ? `${blogPost.title} | Inoxpran Blog` : 'Inoxpran Blog')
 	);
-	const seoDescription = $derived(blogPost?.excerpt || $t('blog.metaDescription'));
+	const seoDescription = $derived(
+		blogPost?.seoDescription || blogPost?.excerpt || $t('blog.metaDescription')
+	);
 	const toIsoDate = (value) => {
 		if (!value) return '';
 		const parsed = new Date(value);
@@ -381,6 +383,9 @@
 <svelte:head>
 	<title>{seoTitle}</title>
 	<meta name="description" content={seoDescription} />
+	{#if /^[a-f0-9]{64}$/i.test(String(blogPost?.contentRevisionHash || ''))}
+		<meta name="content-revision-hash" content={blogPost.contentRevisionHash} />
+	{/if}
 	<meta property="og:type" content="article" />
 	<meta property="og:url" content={canonicalUrl} />
 	<meta property="og:title" content={seoTitle} />

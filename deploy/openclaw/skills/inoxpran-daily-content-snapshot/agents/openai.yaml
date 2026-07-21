@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Content Snapshot"
+  short_description: "Build safe daily content intelligence snapshots"
+  default_prompt: "Use $inoxpran-daily-content-snapshot to validate today's content operations snapshot."

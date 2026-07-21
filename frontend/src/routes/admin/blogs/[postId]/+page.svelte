@@ -179,7 +179,8 @@
 	};
 
 	const regenerateSlugFromTitle = () => {
-		slugTouched = false;
+		// Existing URLs stay stable unless an editor explicitly asks to regenerate the slug.
+		slugTouched = true;
 		blogSlug = toSeoSlug(blogTitle);
 	};
 

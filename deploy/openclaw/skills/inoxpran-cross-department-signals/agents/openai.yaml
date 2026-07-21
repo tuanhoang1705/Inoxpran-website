@@ -1,0 +1,4 @@
+interface:
+  display_name: "Cross-Department Signals"
+  short_description: "Normalize privacy-safe business content signals"
+  default_prompt: "Use $inoxpran-cross-department-signals to normalize content signals without exposing private data."

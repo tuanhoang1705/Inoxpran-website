@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unified Content Brief"
+  short_description: "Plan complete evidence-led content briefs"
+  default_prompt: "Use $inoxpran-unified-content-brief to validate a production-ready brief from a work order."

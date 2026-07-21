@@ -46,6 +46,7 @@
 
 	const copy = $derived({
 		title: isEn ? 'OpenClaw AI Console' : 'OpenClaw AI Console',
+		contentOperations: isEn ? 'Content operations' : 'Vận hành nội dung',
 		subtitle: isEn
 			? 'Daily SEO blog agent operations'
 			: 'Vận hành hệ thống agent tạo blog SEO hàng ngày',
@@ -258,6 +259,9 @@
 			<p class="oc-header__sub">{copy.subtitle}</p>
 		</div>
 		<div class="oc-header__actions">
+			<a class="oc-btn oc-btn--ghost" href={resolveAdminPath('/admin/openclaw/content-operations')}>
+				<span>{copy.contentOperations}</span>
+			</a>
 			<button type="button" class="oc-btn oc-btn--ghost" onclick={refreshDashboard}>
 				<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.3M21 12a9 9 0 0 1-15.5 6.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 3v3.5H14.5M6 21v-3.5H9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
 				<span>{copy.refresh}</span>

@@ -42,6 +42,45 @@ describe('blogSchedule util', () => {
         expect(result.agentConfig.productSeeding).toMatchObject({ enabled: true, mode: 'required', intensity: 'balanced', maxSupportingProducts: 1, excludedProductIds: ['p1'] });
     });
 
+    it('normalizes legacy nested Content Operations controls into the canonical schedule contract', () => {
+        const workOrderId = '507f1f77bcf86cd799439099';
+        const result = normalizeSchedulePayload({
+            name: 'Best action schedule',
+            scheduleType: 'daily',
+            daily: { times: ['06:30'] },
+            contentOperations: {
+                mode: 'best_action',
+                sourceRequirements: ['searchConsole', 'contentInventory'],
+                minimumOpportunityScore: 0.72,
+                allowSkip: false,
+                draftOnly: true,
+                maxTasksPerDay: 2,
+                monitoringWindows: [7, '14d', 30],
+                selectedAction: 'update',
+                selectedWorkOrderId: workOrderId
+            }
+        });
+
+        expect(result).toMatchObject({
+            mode: 'best_action',
+            sourceRequirements: ['google_search_console', 'content_inventory'],
+            minimumOpportunityScore: 0.72,
+            allowSkip: false,
+            draftOnly: true,
+            maximumTasksPerDay: 2,
+            monitoringWindows: ['7d', '14d', '30d']
+        });
+        expect(result.agentConfig).toMatchObject({ contentAction: 'update', workOrderId });
+    });
+
+    it('rejects malformed Content Operations schedule controls instead of silently coercing them', () => {
+        const base = { name: 'Invalid schedule', scheduleType: 'daily', daily: { times: ['06:30'] } };
+        expect(() => normalizeSchedulePayload({ ...base, sourceRequirements: 'content_inventory' })).toThrow('sourceRequirements must be an array');
+        expect(() => normalizeSchedulePayload({ ...base, monitoringWindows: ['6d'] })).toThrow('unsupported window');
+        expect(() => normalizeSchedulePayload({ ...base, minimumOpportunityScore: 'not-a-number' })).toThrow('between 0 and 1');
+        expect(() => normalizeSchedulePayload({ ...base, allowSkip: 'yes' })).toThrow('allowSkip must be a boolean');
+    });
+
     it('calculates the next daily run in the configured timezone', () => {
         const from = new Date('2026-07-10T01:00:00.000Z'); // 08:00 Asia/Ho_Chi_Minh
         const schedule = normalizeSchedulePayload({

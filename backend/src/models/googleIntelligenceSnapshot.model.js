@@ -8,7 +8,7 @@ const snapshotSchema = new Schema(
         timezone: { type: String, required: true, default: 'Asia/Ho_Chi_Minh' },
         status: {
             type: String,
-            enum: ['completed_with_changes', 'completed_no_change', 'partial', 'failed', 'manually_overridden'],
+            enum: ['building', 'completed_with_changes', 'completed_no_change', 'partial', 'failed', 'manually_overridden'],
             required: true,
             index: true
         },
@@ -29,6 +29,11 @@ const snapshotSchema = new Schema(
         reviewerResult: { type: Schema.Types.Mixed, default: () => ({}) },
         contentHash: { type: String, required: true, index: true },
         runId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceRun', default: null },
+        buildToken: { type: String, default: '', maxlength: 200, select: false },
+        buildGeneration: { type: Number, default: 0, min: 0, select: false },
+        completedGeneration: { type: Number, default: 0, min: 0, select: false },
+        leaseUntil: { type: Date, default: null, index: true, select: false },
+        lastBuildError: { type: String, default: '', maxlength: 120, select: false },
         override: {
             reason: { type: String, default: '' },
             adminId: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
@@ -41,5 +46,6 @@ const snapshotSchema = new Schema(
 
 snapshotSchema.index({ snapshotDate: 1, timezone: 1 }, { unique: true });
 snapshotSchema.index({ checkedAt: -1 });
+snapshotSchema.index({ snapshotDate: 1, timezone: 1, buildGeneration: 1 });
 
 module.exports = { GoogleIntelligenceSnapshot: model('GoogleIntelligenceSnapshot', snapshotSchema) };

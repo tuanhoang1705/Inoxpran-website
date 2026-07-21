@@ -11,6 +11,17 @@ const BLOG_CATEGORY_KEYS = ['guide', 'care', 'knowledge', 'trend', 'product', 'd
 const IMAGE_STATUSES = ['pending_generation', 'needs_review', 'complete', 'rejected', 'failed'];
 const IMAGE_REVIEW_STATUSES = ['pending_review', 'approved', 'rejected', 'replaced'];
 const BLOG_SOURCE_TYPES = ['manual', 'agentic'];
+const CONTENT_ACTIONS = [
+    'new',
+    'update',
+    'expand',
+    'merge',
+    'metadata_refresh',
+    'internal_link_maintenance',
+    'content_maintenance',
+    'skip',
+    ''
+];
 
 const imageMetadataSchema = new Schema(
     {
@@ -59,6 +70,7 @@ const blogSchema = new Schema(
         blog_slug: { type: String, required: true, trim: true, unique: true, index: true },
         blog_excerpt: { type: String, required: true, trim: true },
         blog_content: { type: String, required: true },
+        contentRevisionHash: { type: String, default: '', trim: true, maxlength: 128, index: true },
         blog_image: { type: String, required: true },
         blog_image_path: { type: String },
         blog_image_variants: { type: Schema.Types.Mixed, default: null },
@@ -74,6 +86,14 @@ const blogSchema = new Schema(
         googleIntelSnapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', default: null, index: true },
         googleIntelSnapshotDate: { type: String, default: '', index: true },
         googleIntelStatus: { type: String, default: '' },
+        contentOperationsSnapshotId: { type: Schema.Types.ObjectId, ref: 'ContentOperationsDailySnapshot', default: null, index: true },
+        contentInventorySnapshotId: { type: Schema.Types.ObjectId, ref: 'ContentInventorySnapshot', default: null, index: true },
+        contentOpportunityDecisionId: { type: Schema.Types.ObjectId, ref: 'ContentOpportunityDecision', default: null, index: true },
+        contentWorkOrderId: { type: Schema.Types.ObjectId, ref: 'ContentWorkOrder', default: null, index: true },
+        unifiedContentBriefId: { type: Schema.Types.ObjectId, ref: 'UnifiedContentBrief', default: null, index: true },
+        evidenceMapId: { type: Schema.Types.ObjectId, ref: 'EvidenceMap', default: null, index: true },
+        publishReadinessReportId: { type: Schema.Types.ObjectId, ref: 'ContentPublishReadinessReport', default: null, index: true },
+        activeRevisionId: { type: Schema.Types.ObjectId, ref: 'BlogRevision', default: null, index: true },
         researchBundleId: { type: Schema.Types.ObjectId, ref: 'ResearchBundle', default: null, index: true },
         editorialStyleProfileId: { type: Schema.Types.ObjectId, ref: 'EditorialStyleProfile', default: null, index: true },
         strategyPlanId: { type: Schema.Types.ObjectId, ref: 'BlogStrategyPlan', default: null, index: true },
@@ -88,7 +108,16 @@ const blogSchema = new Schema(
         productSeedingReview: { type: Schema.Types.Mixed, default: null },
         productClaimReview: { type: Schema.Types.Mixed, default: null },
         editorialProductPlacementReview: { type: Schema.Types.Mixed, default: null },
-        contentDecision: { type: String, enum: ['new', 'update', 'merge', 'skip', ''], default: '' },
+        contentDecision: { type: String, enum: CONTENT_ACTIONS, default: '' },
+        contentRole: { type: String, default: '', maxlength: 120, index: true },
+        primaryIntent: { type: String, default: '', maxlength: 120, index: true },
+        topicSummary: { type: String, default: '', maxlength: 1000 },
+        entitySummary: { type: [String], default: [] },
+        canonicalUrl: { type: String, default: '', maxlength: 1000 },
+        indexability: { type: Schema.Types.Mixed, default: () => ({ index: true, follow: true, determinable: false }) },
+        lastReviewedAt: { type: Date, default: null, index: true },
+        nextReviewAt: { type: Date, default: null, index: true },
+        lifecycleStatus: { type: String, enum: ['legacy', 'planned', 'revision_pending', 'ready', 'published', 'maintenance_due'], default: 'legacy', index: true },
         structuralFingerprint: { type: Schema.Types.Mixed, default: null },
         agenticReviews: { type: Schema.Types.Mixed, default: null },
         imagePipelineStatus: {

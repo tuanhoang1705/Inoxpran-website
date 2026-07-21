@@ -1,6 +1,12 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onDestroy } from 'svelte';
 	import { locale } from '$lib/i18n/admin/index.js';
+	import {
+		decisionArtifactContext,
+		entityId,
+		normalizePreview
+	} from '$lib/contentOperations/contracts.js';
 	import BlogSchedulesPanel from '$lib/components/admin/openclaw/BlogSchedulesPanel.svelte';
 
 	let { data } = $props();
@@ -11,12 +17,54 @@
 	let dashboard = $state(data?.dashboard || {});
 	// svelte-ignore state_referenced_locally
 	let pageError = $state(data?.loadError || '');
+	// svelte-ignore state_referenced_locally
+	let contentOperations = $state(data?.contentOperations || {});
+	let operationsPreview = $state(null);
+	let operationsBusy = $state('');
+	let operationsMessage = $state('');
 
 	const automation = $derived(dashboard?.automation || {});
 	const env = $derived(dashboard?.env || {});
 	const scheduleData = $derived(data?.schedules || {});
 	const scheduleRuntime = $derived(scheduleData?.runtime || {});
-	const initialSchedules = $derived(Array.isArray(scheduleData?.schedules) ? scheduleData.schedules : []);
+	const initialSchedules = $derived(
+		Array.isArray(scheduleData?.schedules) ? scheduleData.schedules : []
+	);
+	const operationsStatus = $derived(contentOperations?.status || contentOperations || {});
+	const latestOperationsRun = $derived(operationsStatus?.latestRun || {});
+	const latestRunDecision = $derived.by(() => {
+		const candidates = Array.isArray(latestOperationsRun?.candidates)
+			? latestOperationsRun.candidates
+			: [];
+		const selectedOpportunity = candidates.find(
+			(candidate) =>
+				(candidate?.recommendedAction || candidate?.decisionType) ===
+				latestOperationsRun?.selectedDecision
+		);
+		return normalizePreview({
+			...latestOperationsRun,
+			dryRun: latestOperationsRun?.trigger === 'preview',
+			action: latestOperationsRun?.selectedDecision,
+			selectedOpportunity
+		});
+	});
+	const operationsDecision = $derived(operationsPreview || latestRunDecision);
+	const operationsSchedule = $derived(operationsStatus?.schedule || {});
+	const operationsArtifactContext = $derived(
+		decisionArtifactContext(operationsDecision, operationsStatus?.activeWorkOrder)
+	);
+	const operationsWorkOrderId = $derived(operationsArtifactContext.workOrderId);
+	const operationsDecisionId = $derived(operationsArtifactContext.decisionId);
+	const hasRunnableSelection = $derived(operationsArtifactContext.runnable);
+	const canPersistPreview = $derived(
+		Boolean(
+			operationsPreview &&
+			operationsPreview.dryRun !== false &&
+			!entityId(operationsPreview.workOrderId) &&
+			operationsPreview.action !== 'skip' &&
+			operationsPreview.blocked !== true
+		)
+	);
 
 	let confirmOpen = $state(false);
 	let running = $state(false);
@@ -27,6 +75,34 @@
 	const t = $derived({
 		back: isEn ? 'Back to OpenClaw' : 'Quay lại OpenClaw',
 		title: 'Daily Draft',
+		operationsTitle: isEn ? 'Content Operations V3' : 'Vận hành nội dung V3',
+		operationsHint: isEn
+			? 'Preview the evidence-led decision, persist and convert it, then run the draft-only work order.'
+			: 'Xem trước quyết định dựa trên dữ liệu, lưu và chuyển đổi quyết định, sau đó chạy work order ở chế độ bản nháp.',
+		previewBest: isEn ? 'Preview best action' : 'Xem trước hành động tốt nhất',
+		persistBest: isEn ? 'Persist best action' : 'Lưu hành động tốt nhất',
+		runSelected: isEn ? 'Run selected work order' : 'Chạy work order đã chọn',
+		runFixed: isEn ? 'Run fixed brief' : 'Chạy brief cố định',
+		fixedBriefMissing: isEn
+			? 'Configure a fixed topic in Content Operations before running this mode.'
+			: 'Hãy cấu hình chủ đề cố định trong Content Operations trước khi chạy chế độ này.',
+		runMaintenance: isEn ? 'Maintenance only' : 'Chỉ bảo trì',
+		openOperations: isEn ? 'Open control room' : 'Mở trung tâm vận hành',
+		previewSafety: isEn
+			? "Preview may refresh today's intelligence snapshot, but creates no planning artifact, blog, writer run, image, Telegram message, or schedule write."
+			: 'Bản xem trước có thể làm mới snapshot thông tin hôm nay nhưng không tạo artifact kế hoạch, blog, lượt chạy writer, ảnh, tin Telegram hoặc ghi lịch.',
+		skipResult: isEn
+			? 'Skip selected — no production run or draft was started.'
+			: 'Đã chọn bỏ qua — không khởi chạy sản xuất hoặc tạo bản nháp.',
+		persistedBest: isEn
+			? 'Best action persisted and converted. The work order is ready to run.'
+			: 'Đã lưu và chuyển đổi hành động tốt nhất. Work order đã sẵn sàng để chạy.',
+		persistMissing: isEn
+			? 'Preview a non-skip best action before persisting it.'
+			: 'Hãy xem trước một hành động khác skip trước khi lưu.',
+		workOrderMissing: isEn
+			? 'No persisted work order is available to run.'
+			: 'Chưa có work order đã lưu để chạy.',
 		subtitle: isEn
 			? 'Run the blog workflow now or configure automated schedules.'
 			: 'Chạy ngay quy trình tạo bài hoặc thiết lập lịch tự động.',
@@ -86,6 +162,176 @@
 		return path.replace(/^\/admin(?=\/|$)/, '') || '/';
 	};
 
+	const contentOperationsRequest = async (path, body) => {
+		const response = await fetch(
+			resolveAdminPath(`/admin/api/openclaw/content-operations/${path}`),
+			{
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body)
+			}
+		);
+		const payload = await response.json().catch(() => ({}));
+		if (!response.ok) {
+			throw new Error(
+				payload?.error ||
+					(isEn ? 'Content Operations request failed' : 'Yêu cầu Content Operations thất bại')
+			);
+		}
+		return payload;
+	};
+
+	const mergeOperationsStatus = (patch) => {
+		const nextStatus = { ...operationsStatus, ...patch };
+		contentOperations = contentOperations?.status
+			? { ...contentOperations, status: nextStatus }
+			: nextStatus;
+	};
+
+	const previewContentOperation = async () => {
+		operationsBusy = 'preview';
+		operationsMessage = '';
+		try {
+			operationsPreview = normalizePreview(
+				await contentOperationsRequest('preview', {
+					dryRun: true,
+					draftOnly: true,
+					includeCandidates: true
+				})
+			);
+			operationsMessage =
+				operationsPreview.action === 'skip'
+					? t.skipResult
+					: isEn
+						? 'Preview ready. No planning or production artifact was created.'
+						: 'Bản xem trước đã sẵn sàng. Không có artifact kế hoạch hoặc sản xuất nào được tạo.';
+		} catch (error) {
+			operationsMessage = error.message;
+		} finally {
+			operationsBusy = '';
+		}
+	};
+
+	const persistPreviewSelection = async () => {
+		operationsBusy = 'persist_best_action';
+		operationsMessage = '';
+		try {
+			if (!canPersistPreview) throw new Error(t.persistMissing);
+			const planned = normalizePreview(
+				await contentOperationsRequest('run-now', {
+					mode: 'best_action',
+					draftOnly: true,
+					allowSkip: true
+				})
+			);
+			const decisionId = entityId(planned.decisionId || planned.contentOpportunityDecisionId);
+			const plannedWorkOrderId = entityId(
+				planned.workOrderId || planned.contentWorkOrderId || planned.workOrder
+			);
+
+			if (planned.action === 'skip') {
+				operationsPreview = planned;
+				mergeOperationsStatus({
+					latestRun: {
+						...latestOperationsRun,
+						...planned,
+						selectedDecision: 'skip'
+					}
+				});
+				operationsMessage = t.skipResult;
+				return;
+			}
+			if (!decisionId || !plannedWorkOrderId) throw new Error(t.workOrderMissing);
+
+			const converted = await contentOperationsRequest(
+				`opportunities/${encodeURIComponent(decisionId)}/convert`,
+				{ reason: 'Administrator confirmed the previewed best action.' }
+			);
+			const workOrder = converted?.workOrder || planned.workOrder;
+			const workOrderId = entityId(workOrder || plannedWorkOrderId);
+			if (!workOrderId) throw new Error(t.workOrderMissing);
+
+			operationsPreview = normalizePreview({
+				...planned,
+				contentOpportunityDecisionId: decisionId,
+				contentWorkOrderId: workOrderId,
+				selectedOpportunity: converted?.opportunity || planned.selectedOpportunity,
+				workOrder
+			});
+			mergeOperationsStatus({
+				latestRun: {
+					...latestOperationsRun,
+					...planned,
+					contentOpportunityDecisionId: decisionId,
+					contentWorkOrderId: workOrderId,
+					selectedDecision: planned.action
+				},
+				activeWorkOrder: workOrder
+			});
+			operationsMessage = t.persistedBest;
+		} catch (error) {
+			operationsMessage = error.message;
+		} finally {
+			operationsBusy = '';
+		}
+	};
+
+	const runContentOperation = async (mode) => {
+		operationsBusy = mode;
+		operationsMessage = '';
+		try {
+			const selectedWorkOrder = mode === 'selected_work_order';
+			let selectedWorkOrderId = operationsWorkOrderId;
+			if (
+				mode === 'fixed_brief' &&
+				!String(operationsSchedule.topic || operationsSchedule.primaryKeyword || '').trim()
+			) {
+				throw new Error(t.fixedBriefMissing);
+			}
+			if (selectedWorkOrder && !hasRunnableSelection) throw new Error(t.workOrderMissing);
+			if (selectedWorkOrder && operationsDecisionId) {
+				const converted = await contentOperationsRequest(
+					`opportunities/${encodeURIComponent(operationsDecisionId)}/convert`,
+					{ reason: 'Administrator confirmed the selected Work Order for a draft-only run.' }
+				);
+				selectedWorkOrderId = entityId(converted?.workOrder || selectedWorkOrderId);
+			}
+			const path = selectedWorkOrder
+				? `work-orders/${encodeURIComponent(selectedWorkOrderId)}/run`
+				: 'run-now';
+			const result = await contentOperationsRequest(path, {
+				mode: selectedWorkOrder ? undefined : mode,
+				topic: mode === 'fixed_brief' ? operationsSchedule.topic || undefined : undefined,
+				primaryKeyword:
+					mode === 'fixed_brief' ? operationsSchedule.primaryKeyword || undefined : undefined,
+				draftOnly: true,
+				workOrderId: selectedWorkOrder ? selectedWorkOrderId : undefined
+			});
+			const resultDecision = selectedWorkOrder ? operationsDecision : normalizePreview(result);
+			if (!selectedWorkOrder) operationsPreview = resultDecision;
+			mergeOperationsStatus({
+				...result,
+				latestRun: selectedWorkOrder
+					? latestOperationsRun
+					: {
+							...latestOperationsRun,
+							...result,
+							contentOpportunityDecisionId: resultDecision.decisionId,
+							contentWorkOrderId: resultDecision.workOrderId,
+							selectedDecision: resultDecision.action
+						},
+				activeWorkOrder: result?.workOrder || operationsStatus?.activeWorkOrder
+			});
+			operationsMessage = isEn
+				? 'Draft-only operation started.'
+				: 'Đã bắt đầu tác vụ ở chế độ bản nháp.';
+		} catch (error) {
+			operationsMessage = error.message;
+		} finally {
+			operationsBusy = '';
+		}
+	};
+
 	const formatDateTime = (value) => {
 		if (!value) return '--';
 		const date = new Date(value);
@@ -117,7 +363,9 @@
 	// Best-effort: pull a /admin/blogs/<id> style edit link out of the run output.
 	const generatedBlogEditPath = $derived.by(() => {
 		const output = String(activeRun?.output || '');
-		const idMatch = output.match(/\/admin\/blogs\/([a-f0-9]{24})/i) || output.match(/blogId["':\s]+([a-f0-9]{24})/i);
+		const idMatch =
+			output.match(/\/admin\/blogs\/([a-f0-9]{24})/i) ||
+			output.match(/blogId["':\s]+([a-f0-9]{24})/i);
 		return idMatch ? `/admin/blogs/${idMatch[1]}` : '';
 	});
 
@@ -168,7 +416,8 @@
 			const payload = await response.json().catch(() => null);
 			if (!response.ok) {
 				runError =
-					payload?.error || (isEn ? 'Unable to start daily draft run' : 'Không thể bắt đầu chạy daily draft');
+					payload?.error ||
+					(isEn ? 'Unable to start daily draft run' : 'Không thể bắt đầu chạy daily draft');
 				running = false;
 				return;
 			}
@@ -192,8 +441,16 @@
 </svelte:head>
 
 <section class="openclaw-console daily-draft">
-	<a class="oc-back" href="/admin/openclaw">
-		<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+	<a class="oc-back" href={resolve('/admin/openclaw')}>
+		<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
+			><path
+				d="M15 18l-6-6 6-6"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/></svg
+		>
 		<span>{t.back}</span>
 	</a>
 
@@ -203,7 +460,11 @@
 			<h1>{t.title}</h1>
 			<p class="oc-header__sub">{t.subtitle}</p>
 		</div>
-		<span class="oc-badge dd-header__badge" class:is-good={automation.enabled} class:is-muted={!automation.enabled}>
+		<span
+			class="oc-badge dd-header__badge"
+			class:is-good={automation.enabled}
+			class:is-muted={!automation.enabled}
+		>
 			<span class="oc-dot"></span>{t.seoAgent}: {automation.enabled ? t.enabled : t.disabled}
 		</span>
 	</header>
@@ -212,11 +473,87 @@
 		<div class="oc-alert" role="alert">{pageError}</div>
 	{/if}
 
+	<section class="oc-panel dd-operations">
+		<div class="dd-operations__head">
+			<div>
+				<p class="oc-eyebrow">Decision layer</p>
+				<h2>{t.operationsTitle}</h2>
+				<p class="oc-muted">{t.operationsHint}</p>
+			</div>
+			<a
+				class="oc-btn oc-btn--ghost oc-btn--sm"
+				href={resolve(resolveAdminPath('/admin/openclaw/content-operations'))}>{t.openOperations}</a
+			>
+		</div>
+		<div class="dd-operations__safety">{t.previewSafety}</div>
+		<div class="dd-operations__decision">
+			<div>
+				<span>{isEn ? 'Selected action' : 'Hành động được chọn'}</span><strong
+					>{operationsDecision?.action || 'skip'}</strong
+				>
+			</div>
+			<div>
+				<span>{isEn ? 'Topic' : 'Chủ đề'}</span><strong>{operationsDecision?.topic || '--'}</strong>
+			</div>
+			<div>
+				<span>{isEn ? 'Work order' : 'Work order'}</span><code>{operationsWorkOrderId || '--'}</code
+				>
+			</div>
+		</div>
+		<div class="dd-operations__actions">
+			<button
+				class="oc-btn oc-btn--ghost oc-btn--sm"
+				type="button"
+				onclick={previewContentOperation}
+				disabled={Boolean(operationsBusy)}>{t.previewBest}</button
+			>
+			<button
+				class="oc-btn oc-btn--ghost oc-btn--sm"
+				type="button"
+				onclick={persistPreviewSelection}
+				disabled={Boolean(operationsBusy) || !canPersistPreview}>{t.persistBest}</button
+			>
+			<button
+				class="oc-btn oc-btn--primary oc-btn--sm"
+				type="button"
+				onclick={() => runContentOperation('selected_work_order')}
+				disabled={Boolean(operationsBusy) || !hasRunnableSelection}>{t.runSelected}</button
+			>
+			<button
+				class="oc-btn oc-btn--ghost oc-btn--sm"
+				type="button"
+				onclick={() => runContentOperation('fixed_brief')}
+				disabled={Boolean(operationsBusy)}>{t.runFixed}</button
+			>
+			<button
+				class="oc-btn oc-btn--ghost oc-btn--sm"
+				type="button"
+				onclick={() => runContentOperation('maintenance_only')}
+				disabled={Boolean(operationsBusy)}>{t.runMaintenance}</button
+			>
+		</div>
+		{#if operationsMessage}<p
+				class="dd-operations__message"
+				class:is-skip={operationsDecision?.action === 'skip'}
+				role="status"
+				aria-live="polite"
+			>
+				{operationsMessage}
+			</p>{/if}
+	</section>
+
 	<div class="dd-grid">
 		<section class="oc-panel dd-run">
 			<div class="dd-run__intro">
 				<span class="dd-run__icon" aria-hidden="true">
-					<svg viewBox="0 0 24 24" fill="none"><path d="M8 5.5v13l11-6.5-11-6.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+					<svg viewBox="0 0 24 24" fill="none"
+						><path
+							d="M8 5.5v13l11-6.5-11-6.5Z"
+							stroke="currentColor"
+							stroke-width="1.8"
+							stroke-linejoin="round"
+						/></svg
+					>
 				</span>
 				<div>
 					<h2>{t.runSectionTitle}</h2>
@@ -226,13 +563,22 @@
 
 			<div class="dd-run__mode">
 				<span class="oc-muted">{t.publishingMode}</span>
-				<span class="oc-badge" class:is-warn={automation.autoPublish} class:is-good={!automation.autoPublish}>
+				<span
+					class="oc-badge"
+					class:is-warn={automation.autoPublish}
+					class:is-good={!automation.autoPublish}
+				>
 					<span class="oc-dot"></span>{automation.autoPublish ? t.autoPublish : t.draftOnly}
 				</span>
 			</div>
 
 			<div class="dd-run__cta">
-				<button type="button" class="oc-btn oc-btn--primary" onclick={() => (confirmOpen = true)} disabled={running}>
+				<button
+					type="button"
+					class="oc-btn oc-btn--primary"
+					onclick={() => (confirmOpen = true)}
+					disabled={running}
+				>
 					{running ? t.running : t.runNow}
 				</button>
 			</div>
@@ -249,7 +595,9 @@
 							class="oc-badge"
 							class:is-good={activeRun.status === 'completed'}
 							class:is-danger={activeRun.status === 'failed' || activeRun.status === 'timed_out'}
-							class:is-muted={activeRun.status !== 'completed' && activeRun.status !== 'failed' && activeRun.status !== 'timed_out'}
+							class:is-muted={activeRun.status !== 'completed' &&
+								activeRun.status !== 'failed' &&
+								activeRun.status !== 'timed_out'}
 						>
 							{runStatusLabel(activeRun.status)}
 						</b>
@@ -264,11 +612,21 @@
 					</div>
 					<div class="dd-result__links">
 						{#if generatedBlogEditPath}
-							<a class="oc-btn oc-btn--ghost oc-btn--sm" href={generatedBlogEditPath} target="_blank" rel="noreferrer">
+							<a
+								class="oc-btn oc-btn--ghost oc-btn--sm"
+								href={resolve(generatedBlogEditPath)}
+								target="_blank"
+								rel="noreferrer"
+							>
 								{t.openDraft}
 							</a>
 						{/if}
-						<a class="oc-btn oc-btn--ghost oc-btn--sm" href="/admin/blogs" target="_blank" rel="noreferrer">
+						<a
+							class="oc-btn oc-btn--ghost oc-btn--sm"
+							href={resolve('/admin/blogs')}
+							target="_blank"
+							rel="noreferrer"
+						>
 							{t.openBlogs}
 						</a>
 					</div>
@@ -290,19 +648,31 @@
 			<div class="dd-status__list">
 				<div class="dd-status__row">
 					<span>{t.seoAgent}</span>
-					<b class="oc-badge" class:is-good={automation.enabled} class:is-muted={!automation.enabled}>
+					<b
+						class="oc-badge"
+						class:is-good={automation.enabled}
+						class:is-muted={!automation.enabled}
+					>
 						<span class="oc-dot"></span>{automation.enabled ? t.enabled : t.disabled}
 					</b>
 				</div>
 				<div class="dd-status__row">
 					<span>{t.blogCron}</span>
-					<b class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>
+					<b
+						class="oc-badge"
+						class:is-good={scheduleRuntime.cronEnabled}
+						class:is-muted={!scheduleRuntime.cronEnabled}
+					>
 						<span class="oc-dot"></span>{scheduleRuntime.cronEnabled ? t.enabled : t.disabled}
 					</b>
 				</div>
 				<div class="dd-status__row">
 					<span>{t.autoPublish}</span>
-					<b class="oc-badge" class:is-warn={automation.autoPublish} class:is-good={!automation.autoPublish}>
+					<b
+						class="oc-badge"
+						class:is-warn={automation.autoPublish}
+						class:is-good={!automation.autoPublish}
+					>
 						<span class="oc-dot"></span>{automation.autoPublish ? t.autoPublish : t.draftOnly}
 					</b>
 				</div>
@@ -319,13 +689,19 @@
 				</div>
 				<div class="dd-status__row">
 					<span>{t.imagePipeline}</span>
-					<b class="oc-badge" class:is-good={automation.imagePipelineEnabled} class:is-muted={!automation.imagePipelineEnabled}>
+					<b
+						class="oc-badge"
+						class:is-good={automation.imagePipelineEnabled}
+						class:is-muted={!automation.imagePipelineEnabled}
+					>
 						<span class="oc-dot"></span>{automation.imagePipelineEnabled ? t.enabled : t.disabled}
 					</b>
 				</div>
 				<div class="dd-status__row dd-status__row--stack">
 					<span>{t.gateway}</span>
-					<code class="dd-status__gateway" title={dashboard?.openclaw?.gatewayUrl || '--'}>{dashboard?.openclaw?.gatewayUrl || '--'}</code>
+					<code class="dd-status__gateway" title={dashboard?.openclaw?.gatewayUrl || '--'}
+						>{dashboard?.openclaw?.gatewayUrl || '--'}</code
+					>
 				</div>
 			</div>
 		</aside>
@@ -354,7 +730,11 @@
 			<div class="dd-confirm">
 				<div class="dd-confirm__item">
 					<span>{t.publishingMode}</span>
-					<b class="oc-badge" class:is-warn={automation.autoPublish} class:is-good={!automation.autoPublish}>
+					<b
+						class="oc-badge"
+						class:is-warn={automation.autoPublish}
+						class:is-good={!automation.autoPublish}
+					>
 						{automation.autoPublish ? t.autoPublish : t.draftOnly}
 					</b>
 				</div>
@@ -387,8 +767,12 @@
 			<small class="oc-muted">{t.configNote}</small>
 
 			<div class="dd-modal__actions">
-				<button type="button" class="oc-btn oc-btn--ghost" onclick={() => (confirmOpen = false)}>{t.cancel}</button>
-				<button type="button" class="oc-btn oc-btn--primary" onclick={confirmRun}>{t.confirmRun}</button>
+				<button type="button" class="oc-btn oc-btn--ghost" onclick={() => (confirmOpen = false)}
+					>{t.cancel}</button
+				>
+				<button type="button" class="oc-btn oc-btn--primary" onclick={confirmRun}
+					>{t.confirmRun}</button
+				>
 			</div>
 		</div>
 	</div>
@@ -574,6 +958,76 @@
 		font-size: 0.88rem;
 	}
 
+	.dd-operations {
+		display: grid;
+		gap: 12px;
+		border-left: 3px solid var(--oc-primary);
+	}
+	.dd-operations__head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+	}
+	.dd-operations__head h2 {
+		font-size: 1.05rem;
+	}
+	.dd-operations__head p:last-child {
+		margin: 6px 0 0;
+	}
+	.dd-operations__safety {
+		padding: 9px 11px;
+		border: 1px solid rgba(15, 118, 110, 0.18);
+		border-radius: 8px;
+		background: var(--oc-primary-soft);
+		color: var(--oc-primary-strong);
+		font-size: 0.76rem;
+		line-height: 1.45;
+	}
+	.dd-operations__decision {
+		display: grid;
+		grid-template-columns: 0.7fr 1.5fr 1fr;
+		border: 1px solid var(--oc-border);
+		border-radius: 9px;
+		overflow: hidden;
+	}
+	.dd-operations__decision > div {
+		display: grid;
+		gap: 5px;
+		min-width: 0;
+		padding: 10px 12px;
+		border-right: 1px solid var(--oc-border);
+	}
+	.dd-operations__decision > div:last-child {
+		border-right: 0;
+	}
+	.dd-operations__decision span {
+		color: var(--oc-muted);
+		font-size: 0.66rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+	.dd-operations__decision strong,
+	.dd-operations__decision code {
+		overflow-wrap: anywhere;
+		font-size: 0.78rem;
+	}
+	.dd-operations__actions {
+		display: flex;
+		gap: 7px;
+		flex-wrap: wrap;
+	}
+	.dd-operations__message {
+		margin: 0;
+		color: var(--oc-primary-strong);
+		font-size: 0.78rem;
+		font-weight: 700;
+	}
+	.dd-operations__message.is-skip {
+		color: var(--oc-warning);
+	}
+
 	/* ── Buttons ── */
 	.oc-btn {
 		display: inline-flex;
@@ -589,7 +1043,10 @@
 		font-size: 0.88rem;
 		cursor: pointer;
 		text-decoration: none;
-		transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+		transition:
+			background 0.18s ease,
+			border-color 0.18s ease,
+			box-shadow 0.18s ease,
 			transform 0.18s ease;
 	}
 
@@ -880,6 +1337,19 @@
 	}
 
 	@media (max-width: 640px) {
+		.dd-operations__decision {
+			grid-template-columns: 1fr;
+		}
+
+		.dd-operations__decision > div {
+			border-right: 0;
+			border-bottom: 1px solid var(--oc-border);
+		}
+
+		.dd-operations__decision > div:last-child {
+			border-bottom: 0;
+		}
+
 		.dd-confirm {
 			grid-template-columns: 1fr;
 		}

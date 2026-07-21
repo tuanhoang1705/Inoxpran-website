@@ -1,6 +1,10 @@
 # OpenClaw SEO Automation
 
+> Content Operations V3 integration (2026-07-20): the automation lane now begins with Google Intelligence and an evidence-led daily action decision. The complete lifecycle/runbook is in [OpenClaw Content Operations Lifecycle V3](./openclaw-content-operations-lifecycle-v3.md).
+
 This feature adds a safe publishing lane for daily Inoxpran SEO blog automation. OpenClaw agents research, position, ideate, write, prepare image briefs, review, draft/publish, and report. The publisher agent can only call the backend automation API, never MongoDB and never the admin UI.
+
+Content Operations V3 does not make cron synonymous with article creation. After the mandatory Google gate, the backend persists the daily Content Operations/Inventory state, scores candidates, selects one of `new|update|expand|merge|metadata_refresh|internal_link_maintenance|content_maintenance|skip`, and persists a Content Work Order and complete Unified Content Brief before product/research/writer work. `skip` is successful and has no writer/blog/image/publisher/Telegram side effects. Live update/expand/merge work is staged as a revision and cannot unpublish the current version or reset performance state during preparation.
 
 ## Architecture
 
@@ -16,6 +20,7 @@ Publishing through the backend API is safer than using the admin UI because it k
 ## Backend Endpoints
 
 - `GET /v1/api/automation/seo-blog/health`
+- `POST /v1/api/automation/seo-blog/prepare`
 - `POST /v1/api/automation/seo-blog/publish`
 
 Required headers:
@@ -35,8 +40,14 @@ Publish pass conditions:
 - `review.claimRisk != high`
 - `review.imageSafety = pass`
 - content word count is within `SEO_AGENT_MIN_WORDS` and `SEO_AGENT_MAX_WORDS`
+- Content Operations snapshot/action, Work Order, Unified Brief, Google/product/research/style/strategy artifacts, and action target all match
+- the server-persisted Publish Readiness Report passes and is not high/critical risk
 
-If any publish condition fails, the API creates a draft.
+If any auto-publish condition fails, the API remains draft-only when the planned action can be staged safely; critical artifact, security, target, or readiness failures return a controlled block instead of mutating live content.
+
+`prepare` returns the Content Operations snapshot, inventory snapshot, opportunity decision, Work Order, Unified Brief, action/reason/target/merge sources/business goal/score, and all applicable legacy artifacts. Maintenance responses are scoped; `skip` returns a controlled success without an article payload. The raw-body HMAC, timestamp tolerance, API keys, timing-safe verification, validation, and redaction rules apply to both prepare and publish.
+
+Authenticated administrators use `/admin/openclaw/content-operations` and its bounded APIs for status, snapshots, candidate preview/accept/dismiss, Work Orders, signals, inventory, performance/learning, and schedule management. Permissions are separated into `content_operations.*`, `content_signal.*`, `content_inventory.*`, `content_work_order.*`, `content_performance.view`, and `content_learning.*`; overrides require reason and audit and cannot bypass strict/factual/product/security/image/critical-readiness gates.
 
 ## Agents
 
@@ -108,6 +119,26 @@ SEO_AGENT_MIN_SEO_SCORE=85
 SEO_AGENT_MIN_WORDS=800
 SEO_AGENT_MAX_WORDS=1800
 ```
+
+Content Operations safe rollout variables include:
+
+```bash
+CONTENT_OPERATIONS_ENABLED=true
+CONTENT_OPERATIONS_CRON_ENABLED=false
+CONTENT_OPERATIONS_MAX_ACTIONS_PER_DAY=1
+CONTENT_OPERATIONS_MIN_OPPORTUNITY_SCORE=0.65
+CONTENT_OPERATIONS_ALLOW_SKIP=true
+CONTENT_PUBLISH_READINESS_ENABLED=true
+CONTENT_POST_PUBLISH_VERIFY_ENABLED=true
+CONTENT_PERFORMANCE_MONITORING_ENABLED=true
+CONTENT_LEARNING_ENABLED=true
+CONTENT_LEARNING_AUTO_APPLY=false
+SEARCH_CONSOLE_ENABLED=false
+CONTENT_ANALYTICS_ENABLED=false
+CONTENT_TRENDS_ENABLED=false
+```
+
+Search Console/analytics/trends are enabled only with verified read-only configuration. Code and Compose fail closed when the feature flag is absent. Credential JSON is excluded from Docker build context and mounted read-only at runtime; never place it in an image layer or print it.
 
 Required OpenClaw publisher variables:
 
@@ -184,7 +215,7 @@ This sends `deploy/openclaw/prompts/daily-seo-blog.md` to `seo-orchestrator` thr
 Deploy with:
 
 ```bash
-docker compose config
+docker compose config --quiet
 docker compose up -d backend openclaw nginx
 ```
 
@@ -254,13 +285,17 @@ If OpenClaw uses a port other than `18789`, update `deploy/nginx/default.conf`.
 - Optional IP allowlist is supported through `SEO_AGENT_ALLOWED_IPS`.
 - Publisher agent has no browser, shell, MongoDB, or admin UI access in config.
 - Agents cannot publish unless reviewer pass conditions are satisfied.
+- Writer cannot run without a matching Content Work Order and complete Unified Content Brief.
+- Publish validation requires the planned action/target and a passing Publish Readiness Report.
+- Admin decision overrides require RBAC, a reason, and audit; they cannot bypass critical gates.
+- Audit and status payloads exclude raw PII, user-level analytics, private product/inventory fields, credentials, and full copyrighted sources.
 - Backend publish gate rejects publishing when `review.imageSafety` is not `pass`.
 - Content is sanitized. Scripts, styles, inline event handlers, unsafe links, and untrusted images are removed.
 
 ## Rollback
 
-1. Set `SEO_AGENT_ENABLED=false`.
-2. Set `SEO_AGENT_AUTO_PUBLISH=false`.
+1. Set `CONTENT_OPERATIONS_ENABLED=false` and keep `CONTENT_OPERATIONS_CRON_ENABLED=false`.
+2. Set `CONTENT_LEARNING_AUTO_APPLY=false`, `SEO_AGENT_ENABLED=false`, and `SEO_AGENT_AUTO_PUBLISH=false`.
 3. Remove or disable the OpenClaw cron.
 4. Stop OpenClaw:
 
@@ -269,14 +304,16 @@ docker compose stop openclaw
 ```
 
 5. Reload Nginx after removing or disabling the `seo-agent.inoxpran.com` block if needed.
-6. Keep existing blog drafts for review or delete them through the normal admin workflow.
+6. Keep all existing blog drafts for review; rollback must not delete them.
+
+Do not purge V3 snapshots, signals, decisions, Work Orders, revisions, performance/learning, or audit data as part of rollback. Additive collections may remain unused. Deploy the previously recorded exact commit and restore the backed-up configuration; do not patch production source files directly.
 
 ## Known Limitations
 
 - OpenClaw releases can introduce config migrations; the updater keeps a pre-update state archive and verifies health before accepting a new image.
 - ClawHub skill availability is unknown until `install-skills.sh` runs with both CLIs installed.
 - Some relevant ClawHub SEO skills were not installed because `openclaw skills verify` returned fail/pending on 2026-07-07. Re-verify before reconsidering them.
-- Search Console is a local placeholder skill until a verified integration exists.
+- Search Console remains optional, but V3 uses a verified credential-backed read-only adapter when configured and an explicit unavailable/fallback state otherwise.
 - Actual image file generation/upload is provider-dependent. Core behavior creates a safe image brief and uses `SEO_AGENT_DEFAULT_BLOG_IMAGE` unless a verified image provider returns an image URL.
 - Nginx certificate coverage for `seo-agent.inoxpran.com` must be reissued and verified manually.
 - Smoke test requires a running backend and safe non-production env values.

@@ -3,6 +3,13 @@
 const os = require('node:os');
 const { BlogAutomationScheduleService, isCronEnabled } = require('./blogAutomationSchedule.service');
 const { GoogleIntelligenceService } = require('./googleIntelligence.service');
+const {
+    ContentOperationsScheduleService,
+    isContentOperationsScheduleEnabled
+} = require('./contentOperations/contentOperationsSchedule.service');
+const { PerformanceLearningService } = require('./contentOperations/performanceLearning.service');
+const { safeErrorCode } = require('../utils/httpError.util');
+const { getContentOperationsConfig } = require('../config/contentOperations.config');
 
 const DEFAULT_POLL_MS = 30_000;
 const MIN_POLL_MS = 5_000;
@@ -17,21 +24,37 @@ const getPollMs = () =>
 const buildWorkerId = () =>
     `openclaw-blog-cron:${os.hostname()}:${process.pid}:${Date.now().toString(36)}`;
 
+const isPerformanceMonitoringEnabled = () => {
+    const config = getContentOperationsConfig();
+    return config.enabled && config.performanceMonitoring.enabled;
+};
+
 const tick = async () => {
     if (running) return;
-    if (!isCronEnabled() && process.env.GOOGLE_INTELLIGENCE_ENABLED !== 'true') return;
+    if (!isCronEnabled() && process.env.GOOGLE_INTELLIGENCE_ENABLED !== 'true' && !isContentOperationsScheduleEnabled() && !isPerformanceMonitoringEnabled()) return;
     running = true;
     try {
         await GoogleIntelligenceService.runDueOnce({ workerId }).catch((error) => {
-            console.error('Google Intelligence scheduler tick failed:', error?.message || error);
+            console.error('Google Intelligence scheduler tick failed:', safeErrorCode(error));
             return null;
         });
+        await ContentOperationsScheduleService.runDueOnce({ workerId }).catch((error) => {
+            console.error('Content Operations scheduler tick failed:', safeErrorCode(error));
+            return null;
+        });
+        for (let i = 0; i < 3; i += 1) {
+            const result = await PerformanceLearningService.runDueOnce({ workerId }).catch((error) => {
+                console.error('Content performance monitoring tick failed:', safeErrorCode(error));
+                return null;
+            });
+            if (!result) break;
+        }
         for (let i = 0; i < 3; i += 1) {
             const result = await BlogAutomationScheduleService.runDueOnce({ workerId });
             if (!result) break;
         }
     } catch (error) {
-        console.error('OpenClaw blog scheduler tick failed:', error?.message || error);
+        console.error('OpenClaw blog scheduler tick failed:', safeErrorCode(error));
     } finally {
         running = false;
     }

@@ -42,6 +42,9 @@
         skills: [
           "skill-vetter",
           "sharpagent-content-safety",
+          "inoxpran-content-operations-contract",
+          "inoxpran-content-work-order",
+          "inoxpran-unified-content-brief",
           "inoxpran-brand-voice",
           "inoxpran-seo-review",
           "inoxpran-blog-editor-schema",
@@ -54,6 +57,104 @@
           "inoxpran-ranking-evidence-safety",
           "inoxpran-editorial-product-placement-review",
         ],
+      },
+      {
+        id: "content-operations-orchestrator",
+        workspace: "/workspaces/content-operations-orchestrator",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "google-intelligence-snapshot",
+          "inoxpran-content-operations-contract",
+          "inoxpran-daily-content-snapshot",
+          "inoxpran-content-action-decision",
+          "inoxpran-content-work-order",
+          "inoxpran-unified-content-brief",
+        ],
+      },
+      {
+        id: "site-performance-analyst",
+        workspace: "/workspaces/site-performance-analyst",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-daily-content-snapshot",
+          "inoxpran-content-inventory",
+          "inoxpran-search-console",
+        ],
+      },
+      {
+        id: "content-inventory-auditor",
+        workspace: "/workspaces/content-inventory-auditor",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-content-inventory", "inoxpran-daily-content-snapshot"],
+      },
+      {
+        id: "customer-insight-synthesizer",
+        workspace: "/workspaces/customer-insight-synthesizer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-cross-department-signals", "inoxpran-daily-content-snapshot"],
+      },
+      {
+        id: "content-opportunity-prioritizer",
+        workspace: "/workspaces/content-opportunity-prioritizer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-content-action-decision",
+          "inoxpran-daily-content-snapshot",
+          "inoxpran-content-inventory",
+        ],
+      },
+      {
+        id: "content-work-order-manager",
+        workspace: "/workspaces/content-work-order-manager",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-content-operations-contract",
+          "inoxpran-content-action-decision",
+          "inoxpran-content-work-order",
+        ],
+      },
+      {
+        id: "unified-brief-planner",
+        workspace: "/workspaces/unified-brief-planner",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-content-work-order",
+          "inoxpran-unified-content-brief",
+          "inoxpran-source-attribution",
+        ],
+      },
+      {
+        id: "publish-readiness-reviewer",
+        workspace: "/workspaces/publish-readiness-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-publish-readiness",
+          "inoxpran-content-operations-contract",
+          "inoxpran-publisher-gate",
+          "inoxpran-seo-review",
+        ],
+      },
+      {
+        id: "post-publish-verifier",
+        workspace: "/workspaces/post-publish-verifier",
+        tools: { deny: ["exec", "process"] },
+        skills: ["inoxpran-post-publish-verification"],
+      },
+      {
+        id: "content-performance-analyst",
+        workspace: "/workspaces/content-performance-analyst",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-content-learning-loop",
+          "inoxpran-post-publish-verification",
+          "inoxpran-search-console",
+        ],
+      },
+      {
+        id: "content-learning-analyst",
+        workspace: "/workspaces/content-learning-analyst",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: ["inoxpran-content-learning-loop", "inoxpran-content-action-decision"],
       },
       {
         id: "product-catalog-analyst",
@@ -164,6 +265,8 @@
         tools: { deny: ["exec", "process", "browser"] },
         skills: [
           "content-generation",
+          "inoxpran-content-operations-contract",
+          "inoxpran-unified-content-brief",
           "inoxpran-brand-voice",
           "inoxpran-positioning",
           "inoxpran-blog-editor-schema",
@@ -189,7 +292,12 @@
         id: "visual-planner",
         workspace: "/workspaces/visual-planner",
         tools: { deny: ["exec", "process", "browser"] },
-        skills: ["inoxpran-visual-plan", "inoxpran-blog-editor-schema"],
+        skills: [
+          "inoxpran-content-operations-contract",
+          "inoxpran-unified-content-brief",
+          "inoxpran-visual-plan",
+          "inoxpran-blog-editor-schema",
+        ],
       },
       {
         id: "image-researcher",
@@ -220,6 +328,8 @@
         workspace: "/workspaces/publisher-gatekeeper",
         tools: { deny: ["exec", "process", "browser"] },
         skills: [
+          "inoxpran-content-operations-contract",
+          "inoxpran-publish-readiness",
           "inoxpran-publisher-gate",
           "inoxpran-seo-review",
           "google-intelligence-snapshot",
@@ -260,7 +370,11 @@
         id: "qa-agent",
         workspace: "/workspaces/qa-agent",
         tools: { deny: ["exec", "process"] },
-        skills: ["ddg-search", "firecrawl"],
+        skills: [
+          "inoxpran-content-operations-contract",
+          "inoxpran-publish-readiness",
+          "inoxpran-post-publish-verification",
+        ],
       },
       {
         id: "google-source-monitor",
@@ -307,13 +421,24 @@
         ],
       },
       {
+        id: "seo-aeo-geo-reviewer",
+        workspace: "/workspaces/seo-aeo-geo-reviewer",
+        tools: { deny: ["exec", "process", "browser"] },
+        skills: [
+          "inoxpran-seo-review",
+          "inoxpran-source-attribution",
+          "inoxpran-content-operations-contract",
+        ],
+      },
+      {
         id: "topic-opportunity-researcher",
         workspace: "/workspaces/topic-opportunity-researcher",
         tools: { deny: ["exec", "process", "browser"] },
         skills: [
           "inoxpran-topic-planner",
-          "inoxpran-blog-strategy-contract",
-          "inoxpran-search-console",
+          "inoxpran-daily-content-snapshot",
+          "inoxpran-content-inventory",
+          "inoxpran-content-action-decision",
         ],
       },
       {
@@ -331,7 +456,11 @@
         id: "search-intent-analyst",
         workspace: "/workspaces/search-intent-analyst",
         tools: { deny: ["exec", "process", "browser"] },
-        skills: ["inoxpran-blog-strategy-contract"],
+        skills: [
+          "inoxpran-content-work-order",
+          "inoxpran-unified-content-brief",
+          "inoxpran-blog-strategy-contract",
+        ],
       },
       {
         id: "editorial-style-planner",
@@ -344,6 +473,9 @@
         workspace: "/workspaces/content-strategist",
         tools: { deny: ["exec", "process", "browser"] },
         skills: [
+          "inoxpran-content-operations-contract",
+          "inoxpran-content-work-order",
+          "inoxpran-unified-content-brief",
           "inoxpran-blog-strategy-contract",
           "inoxpran-brand-voice",
           "inoxpran-source-attribution",
@@ -357,7 +489,11 @@
         workspace: "/workspaces/content-architect",
         tools: { deny: ["exec", "process", "browser"] },
         skills: [
+          "inoxpran-content-operations-contract",
+          "inoxpran-content-work-order",
+          "inoxpran-unified-content-brief",
           "inoxpran-blog-strategy-contract",
+          "inoxpran-source-attribution",
           "inoxpran-editorial-style-rotation",
           "inoxpran-blog-editor-schema",
           "inoxpran-contextual-product-seeding",
@@ -384,7 +520,13 @@
         id: "fact-checker",
         workspace: "/workspaces/fact-checker",
         tools: { deny: ["exec", "process", "browser"] },
-        skills: ["inoxpran-source-attribution", "inoxpran-brand-voice", "inoxpran-product-claim-safety"],
+        skills: [
+          "inoxpran-content-operations-contract",
+          "inoxpran-unified-content-brief",
+          "inoxpran-source-attribution",
+          "inoxpran-brand-voice",
+          "inoxpran-product-claim-safety",
+        ],
       },
       {
         id: "brand-voice-reviewer",
@@ -396,7 +538,11 @@
         id: "reporter",
         workspace: "/workspaces/reporter",
         tools: { deny: ["exec", "process", "browser"] },
-        skills: ["skill-vetter"],
+        skills: [
+          "inoxpran-content-operations-contract",
+          "inoxpran-content-learning-loop",
+          "inoxpran-post-publish-verification",
+        ],
       },
     ],
   },

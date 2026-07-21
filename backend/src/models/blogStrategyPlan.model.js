@@ -5,6 +5,9 @@ const { Schema, model } = require('mongoose');
 const strategyPlanSchema = new Schema(
     {
         googleIntelSnapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', required: true, index: true },
+        contentWorkOrderId: { type: Schema.Types.ObjectId, ref: 'ContentWorkOrder', default: null, index: true },
+        unifiedContentBriefId: { type: Schema.Types.ObjectId, ref: 'UnifiedContentBrief', default: null, index: true },
+        evidenceMapId: { type: Schema.Types.ObjectId, ref: 'EvidenceMap', default: null, index: true },
         productCatalogSnapshotId: { type: Schema.Types.ObjectId, ref: 'ProductCatalogSnapshot', default: null, index: true },
         productSeedPlanId: { type: Schema.Types.ObjectId, ref: 'ProductSeedPlan', default: null, index: true },
         editorialProductPlacementPlanId: { type: Schema.Types.ObjectId, ref: 'EditorialProductPlacementPlan', default: null, index: true },
@@ -17,7 +20,7 @@ const strategyPlanSchema = new Schema(
         commercialDensityLimit: { type: Schema.Types.Mixed, default: () => ({}) },
         productReviewPlan: { type: Schema.Types.Mixed, default: () => ({}) },
         topic: { type: String, required: true, maxlength: 300 },
-        decision: { type: String, enum: ['new', 'update', 'merge', 'skip'], required: true, index: true },
+        decision: { type: String, enum: ['new', 'update', 'expand', 'merge', 'metadata_refresh', 'internal_link_maintenance', 'content_maintenance', 'skip'], required: true, index: true },
         decisionReason: { type: String, required: true, maxlength: 1000 },
         targetBlogIds: { type: [{ type: Schema.Types.ObjectId, ref: 'BlogPost' }], default: [] },
         targetAudience: { type: String, required: true },

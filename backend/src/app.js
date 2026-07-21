@@ -7,6 +7,14 @@ const compression = require('compression');
 const path = require('path');
 const swaggerUi = require('swagger-ui-express');
 const YAML = require('yamljs');
+const {
+  buildSafeErrorPayload,
+  buildSafeServerLog,
+  escapeHtml,
+  resolveStatusCode,
+  safeClientMessage,
+  safeRequestPath
+} = require('./utils/httpError.util');
 
 // Init shared connections early (Redis, etc.)
 // require('./config/redis'); // safe to require; handles its own connect
@@ -48,9 +56,9 @@ const formatUploadSizeMb = (value) => {
 const buildNotFoundPayload = (req, message = 'Route not found') => ({
   status: 'error',
   code: 404,
-  message,
+  message: String(message || 'Route not found').slice(0, 500),
   method: req.method,
-  path: req.originalUrl
+  path: safeRequestPath(req)
 });
 
 const renderNotFoundHtml = (payload) => `<!doctype html>
@@ -119,7 +127,7 @@ const renderNotFoundHtml = (payload) => `<!doctype html>
       <span class="badge">404</span>
       <h1>Không tìm thấy endpoint</h1>
       <p>Yêu cầu không khớp với bất kỳ route nào của API.</p>
-      <code>${payload.method} ${payload.path}</code>
+      <code>${escapeHtml(payload.method)} ${escapeHtml(payload.path)}</code>
     </div>
   </body>
 </html>`;
@@ -139,7 +147,13 @@ const sendNotFound = (req, res, message) => {
 // Security & logs
 app.use(helmet());
 app.use(cors());
-app.use(morgan('dev'));
+app.use(morgan((tokens, req, res) => [
+  tokens.method(req, res),
+  safeRequestPath(req),
+  tokens.status(req, res),
+  tokens.res(req, res, 'content-length') || '-',
+  `${tokens['response-time'](req, res) || '0'} ms`
+].join(' ')));
 // morgan("compile");
 // morgan("short");
 // morgan("tiny");
@@ -204,22 +218,26 @@ app.use((error, req, res, next) => {
     error?.name === 'JsonWebTokenError' ||
     error?.name === 'NotBeforeError';
 
-  const statusCode = isJwtError ? 401 : error.status || (isMulterError ? 400 : 500);
+  const statusCode = resolveStatusCode(error, { isJwtError, isMulterError });
   if (statusCode === 404) {
-    return sendNotFound(req, res, error.message || 'Not found');
+    return sendNotFound(req, res, 'Not found');
   }
-  const message = isFileSizeError
-    ? `Image size must be ${formatUploadSizeMb(req?.uploadMaxFileSize)} or smaller`
-    : isJwtError
-      ? 'Session expired. Please login again.'
-      : error.message || 'Internal Server Error';
-
-  return res.status(statusCode).json({
-    status: 'error',
-    code: statusCode,
-    stack: error.stack,
-    message
-  })
+  const message = safeClientMessage({
+    error,
+    statusCode,
+    isFileSizeError,
+    isJwtError,
+    uploadMaxFileSize: req?.uploadMaxFileSize,
+    formatUploadSizeMb
+  });
+  const payload = buildSafeErrorPayload({
+    error,
+    statusCode,
+    message,
+    includeStack: process.env.NODE_ENV !== 'production'
+  });
+  if (statusCode >= 500) console.error(JSON.stringify(buildSafeServerLog({ error, req, statusCode })));
+  return res.status(statusCode).json(payload)
 })
 
 module.exports = app;

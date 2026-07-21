@@ -5,6 +5,7 @@ const { Schema, model } = require('mongoose');
 const runSchema = new Schema(
     {
         executionKey: { type: String, required: true, unique: true, index: true },
+        executionSlotKey: { type: String, default: '', index: true },
         scheduledAt: { type: Date, default: null },
         startedAt: { type: Date, default: null },
         completedAt: { type: Date, default: null },
@@ -22,6 +23,8 @@ const runSchema = new Schema(
         triggeredBy: { type: String, default: 'gate' },
         triggeredByAdminId: { type: Schema.Types.ObjectId, ref: 'Admin', default: null },
         snapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', default: null },
+        snapshotGeneration: { type: Number, default: 0, min: 0, index: true },
+        buildToken: { type: String, default: '', maxlength: 200, select: false },
         error: { type: String, default: '', maxlength: 1000 },
         retryCount: { type: Number, default: 0, min: 0 },
         correlationId: { type: String, default: '', index: true }
@@ -30,5 +33,6 @@ const runSchema = new Schema(
 );
 
 runSchema.index({ snapshotDate: 1, createdAt: -1 });
+runSchema.index({ executionSlotKey: 1, snapshotGeneration: 1 });
 
 module.exports = { GoogleIntelligenceRun: model('GoogleIntelligenceRun', runSchema) };

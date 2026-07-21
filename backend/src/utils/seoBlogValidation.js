@@ -1,5 +1,6 @@
 'use strict'
 
+const { isValidObjectId } = require('mongoose');
 const { BLOG_CATEGORY_KEYS } = require('../models/blog.model');
 const { BadRequestError } = require('../core/error.response');
 const {
@@ -16,6 +17,10 @@ const DEFAULT_MAX_WORDS = 1800;
 const MAX_TITLE_LENGTH = 120;
 const MAX_SEO_TITLE_LENGTH = 60;
 const MAX_SEO_DESCRIPTION_LENGTH = 160;
+const CONTENT_ACTIONS = Object.freeze([
+    'new', 'update', 'expand', 'merge', 'metadata_refresh',
+    'internal_link_maintenance', 'content_maintenance', 'skip'
+]);
 
 const parseNumber = (value, fallback) => {
     const parsed = Number(value);
@@ -40,6 +45,15 @@ const parseReview = (value = {}) => ({
     spamRisk: normalizeString(value.spamRisk).toLowerCase(),
     seoAeoGeo: normalizeString(value.seoAeoGeo).toLowerCase()
 });
+
+const normalizeMaterialClaims = (value) => (Array.isArray(value) ? value : [])
+    .slice(0, 100)
+    .map((entry) => ({
+        evidenceKey: normalizeString(entry?.evidenceKey).slice(0, 160),
+        contentExcerpt: normalizeString(entry?.contentExcerpt || entry?.excerpt).slice(0, 500),
+        qualificationApplied: entry?.qualificationApplied === true
+    }))
+    .filter((entry) => entry.evidenceKey && entry.contentExcerpt);
 
 const isPublishReviewPassing = ({ review, wordCount, thresholds = getSeoThresholds() }) => {
     const reasons = [];
@@ -136,6 +150,32 @@ const validateAutomationPayload = (payload = {}) => {
     const context = Object.fromEntries(requiredContext.map((key) => [key, normalizeString(payload[key] || payload.metadata?.[key])]));
     const missingContext = requiredContext.filter((key) => !context[key]);
     if (missingContext.length) throw new BadRequestError(`Agentic writer context is missing: ${missingContext.join(', ')}`);
+    const invalidLegacyIds = ['googleIntelSnapshotId', 'researchBundleId', 'editorialStyleProfileId', 'strategyPlanId', 'agenticExecutionId']
+        .filter((key) => !isValidObjectId(context[key]));
+    if (invalidLegacyIds.length) throw new BadRequestError(`Agentic writer context has invalid object IDs: ${invalidLegacyIds.join(', ')}`);
+
+    const contentDecision = normalizeString(payload.contentDecision || 'new').toLowerCase();
+    if (!CONTENT_ACTIONS.includes(contentDecision)) {
+        throw new BadRequestError(`contentDecision must be one of: ${CONTENT_ACTIONS.join(', ')}`);
+    }
+    if (contentDecision === 'skip') throw new BadRequestError('skip decisions must not invoke the writer or publisher');
+
+    const contentOperationsEnabled = ['1', 'true', 'yes', 'on'].includes(String(process.env.CONTENT_OPERATIONS_ENABLED || '').trim().toLowerCase());
+    const v3Keys = [
+        'contentOperationsSnapshotId',
+        'contentInventorySnapshotId',
+        'contentOpportunityDecisionId',
+        'contentWorkOrderId',
+        'unifiedContentBriefId',
+        'evidenceMapId'
+    ];
+    const v3Context = Object.fromEntries(v3Keys.map((key) => [key, normalizeString(payload[key] || payload.metadata?.[key])]));
+    if (contentOperationsEnabled) {
+        const missingV3 = v3Keys.filter((key) => !v3Context[key]);
+        if (missingV3.length) throw new BadRequestError(`Content Operations writer context is missing: ${missingV3.join(', ')}`);
+        const invalidV3 = v3Keys.filter((key) => !isValidObjectId(v3Context[key]));
+        if (invalidV3.length) throw new BadRequestError(`Content Operations writer context has invalid object IDs: ${invalidV3.join(', ')}`);
+    }
 
     const productSeedingMode = normalizeString(payload.productSeedingMode || payload.metadata?.productSeedingMode || 'off').toLowerCase();
     if (!['off', 'auto', 'required'].includes(productSeedingMode)) {
@@ -165,6 +205,22 @@ const validateAutomationPayload = (payload = {}) => {
             !editorialProductPlacementReview ? 'editorialProductPlacementReview' : ''
         ].filter(Boolean);
         if (missingProductContext.length) throw new BadRequestError(`Product writer context is missing: ${missingProductContext.join(', ')}`);
+        const invalidProductIds = [productCatalogSnapshotId, productSeedPlanId, editorialProductPlacementPlanId]
+            .filter((value) => value && !isValidObjectId(value));
+        if (invalidProductIds.length) throw new BadRequestError('Product writer context contains an invalid object ID');
+    }
+
+    const targetBlogId = normalizeString(payload.targetBlogId);
+    if (['update', 'expand', 'merge', 'metadata_refresh', 'internal_link_maintenance', 'content_maintenance'].includes(contentDecision) && !targetBlogId) {
+        throw new BadRequestError('targetBlogId is required for revision and maintenance actions');
+    }
+    if (targetBlogId && !isValidObjectId(targetBlogId)) throw new BadRequestError('targetBlogId is invalid');
+    const mergeSourceBlogIds = normalizeStringArray(payload.mergeSourceBlogIds, 20);
+    if (mergeSourceBlogIds.some((value) => !isValidObjectId(value))) throw new BadRequestError('mergeSourceBlogIds contains an invalid object ID');
+    if (contentDecision === 'merge' && mergeSourceBlogIds.length === 0) throw new BadRequestError('mergeSourceBlogIds is required for merge');
+    const monitoringWindows = normalizeStringArray(payload.monitoringWindows, 6);
+    if (monitoringWindows.some((window) => !['immediate', '1d', '7d', '14d', '30d', '90d'].includes(window))) {
+        throw new BadRequestError('monitoringWindows contains an unsupported value');
     }
 
     const wordCount = countWords(sanitizedContentHtml);
@@ -197,10 +253,15 @@ const validateAutomationPayload = (payload = {}) => {
         articleType: normalizeString(payload.articleType),
         outline: Array.isArray(payload.outline) ? payload.outline : [],
         internalLinks: Array.isArray(payload.internalLinks) ? payload.internalLinks : [],
+        monitoringWindows,
+        materialClaims: normalizeMaterialClaims(payload.materialClaims),
+        materialClaimsManifestProvided: payload.materialClaimsManifestProvided === true,
         faq: Array.isArray(payload.faq) ? payload.faq : [],
-        contentDecision: normalizeString(payload.contentDecision || 'new').toLowerCase(),
-        targetBlogId: normalizeString(payload.targetBlogId),
+        contentDecision,
+        targetBlogId,
+        mergeSourceBlogIds,
         ...context,
+        ...v3Context,
         productCatalogSnapshotId,
         productSeedPlanId,
         editorialProductPlacementPlanId,
@@ -221,10 +282,12 @@ const validateAutomationPayload = (payload = {}) => {
 };
 
 module.exports = {
+    CONTENT_ACTIONS,
     DEFAULT_MAX_WORDS,
     DEFAULT_MIN_SEO_SCORE,
     DEFAULT_MIN_WORDS,
     isPublishReviewPassing,
+    normalizeMaterialClaims,
     parseReview,
     validateAutomationPayload
 };

@@ -6,6 +6,7 @@ const { product } = require('../models/product.model');
 const { inventory } = require('../models/inventory.model');
 const { ProductCatalogSnapshot } = require('../models/productCatalogSnapshot.model');
 const { buildEnvProductSeedingConfig } = require('../config/productSeeding.config');
+const { safeErrorCode } = require('../utils/httpError.util');
 
 const PRODUCT_SELECT = [
     '_id', 'product_name', 'product_slug', 'product_description', 'product_thumb',
@@ -213,7 +214,7 @@ class ProductCatalogIntelligenceService {
                 generatedAt: now,
                 expiresAt: new Date(now.getTime() + config.catalogSnapshotTtlMinutes * 60_000),
                 status: 'failed',
-                error: text(error?.message || 'catalog_snapshot_failed', 500)
+                error: safeErrorCode({ code: error?.code || 'PRODUCT_CATALOG_SNAPSHOT_FAILED' })
             });
             return typeof failed.toObject === 'function' ? failed.toObject() : failed;
         }

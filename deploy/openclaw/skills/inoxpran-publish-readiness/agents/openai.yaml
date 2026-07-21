@@ -1,0 +1,4 @@
+interface:
+  display_name: "Publish Readiness"
+  short_description: "Enforce critical draft and publish readiness gates"
+  default_prompt: "Use $inoxpran-publish-readiness to issue an evidence-backed readiness verdict."

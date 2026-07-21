@@ -33,6 +33,11 @@
 				roles: ['ADMIN', 'SUPER_ADMIN']
 			},
 			{
+				href: '/admin/openclaw/content-operations',
+				label: $t('admin.nav.contentOperations'),
+				roles: ['ADMIN', 'SUPER_ADMIN']
+			},
+			{
 				href: '/admin/openclaw/google-intelligence',
 				label: $locale === 'en' ? 'Google Intelligence' : 'Google Intelligence',
 				roles: ['ADMIN', 'SUPER_ADMIN']
@@ -67,6 +72,7 @@
 		const path = routeId === '/admin' || routeId.startsWith('/admin/') ? routeId : $page.url.pathname;
 		if (path === href) return true;
 		if (href === '/admin') return false;
+		if (href === '/admin/openclaw') return false;
 		return path.startsWith(`${href}/`);
 	};
 

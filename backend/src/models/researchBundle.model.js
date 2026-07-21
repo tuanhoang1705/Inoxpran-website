@@ -4,6 +4,9 @@ const { Schema, model } = require('mongoose');
 
 const researchBundleSchema = new Schema(
     {
+        contentWorkOrderId: { type: Schema.Types.ObjectId, ref: 'ContentWorkOrder', default: null, index: true },
+        unifiedContentBriefId: { type: Schema.Types.ObjectId, ref: 'UnifiedContentBrief', default: null, index: true },
+        evidenceMapId: { type: Schema.Types.ObjectId, ref: 'EvidenceMap', default: null, index: true },
         topic: { type: String, required: true, trim: true, maxlength: 300, index: true },
         sources: { type: [Schema.Types.Mixed], default: [] },
         researchCoverage: { type: String, enum: ['high', 'medium', 'low'], default: 'low' },

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Work Order"
+  short_description: "Create bounded and auditable editorial work orders"
+  default_prompt: "Use $inoxpran-content-work-order to produce a validated work order from an approved decision."

@@ -97,7 +97,7 @@ Do not commit the bot token. If a token was pasted into chat or logs, rotate it 
    ```
 3. Validate config:
    ```bash
-   docker compose config
+   docker compose config --quiet
    ```
 4. Set the Telegram webhook using the command above.
 5. Open `/admin/openclaw`, create a schedule, and run it manually once.

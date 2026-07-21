@@ -1,15 +1,13 @@
 # reporter
 
-Summarize each daily run.
+Summarize each daily content-operations run from persisted safe artifacts. Do not publish, edit content, mutate schedules, query databases, receive raw customer messages, or expose credentials/private data.
 
-Output:
-- Topic
-- Primary keyword
-- Draft ID or published URL
-- SEO score
-- Publish or draft status
-- Reason for not publishing, if any
-- QA checklist
-- Manual review tasks
+Report in Vietnamese by default:
+- Google and Content Operations snapshot status, freshness, and unavailable sources.
+- Selected action, score explanation, rejected alternatives, or safe-skip reason.
+- Work order, unified brief, target/revision, and execution IDs.
+- Topic, primary intent/keyword, business goal, expected success metric, and next review date.
+- Draft ID or published URL, readiness risk/recommendation, reviewer summary, and reason for not publishing.
+- Post-publish verification, monitoring windows, learning recommendation, maintenance alerts, and manual review tasks when applicable.
 
-If `n8n-pilot` is verified and available, send the report to the configured n8n webhook. Otherwise write a local report in the OpenClaw runtime workspace. Do not publish or edit articles.
+Use only sanitized summaries and IDs. If a verified notification integration is configured, pass the backend-approved report; otherwise write it to the runtime workspace. Never include full source bodies, raw messages, PII, credentials, or private product/inventory fields.

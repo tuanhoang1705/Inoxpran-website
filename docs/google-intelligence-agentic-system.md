@@ -1,8 +1,12 @@
 # Google Intelligence and Compliance System
 
+> Content Operations V3 integration (2026-07-20): Google Intelligence remains the first mandatory gate. The downstream lifecycle is documented in [OpenClaw Content Operations Lifecycle V3](./openclaw-content-operations-lifecycle-v3.md).
+
 ## Purpose
 
 Google Intelligence is an independent, persisted compliance workflow. Every Agentic content execution must obtain an acceptable daily snapshot before planning or writing. It does not promise ranking, indexing, or inclusion in Google AI features.
+
+Google Intelligence and Content Operations Intelligence have separate responsibilities. Google Intelligence answers which official guidance and compliance constraints apply today. Only after that snapshot is acceptable may Content Operations inspect site performance, inventory, market demand, products, and aggregated business/customer signals to decide what work is worthwhile. Content Operations reuses `googleIntelSnapshotId`; it must not fetch or reinterpret Google policy as a duplicate workflow.
 
 ## Architecture
 
@@ -54,9 +58,13 @@ The snapshot key is `(snapshotDate, timezone)` and is unique. Default timezone i
 
 Every snapshot includes source health, counts, required-source result, verified changes, current rules, recommendations, risks, required actions, content guidance, reviewer outcome, and a content hash.
 
+Snapshot construction is generation-fenced. Each builder owns a private token and monotonically increasing generation; only that owner may advance source baselines, persist detected changes, or finalize the snapshot. A stale or force-rebuild worker cannot overwrite a newer generation. When a completed snapshot exists but its exact run remained `running` because the worker stopped in the narrow post-commit gap, reuse reconciles that run from the snapshot, including bounded source results and change counts.
+
 For changed sources, the monitor retains only a bounded prior excerpt. The detector records whether material was new, updated, or substantially removed, plus limited added/removed terminology and an action status. A standalone “Run Source” health check does not advance the daily comparison baseline, so the next snapshot cannot silently lose a detected change.
 
 `ensureGoogleIntelligenceSnapshotForDate()` is called by the schedule pipeline and the authenticated automation publisher. It reuses a fresh daily snapshot, starts an idempotent run when absent, waits briefly for concurrent work, and blocks when the result is unacceptable.
+
+V3 then calls `ensureContentOperationsSnapshotForDate()` for the same local date/timezone. The second artifact records the Google snapshot relationship, source health/freshness, inventory reference, and candidate inputs. No product planning, Work Order, Unified Brief, research, writer, maintenance revision, or preview decision may bypass this order. A V3 preview may ensure/reuse only the permitted intelligence snapshots; it does not persist a planning run, decision, Work Order, brief, blog, image, publication, or Telegram side effect.
 
 ## Strict gate and fallback
 
@@ -140,3 +148,9 @@ GOOGLE_INTELLIGENCE_SOURCE_TIMEOUT_MS=15000
 Deploy code normally, set environment values, restart backend workers, open the admin page, verify sources, and use Run Now before enabling the blog schedule. No destructive migration is required; Mongoose creates additive collections/indexes.
 
 To roll back, disable both Google Intelligence and blog cron, revert the feature commits, and restart backend/frontend. New collections can remain unused; do not delete them during an emergency rollback.
+
+## Content Operations V3 operating note
+
+The Content Operations cron is independent of the Google Intelligence schedule. Initial rollout keeps `CONTENT_OPERATIONS_CRON_ENABLED=false`, `CONTENT_LEARNING_AUTO_APPLY=false`, and `SEO_AGENT_AUTO_PUBLISH=false`; operators first verify a Google-first controlled snapshot and non-mutating preview. If the Google schedule shows no successful daily run or a stale next-run time, repair and verify that gate before enabling Content Operations scheduling.
+
+Search Console is not part of the mandatory Google-policy fetch. Its V3 adapter is optional, read-only, and credential-backed; unavailable Search Console produces an explicit unavailable state rather than fabricated metrics. Google/service-account credentials are mounted read-only at runtime, excluded from image build context, and never returned by status APIs or the admin UI.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Content Operations Contract"
+  short_description: "Govern auditable content operations workflows"
+  default_prompt: "Use $inoxpran-content-operations-contract to validate an auditable content operations handoff."

@@ -1,10 +1,14 @@
 # OpenClaw Product Relevance and Contextual Seeding Intelligence
 
+> Content Operations V3 integration (2026-07-20): product intelligence is downstream of the selected action, Content Work Order, and Unified Content Brief. See [OpenClaw Content Operations Lifecycle V3](./openclaw-content-operations-lifecycle-v3.md).
+
 > Placement boundary: this layer selects eligible products and safe catalog claims only. It no longer decides section/ranking position, disclosure, CTA placement or product-image placement. Those decisions belong to the independently persisted `EditorialProductPlacementPlan`; see `openclaw-editorial-product-placement-strategy.md`.
 
 ## 1. Architecture and workflow
 
-This additive, backend-controlled layer runs: `Google Intelligence strict gate → Product Catalog Snapshot → deterministic relevance/cooldown → Product Seed Plan → existing Agentic Blog Core → product and existing review gates → draft/publish`. Google is the first awaited operation. Required mode can stop before research/writing. OpenClaw never reads MongoDB or product-admin APIs.
+This additive, backend-controlled layer runs: `Google Intelligence strict gate → Content Operations Daily Snapshot/inventory → opportunity decision → Content Work Order → Unified Content Brief → Product Catalog Snapshot → deterministic relevance/cooldown → Product Seed Plan → Editorial Product Placement Plan → existing Agentic Blog Core → product and existing review gates → Publish Readiness → draft/publish`. Google is the first awaited operation, while product work begins only after the user need, action, intent, target, and business goal are persisted. Required mode can stop before research/writing. OpenClaw never reads MongoDB or product-admin APIs.
+
+`skip` bypasses product analysis entirely. `metadata_refresh`, `internal_link_maintenance`, and `content_maintenance` use only the minimum validated product check needed for the scoped task and do not force a full Product Seed Plan or writer run. Product availability or campaign priority alone cannot create a topic.
 
 ## 2. Product Catalog Snapshot
 
@@ -40,7 +44,7 @@ Trend: verified concern → cause → criteria → disclosed product example →
 
 ## 7. Product Seed Plan
 
-`ProductSeedPlan` ties brief hash, Google/catalog snapshots and execution to mode/intensity/decision. It stores selected evidence-only products, top/rejected scores, placements, CTA/density limits, risks, reviews, warnings/error codes and override reason. `BlogStrategyPlan` receives plan/catalog IDs, selected IDs, claim evidence, placement/density constraints and the product review plan.
+`ProductSeedPlan` ties `contentWorkOrderId`, `unifiedContentBriefId`, brief hash, Google/Content Operations/catalog snapshots, decision, and execution to mode/intensity. It stores selected evidence-only products, top/rejected scores, placements, CTA/density limits, risks, reviews, warnings/error codes and override reason. `BlogStrategyPlan` receives the Work Order/brief relationship, plan/catalog IDs, selected IDs, claim evidence, placement/density constraints and the product review plan.
 
 ## 8. Agents and local skills
 
@@ -64,13 +68,13 @@ Product blocks must follow objective context, disclose INOXPRAN, match plan URLs
 
 `agentConfig.productSeeding` persists enabled, mode, intensity, primary/supporting maxima, preferred category/product IDs, exclusions, out-of-stock opt-in, threshold and informational fallback. CRUD/Run Now use this object; global config caps maxima.
 
-Daily Draft adds a bilingual Product Integration fieldset and Preview Matching results (decision, candidate breakdown, selections/rejections/warnings). Execution details show mode/decision, catalog/plan IDs, selected/rejected candidates, placements, claim review, naturalness/pressure and counts without redesigning the page.
+Daily Draft adds a bilingual Product Integration fieldset and Preview Matching results (decision, candidate breakdown, selections/rejections/warnings). Under V3, product controls appear only after the Work Order topic and intent exist. Execution details show Work Order/brief, mode/decision, catalog/plan IDs, selected/rejected candidates, placements, claim review, naturalness/pressure and counts without redesigning the page. Preview must not create a blog, image, Telegram message, or publication.
 
 ## 12. Prepare/publish contracts
 
-HMAC-authenticated `prepare` keeps existing IDs and adds `productCatalogSnapshotId`, `productSeedPlanId`, plus safe mode/intensity/decision/selected evidence/placement/claim/density summaries.
+HMAC-authenticated `prepare` keeps existing IDs and adds the Content Operations snapshot, inventory, opportunity decision, Work Order, Unified Brief, `productCatalogSnapshotId`, `productSeedPlanId`, and safe mode/intensity/decision/selected evidence/placement/claim/density summaries.
 
-`publish` requires product IDs/reviews when mode is not off. It loads execution/plan, checks all relationships, rejects unplanned IDs, recomputes product reviews server-side and blocks publish on failure/high pressure. It writes `ProductSeedExposure` after save. Off mode rejects product blocks. Existing image behavior is unchanged.
+`publish` requires product IDs/reviews when mode is not off. It loads execution/Work Order/brief/plan, checks all relationships and the exact action target, rejects unplanned IDs, recomputes product reviews server-side, and blocks publish on failure/high pressure or Publish Readiness high/critical risk. It writes `ProductSeedExposure` after save. Off mode rejects product blocks. Existing image behavior is unchanged.
 
 ## 13. Backend API and permissions
 
@@ -98,7 +102,7 @@ See `.env.example` for `PRODUCT_SEEDING_*`, `PRODUCT_SEED_*`, and `PRODUCT_CATAL
 ```bash
 cd backend && npm install && npm test
 cd frontend && npm install && npm run build
-docker compose config
+docker compose config --quiet
 git diff --check
 ```
 
@@ -106,7 +110,7 @@ Tests cover catalog safety/hash/eligibility, scores/penalties/modes/cooldown, pi
 
 ## 17. VPS deployment notes
 
-Record the previous commit, pull the reviewed commit, keep secrets only in VPS `.env`, validate Compose, rebuild backend/frontend/OpenClaw, and smoke-test health/admin/public routes. New collections/additive optional fields are lazy; no destructive migration is required. Do not trigger Run Now or publish for deployment validation.
+Record the previous commit, deploy the exact reviewed/tested commit, keep secrets only in VPS `.env` or a read-only credential mount, validate Compose, rebuild only affected backend/frontend/OpenClaw services, and smoke-test health/admin/public routes. New collections/additive optional fields are lazy; no destructive migration is required. Use one controlled Google-first Content Operations snapshot and non-mutating preview; do not trigger writer, blog/image creation, Telegram, or publishing for deployment validation.
 
 ## 18. Rollback
 

@@ -229,7 +229,12 @@ class EditorialProductPlacementPlanningService {
         const document = buildPlanDocument({ brief, productSeedPlan, options, config, recentPlans, now });
         if (!persist) return document;
         await EditorialProductPlacementPlanningService.seedStyleLibrary(config);
-        const created = await EditorialProductPlacementPlan.create({ ...document, executionId });
+        const created = await EditorialProductPlacementPlan.create({
+            ...document,
+            executionId,
+            contentWorkOrderId: brief.contentWorkOrderId || null,
+            unifiedContentBriefId: brief.unifiedContentBriefId || null
+        });
         if (document.placementStyle !== 'no-product') {
             await ProductPlacementStyleDefinition.updateOne({ styleId: document.placementStyle }, { $set: { lastUsedAt: now }, $inc: { useCount: 1 } });
         }

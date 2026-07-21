@@ -10,6 +10,7 @@ const ACCEPTABLE_STATUSES = new Set([
     'partial',
     'manually_overridden'
 ]);
+const SENSITIVE_SOURCE_QUERY_KEY = /(?:^|[_-])(?:access[_-]?token|token|auth(?:orization)?|api[_-]?key|key|client[_-]?secret|secret|signature|sig|credential|password|passcode|cookie|session|code|email|phone|mobile|customer)(?:$|[_-])/i;
 
 const dateInTimezone = (date = new Date(), timezone = DEFAULT_TIMEZONE) => {
     const parts = new Intl.DateTimeFormat('en-CA', {
@@ -48,6 +49,49 @@ const canonicalizeUrl = (input) => {
     return url.toString();
 };
 
+const sourceUrlError = (code) => {
+    const error = new Error(code);
+    error.code = code;
+    return error;
+};
+
+const assertPersistableSourceUrl = (input) => {
+    let rawUrl;
+    try {
+        rawUrl = new URL(String(input || '').trim());
+    } catch (_error) {
+        throw sourceUrlError('GOOGLE_SOURCE_URL_INVALID');
+    }
+    // Check the raw URL first. Canonicalization may intentionally remove benign
+    // tracking parameters, but credentials and secrets must never be accepted.
+    if (rawUrl.username || rawUrl.password) throw sourceUrlError('GOOGLE_SOURCE_URL_CREDENTIALS_NOT_ALLOWED');
+    for (const key of rawUrl.searchParams.keys()) {
+        if (SENSITIVE_SOURCE_QUERY_KEY.test(key)) throw sourceUrlError('GOOGLE_SOURCE_URL_SENSITIVE_QUERY_NOT_ALLOWED');
+    }
+    const canonicalUrl = canonicalizeUrl(rawUrl.toString());
+    const url = new URL(canonicalUrl);
+    if (url.username || url.password) throw sourceUrlError('GOOGLE_SOURCE_URL_CREDENTIALS_NOT_ALLOWED');
+    for (const key of url.searchParams.keys()) {
+        if (SENSITIVE_SOURCE_QUERY_KEY.test(key)) throw sourceUrlError('GOOGLE_SOURCE_URL_SENSITIVE_QUERY_NOT_ALLOWED');
+    }
+    return canonicalUrl;
+};
+
+const sanitizeSourceUrlForRead = (input) => {
+    try {
+        const url = new URL(canonicalizeUrl(input));
+        if (!['https:', 'http:'].includes(url.protocol)) return '';
+        url.username = '';
+        url.password = '';
+        for (const key of [...url.searchParams.keys()]) {
+            if (SENSITIVE_SOURCE_QUERY_KEY.test(key)) url.searchParams.delete(key);
+        }
+        return url.toString();
+    } catch (_error) {
+        return '';
+    }
+};
+
 const calculateSnapshotStatus = ({ successfulSources, failedSources, mandatorySourcesSucceeded, changesDetected }) => {
     if (!successfulSources || !mandatorySourcesSucceeded) return 'failed';
     if (failedSources > 0) return 'partial';
@@ -69,10 +113,13 @@ const isSnapshotAcceptable = ({ snapshot, strictGate = true, maxAgeHours = 24, n
 module.exports = {
     ACCEPTABLE_STATUSES,
     DEFAULT_TIMEZONE,
+    SENSITIVE_SOURCE_QUERY_KEY,
+    assertPersistableSourceUrl,
     calculateSnapshotStatus,
     canonicalizeUrl,
     dateInTimezone,
     isPrivateIp,
     isSnapshotAcceptable,
-    isSnapshotFresh
+    isSnapshotFresh,
+    sanitizeSourceUrlForRead
 };
