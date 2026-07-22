@@ -11,6 +11,16 @@ const { ContentSignalService } = require('./contentSignal.service');
 const { SearchConsoleAdapter } = require('./searchConsole.adapter');
 const { AggregateAnalyticsAdapter } = require('./aggregateAnalytics.adapter');
 const { TrendsAdapter } = require('./trends.adapter');
+const { createGoogleTrendsRssProvider } = require('./googleTrendsRss.provider');
+
+const createConfiguredTrendsProvider = (config = {}) => {
+    if (String(config.provider || '').trim().toLowerCase() !== 'google_trends_rss') return null;
+    return createGoogleTrendsRssProvider({
+        geo: config.geo,
+        maxSignals: config.maxSignals,
+        maxResponseBytes: config.maxResponseBytes
+    });
+};
 
 const sha256 = (value) => crypto.createHash('sha256').update(String(value ?? '')).digest('hex');
 const text = (value, max = 1000) => String(value ?? '').replace(/[\u0000-\u001f\u007f]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -146,14 +156,15 @@ const diffInventoryState = (current = [], previous = []) => {
     return changes.slice(0, 500);
 };
 
-const sourceHealthEntry = ({ source, result, configured, checkedAt, errorCode = '' }) => {
+const sourceHealthEntry = ({ source, result, enabled, configured, checkedAt, errorCode = '' }) => {
     const status = ['available', 'partial', 'unavailable', 'failed'].includes(result?.status)
         ? result.status
         : errorCode ? 'failed' : 'unavailable';
     const sourceCheckedAt = validDate(result?.checkedAt || checkedAt);
     return {
         source,
-        configured: configured ?? Boolean(result?.configured ?? result?.enabled),
+        enabled: enabled ?? (typeof result?.enabled === 'boolean' ? result.enabled : true),
+        configured: configured ?? Boolean(result?.configured),
         status,
         checkedAt: sourceCheckedAt,
         freshness: sourceCheckedAt ? { checkedAt: sourceCheckedAt.toISOString() } : null,
@@ -287,7 +298,11 @@ class ContentOperationsIntelligenceService {
         this.contentSignalService = contentSignalService || new ContentSignalService({ config, now });
         this.searchConsoleAdapter = searchConsoleAdapter || new SearchConsoleAdapter({ config: config.searchConsole, now });
         this.aggregateAnalyticsAdapter = aggregateAnalyticsAdapter || new AggregateAnalyticsAdapter({ config: config.aggregateAnalytics, now });
-        this.trendsAdapter = trendsAdapter || new TrendsAdapter({ config: config.trends, now });
+        this.trendsAdapter = trendsAdapter || new TrendsAdapter({
+            config: config.trends,
+            provider: createConfiguredTrendsProvider(config.trends),
+            now
+        });
     }
 
     async readSnapshot(filter, { internal = false, sort } = {}) {
@@ -473,11 +488,12 @@ class ContentOperationsIntelligenceService {
             const inventoryChanges = diffInventoryState(currentInventoryState, previous?.sourceState?.inventory || []);
             const productStatus = productsSettled.status === 'fulfilled' ? 'available' : 'failed';
             const sourceHealth = [
-                sourceHealthEntry({ source: 'google_intelligence', result: { status: 'available', configured: true, checkedAt: googleSnapshot.checkedAt || now }, checkedAt: now }),
+                sourceHealthEntry({ source: 'google_intelligence', result: { status: 'available', enabled: true, configured: true, checkedAt: googleSnapshot.checkedAt || now }, checkedAt: now }),
                 sourceHealthEntry({
                     source: 'content_inventory',
                     result: {
                         status: inventorySnapshot.status === 'partial' ? 'partial' : 'available',
+                        enabled: true,
                         configured: true,
                         checkedAt: inventorySnapshot.checkedAt || now,
                         warnings: inventorySnapshot.warnings || []
@@ -486,7 +502,7 @@ class ContentOperationsIntelligenceService {
                 }),
                 sourceHealthEntry({
                     source: 'product_catalog',
-                    result: { status: productStatus, configured: true, checkedAt: now },
+                    result: { status: productStatus, enabled: true, configured: true, checkedAt: now },
                     checkedAt: now,
                     errorCode: productStatus === 'failed' ? 'product_catalog_read_failed' : ''
                 }),
@@ -496,16 +512,20 @@ class ContentOperationsIntelligenceService {
                 sourceHealthEntry({ source: 'content_signals', result: contentSignalsResult, checkedAt: now })
             ];
             const degradesSnapshot = sourceHealth.some((health) => (
-                health.status === 'partial' ||
-                health.status === 'failed' ||
-                (health.configured && health.status === 'unavailable')
+                health.enabled !== false && (
+                    health.status === 'partial' ||
+                    health.status === 'failed' ||
+                    health.configured === false ||
+                    (health.configured && health.status === 'unavailable')
+                )
             ));
+            const activeWarnings = (result) => result?.enabled === false ? [] : (result?.warnings || []);
             const warnings = Array.from(new Set([
                 ...(inventorySnapshot.warnings || []),
-                ...(searchResult.warnings || []),
-                ...(analyticsResult.warnings || []),
-                ...(trendsResult.warnings || []),
-                ...(contentSignalsResult.warnings || []),
+                ...activeWarnings(searchResult),
+                ...activeWarnings(analyticsResult),
+                ...activeWarnings(trendsResult),
+                ...activeWarnings(contentSignalsResult),
                 ...(productStatus === 'failed' ? ['product_catalog_read_failed'] : [])
             ].map((warning) => text(warning, 120)).filter(Boolean)));
             const opportunitySignals = [
@@ -551,7 +571,11 @@ class ContentOperationsIntelligenceService {
             };
             const sourceFreshness = Object.fromEntries(sourceHealth.map((health) => [health.source, health.freshness]));
             const risks = sourceHealth
-                .filter((health) => health.status === 'failed' || (health.configured && health.status === 'unavailable'))
+                .filter((health) => health.enabled !== false && (
+                    health.status === 'failed' ||
+                    health.configured === false ||
+                    (health.configured && health.status === 'unavailable')
+                ))
                 .map((health) => ({ type: 'source_unavailable', source: health.source, errorCode: health.errorCode }));
             const stableEvidence = {
                 googleIntelSnapshotId: String(resolvedGoogleId),
@@ -608,6 +632,7 @@ module.exports = {
     ContentOperationsIntelligenceService,
     contentHashFor,
     createContentOperationsIntelligenceService,
+    createConfiguredTrendsProvider,
     diffInventoryState,
     diffProductState,
     inventoryStateFromItems,

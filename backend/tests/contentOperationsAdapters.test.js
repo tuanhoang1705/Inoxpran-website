@@ -19,6 +19,9 @@ const {
 } = require('../src/services/contentOperations/aggregateAnalytics.adapter');
 const { TrendsAdapter } = require('../src/services/contentOperations/trends.adapter');
 const {
+    createConfiguredTrendsProvider
+} = require('../src/services/contentOperations/contentOperationsIntelligence.service');
+const {
     WEBMASTERS_READONLY_SCOPE,
     createGoogleAuthTokenProvider
 } = require('../src/services/contentOperations/googleAuthTokenProvider.service');
@@ -42,6 +45,11 @@ describe('Content Operations configuration and persistence contracts', () => {
             CONTENT_LEARNING_MIN_IMPRESSIONS: '250',
             CONTENT_LEARNING_AUTO_APPLY: 'false',
             CONTENT_ANALYTICS_ENABLED: 'true',
+            CONTENT_TRENDS_ENABLED: 'true',
+            CONTENT_TRENDS_PROVIDER: 'google_trends_rss',
+            CONTENT_TRENDS_GEO: 'vn',
+            CONTENT_TRENDS_MAX_SIGNALS: '40',
+            CONTENT_TRENDS_MAX_RESPONSE_BYTES: '262144',
             CONTENT_EXTERNAL_ADAPTER_TIMEOUT_MS: '1250',
             SEARCH_CONSOLE_REQUEST_TIMEOUT_MS: '2500',
             CONTENT_ACTION_WEIGHT_USER_DEMAND: '0.2'
@@ -68,6 +76,19 @@ describe('Content Operations configuration and persistence contracts', () => {
         expect(config.searchConsole.requestTimeoutMs).toBe(2500);
         expect(config.aggregateAnalytics.queryTimeoutMs).toBe(1250);
         expect(config.trends.requestTimeoutMs).toBe(1250);
+        expect(config.trends).toMatchObject({
+            enabled: true,
+            provider: 'google_trends_rss',
+            geo: 'VN',
+            maxSignals: 40,
+            maxResponseBytes: 262144
+        });
+        expect(createConfiguredTrendsProvider(config.trends)).toMatchObject({
+            geo: 'VN',
+            maxSignals: 40,
+            maxResponseBytes: 262144
+        });
+        expect(createConfiguredTrendsProvider({ provider: 'disabled' })).toBeNull();
         expect(config.performanceMonitoring.enabled).toBe(true);
         expect(config.learning).toEqual({
             enabled: true,

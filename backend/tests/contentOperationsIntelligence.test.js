@@ -3,11 +3,13 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { getContentOperationsConfig } = require('../src/config/contentOperations.config');
+const { ContentOperationsDailySnapshot } = require('../src/models/contentOperationsDailySnapshot.model');
 const {
     ContentOperationsIntelligenceService,
     contentHashFor,
     diffInventoryState,
-    diffProductState
+    diffProductState,
+    sourceHealthEntry
 } = require('../src/services/contentOperations/contentOperationsIntelligence.service');
 
 const matches = (document, filter) => {
@@ -90,6 +92,30 @@ describe('Content Operations daily intelligence', () => {
         expect(contentHashFor({ b: 2, a: 1 })).toBe(contentHashFor({ a: 1, b: 2 }));
         expect(diffProductState([{ productId: 'p1' }], [])).toEqual([]);
         expect(diffInventoryState([{ blogId: 'b1' }], [])).toEqual([]);
+    });
+
+    it('persists enabled independently and keeps old source records compatible', () => {
+        const enabledPath = ContentOperationsDailySnapshot.schema
+            .path('sourceHealth')
+            .schema.path('enabled');
+        expect(enabledPath.instance).toBe('Boolean');
+        expect(enabledPath.defaultValue).toBeUndefined();
+
+        expect(sourceHealthEntry({
+            source: 'trends',
+            result: { enabled: false, configured: true, status: 'unavailable' },
+            checkedAt: now
+        })).toEqual(expect.objectContaining({
+            source: 'trends',
+            enabled: false,
+            configured: true,
+            status: 'unavailable'
+        }));
+        expect(sourceHealthEntry({
+            source: 'legacy_source',
+            result: { configured: true, status: 'available' },
+            checkedAt: now
+        })).toEqual(expect.objectContaining({ enabled: true, configured: true, status: 'available' }));
     });
 
     it('runs the Google gate first, records unavailable configured sources as partial, and reuses the daily lease result', async () => {
@@ -210,8 +236,12 @@ describe('Content Operations daily intelligence', () => {
         expect(first.snapshot.status).toBe('partial');
         expect(first.snapshot.websitePerformance.searchConsole.windows[0].current).toBeNull();
         expect(first.snapshot.sourceHealth).toEqual(expect.arrayContaining([
-            expect.objectContaining({ source: 'google_search_console', configured: true, status: 'unavailable' }),
-            expect.objectContaining({ source: 'trends', configured: false, status: 'unavailable' })
+            expect.objectContaining({ source: 'google_search_console', enabled: true, configured: true, status: 'unavailable' }),
+            expect.objectContaining({ source: 'trends', enabled: false, configured: false, status: 'unavailable' })
+        ]));
+        expect(first.snapshot.warnings).not.toContain('trends_disabled');
+        expect(first.snapshot.risks).not.toEqual(expect.arrayContaining([
+            expect.objectContaining({ source: 'trends' })
         ]));
         expect(first.snapshot.businessSignals.productChanges).toEqual(expect.arrayContaining([
             expect.objectContaining({ type: 'product_availability_changed', from: 'low_stock', to: 'in_stock' })

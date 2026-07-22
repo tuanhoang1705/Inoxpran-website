@@ -7,6 +7,7 @@ const { spawn } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { TelegramApprovalService } = require('./telegramApproval.service');
+const { BlogAutomationScheduleService } = require('./blogAutomationSchedule.service');
 
 const REPO_ROOT = path.resolve(process.env.OPENCLAW_REPO_ROOT || path.resolve(__dirname, '../../..'));
 const OPENCLAW_ROOT = path.resolve(process.env.OPENCLAW_ASSET_ROOT || path.join(REPO_ROOT, 'deploy', 'openclaw'));
@@ -18,6 +19,14 @@ const MAX_LOG_CHARS = 18000;
 const DOCKER_UNAVAILABLE_ACTIONS = new Set(['stop-openclaw', 'install-skills', 'sync-agents', 'smoke-test']);
 const DOCKER_UPDATE_ACTIVE_STATES = new Set(['queued', 'running']);
 const DOCKER_UPDATE_TERMINAL_STATES = new Set(['completed', 'failed', 'rolled_back']);
+const DAILY_DRAFT_ACTIVE_STATES = new Set(['queued', 'running']);
+const DAILY_DRAFT_SUCCESS_STATES = new Set([
+    'draft_created',
+    'maintenance_created',
+    'completed',
+    'published',
+    'skipped'
+]);
 
 const isDockerManaged = () => String(process.env.OPENCLAW_DEPLOYMENT_MODE || '').trim().toLowerCase() === 'docker';
 const isDockerUpdateEnabled = () => isDockerManaged() &&
@@ -122,6 +131,98 @@ const listDirectoryNames = (directory) => {
 const parseBoolean = (value) => {
     const normalized = String(value || '').trim().toLowerCase();
     return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
+
+const hasConfiguredValue = (value) => Boolean(String(value || '').trim());
+const providerConfigured = (value) => {
+    const normalized = String(value || '').trim().toLowerCase();
+    return Boolean(normalized && !['disabled', 'none', 'off', 'false'].includes(normalized));
+};
+
+const capabilityStatus = ({ enabled, configured = true, availability = 'unknown', reasonCode = '' }) => {
+    const isEnabled = Boolean(enabled);
+    const isConfigured = Boolean(configured);
+    let resolvedAvailability = availability;
+    let resolvedReason = reasonCode;
+    if (!isEnabled) {
+        resolvedAvailability = 'unknown';
+        resolvedReason = resolvedReason || 'disabled_by_configuration';
+    } else if (!isConfigured) {
+        resolvedAvailability = 'unavailable';
+        resolvedReason = resolvedReason || 'missing_configuration';
+    }
+    return {
+        enabled: isEnabled,
+        configured: isConfigured,
+        availability: resolvedAvailability,
+        reasonCode: resolvedReason
+    };
+};
+
+const buildCapabilityMatrix = (env = process.env, telegramStatus = TelegramApprovalService.status()) => {
+    const imageSearchConfigured = providerConfigured(env.IMAGE_SEARCH_PROVIDER) && hasConfiguredValue(env.IMAGE_SEARCH_API_KEY);
+    const aiImageConfigured = providerConfigured(env.AI_IMAGE_PROVIDER) && hasConfiguredValue(env.AI_IMAGE_API_KEY || env.OPENAI_API_KEY);
+    const searchConsoleConfigured = hasConfiguredValue(
+        env.SEARCH_CONSOLE_PROPERTY || env.GOOGLE_SEARCH_CONSOLE_PROPERTY || env.SEARCH_CONSOLE_SITE_URL
+    ) && hasConfiguredValue(env.GOOGLE_APPLICATION_CREDENTIALS);
+    const trendsProviderConfigured = String(env.CONTENT_TRENDS_PROVIDER || '').trim().toLowerCase() === 'google_trends_rss';
+    const telegramConfigured = Boolean(
+        telegramStatus?.tokenConfigured &&
+        telegramStatus?.allowlistConfigured &&
+        telegramStatus?.webhookSecretConfigured &&
+        telegramStatus?.adminBaseUrlConfigured
+    );
+
+    return {
+        seoAgent: capabilityStatus({
+            enabled: parseBoolean(env.SEO_AGENT_ENABLED),
+            configured: [env.API_KEY, env.SEO_AGENT_API_KEY, env.SEO_AGENT_HMAC_SECRET, env.OPENAI_API_KEY]
+                .every(hasConfiguredValue)
+        }),
+        contentOperations: capabilityStatus({
+            enabled: parseBoolean(env.CONTENT_OPERATIONS_ENABLED),
+            configured: true
+        }),
+        blogCron: capabilityStatus({ enabled: parseBoolean(env.OPENCLAW_BLOG_CRON_ENABLED), configured: true }),
+        contentOperationsCron: capabilityStatus({ enabled: parseBoolean(env.CONTENT_OPERATIONS_CRON_ENABLED), configured: true }),
+        googleIntelligence: capabilityStatus({ enabled: parseBoolean(env.GOOGLE_INTELLIGENCE_ENABLED), configured: true }),
+        searchConsole: capabilityStatus({
+            enabled: parseBoolean(env.SEARCH_CONSOLE_ENABLED),
+            configured: searchConsoleConfigured
+        }),
+        aggregateAnalytics: capabilityStatus({ enabled: parseBoolean(env.CONTENT_ANALYTICS_ENABLED), configured: true }),
+        trends: capabilityStatus({
+            enabled: parseBoolean(env.CONTENT_TRENDS_ENABLED),
+            configured: trendsProviderConfigured
+        }),
+        inventory: capabilityStatus({ enabled: parseBoolean(env.CONTENT_INVENTORY_ENABLED ?? 'true'), configured: true }),
+        contentSignals: capabilityStatus({ enabled: parseBoolean(env.CONTENT_SIGNALS_ENABLED ?? 'true'), configured: true }),
+        performanceMonitoring: capabilityStatus({
+            enabled: parseBoolean(env.CONTENT_PERFORMANCE_MONITORING_ENABLED),
+            configured: true
+        }),
+        learning: capabilityStatus({ enabled: parseBoolean(env.CONTENT_LEARNING_ENABLED), configured: true }),
+        imagePipeline: capabilityStatus({
+            enabled: parseBoolean(env.OPENCLAW_IMAGE_PIPELINE_ENABLED),
+            configured: imageSearchConfigured || aiImageConfigured
+        }),
+        imageSearch: capabilityStatus({
+            enabled: providerConfigured(env.IMAGE_SEARCH_PROVIDER),
+            configured: imageSearchConfigured
+        }),
+        aiImage: capabilityStatus({
+            enabled: providerConfigured(env.AI_IMAGE_PROVIDER),
+            configured: aiImageConfigured
+        }),
+        telegram: capabilityStatus({
+            enabled: parseBoolean(env.TELEGRAM_BOT_ENABLED),
+            configured: telegramConfigured
+        }),
+        openclawGateway: capabilityStatus({
+            enabled: true,
+            configured: hasConfiguredValue(env.OPENCLAW_GATEWAY_TOKEN)
+        })
+    };
 };
 
 const readJsonIfExists = (filePath) => {
@@ -392,6 +493,13 @@ const buildCommand = ({ action, profile }) => {
         };
     }
 
+    if (action === 'daily-draft' && isDockerManaged()) {
+        return {
+            internal: 'blog-schedule-run',
+            display: 'Run saved Daily Draft schedule through the audited backend pipeline'
+        };
+    }
+
     const scriptByAction = {
         'install-skills': 'install-skills',
         'sync-agents': 'sync-agents',
@@ -433,6 +541,11 @@ const normalizeRun = (run) => ({
     command: run.command,
     durationMs: run.finishedAt ? new Date(run.finishedAt).getTime() - new Date(run.startedAt).getTime() : null,
     dashboardUrl: run.dashboardUrl || '',
+    scheduleId: run.scheduleId || '',
+    executionId: run.executionId || '',
+    blogId: run.blogId || '',
+    blogSlug: run.blogSlug || '',
+    blogTitle: run.blogTitle || '',
     output: redactForDashboard(run.output),
     error: run.error ? redactForDashboard(run.error) : ''
 });
@@ -453,6 +566,8 @@ const buildDashboard = () => {
     const localAgents = listMarkdownNames(path.join(OPENCLAW_ROOT, 'agents'));
     const localSkills = listDirectoryNames(path.join(OPENCLAW_ROOT, 'skills'));
     const skillReport = parseSkillReport();
+    const telegramStatus = TelegramApprovalService.status();
+    const capabilities = buildCapabilityMatrix(process.env, telegramStatus);
     const requiredEnv = [
         'API_KEY',
         'SEO_AGENT_API_KEY',
@@ -462,14 +577,37 @@ const buildDashboard = () => {
         'FIRECRAWL_API_KEY',
         'IMAGE_SEARCH_API_KEY',
         'AI_IMAGE_API_KEY',
-        'OPENCLAW_BLOG_CRON_ENABLED',
-        'TELEGRAM_BOT_ENABLED',
         'TELEGRAM_BOT_TOKEN',
         'TELEGRAM_WEBHOOK_SECRET',
         'TELEGRAM_ALLOWED_CHAT_IDS',
         'TELEGRAM_ALLOWED_USER_IDS',
-        'ADMIN_BASE_URL'
+        'ADMIN_BASE_URL',
+        'GOOGLE_APPLICATION_CREDENTIALS',
+        'SEARCH_CONSOLE_PROPERTY'
     ];
+    const featureFlags = Object.fromEntries([
+        'SEO_AGENT_ENABLED',
+        'SEO_AGENT_AUTO_PUBLISH',
+        'CONTENT_OPERATIONS_ENABLED',
+        'CONTENT_OPERATIONS_CRON_ENABLED',
+        'GOOGLE_INTELLIGENCE_ENABLED',
+        'GOOGLE_INTELLIGENCE_STRICT_GATE',
+        'SEARCH_CONSOLE_ENABLED',
+        'CONTENT_ANALYTICS_ENABLED',
+        'CONTENT_TRENDS_ENABLED',
+        'CONTENT_INVENTORY_ENABLED',
+        'CONTENT_SIGNALS_ENABLED',
+        'CONTENT_PERFORMANCE_MONITORING_ENABLED',
+        'CONTENT_LEARNING_ENABLED',
+        'CONTENT_LEARNING_AUTO_APPLY',
+        'CONTENT_PUBLISH_READINESS_ENABLED',
+        'CONTENT_POST_PUBLISH_VERIFY_ENABLED',
+        'OPENCLAW_BLOG_CRON_ENABLED',
+        'OPENCLAW_IMAGE_PIPELINE_ENABLED',
+        'OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH',
+        'TELEGRAM_BOT_ENABLED',
+        'OPENCLAW_UPDATE_ENABLED'
+    ].map((name) => [name, parseBoolean(process.env[name])]));
 
     return {
         profile: DEFAULT_PROFILE,
@@ -485,15 +623,17 @@ const buildDashboard = () => {
             minWords: Number(process.env.SEO_AGENT_MIN_WORDS || 800),
             maxWords: Number(process.env.SEO_AGENT_MAX_WORDS || 1800),
             defaultImage: process.env.SEO_AGENT_DEFAULT_BLOG_IMAGE || '/og-image.png',
-            imagePipelineEnabled: parseBoolean(process.env.OPENCLAW_IMAGE_PIPELINE_ENABLED ?? 'true'),
+            imagePipelineEnabled: parseBoolean(process.env.OPENCLAW_IMAGE_PIPELINE_ENABLED),
             requireCoverForPublish: parseBoolean(process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH ?? 'true'),
             imageSearchProvider: process.env.IMAGE_SEARCH_PROVIDER || 'disabled',
             aiImageProvider: process.env.AI_IMAGE_PROVIDER || 'disabled',
             blogCronEnabled: parseBoolean(process.env.OPENCLAW_BLOG_CRON_ENABLED),
             telegramEnabled: parseBoolean(process.env.TELEGRAM_BOT_ENABLED)
         },
-        telegram: TelegramApprovalService.status(),
-        env: Object.fromEntries(requiredEnv.map((name) => [name, Boolean(process.env[name])])),
+        telegram: telegramStatus,
+        env: Object.fromEntries(requiredEnv.map((name) => [name, hasConfiguredValue(process.env[name])])),
+        featureFlags,
+        capabilities,
         openclaw: {
             dashboardUrl: lastDashboardUrl || getConfiguredDashboardUrl(),
             gatewayUrl: isDockerManaged() ? 'ws://app_openclaw:18789' : 'ws://127.0.0.1:18789',
@@ -522,6 +662,18 @@ class OpenClawDashboardService {
     static async dashboard() {
         const dashboard = buildDashboard();
         dashboard.openclaw.health = await probeOpenClawGateway();
+        dashboard.capabilities.openclawGateway = {
+            ...dashboard.capabilities.openclawGateway,
+            availability: dashboard.openclaw.health.ready
+                ? 'available'
+                : dashboard.openclaw.health.live
+                    ? 'degraded'
+                    : 'unavailable',
+            reasonCode: dashboard.openclaw.health.ready
+                ? ''
+                : dashboard.openclaw.health.error || 'gateway_not_ready',
+            checkedAt: dashboard.openclaw.health.checkedAt
+        };
         return dashboard;
     }
 
@@ -572,6 +724,78 @@ class OpenClawDashboardService {
                 ].join('\n'));
                 run.error = health.ready ? '' : redactForDashboard(health.error || 'gateway_not_ready');
                 if (health.ready && lastDashboardUrl) run.dashboardUrl = lastDashboardUrl;
+            });
+            return normalizeRun(run);
+        }
+
+        if (command.internal === 'blog-schedule-run') {
+            Promise.resolve().then(async () => {
+                try {
+                    const listed = await BlogAutomationScheduleService.listSchedules({ limit: 100, page: 1 });
+                    const schedules = Array.isArray(listed?.schedules) ? listed.schedules : [];
+                    const schedule = schedules.find((item) => item.enabled) || schedules[0];
+                    if (!schedule?.id) {
+                        throw new BadRequestError('Create and save a blog schedule before running Daily Draft');
+                    }
+
+                    const queued = await BlogAutomationScheduleService.runNow({ scheduleId: schedule.id });
+                    const queuedAt = new Date(queued?.startedAt || run.startedAt).getTime();
+                    run.scheduleId = String(queued?.scheduleId || schedule.id);
+                    run.output = redactForDashboard(
+                        queued?.message || 'Daily Draft was queued in the audited blog automation pipeline.'
+                    );
+
+                    const deadline = Date.now() + ACTIONS[normalizedAction].timeoutMs;
+                    while (Date.now() < deadline) {
+                        const history = await BlogAutomationScheduleService.listExecutions({
+                            scheduleId: run.scheduleId,
+                            limit: 20
+                        });
+                        const execution = (history?.executions || []).find((item) => {
+                            const createdAt = new Date(item?.createdAt || item?.startedAt || 0).getTime();
+                            return Number.isFinite(createdAt) && createdAt >= queuedAt - 5000;
+                        });
+
+                        if (execution) {
+                            run.executionId = execution.id || '';
+                            run.blogId = execution.blogId || '';
+                            run.blogSlug = execution.blogSlug || '';
+                            run.blogTitle = execution.blogTitle || '';
+                            run.output = redactForDashboard([
+                                `Daily Draft execution: ${execution.status || 'running'}`,
+                                execution.id ? `Execution ID: ${execution.id}` : '',
+                                execution.contentAction ? `Content action: ${execution.contentAction}` : '',
+                                execution.blogTitle ? `Blog: ${execution.blogTitle}` : '',
+                                execution.blogId ? `/admin/blogs/${execution.blogId}` : '',
+                                execution.telegramNotificationStatus
+                                    ? `Telegram: ${execution.telegramNotificationStatus}`
+                                    : ''
+                            ].filter(Boolean).join('\n'));
+
+                            if (!DAILY_DRAFT_ACTIVE_STATES.has(execution.status)) {
+                                run.finishedAt = execution.completedAt || new Date().toISOString();
+                                run.exitCode = DAILY_DRAFT_SUCCESS_STATES.has(execution.status) ? 0 : 1;
+                                run.status = run.exitCode === 0 ? 'completed' : 'failed';
+                                run.error = run.exitCode === 0
+                                    ? ''
+                                    : redactForDashboard(execution.error || `daily_draft_${execution.status || 'failed'}`);
+                                return;
+                            }
+                        }
+
+                        await new Promise((resolve) => setTimeout(resolve, 2000));
+                    }
+
+                    run.status = 'timed_out';
+                    run.exitCode = 1;
+                    run.error = 'Daily Draft tracking timed out. Check schedule execution history before retrying.';
+                    run.finishedAt = new Date().toISOString();
+                } catch (error) {
+                    run.status = 'failed';
+                    run.exitCode = 1;
+                    run.error = redactForDashboard(error?.message || 'Unable to start Daily Draft schedule');
+                    run.finishedAt = new Date().toISOString();
+                }
             });
             return normalizeRun(run);
         }
@@ -686,6 +910,8 @@ class OpenClawDashboardService {
 
 module.exports = {
     OpenClawDashboardService,
+    buildCapabilityMatrix,
+    capabilityStatus,
     extractDashboardUrl,
     getConfiguredDashboardUrl,
     formatDockerUpdateStatus,

@@ -8,6 +8,7 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const {
     OpenClawDashboardService,
+    buildCapabilityMatrix,
     extractDashboardUrl,
     formatDockerUpdateStatus,
     getConfiguredDashboardUrl,
@@ -15,8 +16,48 @@ const {
     queueDockerUpdateRequest,
     redactForDashboard
 } = require('../src/services/openclawDashboard.service');
+const { BlogAutomationScheduleService } = require('../src/services/blogAutomationSchedule.service');
 
 describe('openclaw dashboard service', () => {
+    it('keeps enabled, configured, and availability as independent capability axes', () => {
+        const telegramStatus = {
+            tokenConfigured: true,
+            allowlistConfigured: true,
+            webhookSecretConfigured: true,
+            adminBaseUrlConfigured: true
+        };
+        const capabilities = buildCapabilityMatrix({
+            SEO_AGENT_ENABLED: 'false',
+            API_KEY: 'set',
+            SEO_AGENT_API_KEY: 'set',
+            SEO_AGENT_HMAC_SECRET: 'set',
+            OPENAI_API_KEY: 'set',
+            SEARCH_CONSOLE_ENABLED: 'true',
+            GOOGLE_APPLICATION_CREDENTIALS: '/run/secrets/google.json',
+            CONTENT_TRENDS_ENABLED: 'true',
+            CONTENT_TRENDS_PROVIDER: 'google_trends_rss',
+            IMAGE_SEARCH_PROVIDER: 'disabled',
+            IMAGE_SEARCH_API_KEY: 'set',
+            TELEGRAM_BOT_ENABLED: 'false'
+        }, telegramStatus);
+
+        expect(capabilities.seoAgent).toMatchObject({
+            enabled: false,
+            configured: true,
+            availability: 'unknown',
+            reasonCode: 'disabled_by_configuration'
+        });
+        expect(capabilities.searchConsole).toMatchObject({
+            enabled: true,
+            configured: false,
+            availability: 'unavailable',
+            reasonCode: 'missing_configuration'
+        });
+        expect(capabilities.trends).toMatchObject({ enabled: true, configured: true });
+        expect(capabilities.imageSearch).toMatchObject({ enabled: false, configured: false });
+        expect(capabilities.telegram).toMatchObject({ enabled: false, configured: true });
+    });
+
     it('redacts sensitive values from command output', () => {
         const output = redactForDashboard(
             'API_KEY=abc123 SEO_AGENT_HMAC_SECRET=hmac123 OPENAI_API_KEY=sk-testsecret123456 mongodb+srv://user:pass@example/db authorization: Bearer abc.def http://127.0.0.1:18789/?token=secret-token'
@@ -101,6 +142,57 @@ describe('openclaw dashboard service', () => {
         });
         expect(health).toMatchObject({ reachable: false, live: false, ready: false });
         expect(health.error).toBe('gateway_unreachable');
+    });
+
+    it('runs Docker Daily Draft through a saved schedule without requiring a script or CLI', async () => {
+        const previousMode = process.env.OPENCLAW_DEPLOYMENT_MODE;
+        process.env.OPENCLAW_DEPLOYMENT_MODE = 'docker';
+        const scheduleId = '507f1f77bcf86cd799439011';
+        const executionId = '507f1f77bcf86cd799439012';
+        const blogId = '507f1f77bcf86cd799439013';
+        const listSchedules = vi.spyOn(BlogAutomationScheduleService, 'listSchedules').mockResolvedValue({
+            schedules: [{ id: scheduleId, name: 'Daily draft', enabled: false }]
+        });
+        const runNow = vi.spyOn(BlogAutomationScheduleService, 'runNow').mockResolvedValue({
+            queued: true,
+            scheduleId,
+            startedAt: new Date().toISOString(),
+            message: 'queued'
+        });
+        const listExecutions = vi.spyOn(BlogAutomationScheduleService, 'listExecutions').mockResolvedValue({
+            executions: [{
+                id: executionId,
+                scheduleId,
+                status: 'draft_created',
+                createdAt: new Date().toISOString(),
+                completedAt: new Date().toISOString(),
+                blogId,
+                blogTitle: 'A safe draft',
+                contentAction: 'new'
+            }]
+        });
+
+        try {
+            const started = OpenClawDashboardService.startRun({ action: 'daily-draft', profile: 'inoxpran' });
+            expect(started.command).toContain('audited backend pipeline');
+            expect(started.error).not.toContain('Missing script');
+            await vi.waitFor(() => {
+                expect(OpenClawDashboardService.getRun({ runId: started.id })).toMatchObject({
+                    status: 'completed',
+                    executionId,
+                    blogId
+                });
+            });
+            expect(listSchedules).toHaveBeenCalledOnce();
+            expect(runNow).toHaveBeenCalledWith({ scheduleId });
+            expect(listExecutions).toHaveBeenCalledWith({ scheduleId, limit: 20 });
+        } finally {
+            listSchedules.mockRestore();
+            runNow.mockRestore();
+            listExecutions.mockRestore();
+            if (previousMode === undefined) delete process.env.OPENCLAW_DEPLOYMENT_MODE;
+            else process.env.OPENCLAW_DEPLOYMENT_MODE = previousMode;
+        }
     });
 
     it('queues exactly one structured Docker update request at a time', () => {

@@ -5,6 +5,7 @@ const { Schema, model } = require('mongoose');
 const sourceHealthSchema = new Schema(
     {
         source: { type: String, required: true, trim: true, maxlength: 80 },
+        enabled: { type: Boolean, default: undefined },
         configured: { type: Boolean, default: false },
         status: { type: String, enum: ['available', 'partial', 'unavailable', 'failed'], required: true },
         checkedAt: { type: Date, default: null },

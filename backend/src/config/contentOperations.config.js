@@ -138,6 +138,15 @@ const getContentOperationsConfig = (env = process.env) => ({
     trends: Object.freeze({
         enabled: asBoolean(env.CONTENT_TRENDS_ENABLED, false),
         provider: String(env.CONTENT_TRENDS_PROVIDER || 'disabled').trim(),
+        geo: /^[A-Za-z]{2}$/.test(String(env.CONTENT_TRENDS_GEO || 'VN').trim())
+            ? String(env.CONTENT_TRENDS_GEO || 'VN').trim().toUpperCase()
+            : 'VN',
+        maxSignals: asNumber(env.CONTENT_TRENDS_MAX_SIGNALS, 50, { min: 1, max: 100 }),
+        maxResponseBytes: asNumber(
+            env.CONTENT_TRENDS_MAX_RESPONSE_BYTES,
+            512 * 1024,
+            { min: 1024, max: 2 * 1024 * 1024 }
+        ),
         requestTimeoutMs: asNumber(
             env.CONTENT_TRENDS_REQUEST_TIMEOUT_MS ?? env.CONTENT_EXTERNAL_ADAPTER_TIMEOUT_MS,
             DEFAULT_EXTERNAL_ADAPTER_TIMEOUT_MS,

@@ -7,6 +7,15 @@
 		entityId,
 		normalizePreview
 	} from '$lib/contentOperations/contracts.js';
+	import {
+		dailyDraftStatusLabel,
+		isDailyDraftRunActive,
+		isDailyDraftRunFailed,
+		isDailyDraftRunSuccessful,
+		normalizeDailyDraftExecution,
+		selectDefaultDailyDraftSchedule,
+		selectQueuedDailyDraftExecution
+	} from '$lib/openclaw/dailyDraft.js';
 	import BlogSchedulesPanel from '$lib/components/admin/openclaw/BlogSchedulesPanel.svelte';
 
 	let { data } = $props();
@@ -24,12 +33,24 @@
 	let operationsMessage = $state('');
 
 	const automation = $derived(dashboard?.automation || {});
-	const env = $derived(dashboard?.env || {});
 	const scheduleData = $derived(data?.schedules || {});
 	const scheduleRuntime = $derived(scheduleData?.runtime || {});
 	const initialSchedules = $derived(
 		Array.isArray(scheduleData?.schedules) ? scheduleData.schedules : []
 	);
+	// svelte-ignore state_referenced_locally
+	let runSchedules = $state(Array.isArray(scheduleData?.schedules) ? [...scheduleData.schedules] : []);
+	// svelte-ignore state_referenced_locally
+	let selectedRunScheduleId = $state(
+		selectDefaultDailyDraftSchedule(runSchedules)?.id || ''
+	);
+	const selectedRunSchedule = $derived(
+		selectDefaultDailyDraftSchedule(runSchedules, selectedRunScheduleId)
+	);
+	const enabledScheduleCount = $derived(
+		runSchedules.filter((schedule) => schedule?.enabled).length
+	);
+	const gatewayHealth = $derived(dashboard?.openclaw?.health || {});
 	const operationsStatus = $derived(contentOperations?.status || contentOperations || {});
 	const latestOperationsRun = $derived(operationsStatus?.latestRun || {});
 	const latestRunDecision = $derived.by(() => {
@@ -67,10 +88,13 @@
 	);
 
 	let confirmOpen = $state(false);
+	let openingConfirmation = $state(false);
 	let running = $state(false);
 	let activeRun = $state(null);
 	let runError = $state('');
 	let pollTimer = null;
+	let pollStartedAt = 0;
+	let pollInFlight = false;
 
 	const t = $derived({
 		back: isEn ? 'Back to OpenClaw' : 'Quay lại OpenClaw',
@@ -108,14 +132,25 @@
 			: 'Chạy ngay quy trình tạo bài hoặc thiết lập lịch tự động.',
 		runSectionTitle: isEn ? 'Run Daily Draft Now' : 'Chạy Daily Draft ngay',
 		runSectionHint: isEn
-			? 'Trigger the default multi-agent SEO blog workflow one time.'
-			: 'Kích hoạt quy trình tạo blog SEO đa agent mặc định một lần.',
+			? 'Run one saved blog schedule through the audited Content Operations pipeline.'
+			: 'Chạy một lịch blog đã lưu qua pipeline Content Operations có lịch sử kiểm tra.',
 		runNow: isEn ? 'Run daily draft now' : 'Chạy daily draft ngay',
 		running: isEn ? 'Running…' : 'Đang chạy…',
+		loadingSchedules: isEn ? 'Loading schedules…' : 'Đang tải lịch…',
 		confirmTitle: isEn ? 'Confirm daily draft run' : 'Xác nhận chạy daily draft',
 		confirmDescription: isEn
-			? 'This starts the default Agentic workflow with the settings below.'
-			: 'Thao tác này khởi động quy trình Agentic mặc định với cấu hình bên dưới.',
+			? 'This starts the selected schedule once and records a real execution in run history.'
+			: 'Thao tác này chạy lịch đã chọn một lần và ghi execution thật vào lịch sử chạy.',
+		schedule: isEn ? 'Blog schedule' : 'Lịch tạo bài',
+		scheduleDisabled: isEn
+			? 'Schedule automation is off; this one-time manual run is still allowed.'
+			: 'Tự động chạy lịch đang tắt; lần chạy thủ công này vẫn được phép.',
+		noSchedule: isEn
+			? 'Create and save a blog schedule before running Daily Draft.'
+			: 'Hãy tạo và lưu một lịch tạo bài trước khi chạy Daily Draft.',
+		automationDisabled: isEn
+			? 'SEO Agent is disabled. Enable SEO_AGENT_ENABLED before starting a draft.'
+			: 'SEO Agent đang tắt. Hãy bật SEO_AGENT_ENABLED trước khi tạo bản nháp.',
 		publishingMode: isEn ? 'Publishing mode' : 'Chế độ xuất bản',
 		autoPublish: isEn ? 'Auto publish' : 'Tự động publish',
 		draftOnly: isEn ? 'Draft only' : 'Chỉ tạo bản nháp',
@@ -127,9 +162,11 @@
 		aiImage: isEn ? 'AI image' : 'Ảnh AI',
 		minSeo: isEn ? 'Min SEO score' : 'Điểm SEO tối thiểu',
 		wordRange: isEn ? 'Word range' : 'Số từ',
+		scheduleMode: isEn ? 'Schedule mode' : 'Chế độ lịch',
+		topic: isEn ? 'Topic' : 'Chủ đề',
 		configNote: isEn
-			? 'Topic, category and language follow the daily-seo-blog prompt configuration.'
-			: 'Chủ đề, danh mục và ngôn ngữ theo cấu hình prompt daily-seo-blog.',
+			? 'Topic, mode and language come from the selected saved schedule. This manual run does not enable its automatic schedule.'
+			: 'Chủ đề, chế độ và ngôn ngữ lấy từ lịch đã lưu. Lần chạy thủ công này không tự bật lịch định kỳ.',
 		cancel: isEn ? 'Cancel' : 'Huỷ',
 		confirmRun: isEn ? 'Confirm run' : 'Xác nhận chạy',
 		on: isEn ? 'On' : 'Bật',
@@ -144,15 +181,15 @@
 		missingConfig: isEn ? 'Missing config' : 'Thiếu cấu hình',
 		configured: isEn ? 'Configured' : 'Đã cấu hình',
 		notConfigured: isEn ? 'Not configured' : 'Chưa cấu hình',
-		runStarted: isEn ? 'Run started' : 'Đã bắt đầu chạy',
+		runStarted: isEn ? 'Run queued' : 'Đã xếp lịch chạy',
 		runStatus: isEn ? 'Status' : 'Trạng thái',
 		executionId: isEn ? 'Execution ID' : 'Mã phiên chạy',
 		output: isEn ? 'Output' : 'Nhật ký',
 		openBlogs: isEn ? 'Open blog list' : 'Mở danh sách bài viết',
 		openDraft: isEn ? 'Open generated draft' : 'Mở bản nháp vừa tạo',
 		draftHint: isEn
-			? 'When finished, the new draft appears in the blog list.'
-			: 'Khi chạy xong, bản nháp mới sẽ xuất hiện trong danh sách bài viết.'
+			? 'The execution is persisted. When finished, open the generated draft or inspect the run history below.'
+			: 'Execution được lưu lại. Khi hoàn tất, hãy mở bản nháp vừa tạo hoặc xem lịch sử chạy bên dưới.'
 	});
 
 	const resolveAdminPath = (path) => {
@@ -342,32 +379,62 @@
 		}).format(date);
 	};
 
-	const runStatusLabel = (status) => {
-		if (status === 'completed') return isEn ? 'Completed' : 'Hoàn tất';
-		if (status === 'failed') return isEn ? 'Failed' : 'Lỗi';
-		if (status === 'timed_out') return isEn ? 'Timed out' : 'Quá thời gian';
-		return isEn ? 'Running' : 'Đang chạy';
-	};
-
 	const telegramStatus = $derived.by(() => {
-		const enabled = Boolean(scheduleRuntime.telegramEnabled);
-		if (!enabled) return { key: 'disabled', label: t.disabled, tone: 'bad' };
-		const complete =
-			env.TELEGRAM_BOT_TOKEN &&
-			env.TELEGRAM_WEBHOOK_SECRET &&
-			(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS);
-		if (!complete) return { key: 'missing', label: t.missingConfig, tone: 'warn' };
+		const telegram = dashboard?.telegram || {};
+		const enabled = Boolean(automation.telegramEnabled);
+		const complete = Boolean(
+			telegram.tokenConfigured &&
+			telegram.webhookSecretConfigured &&
+			telegram.allowlistConfigured &&
+			telegram.adminBaseUrlConfigured
+		);
+		if (enabled && !complete) return { key: 'missing', label: t.missingConfig, tone: 'warn' };
+		if (!enabled && complete) {
+			return {
+				key: 'configured_off',
+				label: isEn ? 'Off · configured' : 'Tắt · đã cấu hình',
+				tone: 'neutral'
+			};
+		}
+		if (!enabled) return { key: 'disabled', label: t.disabled, tone: 'neutral' };
 		return { key: 'enabled', label: t.enabled, tone: 'good' };
 	});
 
-	// Best-effort: pull a /admin/blogs/<id> style edit link out of the run output.
-	const generatedBlogEditPath = $derived.by(() => {
-		const output = String(activeRun?.output || '');
-		const idMatch =
-			output.match(/\/admin\/blogs\/([a-f0-9]{24})/i) ||
-			output.match(/blogId["':\s]+([a-f0-9]{24})/i);
-		return idMatch ? `/admin/blogs/${idMatch[1]}` : '';
-	});
+	const generatedBlogEditPath = $derived(
+		activeRun?.blogId ? `/admin/blogs/${activeRun.blogId}` : ''
+	);
+
+	const refreshRunSchedules = async () => {
+		const response = await fetch(
+			resolveAdminPath('/admin/api/openclaw/blog-schedules?limit=50&page=1')
+		);
+		const payload = await response.json().catch(() => null);
+		if (!response.ok) {
+			throw new Error(
+				payload?.error || (isEn ? 'Unable to load blog schedules' : 'Không tải được lịch tạo bài')
+			);
+		}
+		runSchedules = Array.isArray(payload?.schedules) ? payload.schedules : [];
+		selectedRunScheduleId =
+			selectDefaultDailyDraftSchedule(runSchedules, selectedRunScheduleId)?.id || '';
+		return runSchedules;
+	};
+
+	const openRunConfirmation = async () => {
+		if (running || openingConfirmation) return;
+		openingConfirmation = true;
+		runError = '';
+		try {
+			await refreshRunSchedules();
+			if (!automation.enabled) throw new Error(t.automationDisabled);
+			if (!selectedRunSchedule) throw new Error(t.noSchedule);
+			confirmOpen = true;
+		} catch (error) {
+			runError = error.message;
+		} finally {
+			openingConfirmation = false;
+		}
+	};
 
 	const stopPolling = () => {
 		if (pollTimer) {
@@ -376,25 +443,51 @@
 		}
 	};
 
-	const startPolling = (runId) => {
-		stopPolling();
-		pollTimer = setInterval(async () => {
-			try {
-				const response = await fetch(resolveAdminPath('/admin/api/openclaw/runs'));
-				const payload = await response.json().catch(() => null);
-				if (!response.ok) return;
-				const runs = Array.isArray(payload?.runs) ? payload.runs : [];
-				const match = runs.find((run) => run.id === runId);
-				if (match) {
-					activeRun = match;
-					if (match.status !== 'running') {
-						running = false;
-						stopPolling();
-					}
-				}
-			} catch {
-				/* keep polling; transient network error */
+	const pollDailyDraftExecution = async (queuedRun) => {
+		if (pollInFlight) return;
+		pollInFlight = true;
+		try {
+			const response = await fetch(
+				resolveAdminPath(
+					`/admin/api/openclaw/blog-schedules/${encodeURIComponent(queuedRun.scheduleId)}/executions?limit=20`
+				)
+			);
+			const payload = await response.json().catch(() => null);
+			if (!response.ok) return;
+			const match = selectQueuedDailyDraftExecution(payload?.executions, queuedRun);
+			if (!match) return;
+			activeRun = normalizeDailyDraftExecution(match, queuedRun);
+			if (!isDailyDraftRunActive(match.status)) {
+				running = false;
+				stopPolling();
+				await refreshRunSchedules().catch(() => null);
 			}
+		} catch {
+			/* A transient polling failure must not start a duplicate draft. */
+		} finally {
+			pollInFlight = false;
+		}
+	};
+
+	const startPolling = (queuedRun) => {
+		stopPolling();
+		pollStartedAt = Date.now();
+		void pollDailyDraftExecution(queuedRun);
+		pollTimer = setInterval(() => {
+			if (Date.now() - pollStartedAt > 35 * 60 * 1000) {
+				activeRun = normalizeDailyDraftExecution({}, {
+					...queuedRun,
+					...activeRun,
+					status: 'tracking_timeout',
+					error: isEn
+						? 'Live tracking ended. The backend run may still be active; inspect run history before retrying.'
+						: 'Đã dừng theo dõi trực tiếp. Backend có thể vẫn đang chạy; hãy kiểm tra lịch sử trước khi chạy lại.'
+				});
+				running = false;
+				stopPolling();
+				return;
+			}
+			void pollDailyDraftExecution(queuedRun);
 		}, 2500);
 	};
 
@@ -405,30 +498,37 @@
 		confirmOpen = false;
 		activeRun = null;
 		try {
-			const response = await fetch(resolveAdminPath('/admin/api/openclaw/runs'), {
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({
-					action: 'daily-draft',
-					profile: dashboard?.profile || 'inoxpran'
-				})
-			});
+			if (!automation.enabled) throw new Error(t.automationDisabled);
+			const schedule = selectDefaultDailyDraftSchedule(runSchedules, selectedRunScheduleId);
+			if (!schedule?.id) throw new Error(t.noSchedule);
+			const queuedAt = new Date().toISOString();
+			const response = await fetch(
+				resolveAdminPath(
+					`/admin/api/openclaw/blog-schedules/${encodeURIComponent(schedule.id)}/run-now`
+				),
+				{ method: 'POST' }
+			);
 			const payload = await response.json().catch(() => null);
 			if (!response.ok) {
-				runError =
+				throw new Error(
 					payload?.error ||
-					(isEn ? 'Unable to start daily draft run' : 'Không thể bắt đầu chạy daily draft');
-				running = false;
-				return;
+						(isEn ? 'Unable to start daily draft run' : 'Không thể bắt đầu chạy daily draft')
+				);
 			}
-			activeRun = payload;
-			if (payload?.status === 'running' && payload?.id) {
-				startPolling(payload.id);
-			} else {
-				running = false;
-			}
-		} catch {
-			runError = isEn ? 'Network error while starting run' : 'Lỗi mạng khi bắt đầu chạy';
+			const queuedRun = {
+				id: payload?.executionId || '',
+				executionId: payload?.executionId || '',
+				scheduleId: payload?.scheduleId || schedule.id,
+				status: 'queued',
+				queuedAt: payload?.startedAt || queuedAt,
+				startedAt: payload?.startedAt || queuedAt,
+				output: payload?.message || t.runStarted
+			};
+			activeRun = normalizeDailyDraftExecution({}, queuedRun);
+			startPolling(queuedRun);
+		} catch (error) {
+			runError =
+				error?.message || (isEn ? 'Network error while starting run' : 'Lỗi mạng khi bắt đầu chạy');
 			running = false;
 		}
 	};
@@ -576,12 +676,17 @@
 				<button
 					type="button"
 					class="oc-btn oc-btn--primary"
-					onclick={() => (confirmOpen = true)}
-					disabled={running}
+					onclick={openRunConfirmation}
+					disabled={running || openingConfirmation || !automation.enabled || !runSchedules.length}
 				>
-					{running ? t.running : t.runNow}
+					{running ? t.running : openingConfirmation ? t.loadingSchedules : t.runNow}
 				</button>
 			</div>
+			{#if !automation.enabled || !runSchedules.length}
+				<p class="dd-run__prerequisite">
+					{!automation.enabled ? t.automationDisabled : t.noSchedule}
+				</p>
+			{/if}
 
 			{#if runError}
 				<div class="oc-alert" role="alert">{runError}</div>
@@ -593,18 +698,16 @@
 						<span>{t.runStatus}</span>
 						<b
 							class="oc-badge"
-							class:is-good={activeRun.status === 'completed'}
-							class:is-danger={activeRun.status === 'failed' || activeRun.status === 'timed_out'}
-							class:is-muted={activeRun.status !== 'completed' &&
-								activeRun.status !== 'failed' &&
-								activeRun.status !== 'timed_out'}
+							class:is-good={isDailyDraftRunSuccessful(activeRun.status)}
+							class:is-danger={isDailyDraftRunFailed(activeRun.status)}
+							class:is-muted={isDailyDraftRunActive(activeRun.status)}
 						>
-							{runStatusLabel(activeRun.status)}
+							{dailyDraftStatusLabel(activeRun.status, isEn)}
 						</b>
 					</div>
 					<div class="dd-result__row">
 						<span>{t.executionId}</span>
-						<code>{activeRun.id}</code>
+						<code>{activeRun.id || (isEn ? 'Waiting for execution…' : 'Đang tạo execution…')}</code>
 					</div>
 					<div class="dd-result__row">
 						<span>{isEn ? 'Started' : 'Bắt đầu'}</span>
@@ -658,13 +761,16 @@
 				</div>
 				<div class="dd-status__row">
 					<span>{t.blogCron}</span>
-					<b
-						class="oc-badge"
-						class:is-good={scheduleRuntime.cronEnabled}
-						class:is-muted={!scheduleRuntime.cronEnabled}
-					>
-						<span class="oc-dot"></span>{scheduleRuntime.cronEnabled ? t.enabled : t.disabled}
-					</b>
+					<div class="dd-status__value">
+						<b
+							class="oc-badge"
+							class:is-good={scheduleRuntime.cronEnabled}
+							class:is-muted={!scheduleRuntime.cronEnabled}
+						>
+							<span class="oc-dot"></span>{scheduleRuntime.cronEnabled ? t.enabled : t.disabled}
+						</b>
+						<small>{enabledScheduleCount} {isEn ? 'enabled schedule(s)' : 'lịch đang bật'}</small>
+					</div>
 				</div>
 				<div class="dd-status__row">
 					<span>{t.autoPublish}</span>
@@ -681,8 +787,8 @@
 					<b
 						class="oc-badge"
 						class:is-good={telegramStatus.tone === 'good'}
-						class:is-danger={telegramStatus.tone === 'bad'}
 						class:is-warn={telegramStatus.tone === 'warn'}
+						class:is-muted={telegramStatus.tone === 'neutral'}
 					>
 						<span class="oc-dot"></span>{telegramStatus.label}
 					</b>
@@ -697,11 +803,29 @@
 						<span class="oc-dot"></span>{automation.imagePipelineEnabled ? t.enabled : t.disabled}
 					</b>
 				</div>
-				<div class="dd-status__row dd-status__row--stack">
+				<div class="dd-status__row">
 					<span>{t.gateway}</span>
-					<code class="dd-status__gateway" title={dashboard?.openclaw?.gatewayUrl || '--'}
-						>{dashboard?.openclaw?.gatewayUrl || '--'}</code
-					>
+					<div class="dd-status__value">
+						<b
+							class="oc-badge"
+							class:is-good={gatewayHealth.ready}
+							class:is-warn={gatewayHealth.live && !gatewayHealth.ready}
+							class:is-danger={gatewayHealth.reachable === false}
+						>
+							<span class="oc-dot"></span>{gatewayHealth.ready
+								? isEn
+									? 'Ready'
+									: 'Sẵn sàng'
+								: gatewayHealth.live
+									? isEn
+										? 'Starting'
+										: 'Đang khởi động'
+									: isEn
+										? 'Unavailable'
+										: 'Không khả dụng'}</b
+						>
+						{#if gatewayHealth.checkedAt}<small>{formatDateTime(gatewayHealth.checkedAt)}</small>{/if}
+					</div>
 				</div>
 			</div>
 		</aside>
@@ -726,8 +850,29 @@
 		<div class="dd-modal__box" role="dialog" aria-modal="true" aria-label={t.confirmTitle}>
 			<h3>{t.confirmTitle}</h3>
 			<p class="oc-muted">{t.confirmDescription}</p>
+			<label class="dd-schedule-choice">
+				<span>{t.schedule}</span>
+				<select bind:value={selectedRunScheduleId}>
+					{#each runSchedules as schedule (schedule.id)}
+						<option value={schedule.id}>
+							{schedule.name} · {schedule.enabled ? t.enabled : t.disabled}
+						</option>
+					{/each}
+				</select>
+			</label>
+			{#if selectedRunSchedule && !selectedRunSchedule.enabled}
+				<p class="dd-confirm__notice">{t.scheduleDisabled}</p>
+			{/if}
 
 			<div class="dd-confirm">
+				<div class="dd-confirm__item">
+					<span>{t.scheduleMode}</span>
+					<b>{selectedRunSchedule?.mode || 'fixed_brief'}</b>
+				</div>
+				<div class="dd-confirm__item">
+					<span>{t.topic}</span>
+					<b>{selectedRunSchedule?.agentConfig?.topic || selectedRunSchedule?.agentConfig?.primaryKeyword || '--'}</b>
+				</div>
 				<div class="dd-confirm__item">
 					<span>{t.publishingMode}</span>
 					<b
@@ -770,7 +915,11 @@
 				<button type="button" class="oc-btn oc-btn--ghost" onclick={() => (confirmOpen = false)}
 					>{t.cancel}</button
 				>
-				<button type="button" class="oc-btn oc-btn--primary" onclick={confirmRun}
+				<button
+					type="button"
+					class="oc-btn oc-btn--primary"
+					onclick={confirmRun}
+					disabled={!selectedRunSchedule || running}
 					>{t.confirmRun}</button
 				>
 			</div>
@@ -1158,6 +1307,16 @@
 		justify-content: flex-end;
 	}
 
+	.dd-run__prerequisite {
+		margin: 0;
+		padding: 10px 12px;
+		border: 1px solid rgba(217, 119, 6, 0.24);
+		border-radius: var(--oc-radius-sm);
+		background: rgba(217, 119, 6, 0.07);
+		color: #9a5a08;
+		font-size: 0.82rem;
+	}
+
 	/* ── Run result ── */
 	.dd-result {
 		display: grid;
@@ -1244,18 +1403,22 @@
 		font-size: 0.85rem;
 	}
 
+	.dd-status__value {
+		display: grid;
+		justify-items: end;
+		gap: 4px;
+		text-align: right;
+	}
+
+	.dd-status__value small {
+		color: var(--oc-muted);
+		font-size: 0.7rem;
+	}
+
 	.dd-status__row--stack {
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 5px;
-	}
-
-	.dd-status__gateway {
-		font-family: 'Monaco', 'Courier New', monospace;
-		font-size: 0.76rem;
-		color: var(--oc-text);
-		overflow-wrap: anywhere;
-		max-width: 100%;
 	}
 
 	/* ── Modal ── */
@@ -1283,6 +1446,33 @@
 	.dd-modal__box h3 {
 		font-size: 1.1rem;
 		font-weight: 700;
+	}
+
+	.dd-schedule-choice {
+		display: grid;
+		gap: 6px;
+		color: var(--oc-muted);
+		font-size: 0.8rem;
+	}
+
+	.dd-schedule-choice select {
+		width: 100%;
+		min-height: 40px;
+		padding: 0 10px;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface);
+		color: var(--oc-text);
+		font: inherit;
+	}
+
+	.dd-confirm__notice {
+		margin: 0;
+		padding: 9px 11px;
+		border-radius: var(--oc-radius-sm);
+		background: rgba(15, 118, 110, 0.07);
+		color: var(--oc-primary-strong);
+		font-size: 0.8rem;
 	}
 
 	.dd-confirm {

@@ -22,6 +22,9 @@
 	const isEn = $derived($locale === 'en');
 	const automation = $derived(dashboard?.automation || {});
 	const env = $derived(dashboard?.env || {});
+	const featureFlags = $derived(dashboard?.featureFlags || {});
+	const capabilities = $derived(dashboard?.capabilities || {});
+	const gatewayHealth = $derived(dashboard?.openclaw?.health || {});
 	const actions = $derived(Array.isArray(dashboard?.actions) ? dashboard.actions : []);
 	const agents = $derived(Array.isArray(dashboard?.agents) ? dashboard.agents : []);
 	const localSkills = $derived(Array.isArray(dashboard?.localSkills) ? dashboard.localSkills : []);
@@ -33,6 +36,25 @@
 				(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)
 		)
 	);
+	const enabledScheduleCount = $derived(
+		(Array.isArray(initialSchedulesData?.schedules) ? initialSchedulesData.schedules : []).filter(
+			(schedule) => schedule?.enabled
+		).length
+	);
+	const dataCapabilityRows = $derived([
+		['GOOGLE_INTELLIGENCE_ENABLED', capabilities.googleIntelligence],
+		['SEARCH_CONSOLE_ENABLED', capabilities.searchConsole],
+		['CONTENT_ANALYTICS_ENABLED', capabilities.aggregateAnalytics],
+		['CONTENT_TRENDS_ENABLED', capabilities.trends],
+		['CONTENT_INVENTORY_ENABLED', capabilities.inventory],
+		['CONTENT_SIGNALS_ENABLED', capabilities.contentSignals]
+	]);
+	const operationsCapabilityRows = $derived([
+		['CONTENT_OPERATIONS_ENABLED', capabilities.contentOperations],
+		['CONTENT_OPERATIONS_CRON_ENABLED', capabilities.contentOperationsCron],
+		['CONTENT_PERFORMANCE_MONITORING_ENABLED', capabilities.performanceMonitoring],
+		['CONTENT_LEARNING_ENABLED', capabilities.learning]
+	]);
 	const activeRuns = $derived(runs.filter((run) => run.status === 'running'));
 	const selectedRun = $derived(
 		runs.find((run) => run.id === selectedRunId) || runs[0] || null
@@ -143,6 +165,24 @@
 		if (status === 'failed') return isEn ? 'Failed' : 'Lỗi';
 		if (status === 'timed_out') return isEn ? 'Timed out' : 'Quá thời gian';
 		return isEn ? 'Running' : 'Đang chạy';
+	};
+
+	const capabilityLabel = (capability = {}) => {
+		if (capability.enabled && !capability.configured) return isEn ? 'Missing config' : 'Thiếu cấu hình';
+		if (!capability.enabled && capability.configured) return isEn ? 'Off · configured' : 'Tắt · đã cấu hình';
+		if (!capability.enabled) return isEn ? 'Off' : 'Tắt';
+		if (capability.availability === 'available') return isEn ? 'Ready' : 'Sẵn sàng';
+		if (capability.availability === 'degraded') return isEn ? 'Degraded' : 'Hoạt động một phần';
+		if (capability.availability === 'unavailable') return isEn ? 'Unavailable' : 'Không khả dụng';
+		return isEn ? 'On · not checked' : 'Bật · chưa kiểm tra';
+	};
+
+	const capabilityTone = (capability = {}) => {
+		if (capability.enabled && !capability.configured) return 'danger';
+		if (!capability.enabled) return 'muted';
+		if (capability.availability === 'available') return 'good';
+		if (capability.availability === 'degraded' || capability.availability === 'unknown') return 'warn';
+		return 'danger';
 	};
 
 	const resolveAdminPath = (path) => {
@@ -287,8 +327,14 @@
 		<div class="oc-status__grid">
 			<div class="oc-status__item">
 				<span class="oc-status__label">{copy.automation}</span>
-				<span class="oc-badge" class:is-good={automation.enabled} class:is-muted={!automation.enabled}>
-					<span class="oc-dot"></span>{automation.enabled ? 'ON' : 'OFF'}
+				<span
+					class="oc-badge"
+					class:is-good={capabilityTone(capabilities.seoAgent) === 'good'}
+					class:is-warn={capabilityTone(capabilities.seoAgent) === 'warn'}
+					class:is-danger={capabilityTone(capabilities.seoAgent) === 'danger'}
+					class:is-muted={capabilityTone(capabilities.seoAgent) === 'muted'}
+				>
+					<span class="oc-dot"></span>{capabilityLabel(capabilities.seoAgent)}
 				</span>
 			</div>
 			<div class="oc-status__item">
@@ -298,25 +344,46 @@
 				</span>
 			</div>
 			<div class="oc-status__item">
-				<span class="oc-status__label">Blog cron</span>
+				<span class="oc-status__label" title={`${enabledScheduleCount} enabled schedule(s)`}>Blog cron · {enabledScheduleCount}</span>
 				<span class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>
 					<span class="oc-dot"></span>{scheduleRuntime.cronEnabled ? 'ON' : 'OFF'}
 				</span>
 			</div>
 			<div class="oc-status__item">
 				<span class="oc-status__label">Telegram</span>
-				<span class="oc-badge" class:is-good={scheduleRuntime.telegramEnabled} class:is-muted={!scheduleRuntime.telegramEnabled}>
-					<span class="oc-dot"></span>{scheduleRuntime.telegramEnabled ? 'ON' : 'OPTIONAL'}
+				<span
+					class="oc-badge"
+					class:is-good={capabilityTone(capabilities.telegram) === 'good'}
+					class:is-warn={capabilityTone(capabilities.telegram) === 'warn'}
+					class:is-danger={capabilityTone(capabilities.telegram) === 'danger'}
+					class:is-muted={capabilityTone(capabilities.telegram) === 'muted'}
+				>
+					<span class="oc-dot"></span>{capabilityLabel(capabilities.telegram)}
 				</span>
 			</div>
 			<div class="oc-status__item">
 				<span class="oc-status__label">{copy.profile}</span>
 				<span class="oc-status__value">{dashboard?.profile || 'inoxpran'}</span>
 			</div>
-			<div class="oc-status__item oc-status__item--wide">
+			<div class="oc-status__item">
 				<span class="oc-status__label">{copy.gateway}</span>
-				<span class="oc-status__value oc-status__value--mono" title={dashboard?.openclaw?.gatewayUrl || '--'}>
-					{dashboard?.openclaw?.gatewayUrl || '--'}
+				<span
+					class="oc-badge"
+					class:is-good={gatewayHealth.ready}
+					class:is-warn={gatewayHealth.live && !gatewayHealth.ready}
+					class:is-danger={gatewayHealth.reachable === false}
+				>
+					<span class="oc-dot"></span>{gatewayHealth.ready
+						? isEn
+							? 'Ready'
+							: 'Sẵn sàng'
+						: gatewayHealth.live
+							? isEn
+								? 'Starting'
+								: 'Đang khởi động'
+							: isEn
+								? 'Unavailable'
+								: 'Không khả dụng'}
 				</span>
 			</div>
 			<div class="oc-status__item">
@@ -472,10 +539,47 @@
 			</div>
 
 			<div class="oc-gate-group">
+				<p class="oc-gate-group__label">{isEn ? 'Content Ops & data sources' : 'Content Ops & nguồn dữ liệu'}</p>
+				{#each operationsCapabilityRows as [name, capability] (name)}
+					<div class="oc-gate__row">
+						<span>{name}</span>
+						<b
+							class="oc-badge"
+							class:is-good={capabilityTone(capability) === 'good'}
+							class:is-warn={capabilityTone(capability) === 'warn'}
+							class:is-danger={capabilityTone(capability) === 'danger'}
+							class:is-muted={capabilityTone(capability) === 'muted'}
+						>{capabilityLabel(capability)}</b
+						>
+					</div>
+				{/each}
+				{#each dataCapabilityRows as [name, capability] (name)}
+					<div class="oc-gate__row">
+						<span>{name}</span>
+						<b
+							class="oc-badge"
+							class:is-good={capabilityTone(capability) === 'good'}
+							class:is-warn={capabilityTone(capability) === 'warn'}
+							class:is-danger={capabilityTone(capability) === 'danger'}
+							class:is-muted={capabilityTone(capability) === 'muted'}
+						>{capabilityLabel(capability)}</b
+						>
+					</div>
+				{/each}
+			</div>
+
+			<div class="oc-gate-group">
 				<p class="oc-gate-group__label">{copy.gateImages}</p>
 				<div class="oc-gate__row">
 					<span>IMAGE_PIPELINE</span>
-					<b class="oc-badge" class:is-good={automation.imagePipelineEnabled} class:is-muted={!automation.imagePipelineEnabled}>{automation.imagePipelineEnabled ? 'enabled' : 'disabled'}</b>
+					<b
+						class="oc-badge"
+						class:is-good={capabilityTone(capabilities.imagePipeline) === 'good'}
+						class:is-warn={capabilityTone(capabilities.imagePipeline) === 'warn'}
+						class:is-danger={capabilityTone(capabilities.imagePipeline) === 'danger'}
+						class:is-muted={capabilityTone(capabilities.imagePipeline) === 'muted'}
+					>{capabilityLabel(capabilities.imagePipeline)}</b
+					>
 				</div>
 				<div class="oc-gate__row">
 					<span>REQUIRE_COVER</span>
@@ -483,11 +587,11 @@
 				</div>
 				<div class="oc-gate__row">
 					<span>IMAGE_SEARCH</span>
-					<b class="oc-badge" class:is-good={automation.imageSearchProvider} class:is-muted={!automation.imageSearchProvider}>{automation.imageSearchProvider || 'disabled'}{env.IMAGE_SEARCH_API_KEY ? ' / set' : ''}</b>
+					<b class="oc-badge" class:is-good={capabilities.imageSearch?.configured} class:is-muted={!capabilities.imageSearch?.configured}>{capabilities.imageSearch?.configured ? `${automation.imageSearchProvider} / set` : 'disabled / missing'}</b>
 				</div>
 				<div class="oc-gate__row">
 					<span>AI_IMAGE</span>
-					<b class="oc-badge" class:is-good={automation.aiImageProvider} class:is-muted={!automation.aiImageProvider}>{automation.aiImageProvider || 'disabled'}{env.AI_IMAGE_API_KEY ? ' / set' : ''}</b>
+					<b class="oc-badge" class:is-good={capabilities.aiImage?.configured} class:is-muted={!capabilities.aiImage?.configured}>{capabilities.aiImage?.configured ? `${automation.aiImageProvider} / set` : 'disabled / missing'}</b>
 				</div>
 				<div class="oc-gate__row">
 					<span>FIRECRAWL_API_KEY</span>
@@ -499,11 +603,18 @@
 				<p class="oc-gate-group__label">{copy.gateScheduling}</p>
 				<div class="oc-gate__row">
 					<span>OPENCLAW_BLOG_CRON_ENABLED</span>
-					<b class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>{scheduleRuntime.cronEnabled ? 'true' : 'false'}</b>
+					<b class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>{scheduleRuntime.cronEnabled ? 'true' : 'false'} · {enabledScheduleCount} {isEn ? 'schedule(s)' : 'lịch'}</b>
 				</div>
 				<div class="oc-gate__row">
 					<span>TELEGRAM_BOT_ENABLED</span>
-					<b class="oc-badge" class:is-good={scheduleRuntime.telegramEnabled} class:is-muted={!scheduleRuntime.telegramEnabled}>{scheduleRuntime.telegramEnabled ? 'enabled' : 'optional / off'}</b>
+					<b
+						class="oc-badge"
+						class:is-good={capabilityTone(capabilities.telegram) === 'good'}
+						class:is-warn={capabilityTone(capabilities.telegram) === 'warn'}
+						class:is-danger={capabilityTone(capabilities.telegram) === 'danger'}
+						class:is-muted={capabilityTone(capabilities.telegram) === 'muted'}
+					>{capabilityLabel(capabilities.telegram)}</b
+					>
 				</div>
 				{#if scheduleRuntime.telegramEnabled || telegramConfigured}
 					<div class="oc-gate__row">
@@ -525,6 +636,22 @@
 					</div>
 				{/if}
 			</div>
+
+			<div class="oc-gate-group">
+				<p class="oc-gate-group__label">{isEn ? 'Review safety' : 'An toàn kiểm duyệt'}</p>
+				<div class="oc-gate__row">
+					<span>CONTENT_LEARNING_AUTO_APPLY</span>
+					<b class="oc-badge" class:is-good={!featureFlags.CONTENT_LEARNING_AUTO_APPLY} class:is-warn={featureFlags.CONTENT_LEARNING_AUTO_APPLY}>{featureFlags.CONTENT_LEARNING_AUTO_APPLY ? 'automatic' : 'manual review'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>CONTENT_PUBLISH_READINESS_ENABLED</span>
+					<b class="oc-badge" class:is-good={featureFlags.CONTENT_PUBLISH_READINESS_ENABLED} class:is-danger={!featureFlags.CONTENT_PUBLISH_READINESS_ENABLED}>{featureFlags.CONTENT_PUBLISH_READINESS_ENABLED ? 'true' : 'false'}</b>
+				</div>
+				<div class="oc-gate__row">
+					<span>CONTENT_POST_PUBLISH_VERIFY_ENABLED</span>
+					<b class="oc-badge" class:is-good={featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED} class:is-danger={!featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED}>{featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED ? 'true' : 'false'}</b>
+				</div>
+			</div>
 		</aside>
 	</div>
 
@@ -537,7 +664,7 @@
 		<div class="oc-run-layout">
 			<div class="oc-run-list">
 				{#if runs.length}
-					{#each runs as run}
+					{#each runs as run (run.id)}
 						<button
 							type="button"
 							class="oc-run-row"
@@ -586,7 +713,7 @@
 				<span class="oc-count">{agents.length}</span>
 			</div>
 			<div class="oc-chips">
-				{#each agents as agent}
+				{#each agents as agent (agent)}
 					<span class="oc-chip">{agent}</span>
 				{/each}
 			</div>
@@ -598,7 +725,7 @@
 				<span class="oc-count">{localSkills.length}</span>
 			</div>
 			<div class="oc-chips">
-				{#each localSkills as skill}
+				{#each localSkills as skill (skill)}
 					<span class="oc-chip">{skill}</span>
 				{/each}
 			</div>
@@ -611,7 +738,7 @@
 			</div>
 			{#if (skillReport?.installed || []).length}
 				<div class="oc-skill-report">
-					{#each skillReport?.installed || [] as skill}
+					{#each skillReport?.installed || [] as skill (skill)}
 						<div class="oc-skill-report__row"><b>installed</b><span>{skill}</span></div>
 					{/each}
 				</div>

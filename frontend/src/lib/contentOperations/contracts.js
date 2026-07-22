@@ -95,6 +95,12 @@ export const statusTone = (value) => {
 	const status = String(value || '').toLowerCase();
 	if (
 		[
+			'available',
+			'fresh',
+			'enabled',
+			'active',
+			'stable',
+			'verified',
 			'complete',
 			'completed',
 			'current',
@@ -111,16 +117,33 @@ export const statusTone = (value) => {
 		return 'good';
 	}
 	if (['failed', 'blocked', 'critical', 'rejected', 'error'].includes(status)) return 'danger';
-	if (['partial', 'warning', 'needs_review', 'draft', 'paused', 'unavailable'].includes(status)) {
+	if (
+		[
+			'partial',
+			'degraded',
+			'not_configured',
+			'warning',
+			'needs_review',
+			'draft',
+			'paused',
+			'unavailable'
+		].includes(status)
+	) {
 		return 'warn';
 	}
 	return 'muted';
 };
 
 export const sourceState = (source) => {
-	if (!source || typeof source !== 'object') return 'unavailable';
-	if (source.configured === false || source.status === 'unavailable') return 'unavailable';
-	return String(source.status || (source.configured ? 'available' : 'unknown'));
+	if (!source || typeof source !== 'object') return 'unknown';
+	if (source.enabled === false) return 'disabled';
+	if (source.configured === false) return 'not_configured';
+	const status = String(source.status || '').trim().toLowerCase();
+	if (status === 'available') return 'ready';
+	if (status === 'partial') return 'degraded';
+	if (status === 'failed') return 'failed';
+	if (status === 'unavailable') return 'unavailable';
+	return status || 'unknown';
 };
 
 export const hasProductPlanningContext = ({ mode, topic, action, workOrderId } = {}) => {
