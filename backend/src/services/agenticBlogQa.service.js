@@ -1181,7 +1181,13 @@ class AgenticBlogQaBatchService {
       return {
         featureEnabled: false,
         environment: config.environment,
-        actions: [],
+        // The route already enforces agentic_blog_qa.view. Preserve that
+        // read-only capability so authorized admins can discover the QA
+        // workspace and understand why execution is disabled. Mutating
+        // actions remain unavailable until the isolated QA feature is enabled.
+        actions: (Array.isArray(actions) ? actions : []).filter(
+          (action) => action === "view",
+        ),
         batches: [],
         pagination: { page, limit, total: 0 },
       };

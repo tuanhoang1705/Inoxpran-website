@@ -45,6 +45,29 @@ const validCodeBody = () => ({
 });
 
 describe("Agentic Blog QA backend boundary safety", () => {
+  it("preserves only authorized view metadata when QA execution is disabled", async () => {
+    const service = new AgenticBlogQaBatchService({
+      config: {
+        ...config,
+        enabled: false,
+        environment: "production",
+      },
+    });
+
+    await expect(
+      service.listBatches({
+        query: { page: "1", limit: "1" },
+        actions: ["view", "create", "run", "review", "remediate"],
+      }),
+    ).resolves.toEqual({
+      featureEnabled: false,
+      environment: "production",
+      actions: ["view"],
+      batches: [],
+      pagination: { page: 1, limit: 1, total: 0 },
+    });
+  });
+
   it("enforces exact body and query contracts before configuration, infrastructure, or persistence", async () => {
     const EnsureInfrastructure = vi.fn();
     const service = new AgenticBlogQaBatchService({ EnsureInfrastructure });
