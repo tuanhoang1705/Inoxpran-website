@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { t } from '$lib/i18n/admin/index.js';
 	import { untrack } from 'svelte';
+	import { canUseQaAction, qaFeatureAccess } from '$lib/openclaw/blogQa.js';
 	import {
 		CONTENT_OPERATION_VIEWS,
 		entityId,
@@ -11,6 +12,7 @@
 		viewTranslationKey
 	} from '$lib/contentOperations/contracts.js';
 	import InventoryPanel from '$lib/components/admin/openclaw/content-operations/InventoryPanel.svelte';
+	import CapabilityHealthPanel from '$lib/components/admin/openclaw/CapabilityHealthPanel.svelte';
 	import MonitoringPanel from '$lib/components/admin/openclaw/content-operations/MonitoringPanel.svelte';
 	import OpportunityCandidatesPanel from '$lib/components/admin/openclaw/content-operations/OpportunityCandidatesPanel.svelte';
 	import OperationsSchedulePanel from '$lib/components/admin/openclaw/content-operations/OperationsSchedulePanel.svelte';
@@ -22,6 +24,7 @@
 	const initialData = untrack(() => data);
 	let activeView = $state('today');
 	let status = $state(initialData?.status || {});
+	let capabilityHealth = $state(initialData?.capabilityHealth || { capabilities: {} });
 	let snapshots = $state(initialData?.snapshots || {});
 	let opportunities = $state(initialData?.opportunities || {});
 	let workOrders = $state(initialData?.workOrders || {});
@@ -42,6 +45,10 @@
 	const signalItems = $derived(firstList(signals, ['signals', 'items']));
 	const inventoryItems = $derived(firstList(inventory, ['items', 'inventory', 'articles']));
 	const failedLoads = $derived(Object.keys(data?.loadErrors || {}));
+	const qaAccess = $derived(qaFeatureAccess(data?.qaAccess));
+	const canViewQa = $derived(
+		canUseQaAction(qaAccess, 'view') || canUseQaAction(qaAccess, 'agentic_blog_qa.view')
+	);
 	const counts = $derived({
 		today: preview ? 1 : firstList(snapshots, ['snapshots', 'items']).length,
 		opportunities: opportunityItems.length,
@@ -89,6 +96,10 @@
 	};
 	const showSuccess = (key = 'updated') => {
 		notice = { tone: 'success', text: $t(`admin.contentOperations.feedback.${key}`) };
+	};
+
+	const handleCapabilityUpdate = (nextHealth) => {
+		capabilityHealth = nextHealth;
 	};
 
 	const replaceById = (items, id, patch) =>
@@ -310,6 +321,13 @@
 			<p>{$t('admin.contentOperations.description')}</p>
 		</div>
 		<div class="hero-actions">
+			{#if canViewQa}
+				<a
+					class="co-button co-button--quiet"
+					href={resolve(resolveAdminPath('/admin/openclaw/content-operations/qa'))}
+					>{$t('admin.contentOperations.qa.openQa')}</a
+				>
+			{/if}
 			<a
 				class="co-button co-button--quiet"
 				href={resolve(resolveAdminPath('/admin/openclaw/daily-draft'))}
@@ -337,6 +355,8 @@
 			>
 		</p>
 	</div>
+
+	<CapabilityHealthPanel health={capabilityHealth} onUpdated={handleCapabilityUpdate} />
 
 	{#if failedLoads.length}
 		<div class="load-warning" role="status">

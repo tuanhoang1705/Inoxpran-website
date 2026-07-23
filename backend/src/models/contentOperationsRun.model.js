@@ -4,6 +4,13 @@ const { Schema, model } = require("mongoose");
 
 const schema = new Schema(
   {
+    isQaTest: { type: Boolean, default: false, index: true },
+    qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+    qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+    environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+    executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+    originalTopicSeed: { type: String, default: '', maxlength: 300 },
+    normalizedTopicKey: { type: String, default: '', maxlength: 320 },
     executionKey: { type: String, required: true, unique: true, index: true },
     correlationId: { type: String, required: true, index: true },
     leaseOwner: {
@@ -83,6 +90,7 @@ const schema = new Schema(
 );
 
 schema.index({ createdAt: -1, status: 1 });
+schema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_content_operations_run' });
 
 module.exports = {
   ContentOperationsRun: model("ContentOperationsRun", schema),

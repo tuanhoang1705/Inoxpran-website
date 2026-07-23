@@ -1,4 +1,8 @@
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import {
+	sanitizeOpenClawClientPayload,
+	sanitizeOpenClawErrorMessage
+} from '$lib/server/openclawClientPayload.js';
 
 export const load = async ({ cookies, fetch }) => {
 	const [response, schedulesResponse] = await Promise.all([
@@ -20,13 +24,20 @@ export const load = async ({ cookies, fetch }) => {
 		return {
 			dashboard: null,
 			schedules: null,
-			loadError: payload?.message || 'Unable to load OpenClaw dashboard'
+			capabilityHealth: null,
+			loadError:
+				response.status >= 500
+					? 'Internal Server Error'
+					: sanitizeOpenClawErrorMessage(payload?.message, 'Unable to load OpenClaw dashboard')
 		};
 	}
 
 	return {
-		dashboard: payload?.metadata || null,
+		dashboard: sanitizeOpenClawClientPayload(payload?.metadata || null),
 		schedules: schedulesResponse.ok ? schedulesPayload?.metadata || null : null,
+		capabilityHealth: sanitizeOpenClawClientPayload(
+			payload?.metadata?.capabilityHealth || { capabilities: payload?.metadata?.capabilities || {} }
+		),
 		loadError: ''
 	};
 };

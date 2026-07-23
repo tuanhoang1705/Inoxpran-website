@@ -6,6 +6,11 @@ const {
   getContentOperationsConfig,
 } = require("../../config/contentOperations.config");
 const { safeErrorCode } = require("../../utils/httpError.util");
+const {
+  hasQaProvenanceMarkers,
+  normalizeTrustedQaProvenance,
+  qaProvenanceMatches,
+} = require("../../utils/qaProvenance.util");
 const { GoogleIntelligenceService } = require("../googleIntelligence.service");
 const {
   ContentInventoryItem,
@@ -49,6 +54,50 @@ const MAINTENANCE_ACTIONS = new Set([
 const asObject = (value) =>
   typeof value?.toObject === "function" ? value.toObject() : value || {};
 const asId = (value) => String(value?._id || value?.id || value || "");
+
+const planningArtifactScopeError = (label) => {
+  const error = new Error(`${label} does not belong to the trusted planning scope`);
+  error.code = "TRUSTED_QA_PROVENANCE_INVALID";
+  error.status = 409;
+  return error;
+};
+
+const assertPlanningArtifactScope = ({ artifact, qaProvenance, label }) => {
+  if (!artifact) return artifact;
+  const source = asObject(artifact);
+  const nestedCandidates = [source.metadata, source.qaContext].filter(Boolean);
+  if (!qaProvenance) {
+    if (
+      hasQaProvenanceMarkers(source) ||
+      nestedCandidates.some(hasQaProvenanceMarkers)
+    ) {
+      throw planningArtifactScopeError(label);
+    }
+    return artifact;
+  }
+  let stored;
+  try {
+    stored = normalizeTrustedQaProvenance(source);
+  } catch {
+    throw planningArtifactScopeError(label);
+  }
+  if (!qaProvenanceMatches(qaProvenance, stored)) {
+    throw planningArtifactScopeError(label);
+  }
+  for (const candidate of nestedCandidates) {
+    if (!hasQaProvenanceMarkers(candidate)) continue;
+    let nested;
+    try {
+      nested = normalizeTrustedQaProvenance(candidate);
+    } catch {
+      throw planningArtifactScopeError(label);
+    }
+    if (!qaProvenanceMatches(qaProvenance, nested)) {
+      throw planningArtifactScopeError(label);
+    }
+  }
+  return artifact;
+};
 const cleanStrings = (values, max = 20) =>
   Array.isArray(values)
     ? [
@@ -253,7 +302,9 @@ const workOrderInputFor = ({
     metadata: {
       planningMode: input.mode || "best_action",
       draftOnly: input.draftOnly !== false,
+      ...(input.qaContext || {}),
     },
+    ...(input.qaContext || {}),
   };
 };
 
@@ -338,6 +389,7 @@ const briefInputFor = ({
       })),
     categoryLinkCandidates: [],
     productIntegration: workOrder.productIntegrationPolicy,
+    plannedOutline: Array.isArray(input.plannedOutline) ? input.plannedOutline.slice(0, 20) : [],
     requiredFacts: Array.isArray(input.requiredFacts)
       ? input.requiredFacts
       : [],
@@ -381,6 +433,7 @@ const briefInputFor = ({
           "brand_voice",
           "publish_readiness",
         ],
+    qaContext: input.qaContext || workOrder.metadata || null,
   };
 };
 
@@ -796,7 +849,21 @@ class ContentOperationsPlanningService {
     adminId = null,
     executionKey: requestedExecutionKey = "",
     lease = null,
+    trustedQaContext = null,
   } = {}) {
+    if (Object.prototype.hasOwnProperty.call(input, "qaContext")) {
+      const error = new Error("QA provenance cannot be supplied through planning input");
+      error.code = "QA_PROVENANCE_INPUT_FORBIDDEN";
+      error.status = 400;
+      throw error;
+    }
+    const qaProvenance = normalizeTrustedQaProvenance(trustedQaContext);
+    if (qaProvenance) {
+      input = {
+        ...input,
+        qaContext: { ...trustedQaContext, ...qaProvenance },
+      };
+    }
     if (trigger === "preview") return this.preview({ input });
     const now = this.now();
     const correlationId = crypto.randomUUID();
@@ -825,6 +892,7 @@ class ContentOperationsPlanningService {
       status: "running",
       startedAt: now,
       triggeredByAdminId: adminId,
+      ...(input.qaContext || {}),
       pipelineSteps: [
         { step: "google_intelligence", status: "running", at: now },
       ],
@@ -850,6 +918,7 @@ class ContentOperationsPlanningService {
       const googleSnapshot =
         await this.GoogleService.ensureGoogleIntelligenceSnapshotForDate({
           now,
+          ...(qaProvenance ? { trustedQaContext: input.qaContext } : {}),
         });
       if (leaseGuard) await leaseGuard.checkpoint("after_google_intelligence");
       const intelligenceService =
@@ -861,6 +930,7 @@ class ContentOperationsPlanningService {
           now,
           force: input.force === true,
           googleIntelSnapshot: googleSnapshot,
+          ...(qaProvenance ? { trustedQaContext: input.qaContext } : {}),
         });
       if (leaseGuard) await leaseGuard.checkpoint("after_daily_snapshot");
       if (snapshotResult.disabled) {
@@ -890,6 +960,23 @@ class ContentOperationsPlanningService {
           error.status = 404;
           throw error;
         }
+        assertPlanningArtifactScope({
+          artifact: existingWorkOrder,
+          qaProvenance,
+          label: "Content Work Order",
+        });
+        assertPlanningArtifactScope({
+          artifact: existingBrief,
+          qaProvenance,
+          label: "Unified Content Brief",
+        });
+        if (
+          asId(existingBrief.contentWorkOrderId) !== asId(existingWorkOrder) ||
+          asId(existingWorkOrder._id || existingWorkOrder.id) !==
+            asId(input.workOrderId)
+        ) {
+          throw planningArtifactScopeError("Selected Work Order chain");
+        }
         const existingWorkOrderRunnable =
           isWorkOrderRunnable(existingWorkOrder, { now }) &&
           existingWorkOrder.decision !== ACTIONS.SKIP;
@@ -910,6 +997,18 @@ class ContentOperationsPlanningService {
         );
         if (!selected)
           throw new Error("The Work Order opportunity decision was not found");
+        assertPlanningArtifactScope({
+          artifact: selected,
+          qaProvenance,
+          label: "Content opportunity decision",
+        });
+        if (
+          asId(selected) !== asId(existingWorkOrder.contentOpportunityDecisionId) ||
+          asId(selected.contentOperationsSnapshotId) !==
+            asId(existingWorkOrder.contentOperationsSnapshotId)
+        ) {
+          throw planningArtifactScopeError("Selected Work Order chain");
+        }
         await this.persistRunTerminal({
           runId: run._id,
           ownerToken: leaseOwner,
@@ -1033,6 +1132,7 @@ class ContentOperationsPlanningService {
         contentInventorySnapshotId: snapshot.contentInventorySnapshotId,
         planningRunId,
         candidates,
+        qaContext: input.qaContext || null,
         config: decisionConfig,
       });
       if (leaseGuard)

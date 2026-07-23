@@ -8,6 +8,11 @@ const { ContentInventoryItem } = require('../../models/contentInventoryItem.mode
 const { ProductCatalogIntelligenceService } = require('../productCatalogIntelligence.service');
 const { dateInTimezone } = require('../../utils/googleIntelligence.util');
 const { getContentOperationsConfig } = require('../../config/contentOperations.config');
+const {
+    normalizeTrustedQaProvenance,
+    qaProvenanceDocument,
+    qaScopeFilter
+} = require('../../utils/qaProvenance.util');
 
 const BLOG_SELECT = [
     '_id', 'blog_title', 'blog_slug', 'blog_excerpt', 'blog_content', 'blog_category_key', 'blog_tags',
@@ -299,7 +304,7 @@ class ContentInventoryService {
         return leanQuery(query);
     }
 
-    async acquireBuildLease({ snapshotKey, existing, now }) {
+    async acquireBuildLease({ snapshotKey, snapshotDocument, existing, now }) {
         const buildToken = crypto.randomUUID();
         const leaseMs = Number(this.config.leaseMs) || 10 * 60 * 1000;
         const leaseUntil = new Date(now.getTime() + leaseMs);
@@ -313,7 +318,7 @@ class ContentInventoryService {
         };
         const update = {
             $setOnInsert: {
-                ...snapshotKey,
+                ...snapshotDocument,
                 checkedAt: now,
                 contentHash: sha256(`${snapshotKey.snapshotDate}:building`)
             },
@@ -439,21 +444,28 @@ class ContentInventoryService {
     }
 
     async readBlogs() {
-        let query = this.BlogModel.find({});
+        // QA drafts are deliberately excluded from the canonical inventory corpus.
+        // QA-specific inventory snapshots still describe production content and are
+        // separately labelled as derivative QA artifacts.
+        let query = this.BlogModel.find({ isQaTest: { $ne: true } });
         if (typeof query.select === 'function') query = query.select(BLOG_SELECT);
         if (typeof query.limit === 'function') query = query.limit(this.config.inventory.maxItems);
         return leanQuery(query);
     }
 
-    async ensureSnapshotForDate({ now = this.now(), force = false } = {}) {
+    async ensureSnapshotForDate({ now = this.now(), force = false, trustedQaContext = null } = {}) {
+        const qaContext = normalizeTrustedQaProvenance(trustedQaContext);
+        const provenance = qaProvenanceDocument(qaContext);
         const snapshotDate = dateInTimezone(now, this.config.timezone);
-        const snapshotKey = { snapshotDate, timezone: this.config.timezone };
+        const snapshotBase = { snapshotDate, timezone: this.config.timezone };
+        const snapshotKey = { ...snapshotBase, ...qaScopeFilter(qaContext) };
+        const snapshotDocument = { ...snapshotBase, ...provenance };
         let lease = null;
         let heartbeatTimer = null;
         let heartbeatError = null;
         try {
             const existing = await this.readSnapshot(snapshotKey, { internal: true });
-            lease = await this.acquireBuildLease({ snapshotKey, existing, now });
+            lease = await this.acquireBuildLease({ snapshotKey, snapshotDocument, existing, now });
             const heartbeatMs = Math.max(1000, Math.floor((Number(this.config.leaseMs) || 10 * 60 * 1000) / 3));
             heartbeatTimer = setInterval(() => {
                 this.renewBuildLease({ snapshotKey, lease }).catch((error) => {
@@ -479,6 +491,7 @@ class ContentInventoryService {
             });
             const truncated = sourceBlogs.length >= this.config.inventory.maxItems;
             const snapshotPayload = {
+                ...provenance,
                 snapshotDate,
                 timezone: this.config.timezone,
                 status: truncated ? 'partial' : 'complete',
@@ -523,7 +536,14 @@ class ContentInventoryService {
                                 { buildGeneration: { $lte: lease.buildGeneration } }
                             ]
                         },
-                        update: { $set: { ...item, snapshotId, buildGeneration: lease.buildGeneration } },
+                        update: {
+                            $set: {
+                                ...item,
+                                ...provenance,
+                                snapshotId,
+                                buildGeneration: lease.buildGeneration
+                            }
+                        },
                         upsert: true
                     }
                 })), { ordered: false });

@@ -4,6 +4,13 @@ const { Schema, model } = require('mongoose');
 
 const strategyPlanSchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', maxlength: 320 },
         googleIntelSnapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', required: true, index: true },
         contentWorkOrderId: { type: Schema.Types.ObjectId, ref: 'ContentWorkOrder', default: null, index: true },
         unifiedContentBriefId: { type: Schema.Types.ObjectId, ref: 'UnifiedContentBrief', default: null, index: true },
@@ -43,5 +50,7 @@ const strategyPlanSchema = new Schema(
     },
     { collection: 'BlogStrategyPlans', timestamps: true }
 );
+
+strategyPlanSchema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_blog_strategy_plan' });
 
 module.exports = { BlogStrategyPlan: model('BlogStrategyPlan', strategyPlanSchema) };

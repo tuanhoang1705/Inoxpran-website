@@ -4,6 +4,13 @@ const { Schema, model } = require("mongoose");
 
 const unifiedContentBriefSchema = new Schema(
   {
+    isQaTest: { type: Boolean, default: false, index: true },
+    qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+    qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+    environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+    executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+    originalTopicSeed: { type: String, default: '', maxlength: 300 },
+    normalizedTopicKey: { type: String, default: '', maxlength: 320 },
     contentWorkOrderId: {
       type: Schema.Types.ObjectId,
       ref: "ContentWorkOrder",
@@ -51,6 +58,7 @@ const unifiedContentBriefSchema = new Schema(
     supportingQuestions: { type: [String], default: [] },
     articleType: { type: String, required: true, trim: true, maxlength: 100 },
     contentRole: { type: String, required: true, trim: true, maxlength: 120 },
+    plannedOutline: { type: [String], default: [] },
     editorialAngle: {
       type: String,
       required: true,
@@ -106,6 +114,7 @@ unifiedContentBriefSchema.index(
   { contentWorkOrderId: 1, version: 1 },
   { unique: true },
 );
+unifiedContentBriefSchema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_unified_content_brief' });
 
 module.exports = {
   UnifiedContentBrief: model("UnifiedContentBrief", unifiedContentBriefSchema),

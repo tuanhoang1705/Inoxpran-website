@@ -4,7 +4,7 @@
 Tên biến: OPEN_API
 Mô tả: Domain tích hợp open API	
 PRODUCTION: https://services.giaohangtietkiem.vn
-API Token: 3F1SplMh1nMUTUoQl5jrFJxrEr5pnodAYRM7j3s
+API Token: `${GHTK_API_TOKEN}` (configure through the deployment secret store; never commit the production token)
 
 Tên biến	    Mô tả
 API_TOKEN	    API token lấy được từ web khách hàng của GHTK - URL : CUSTOMER_WEBSITE/web/thong-tin-shop/tai-khoan

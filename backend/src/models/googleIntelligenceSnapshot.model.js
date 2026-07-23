@@ -4,6 +4,13 @@ const { Schema, model } = require('mongoose');
 
 const snapshotSchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', maxlength: 320 },
         snapshotDate: { type: String, required: true },
         timezone: { type: String, required: true, default: 'Asia/Ho_Chi_Minh' },
         status: {
@@ -44,7 +51,10 @@ const snapshotSchema = new Schema(
     { collection: 'GoogleIntelligenceSnapshots', timestamps: true }
 );
 
-snapshotSchema.index({ snapshotDate: 1, timezone: 1 }, { unique: true });
+snapshotSchema.index(
+    { snapshotDate: 1, timezone: 1, isQaTest: 1, qaBatchId: 1, qaCaseId: 1 },
+    { unique: true, name: 'google_snapshot_scope_unique' }
+);
 snapshotSchema.index({ checkedAt: -1 });
 snapshotSchema.index({ snapshotDate: 1, timezone: 1, buildGeneration: 1 });
 

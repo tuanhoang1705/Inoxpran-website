@@ -12,6 +12,11 @@ const { SearchConsoleAdapter } = require('./searchConsole.adapter');
 const { AggregateAnalyticsAdapter } = require('./aggregateAnalytics.adapter');
 const { TrendsAdapter } = require('./trends.adapter');
 const { createGoogleTrendsRssProvider } = require('./googleTrendsRss.provider');
+const {
+    normalizeTrustedQaProvenance,
+    qaProvenanceDocument,
+    qaScopeFilter
+} = require('../../utils/qaProvenance.util');
 
 const createConfiguredTrendsProvider = (config = {}) => {
     if (String(config.provider || '').trim().toLowerCase() !== 'google_trends_rss') return null;
@@ -176,6 +181,13 @@ const safeSnapshotView = (snapshot) => {
     const source = typeof snapshot?.toObject === 'function' ? snapshot.toObject() : snapshot || {};
     return {
         id: String(source._id || source.id || ''),
+        isQaTest: source.isQaTest === true,
+        qaBatchId: source.qaBatchId ? String(source.qaBatchId) : '',
+        qaCaseId: source.qaCaseId ? String(source.qaCaseId) : '',
+        environment: source.environment || '',
+        executionMode: source.executionMode || '',
+        originalTopicSeed: source.originalTopicSeed || '',
+        normalizedTopicKey: source.normalizedTopicKey || '',
         snapshotDate: source.snapshotDate,
         timezone: source.timezone,
         status: source.status,
@@ -312,7 +324,7 @@ class ContentOperationsIntelligenceService {
         });
     }
 
-    async resolveGoogleSnapshot({ googleIntelSnapshot, googleIntelSnapshotId, now }) {
+    async resolveGoogleSnapshot({ googleIntelSnapshot, googleIntelSnapshotId, now, trustedQaContext = null }) {
         if (googleIntelSnapshot && (googleIntelSnapshot.id || googleIntelSnapshot._id)) return googleIntelSnapshot;
         if (googleIntelSnapshotId) return { id: googleIntelSnapshotId, checkedAt: now, status: 'provided_by_gate' };
         if (!this.googleIntelligenceService || typeof this.googleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate !== 'function') {
@@ -320,11 +332,18 @@ class ContentOperationsIntelligenceService {
             error.code = 'GOOGLE_INTELLIGENCE_GATE_UNAVAILABLE';
             throw error;
         }
-        return this.googleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate({ now });
+        return this.googleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate({
+            now,
+            ...(trustedQaContext ? { trustedQaContext } : {})
+        });
     }
 
-    async acquireLease({ snapshotDate, now, force }) {
-        const existing = await this.readSnapshot({ snapshotDate, timezone: this.config.timezone }, { internal: true });
+    async acquireLease({ snapshotDate, now, force, trustedQaContext = null }) {
+        const qaContext = normalizeTrustedQaProvenance(trustedQaContext);
+        const snapshotBase = { snapshotDate, timezone: this.config.timezone };
+        const snapshotKey = { ...snapshotBase, ...qaScopeFilter(qaContext) };
+        const snapshotDocument = { ...snapshotBase, ...qaProvenanceDocument(qaContext) };
+        const existing = await this.readSnapshot(snapshotKey, { internal: true });
         if (!force && isFreshSnapshot({ snapshot: existing, now, maxAgeHours: this.config.snapshotMaxAgeHours })) {
             return { snapshot: existing, reused: true };
         }
@@ -332,8 +351,7 @@ class ContentOperationsIntelligenceService {
         const leaseToken = crypto.randomUUID();
         const leaseUntil = new Date(now.getTime() + this.config.leaseMs);
         const filter = {
-            snapshotDate,
-            timezone: this.config.timezone,
+            ...snapshotKey,
             $or: [
                 { leaseUntil: null },
                 { leaseUntil: { $exists: false } },
@@ -342,8 +360,7 @@ class ContentOperationsIntelligenceService {
         };
         const update = {
             $setOnInsert: {
-                snapshotDate,
-                timezone: this.config.timezone,
+                ...snapshotDocument,
                 checkedAt: now,
                 contentHash: sha256(`${snapshotDate}:building`)
             },
@@ -364,17 +381,17 @@ class ContentOperationsIntelligenceService {
         } catch (error) {
             if (error?.code !== 11000) throw error;
         }
-        if (claimed) return { leaseOwner, leaseToken, leaseUntil, reused: false };
+        if (claimed) return { leaseOwner, leaseToken, leaseUntil, snapshotKey, reused: false };
 
         const deadline = Date.now() + this.config.leaseWaitMs;
         while (Date.now() < deadline) {
             await this.sleep(this.config.leasePollMs);
-            const concurrent = await this.readSnapshot({ snapshotDate, timezone: this.config.timezone }, { internal: true });
+            const concurrent = await this.readSnapshot(snapshotKey, { internal: true });
             if (isFreshSnapshot({ snapshot: concurrent, now: this.now(), maxAgeHours: this.config.snapshotMaxAgeHours })) {
                 return { snapshot: concurrent, reused: true };
             }
             if (!concurrent?.leaseUntil || new Date(concurrent.leaseUntil) <= this.now()) {
-                return this.acquireLease({ snapshotDate, now: this.now(), force: true });
+                return this.acquireLease({ snapshotDate, now: this.now(), force: true, trustedQaContext: qaContext });
             }
         }
         const error = new Error('content_operations_lease_busy');
@@ -382,9 +399,9 @@ class ContentOperationsIntelligenceService {
         throw error;
     }
 
-    async completeLease({ snapshotDate, leaseToken, payload }) {
+    async completeLease({ snapshotKey, leaseToken, payload }) {
         const updated = await this.SnapshotModel.findOneAndUpdate(
-            { snapshotDate, timezone: this.config.timezone, leaseToken },
+            { ...snapshotKey, leaseToken },
             {
                 $set: payload,
                 $unset: { leaseOwner: '', leaseToken: '', leaseUntil: '' }
@@ -399,9 +416,9 @@ class ContentOperationsIntelligenceService {
         return updated;
     }
 
-    async failLease({ snapshotDate, leaseToken, now, errorCode }) {
+    async failLease({ snapshotKey, leaseToken, now, errorCode }) {
         return this.SnapshotModel.findOneAndUpdate(
-            { snapshotDate, timezone: this.config.timezone, leaseToken },
+            { ...snapshotKey, leaseToken },
             {
                 $set: {
                     status: 'failed',
@@ -419,8 +436,11 @@ class ContentOperationsIntelligenceService {
         now = this.now(),
         force = false,
         googleIntelSnapshot = null,
-        googleIntelSnapshotId = null
+        googleIntelSnapshotId = null,
+        trustedQaContext = null
     } = {}) {
+        const qaContext = normalizeTrustedQaProvenance(trustedQaContext);
+        const provenance = qaProvenanceDocument(qaContext);
         if (!this.config.enabled) {
             return {
                 snapshot: {
@@ -443,7 +463,12 @@ class ContentOperationsIntelligenceService {
             };
         }
 
-        const googleSnapshot = await this.resolveGoogleSnapshot({ googleIntelSnapshot, googleIntelSnapshotId, now });
+        const googleSnapshot = await this.resolveGoogleSnapshot({
+            googleIntelSnapshot,
+            googleIntelSnapshotId,
+            now,
+            trustedQaContext: qaContext
+        });
         const resolvedGoogleId = googleSnapshot.id || googleSnapshot._id;
         if (!resolvedGoogleId) {
             const error = new Error('google_intelligence_snapshot_id_missing');
@@ -452,16 +477,43 @@ class ContentOperationsIntelligenceService {
         }
 
         const snapshotDate = dateInTimezone(now, this.config.timezone);
-        const lease = await this.acquireLease({ snapshotDate, now, force });
+        if (qaContext && !force) {
+            const productionSnapshot = await this.readSnapshot({
+                snapshotDate,
+                timezone: this.config.timezone,
+                isQaTest: { $ne: true }
+            });
+            if (
+                isFreshSnapshot({ snapshot: productionSnapshot, now, maxAgeHours: this.config.snapshotMaxAgeHours }) &&
+                String(productionSnapshot.googleIntelSnapshotId || '') === String(resolvedGoogleId)
+            ) {
+                return { snapshot: safeSnapshotView(productionSnapshot), reused: true };
+            }
+        }
+        const lease = await this.acquireLease({
+            snapshotDate,
+            now,
+            force,
+            trustedQaContext: qaContext
+        });
         if (lease.reused) return { snapshot: safeSnapshotView(lease.snapshot), reused: true };
 
         try {
             const previous = await this.readSnapshot(
-                { snapshotDate: { $lt: snapshotDate }, timezone: this.config.timezone, status: { $in: ['complete', 'partial'] } },
+                {
+                    snapshotDate: { $lt: snapshotDate },
+                    timezone: this.config.timezone,
+                    isQaTest: { $ne: true },
+                    status: { $in: ['complete', 'partial'] }
+                },
                 { internal: true, sort: { snapshotDate: -1 } }
             );
             const [inventorySettled, productsSettled, searchResult, analyticsResult, trendsResult, contentSignalsResult] = await Promise.all([
-                this.inventoryService.ensureSnapshotForDate({ now, force }),
+                this.inventoryService.ensureSnapshotForDate({
+                    now,
+                    force,
+                    ...(qaContext ? { trustedQaContext: qaContext } : {})
+                }),
                 Promise.resolve().then(() => this.productCatalogService.readSafeCatalog()),
                 adapterRead(this.searchConsoleAdapter, 'google_search_console', now),
                 adapterRead(this.aggregateAnalyticsAdapter, 'first_party_aggregate_analytics', now),
@@ -586,6 +638,7 @@ class ContentOperationsIntelligenceService {
                 contentSignals: withoutVolatileFields(safeSignals)
             };
             const payload = {
+                ...provenance,
                 snapshotDate,
                 timezone: this.config.timezone,
                 status: degradesSnapshot ? 'partial' : 'complete',
@@ -603,11 +656,11 @@ class ContentOperationsIntelligenceService {
                 contentHash: contentHashFor(stableEvidence),
                 sourceState
             };
-            const snapshot = await this.completeLease({ snapshotDate, leaseToken: lease.leaseToken, payload });
+            const snapshot = await this.completeLease({ snapshotKey: lease.snapshotKey, leaseToken: lease.leaseToken, payload });
             return { snapshot: safeSnapshotView(snapshot), reused: false };
         } catch (error) {
             const errorCode = text(error?.code || 'CONTENT_OPERATIONS_BUILD_FAILED', 120);
-            await this.failLease({ snapshotDate, leaseToken: lease.leaseToken, now, errorCode });
+            await this.failLease({ snapshotKey: lease.snapshotKey, leaseToken: lease.leaseToken, now, errorCode });
             error.code = errorCode;
             throw error;
         }

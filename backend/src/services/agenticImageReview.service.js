@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const { blog } = require("../models/blog.model");
 const {
   BadRequestError,
@@ -27,6 +28,12 @@ const {
   searchPexelsImages,
 } = require("./openclaw/imageSearch.service");
 const { buildStorageFolder } = require("./openclaw/imagePipeline.service");
+
+const hashPersistedBlogContent = (value) =>
+  crypto
+    .createHash("sha256")
+    .update(String(value || ""))
+    .digest("hex");
 
 const parseTarget = (value) => {
   if (value && typeof value === "object") return value;
@@ -206,6 +213,7 @@ const buildReplacementUpdate = ({
       replacement,
     }),
   );
+  set.contentRevisionHash = hashPersistedBlogContent(set.blog_content);
   return set;
 };
 

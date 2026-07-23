@@ -28,7 +28,11 @@ fi
 
 mkdir -p "${WORKSPACES_DIR}"
 
-agents_list="$(run_openclaw --profile "${PROFILE}" agents list 2>&1 || true)"
+if ! agents_list="$(run_openclaw --profile "${PROFILE}" agents list 2>&1)"; then
+  printf '%s\n' "${agents_list}" >&2
+  echo "Unable to list OpenClaw agents for profile '${PROFILE}'." >&2
+  exit 1
+fi
 
 for agent_file in "${AGENTS_DIR}"/*.md; do
   [ -f "${agent_file}" ] || continue
@@ -36,14 +40,23 @@ for agent_file in "${AGENTS_DIR}"/*.md; do
   workspace="${WORKSPACES_DIR}/${agent_id}"
   mkdir -p "${workspace}"
 
-  cat >"${workspace}/BOOTSTRAP.md" <<EOF
+  if [ "${agent_id}" = "senior-blog-acceptance-auditor" ]; then
+    for required_file in BOOTSTRAP.md AGENTS.md IDENTITY.md USER.md; do
+      if [ ! -f "${workspace}/${required_file}" ]; then
+        echo "Missing repository-managed Senior Auditor workspace file: ${workspace}/${required_file}" >&2
+        exit 1
+      fi
+    done
+    echo "Preserving repository-managed read-only Senior Auditor workspace."
+  else
+    cat >"${workspace}/BOOTSTRAP.md" <<EOF
 # ${agent_id}
 
 This workspace is managed by scripts/openclaw/sync-agents.sh.
 Follow AGENTS.md for role, constraints, and handoff rules.
 
 Project: Inoxpran SEO automation.
-Default output: create draft-only blog workflow artifacts unless explicitly instructed by the reviewer/publisher policy.
+Default output: follow AGENTS.md exactly and never perform publication or another external side effect unless the role policy explicitly permits it.
 EOF
 
   {
@@ -67,6 +80,7 @@ EOF
 The user owns the Inoxpran website and wants a conservative daily SEO blog automation workflow.
 Never expose credentials. Never publish directly unless backend safety gates and reviewer conditions pass.
 EOF
+  fi
 
   if printf '%s\n' "${agents_list}" | grep -Eq "^[[:space:]]*-[[:space:]]+${agent_id}([[:space:]]|$)"; then
     echo "Agent already registered: ${agent_id}"

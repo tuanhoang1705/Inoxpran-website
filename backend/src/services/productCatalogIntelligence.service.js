@@ -7,6 +7,11 @@ const { inventory } = require('../models/inventory.model');
 const { ProductCatalogSnapshot } = require('../models/productCatalogSnapshot.model');
 const { buildEnvProductSeedingConfig } = require('../config/productSeeding.config');
 const { safeErrorCode } = require('../utils/httpError.util');
+const {
+    normalizeTrustedQaProvenance,
+    qaProvenanceDocument,
+    qaScopeFilter
+} = require('../utils/qaProvenance.util');
 
 const PRODUCT_SELECT = [
     '_id', 'product_name', 'product_slug', 'product_description', 'product_thumb',
@@ -165,25 +170,45 @@ class ProductCatalogIntelligenceService {
         }));
     }
 
-    static async ensureSnapshot({ force = false, now = new Date(), config = buildEnvProductSeedingConfig() } = {}) {
+    static async ensureSnapshot({
+        force = false,
+        now = new Date(),
+        config = buildEnvProductSeedingConfig(),
+        trustedQaContext = null
+    } = {}) {
+        const qaContext = normalizeTrustedQaProvenance(trustedQaContext);
+        const provenance = qaProvenanceDocument(qaContext);
+        let products = null;
         if (!force) {
-            const reusable = await ProductCatalogSnapshot.findOne({ status: { $in: ['complete', 'partial'] }, expiresAt: { $gt: now } })
-                .sort({ generatedAt: -1 })
-                .lean();
-            if (reusable) {
-                const products = await ProductCatalogIntelligenceService.readSafeCatalog({ config });
+            // A QA run may consume a valid production snapshot because it did not
+            // create that artifact. If no production snapshot is usable, only an
+            // artifact owned by the same QA case may be reused.
+            const scopes = qaContext
+                ? [{ isQaTest: { $ne: true } }, qaScopeFilter(qaContext)]
+                : [qaScopeFilter(null)];
+            for (const scope of scopes) {
+                const reusable = await ProductCatalogSnapshot.findOne({
+                    ...scope,
+                    status: { $in: ['complete', 'partial'] },
+                    expiresAt: { $gt: now }
+                })
+                    .sort({ generatedAt: -1 })
+                    .lean();
+                if (!reusable) continue;
+                products ||= await ProductCatalogIntelligenceService.readSafeCatalog({ config });
                 if (hashSafeCatalog(products) === reusable.catalogHash) {
                     return { ...reusable, safeProducts: products };
                 }
             }
         }
         try {
-            const products = await ProductCatalogIntelligenceService.readSafeCatalog({ config });
+            products ||= await ProductCatalogIntelligenceService.readSafeCatalog({ config });
             const generatedAt = new Date(now);
             const sourceDates = products.map((item) => item.updatedAt ? new Date(item.updatedAt).getTime() : 0).filter((item) => item > 0);
             const sourceUpdatedAt = sourceDates.length ? new Date(Math.max(...sourceDates)) : null;
             const status = products.some((item) => item.eligible) || products.length === 0 ? 'complete' : 'partial';
             const snapshot = await ProductCatalogSnapshot.create({
+                ...provenance,
                 catalogHash: hashSafeCatalog(products),
                 productCount: products.length,
                 eligibleProductCount: products.filter((item) => item.eligible).length,
@@ -208,6 +233,7 @@ class ProductCatalogIntelligenceService {
             return { ...(typeof snapshot.toObject === 'function' ? snapshot.toObject() : snapshot), safeProducts: products };
         } catch (error) {
             const failed = await ProductCatalogSnapshot.create({
+                ...provenance,
                 catalogHash: sha256(`failed:${now.toISOString()}`),
                 productCount: 0,
                 eligibleProductCount: 0,
@@ -228,7 +254,7 @@ class ProductCatalogIntelligenceService {
     }
 
     static async getStatus() {
-        const latest = await ProductCatalogSnapshot.findOne().sort({ generatedAt: -1 }).lean();
+        const latest = await ProductCatalogSnapshot.findOne({ isQaTest: { $ne: true } }).sort({ generatedAt: -1 }).lean();
         return latest ? {
             id: String(latest._id), catalogHash: latest.catalogHash,
             productCount: latest.productCount, eligibleProductCount: latest.eligibleProductCount,

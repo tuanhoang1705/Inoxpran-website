@@ -541,11 +541,14 @@ describe("Content Work Order lease ownership", () => {
     };
     const ExecutionModel = {
       updateOne: vi.fn(async (filter, update) => {
+        const statusMatches = Array.isArray(filter.status?.$in)
+          ? filter.status.$in.includes(state.status)
+          : filter.status === state.status;
         const matched =
           String(filter._id) === String(state._id) &&
           String(filter.contentWorkOrderId) ===
             String(state.contentWorkOrderId) &&
-          filter.status === state.status &&
+          statusMatches &&
           filter["metadata.contentWorkOrderClaimToken"] ===
             state.metadata.contentWorkOrderClaimToken;
         if (!matched) return { matchedCount: 0, modifiedCount: 0 };

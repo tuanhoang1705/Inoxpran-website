@@ -4,6 +4,13 @@ const { Schema, model } = require('mongoose');
 
 const inventoryItemSchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', maxlength: 320 },
         snapshotId: { type: Schema.Types.ObjectId, ref: 'ContentInventorySnapshot', required: true, index: true },
         blogId: { type: Schema.Types.ObjectId, ref: 'BlogPost', required: true, index: true },
         buildGeneration: { type: Number, default: 0, min: 0, select: false },

@@ -6,6 +6,7 @@ const { BadRequestError, NotFoundError } = require('../../core/error.response')
 const { ACTIONS, getContentOperationsConfig } = require('../../config/contentOperations.config')
 const { calculateNextRun, normalizeTimes } = require('../../utils/blogSchedule.util')
 const { redactInternalOwnership, safeErrorCode } = require('../../utils/httpError.util')
+const { hasQaProvenanceMarkers, qaScopeFilter } = require('../../utils/qaProvenance.util')
 const { ContentOperationsDailySnapshot } = require('../../models/contentOperationsDailySnapshot.model')
 const { ContentInventorySnapshot } = require('../../models/contentInventorySnapshot.model')
 const { ContentInventoryItem } = require('../../models/contentInventoryItem.model')
@@ -50,6 +51,34 @@ const toView = (value) => {
 }
 
 const asObject = (value) => typeof value?.toObject === 'function' ? value.toObject() : value || {}
+
+const productionArtifactScopeFilter = () => ({
+    ...qaScopeFilter(null),
+    qaBatchId: null,
+    qaCaseId: null,
+    environment: { $in: [null, ''] },
+    executionMode: { $in: [null, ''] },
+    originalTopicSeed: { $in: [null, ''] },
+    normalizedTopicKey: { $in: [null, ''] },
+    'metadata.isQaTest': { $ne: true },
+    'metadata.qaBatchId': null,
+    'metadata.qaCaseId': null
+})
+
+const assertProductionArtifact = (value, label) => {
+    if (!value) return value
+    const source = asObject(value)
+    if (
+        hasQaProvenanceMarkers(source) ||
+        hasQaProvenanceMarkers(source.metadata) ||
+        hasQaProvenanceMarkers(source.qaContext)
+    ) {
+        const error = new NotFoundError(`${label} not found`)
+        error.code = 'PRODUCTION_ARTIFACT_SCOPE_INVALID'
+        throw error
+    }
+    return value
+}
 
 const assertId = (value, label = 'id') => {
     if (!isValidObjectId(value)) throw new BadRequestError(`${label} is invalid`)
@@ -431,8 +460,13 @@ const normalizeOpportunityTransitionPayload = (payload = {}) => {
 
 const findCompleteBriefForWorkOrder = async (workOrderId) => {
     if (!workOrderId) return null
-    const query = UnifiedContentBrief.findOne({ contentWorkOrderId: workOrderId, status: 'complete' })
-    return typeof query?.sort === 'function' ? query.sort({ version: -1 }) : query
+    const query = UnifiedContentBrief.findOne({
+        contentWorkOrderId: workOrderId,
+        status: 'complete',
+        ...productionArtifactScopeFilter()
+    })
+    const brief = await (typeof query?.sort === 'function' ? query.sort({ version: -1 }) : query)
+    return assertProductionArtifact(brief, 'Unified Content Brief')
 }
 
 const convertedArtifactsAreComplete = ({ workOrder, brief }) => {
@@ -444,12 +478,21 @@ const convertedArtifactsAreComplete = ({ workOrder, brief }) => {
 }
 
 const ensureConvertedArtifacts = async ({ opportunity, payload, adminId }) => {
-    let workOrder = await ContentWorkOrder.findOne({ contentOpportunityDecisionId: opportunity._id })
+    assertProductionArtifact(opportunity, 'Opportunity')
+    let workOrder = await ContentWorkOrder.findOne({
+        contentOpportunityDecisionId: opportunity._id,
+        ...productionArtifactScopeFilter()
+    })
+    assertProductionArtifact(workOrder, 'Content Work Order')
     let brief = await findCompleteBriefForWorkOrder(workOrder?._id || workOrder?.id)
     if (convertedArtifactsAreComplete({ workOrder, brief })) return { workOrder, brief }
 
-    const snapshot = await ContentOperationsDailySnapshot.findById(opportunity.contentOperationsSnapshotId).lean()
+    const snapshot = await ContentOperationsDailySnapshot.findOne({
+        _id: opportunity.contentOperationsSnapshotId,
+        ...productionArtifactScopeFilter()
+    }).lean()
     if (!snapshot) throw new Error('CONTENT_OPPORTUNITY_SNAPSHOT_UNAVAILABLE')
+    assertProductionArtifact(snapshot, 'Content Operations snapshot')
     const decision = asObject(opportunity)
     workOrder = workOrder || await ContentWorkOrderService.createFromDecision({
         decision,
@@ -465,7 +508,10 @@ const ensureConvertedArtifacts = async ({ opportunity, payload, adminId }) => {
     brief = brief || await findCompleteBriefForWorkOrder(workOrder._id || workOrder.id)
     if (!brief) {
         const inventoryItems = snapshot.contentInventorySnapshotId
-            ? await ContentInventoryItem.find({ snapshotId: snapshot.contentInventorySnapshotId }).limit(1000).lean()
+            ? await ContentInventoryItem.find({
+                snapshotId: snapshot.contentInventorySnapshotId,
+                ...productionArtifactScopeFilter()
+            }).limit(1000).lean()
             : []
         brief = await UnifiedContentBriefService.create({
             workOrder: asObject(workOrder),
@@ -488,10 +534,13 @@ class ContentOperationsAdminService {
     static async getStatus() {
         const config = getContentOperationsConfig()
         const [snapshot, run, schedule, openWorkOrders, activeSignals] = await Promise.all([
-            ContentOperationsDailySnapshot.findOne().sort({ snapshotDate: -1 }).lean(),
-            ContentOperationsRun.findOne().sort({ createdAt: -1 }).lean(),
+            ContentOperationsDailySnapshot.findOne(productionArtifactScopeFilter()).sort({ snapshotDate: -1 }).lean(),
+            ContentOperationsRun.findOne(productionArtifactScopeFilter()).sort({ createdAt: -1 }).lean(),
             ContentOperationsSchedule.findOne({ singletonKey: 'default' }).lean(),
-            ContentWorkOrder.countDocuments({ status: { $nin: ['completed', 'cancelled'] } }),
+            ContentWorkOrder.countDocuments({
+                status: { $nin: ['completed', 'cancelled'] },
+                ...productionArtifactScopeFilter()
+            }),
             ContentSignal.countDocuments({ status: { $in: ['new', 'reviewed'] }, expiresAt: { $gt: new Date() } })
         ])
         return {
@@ -544,19 +593,24 @@ class ContentOperationsAdminService {
     }
 
     static async listSnapshots(query) {
-        const result = await listPage({ Model: ContentOperationsDailySnapshot, query, sort: { snapshotDate: -1 } })
+        const result = await listPage({
+            Model: ContentOperationsDailySnapshot,
+            filter: { isQaTest: { $ne: true } },
+            query,
+            sort: { snapshotDate: -1 }
+        })
         return { snapshots: result.items, pagination: result.pagination }
     }
 
     static async getSnapshot(snapshotId) {
         assertId(snapshotId, 'snapshotId')
-        const snapshot = await ContentOperationsDailySnapshot.findById(snapshotId).lean()
+        const snapshot = await ContentOperationsDailySnapshot.findOne({ _id: snapshotId, isQaTest: { $ne: true } }).lean()
         if (!snapshot) throw new NotFoundError('Content Operations snapshot not found')
         return { snapshot: toView(snapshot) }
     }
 
     static async listOpportunities(query = {}) {
-        const filter = {}
+        const filter = productionArtifactScopeFilter()
         if (query.status && ['candidate', 'selected', 'accepted', 'dismissed', 'converted'].includes(query.status)) filter.status = query.status
         if (query.action) filter.decisionType = query.action
         const result = await listPage({ Model: ContentOpportunityDecision, filter, query, sort: { createdAt: -1, totalScore: -1 } })
@@ -567,6 +621,7 @@ class ContentOperationsAdminService {
         assertId(id)
         const opportunity = await ContentOpportunityDecision.findById(id).lean()
         if (!opportunity) throw new NotFoundError('Opportunity not found')
+        assertProductionArtifact(opportunity, 'Opportunity')
         return { opportunity: toView(opportunity) }
     }
 
@@ -578,6 +633,7 @@ class ContentOperationsAdminService {
         const normalizedPayload = normalizeOpportunityTransitionPayload(payload)
         const opportunity = await ContentOpportunityDecision.findById(id)
         if (!opportunity) throw new NotFoundError('Opportunity not found')
+        assertProductionArtifact(opportunity, 'Opportunity')
         const previousStatus = opportunity.status
         const reason = String(normalizedPayload.reason || normalizedPayload.overrideReason || '').trim()
         if (operation === 'dismiss' && reason.length < 8) throw new BadRequestError('A dismissal reason of at least 8 characters is required')
@@ -589,7 +645,11 @@ class ContentOperationsAdminService {
         const targetStatus = operation === 'accept' ? 'accepted' : operation === 'dismiss' ? 'dismissed' : 'converted'
         const idempotentConvert = operation === 'convert' && previousStatus === targetStatus
         if (previousStatus === targetStatus && !idempotentConvert) {
-            const workOrder = await ContentWorkOrder.findOne({ contentOpportunityDecisionId: opportunity._id })
+            const workOrder = await ContentWorkOrder.findOne({
+                contentOpportunityDecisionId: opportunity._id,
+                ...productionArtifactScopeFilter()
+            })
+            assertProductionArtifact(workOrder, 'Content Work Order')
             const brief = await findCompleteBriefForWorkOrder(workOrder?._id || workOrder?.id)
             return { opportunity: toView(opportunity), workOrder: toView(workOrder), brief: toView(brief) }
         }
@@ -598,7 +658,11 @@ class ContentOperationsAdminService {
         let workOrder = null
         let brief = null
         if (idempotentConvert) {
-            workOrder = await ContentWorkOrder.findOne({ contentOpportunityDecisionId: opportunity._id })
+            workOrder = await ContentWorkOrder.findOne({
+                contentOpportunityDecisionId: opportunity._id,
+                ...productionArtifactScopeFilter()
+            })
+            assertProductionArtifact(workOrder, 'Content Work Order')
             brief = await findCompleteBriefForWorkOrder(workOrder?._id || workOrder?.id)
             if (convertedArtifactsAreComplete({ workOrder, brief })) {
                 return { opportunity: toView(opportunity), workOrder: toView(workOrder), brief: toView(brief) }
@@ -621,12 +685,17 @@ class ContentOperationsAdminService {
         let transitioned = opportunity
         if (!idempotentConvert) {
             transitioned = await ContentOpportunityDecision.findOneAndUpdate(
-                { _id: opportunity._id, status: previousStatus },
+                {
+                    _id: opportunity._id,
+                    status: previousStatus,
+                    ...productionArtifactScopeFilter()
+                },
                 { $set: { status: targetStatus } },
                 { new: true, runValidators: true }
             )
             if (!transitioned) {
                 const latest = await ContentOpportunityDecision.findById(opportunity._id)
+                assertProductionArtifact(latest, 'Opportunity')
                 if (operation === 'convert' && latest?.status === 'converted') transitioned = latest
                 else throw new BadRequestError('Opportunity status changed concurrently; retry with current data')
             }
@@ -678,7 +747,7 @@ class ContentOperationsAdminService {
     }
 
     static async listWorkOrders(query = {}) {
-        const filter = {}
+        const filter = productionArtifactScopeFilter()
         if (query.status && WORK_ORDER_STATUSES.includes(query.status)) filter.status = query.status
         const result = await listPage({ Model: ContentWorkOrder, filter, query, sort: { createdAt: -1 } })
         return { workOrders: result.items, pagination: result.pagination }
@@ -702,9 +771,15 @@ class ContentOperationsAdminService {
         assertId(id)
         const [workOrder, brief] = await Promise.all([
             ContentWorkOrder.findById(id).lean(),
-            UnifiedContentBrief.findOne({ contentWorkOrderId: id, status: 'complete' }).sort({ version: -1 }).lean()
+            UnifiedContentBrief.findOne({
+                contentWorkOrderId: id,
+                status: 'complete',
+                ...productionArtifactScopeFilter()
+            }).sort({ version: -1 }).lean()
         ])
         if (!workOrder) throw new NotFoundError('Content Work Order not found')
+        assertProductionArtifact(workOrder, 'Content Work Order')
+        assertProductionArtifact(brief, 'Unified Content Brief')
         return { workOrder: toView(workOrder), brief: toView(brief) }
     }
 
@@ -735,6 +810,7 @@ class ContentOperationsAdminService {
         }
         const current = await ContentWorkOrder.findById(id).lean()
         if (!current) throw new NotFoundError('Content Work Order not found')
+        assertProductionArtifact(current, 'Content Work Order')
         if (current.topicLocked && normalizedPayload.topic !== undefined && normalizedPayload.topic !== current.topic && normalizedPayload.topicLocked !== false) {
             throw new BadRequestError('Unlock the topic before changing it')
         }
@@ -761,7 +837,7 @@ class ContentOperationsAdminService {
             ip
         })
         const workOrder = await ContentWorkOrder.findOneAndUpdate(
-            { _id: id, status: current.status },
+            { _id: id, status: current.status, ...productionArtifactScopeFilter() },
             { $set: normalizedPayload },
             { new: true, runValidators: true }
         )
@@ -790,15 +866,26 @@ class ContentOperationsAdminService {
         assertId(id, 'workOrderId')
         assertPlainObject(payload)
         assertAllowedKeys(payload, ['draftOnly', 'workOrderId'])
+        if (payload.workOrderId !== undefined) {
+            assertId(payload.workOrderId, 'payload.workOrderId')
+            if (String(payload.workOrderId) !== String(id)) throw new BadRequestError('Selected Work Order does not match the route')
+        }
         if (payload.draftOnly === false) throw new BadRequestError('Content Operations Work Orders are draft-only')
         if (!getContentOperationsConfig().enabled) throw new BadRequestError('Content Operations is disabled')
         const [workOrder, brief] = await Promise.all([
             ContentWorkOrder.findById(id).lean(),
-            UnifiedContentBrief.findOne({ contentWorkOrderId: id, status: 'complete' }).sort({ version: -1 }).lean()
+            UnifiedContentBrief.findOne({
+                contentWorkOrderId: id,
+                status: 'complete',
+                ...productionArtifactScopeFilter()
+            }).sort({ version: -1 }).lean()
         ])
         if (!workOrder || !brief) throw new NotFoundError('Runnable Work Order and complete Unified Brief were not found')
+        assertProductionArtifact(workOrder, 'Content Work Order')
+        assertProductionArtifact(brief, 'Unified Content Brief')
         if (!isWorkOrderRunnable(workOrder) || workOrder.decision === 'skip') throw new BadRequestError('Work Order is not runnable')
         const opportunity = await ContentOpportunityDecision.findById(workOrder.contentOpportunityDecisionId).lean()
+        assertProductionArtifact(opportunity, 'Opportunity')
         const opportunityIdMatches = String(opportunity?._id || '') === String(workOrder.contentOpportunityDecisionId || '')
         const workOrderIdMatches = String(brief.contentWorkOrderId || '') === String(workOrder._id || '')
         const snapshotIdMatches = String(opportunity?.contentOperationsSnapshotId || '') === String(workOrder.contentOperationsSnapshotId || '')
@@ -1027,8 +1114,11 @@ class ContentOperationsAdminService {
     static async getInventory(query = {}) {
         const { page, limit } = safePagination(query)
         const snapshot = query.snapshotId
-            ? await ContentInventorySnapshot.findById(assertId(query.snapshotId, 'snapshotId')).lean()
-            : await ContentInventorySnapshot.findOne().sort({ snapshotDate: -1 }).lean()
+            ? await ContentInventorySnapshot.findOne({
+                _id: assertId(query.snapshotId, 'snapshotId'),
+                isQaTest: { $ne: true }
+            }).lean()
+            : await ContentInventorySnapshot.findOne({ isQaTest: { $ne: true } }).sort({ snapshotDate: -1 }).lean()
         if (!snapshot) return { snapshot: null, items: [], pagination: { page, limit, total: 0, pages: 1 } }
         const [items, total] = await Promise.all([
             ContentInventoryItem.find({ snapshotId: snapshot._id }).sort({ reviewStatus: -1, articleUpdatedAt: 1 }).skip((page - 1) * limit).limit(limit).lean(),
@@ -1053,11 +1143,15 @@ class ContentOperationsAdminService {
 
     static async getPerformance(blogId) {
         assertId(blogId, 'blogId')
-        const [tasks, snapshots, verification, blogPost, alerts] = await Promise.all([
+        const blogPost = await blog.findById(blogId)
+            .select('blog_title blog_slug isQaTest qaBatchId qaCaseId environment executionMode originalTopicSeed normalizedTopicKey')
+            .lean()
+        if (!blogPost) throw new NotFoundError('Blog not found')
+        assertProductionArtifact(blogPost, 'Blog')
+        const [tasks, snapshots, verification, alerts] = await Promise.all([
             ContentMonitoringTask.find({ blogId }).sort({ dueAt: 1 }).lean(),
             ContentPerformanceSnapshot.find({ blogId }).sort({ measuredAt: -1 }).limit(100).lean(),
             PostPublishVerification.findOne({ blogId }).sort({ checkedAt: -1 }).lean(),
-            blog.findById(blogId).select('blog_title blog_slug').lean(),
             ContentMaintenanceAlert.find({ blogId, status: { $in: ['open', 'acknowledged'] } }).sort({ detectedAt: -1 }).limit(50).lean()
         ])
         const windows = snapshots.map((snapshot) => ({
@@ -1085,10 +1179,14 @@ class ContentOperationsAdminService {
 
     static async getLearning(blogId) {
         assertId(blogId, 'blogId')
-        const [records, alerts, blogPost] = await Promise.all([
+        const blogPost = await blog.findById(blogId)
+            .select('blog_title isQaTest qaBatchId qaCaseId environment executionMode originalTopicSeed normalizedTopicKey')
+            .lean()
+        if (!blogPost) throw new NotFoundError('Blog not found')
+        assertProductionArtifact(blogPost, 'Blog')
+        const [records, alerts] = await Promise.all([
             ContentLearningRecord.find({ blogId }).sort({ createdAt: -1 }).limit(100).lean(),
-            ContentMaintenanceAlert.find({ blogId, status: { $in: ['open', 'acknowledged'] } }).sort({ detectedAt: -1 }).limit(50).lean(),
-            blog.findById(blogId).select('blog_title').lean()
+            ContentMaintenanceAlert.find({ blogId, status: { $in: ['open', 'acknowledged'] } }).sort({ detectedAt: -1 }).limit(50).lean()
         ])
         const latest = records[0] || null
         return {

@@ -11,6 +11,13 @@ const productReferenceSchema = new Schema({
 }, { _id: false });
 
 const schema = new Schema({
+    isQaTest: { type: Boolean, default: false, index: true },
+    qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+    qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+    environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+    executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+    originalTopicSeed: { type: String, default: '', maxlength: 300 },
+    normalizedTopicKey: { type: String, default: '', maxlength: 320 },
     catalogHash: { type: String, required: true, index: true },
     productCount: { type: Number, default: 0, min: 0 },
     eligibleProductCount: { type: Number, default: 0, min: 0 },

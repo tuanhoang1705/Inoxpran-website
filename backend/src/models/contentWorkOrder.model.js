@@ -16,6 +16,13 @@ const BUSINESS_GOALS = Object.freeze([
 
 const contentWorkOrderSchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', maxlength: 320 },
         contentOperationsSnapshotId: { type: Schema.Types.ObjectId, ref: 'ContentOperationsDailySnapshot', required: true, index: true },
         googleIntelSnapshotId: { type: Schema.Types.ObjectId, ref: 'GoogleIntelligenceSnapshot', required: true, index: true },
         contentOpportunityDecisionId: { type: Schema.Types.ObjectId, ref: 'ContentOpportunityDecision', required: true, unique: true, index: true },
@@ -56,6 +63,7 @@ const contentWorkOrderSchema = new Schema(
 
 contentWorkOrderSchema.index({ status: 1, targetPublishDate: 1, createdAt: 1 });
 contentWorkOrderSchema.index({ decision: 1, targetBlogId: 1, createdAt: -1 });
+contentWorkOrderSchema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_content_work_order' });
 
 module.exports = {
     BUSINESS_GOALS,

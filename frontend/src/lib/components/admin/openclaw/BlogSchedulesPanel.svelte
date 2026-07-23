@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount, onDestroy } from 'svelte';
 	import { locale } from '$lib/i18n/admin/index.js';
 	import {
@@ -6,7 +7,7 @@
 		hasProductPlanningContext
 	} from '$lib/contentOperations/contracts.js';
 
-	let { initialSchedules = [], initialRuntime = {} } = $props();
+	let { initialSchedules = [] } = $props();
 
 	const isEn = $derived($locale === 'en');
 
@@ -65,8 +66,6 @@
 	// svelte-ignore state_referenced_locally
 	let schedules = $state(Array.isArray(initialSchedules) ? [...initialSchedules] : []);
 	// svelte-ignore state_referenced_locally
-	let scheduleRuntime = $state(initialRuntime || {});
-	// svelte-ignore state_referenced_locally
 	let selectedScheduleId = $state(schedules[0]?.id || '');
 	let scheduleExecutions = $state([]);
 	let scheduleForm = $state(makeDefaultScheduleForm());
@@ -75,6 +74,26 @@
 	let pageError = $state('');
 	let productPreview = $state(null);
 	let previewBusy = $state(false);
+	let runNowIdempotencyKeys = $state({});
+	const activeExecutionStatuses = ['queued', 'running'];
+
+	const createIdempotencyKey = () =>
+		typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+			? crypto.randomUUID()
+			: `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+
+	const runNowIdempotencyKey = (scheduleId) => {
+		if (runNowIdempotencyKeys[scheduleId]) return runNowIdempotencyKeys[scheduleId];
+		const key = createIdempotencyKey();
+		runNowIdempotencyKeys = { ...runNowIdempotencyKeys, [scheduleId]: key };
+		return key;
+	};
+
+	const clearRunNowIdempotencyKey = (scheduleId) => {
+		const next = { ...runNowIdempotencyKeys };
+		delete next[scheduleId];
+		runNowIdempotencyKeys = next;
+	};
 	const productPreviewReady = $derived(
 		hasProductPlanningContext({
 			mode: scheduleForm.contentOperationsMode,
@@ -94,15 +113,21 @@
 		modeBest: isEn ? 'Best action' : 'Hành động tốt nhất',
 		modeFixed: isEn ? 'Fixed brief' : 'Brief cố định',
 		modeMaintenance: isEn ? 'Maintenance only' : 'Chỉ bảo trì',
-		sourceRequirements: isEn ? 'Required sources (comma-separated)' : 'Nguồn bắt buộc (phân cách bằng dấu phẩy)',
+		sourceRequirements: isEn
+			? 'Required sources (comma-separated)'
+			: 'Nguồn bắt buộc (phân cách bằng dấu phẩy)',
 		minimumScore: isEn ? 'Minimum opportunity score (0–1)' : 'Điểm cơ hội tối thiểu (0–1)',
 		allowSkip: isEn ? 'Allow an explicit skip' : 'Cho phép bỏ qua rõ ràng',
-		draftOnlyGuard: isEn ? 'Draft only — preserve editorial review' : 'Chỉ tạo bản nháp — giữ bước duyệt biên tập',
+		draftOnlyGuard: isEn
+			? 'Draft only — preserve editorial review'
+			: 'Chỉ tạo bản nháp — giữ bước duyệt biên tập',
 		maxTasks: isEn ? 'Maximum tasks per day' : 'Tác vụ tối đa mỗi ngày',
 		monitoringWindows: isEn ? 'Monitoring windows in days' : 'Cửa sổ theo dõi theo ngày',
 		selectedAction: isEn ? 'Selected action context' : 'Hành động đã chọn',
 		selectedWorkOrder: isEn ? 'Selected work order ID' : 'ID work order đã chọn',
-		productPreviewGate: isEn ? 'Best-action product preview requires a topic, a non-skip action, and a work order.' : 'Preview sản phẩm ở chế độ hành động tốt nhất cần chủ đề, hành động không phải skip và work order.',
+		productPreviewGate: isEn
+			? 'Best-action product preview requires a topic, a non-skip action, and a work order.'
+			: 'Preview sản phẩm ở chế độ hành động tốt nhất cần chủ đề, hành động không phải skip và work order.',
 		title: isEn ? 'Blog schedules' : 'Lịch tạo bài',
 		refresh: isEn ? 'Refresh' : 'Làm mới',
 		new: isEn ? 'New' : 'Tạo mới',
@@ -301,7 +326,8 @@
 			editingScheduleId = '';
 			return;
 		}
-		const contentOperations = schedule.contentOperations || schedule.agentConfig?.contentOperations || {};
+		const contentOperations =
+			schedule.contentOperations || schedule.agentConfig?.contentOperations || {};
 		scheduleForm = {
 			name: schedule.name || '',
 			description: schedule.description || '',
@@ -317,17 +343,34 @@
 			startAt: toInputDateTime(schedule.startAt),
 			endAt: toInputDateTime(schedule.endAt),
 			autoPublish: Boolean(schedule.autoPublish),
-			contentOperationsMode: CONTENT_SCHEDULE_MODES.includes(contentOperations.mode || schedule.mode)
+			contentOperationsMode: CONTENT_SCHEDULE_MODES.includes(
+				contentOperations.mode || schedule.mode
+			)
 				? contentOperations.mode || schedule.mode
 				: 'fixed_brief',
-			sourceRequirements: (schedule.sourceRequirements || contentOperations.sourceRequirements || []).join(', '),
-			minimumOpportunityScore: schedule.minimumOpportunityScore ?? contentOperations.minimumOpportunityScore ?? 0.65,
+			sourceRequirements: (
+				schedule.sourceRequirements ||
+				contentOperations.sourceRequirements ||
+				[]
+			).join(', '),
+			minimumOpportunityScore:
+				schedule.minimumOpportunityScore ?? contentOperations.minimumOpportunityScore ?? 0.65,
 			allowSkip: (schedule.allowSkip ?? contentOperations.allowSkip) !== false,
-			draftOnly: (schedule.draftOnly ?? contentOperations.draftOnly) !== false && schedule.autoPublish !== true,
-			maxTasksPerDay: schedule.maximumTasksPerDay ?? contentOperations.maximumTasksPerDay ?? contentOperations.maxTasksPerDay ?? 1,
-			monitoringWindows: (schedule.monitoringWindows || contentOperations.monitoringWindows || ['1d', '7d', '14d', '30d', '90d']).join(', '),
+			draftOnly:
+				(schedule.draftOnly ?? contentOperations.draftOnly) !== false &&
+				schedule.autoPublish !== true,
+			maxTasksPerDay:
+				schedule.maximumTasksPerDay ??
+				contentOperations.maximumTasksPerDay ??
+				contentOperations.maxTasksPerDay ??
+				1,
+			monitoringWindows: (
+				schedule.monitoringWindows ||
+				contentOperations.monitoringWindows || ['1d', '7d', '14d', '30d', '90d']
+			).join(', '),
 			selectedAction: schedule.agentConfig?.contentAction || contentOperations.selectedAction || '',
-			selectedWorkOrderId: schedule.agentConfig?.workOrderId || contentOperations.selectedWorkOrderId || '',
+			selectedWorkOrderId:
+				schedule.agentConfig?.workOrderId || contentOperations.selectedWorkOrderId || '',
 			topic: schedule.agentConfig?.topic || '',
 			primaryKeyword: schedule.agentConfig?.primaryKeyword || '',
 			secondaryKeywords: (schedule.agentConfig?.secondaryKeywords || []).join(', '),
@@ -388,7 +431,10 @@
 		autoPublish: scheduleForm.draftOnly ? false : scheduleForm.autoPublish,
 		mode: scheduleForm.contentOperationsMode,
 		sourceRequirements: splitCsv(scheduleForm.sourceRequirements),
-		minimumOpportunityScore: Math.min(1, Math.max(0, Number(scheduleForm.minimumOpportunityScore) || 0)),
+		minimumOpportunityScore: Math.min(
+			1,
+			Math.max(0, Number(scheduleForm.minimumOpportunityScore) || 0)
+		),
 		allowSkip: scheduleForm.allowSkip,
 		draftOnly: scheduleForm.draftOnly,
 		maximumTasksPerDay: Math.min(24, Math.max(1, Number(scheduleForm.maxTasksPerDay) || 1)),
@@ -480,7 +526,6 @@
 			return;
 		}
 		schedules = Array.isArray(payload?.schedules) ? payload.schedules : [];
-		scheduleRuntime = payload?.runtime || {};
 		if (!selectedScheduleId && schedules[0]?.id) selectedScheduleId = schedules[0].id;
 	};
 
@@ -500,7 +545,7 @@
 			return;
 		}
 		scheduleExecutions = Array.isArray(payload?.executions) ? payload.executions : [];
-		if (scheduleExecutions.some((item) => item.status === 'running')) {
+		if (scheduleExecutions.some((item) => activeExecutionStatuses.includes(item.status))) {
 			ensureExecutionPolling(scheduleId);
 		}
 	};
@@ -538,6 +583,7 @@
 
 	let executionPollTimer = null;
 	let executionPollStartedAt = 0;
+	let executionPollInFlight = false;
 
 	const stopExecutionPolling = () => {
 		if (executionPollTimer) {
@@ -550,17 +596,24 @@
 		if (executionPollTimer || !scheduleId) return;
 		executionPollStartedAt = Date.now();
 		executionPollTimer = setInterval(async () => {
+			if (executionPollInFlight) return;
 			if (
-				Date.now() - executionPollStartedAt > 12 * 60 * 1000 ||
+				Date.now() - executionPollStartedAt > 35 * 60 * 1000 ||
 				selectedScheduleId !== scheduleId
 			) {
 				stopExecutionPolling();
 				return;
 			}
-			await loadScheduleExecutions(scheduleId);
-			if (!scheduleExecutions.some((item) => item.status === 'running')) {
-				stopExecutionPolling();
-				await refreshSchedules();
+			executionPollInFlight = true;
+			try {
+				await loadScheduleExecutions(scheduleId);
+				if (!scheduleExecutions.some((item) => activeExecutionStatuses.includes(item.status))) {
+					clearRunNowIdempotencyKey(scheduleId);
+					stopExecutionPolling();
+					await refreshSchedules();
+				}
+			} finally {
+				executionPollInFlight = false;
 			}
 		}, 6000);
 	};
@@ -570,9 +623,13 @@
 		busyScheduleAction = `${operation}:${scheduleId}`;
 		pageError = '';
 		try {
+			const idempotencyKey = operation === 'run-now' ? runNowIdempotencyKey(scheduleId) : '';
 			const response = await fetch(
 				resolveAdminPath(`/admin/api/openclaw/blog-schedules/${scheduleId}/${operation}`),
-				{ method: 'POST' }
+				{
+					method: 'POST',
+					headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : undefined
+				}
 			);
 			const payload = await response.json().catch(() => null);
 			if (!response.ok) {
@@ -619,12 +676,11 @@
 	};
 
 	const toggleWeekday = (day) => {
-		const current = new Set(scheduleForm.daysOfWeek || []);
-		if (current.has(day)) current.delete(day);
-		else current.add(day);
+		const current = (scheduleForm.daysOfWeek || []).filter((item) => item !== day);
+		if (!(scheduleForm.daysOfWeek || []).includes(day)) current.push(day);
 		scheduleForm = {
 			...scheduleForm,
-			daysOfWeek: Array.from(current).sort((a, b) => a - b)
+			daysOfWeek: current.sort((a, b) => a - b)
 		};
 	};
 
@@ -780,8 +836,10 @@
 								<span class="oc-exec__title">{execution.blogTitle || execution.executionKey}</span>
 								<small>{formatDateTime(execution.createdAt)}</small>
 								{#if execution.blogId}
-									<a href={`/admin/blogs/${execution.blogId}`} target="_blank" rel="noreferrer"
-										>{t.openDraft}</a
+									<a
+										href={resolve(resolveAdminPath(`/admin/blogs/${execution.blogId}`))}
+										target="_blank"
+										rel="noreferrer">{t.openDraft}</a
 									>
 								{/if}
 								{#if execution.telegramNotificationStatus}
@@ -803,7 +861,7 @@
 											>{/if}
 										{#if execution.metadata?.productSeeding?.candidateScores?.length}
 											<ul>
-												{#each execution.metadata.productSeeding.candidateScores.slice(0, 5) as item}<li
+												{#each execution.metadata.productSeeding.candidateScores.slice(0, 5) as item (item.productId || item.id || item.name)}<li
 													>
 														{item.name}: {Math.round((item.totalScore || 0) * 100)}% — {(
 															item.matchedEvidence || []
@@ -875,11 +933,8 @@
 					<textarea bind:value={scheduleForm.topic} rows="2" maxlength="300" required></textarea>
 					<small
 						class="oc-topic-count"
-						style="display:block;text-align:right;font-size:0.72rem;opacity:0.65;{(
-							scheduleForm.topic || ''
-						).length > 300
-							? 'color:#c0392b;opacity:1;font-weight:700;'
-							: ''}">{(scheduleForm.topic || '').length}/300</small
+						class:is-over-limit={(scheduleForm.topic || '').length > 300}
+						>{(scheduleForm.topic || '').length}/300</small
 					>
 				</label>
 			</fieldset>
@@ -897,25 +952,68 @@
 					</label>
 					<label class="oc-field">
 						<span>{t.minimumScore}</span>
-						<input type="number" min="0" max="1" step="0.05" bind:value={scheduleForm.minimumOpportunityScore} />
+						<input
+							type="number"
+							min="0"
+							max="1"
+							step="0.05"
+							bind:value={scheduleForm.minimumOpportunityScore}
+						/>
 					</label>
 				</div>
 				<label class="oc-field">
 					<span>{t.sourceRequirements}</span>
-					<input bind:value={scheduleForm.sourceRequirements} placeholder="searchConsole, analytics, trends" />
+					<input
+						bind:value={scheduleForm.sourceRequirements}
+						placeholder="searchConsole, analytics, trends"
+					/>
 				</label>
 				<div class="oc-form__grid">
-					<label class="oc-field"><span>{t.maxTasks}</span><input type="number" min="1" max="10" bind:value={scheduleForm.maxTasksPerDay} /></label>
-					<label class="oc-field"><span>{t.monitoringWindows}</span><input bind:value={scheduleForm.monitoringWindows} placeholder="7, 14, 30" /></label>
+					<label class="oc-field"
+						><span>{t.maxTasks}</span><input
+							type="number"
+							min="1"
+							max="10"
+							bind:value={scheduleForm.maxTasksPerDay}
+						/></label
+					>
+					<label class="oc-field"
+						><span>{t.monitoringWindows}</span><input
+							bind:value={scheduleForm.monitoringWindows}
+							placeholder="7, 14, 30"
+						/></label
+					>
 				</div>
 				{#if scheduleForm.contentOperationsMode !== 'fixed_brief'}
 					<div class="oc-form__grid">
-						<label class="oc-field"><span>{t.selectedAction}</span><select bind:value={scheduleForm.selectedAction}><option value="">--</option><option value="new">new</option><option value="update">update</option><option value="expand">expand</option><option value="merge">merge</option><option value="metadata_refresh">metadata_refresh</option><option value="internal_link_maintenance">internal_link_maintenance</option><option value="content_maintenance">content_maintenance</option><option value="skip">skip</option></select></label>
-						<label class="oc-field"><span>{t.selectedWorkOrder}</span><input bind:value={scheduleForm.selectedWorkOrderId} maxlength="128" /></label>
+						<label class="oc-field"
+							><span>{t.selectedAction}</span><select bind:value={scheduleForm.selectedAction}
+								><option value="">--</option><option value="new">new</option><option value="update"
+									>update</option
+								><option value="expand">expand</option><option value="merge">merge</option><option
+									value="metadata_refresh">metadata_refresh</option
+								><option value="internal_link_maintenance">internal_link_maintenance</option><option
+									value="content_maintenance">content_maintenance</option
+								><option value="skip">skip</option></select
+							></label
+						>
+						<label class="oc-field"
+							><span>{t.selectedWorkOrder}</span><input
+								bind:value={scheduleForm.selectedWorkOrderId}
+								maxlength="128"
+							/></label
+						>
 					</div>
 				{/if}
-				<label class="oc-check"><input type="checkbox" bind:checked={scheduleForm.allowSkip} /><span>{t.allowSkip}</span></label>
-				<label class="oc-check"><input type="checkbox" bind:checked={scheduleForm.draftOnly} /><span>{t.draftOnlyGuard}</span></label>
+				<label class="oc-check"
+					><input type="checkbox" bind:checked={scheduleForm.allowSkip} /><span>{t.allowSkip}</span
+					></label
+				>
+				<label class="oc-check"
+					><input type="checkbox" bind:checked={scheduleForm.draftOnly} /><span
+						>{t.draftOnlyGuard}</span
+					></label
+				>
 			</fieldset>
 
 			<fieldset class="oc-form__section">
@@ -944,7 +1042,7 @@
 					<div class="oc-field">
 						<span>{t.weekly}</span>
 						<div class="oc-weekdays">
-							{#each [0, 1, 2, 3, 4, 5, 6] as day}
+							{#each [0, 1, 2, 3, 4, 5, 6] as day (day)}
 								<button
 									type="button"
 									class="oc-weekday"
@@ -1208,7 +1306,8 @@
 						{#if productPreview.selectedProducts?.length}
 							<h4>{productT.selected}</h4>
 							<ul>
-								{#each productPreview.selectedProducts as item}<li>
+								{#each productPreview.selectedProducts as item (item.productId || item.id || item._id || item.name)}<li
+									>
 										{item.name} — {Math.round((item.relevanceScore || 0) * 100)}%
 									</li>{/each}
 							</ul>
@@ -1216,7 +1315,8 @@
 						{#if productPreview.topCandidates?.length}
 							<h4>{productT.candidates}</h4>
 							<ul>
-								{#each productPreview.topCandidates as item}<li>
+								{#each productPreview.topCandidates as item (item.productId || item.id || item._id || item.name)}<li
+									>
 										<strong>{item.name}</strong> — {Math.round((item.totalScore || 0) * 100)}% · {Object.entries(
 											item.scoreBreakdown || {}
 										)
@@ -1228,7 +1328,8 @@
 						{#if productPreview.rejectedCandidates?.length}
 							<h4>{productT.rejected}</h4>
 							<ul>
-								{#each productPreview.rejectedCandidates as item}<li>
+								{#each productPreview.rejectedCandidates as item (item.productId || item.id || item._id || item.name)}<li
+									>
 										{item.name}: {(item.rejectionReasons || []).join(', ')}
 									</li>{/each}
 							</ul>
@@ -1247,10 +1348,12 @@
 									?.minimumProgressPercent || 0}%
 							</p>
 							<ul>
-								{#each productPreview.editorialOutline.prerequisites || [] as item}<li>
+								{#each productPreview.editorialOutline.prerequisites || [] as item (item.sectionKey)}<li
+									>
 										{item.sectionKey}: {item.purpose}
 									</li>{/each}
-								{#each productPreview.editorialOutline.placements || [] as item}<li>
+								{#each productPreview.editorialOutline.placements || [] as item (item.placementId)}<li
+									>
 										{item.placementId}: {item.sectionKey} — {item.rankPosition}
 									</li>{/each}
 							</ul>
@@ -1763,6 +1866,19 @@
 	.oc-field textarea {
 		resize: vertical;
 		min-height: 76px;
+	}
+
+	.oc-topic-count {
+		display: block;
+		text-align: right;
+		font-size: 0.72rem;
+		opacity: 0.65;
+	}
+
+	.oc-topic-count.is-over-limit {
+		color: #c0392b;
+		opacity: 1;
+		font-weight: 700;
 	}
 
 	.oc-field__hint {

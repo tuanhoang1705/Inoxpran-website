@@ -7,9 +7,13 @@ const { Module } = require('node:module');
 const ORIGINAL_ENV = { ...process.env };
 const SCHEDULE_ID = '507f1f77bcf86cd799439071';
 const EXECUTION_ID = '507f1f77bcf86cd799439072';
+const QA_BATCH_ID = '507f1f77bcf86cd799439075';
+const QA_CASE_ID = '507f1f77bcf86cd799439076';
+const QA_RESERVATION_ID = '507f1f77bcf86cd799439077';
 
 const scheduleMock = {
     findById: vi.fn(),
+    findOne: vi.fn(),
     findOneAndUpdate: vi.fn(),
     updateOne: vi.fn()
 };
@@ -82,9 +86,11 @@ const baseSchedule = (overrides = {}) => ({
 });
 
 const leanResult = (value) => ({ lean: vi.fn().mockResolvedValue(value) });
-const selectLeanResult = (value) => ({
-    select: vi.fn(() => ({ lean: vi.fn().mockResolvedValue(value) }))
-});
+const selectLeanResult = (value) => {
+    const query = { lean: vi.fn().mockResolvedValue(value) };
+    query.select = vi.fn(() => query);
+    return query;
+};
 
 beforeEach(() => {
     process.env = {
@@ -162,6 +168,7 @@ describe('BlogAutomationScheduleService concurrency and recovery', () => {
         });
         scheduleMock.findById.mockReturnValue(selectLeanResult({ _id: SCHEDULE_ID }));
         executionMock.findOne.mockReturnValue(selectLeanResult(null));
+        executionMock.create.mockResolvedValue({ _id: EXECUTION_ID, status: 'queued' });
         const execute = vi.spyOn(BlogAutomationScheduleService, 'executeSchedule').mockResolvedValue({ queued: true });
 
         const first = await BlogAutomationScheduleService.runNow({ scheduleId: SCHEDULE_ID });
@@ -176,6 +183,72 @@ describe('BlogAutomationScheduleService concurrency and recovery', () => {
             $or: expect.any(Array)
         });
     });
+
+    it.each(['run_now', 'schedule_run_now'])(
+        'atomically persists remediation iteration for the %s QA entrypoint',
+        async (executionMode) => {
+            const qaSchedule = baseSchedule({
+                isQaTest: true,
+                qaBatchId: QA_BATCH_ID,
+                qaCaseId: QA_CASE_ID,
+                qaIteration: 0,
+                environment: 'local',
+                executionMode,
+                originalTopicSeed: 'QA retained topic',
+                normalizedTopicKey: 'qa-retained-topic',
+                qaTopicReservationId: QA_RESERVATION_ID
+            });
+            scheduleMock.findById.mockReturnValue(selectLeanResult(qaSchedule));
+            scheduleMock.findOneAndUpdate.mockImplementation((_filter, update) =>
+                leanResult({
+                    ...qaSchedule,
+                    ...update.$set
+                })
+            );
+            executionMock.findOne.mockReturnValue(selectLeanResult(null));
+            executionMock.create.mockImplementation(async (payload) => ({
+                _id: EXECUTION_ID,
+                ...payload
+            }));
+            const execute = vi.spyOn(BlogAutomationScheduleService, 'executeSchedule').mockResolvedValue({ queued: true });
+
+            const request = {
+                scheduleId: SCHEDULE_ID,
+                idempotencyKey: `qa-remediation-${executionMode}-iteration-1`,
+                adminId: '507f1f77bcf86cd799439078',
+                trustedQaRun: true,
+                qaIteration: 1
+            };
+            const result = executionMode === 'run_now'
+                ? await BlogAutomationScheduleService.runDailyDraftForQa(request)
+                : await BlogAutomationScheduleService.runNow(request);
+            await Promise.resolve();
+            await Promise.resolve();
+
+            expect(result).toMatchObject({ queued: true, executionId: EXECUTION_ID });
+            const [claimFilter, claimUpdate] = scheduleMock.findOneAndUpdate.mock.calls[0];
+            expect(claimFilter).toMatchObject({
+                isQaTest: true,
+                qaBatchId: QA_BATCH_ID,
+                qaCaseId: QA_CASE_ID,
+                environment: 'local',
+                executionMode,
+                qaTopicReservationId: QA_RESERVATION_ID
+            });
+            expect(claimUpdate.$set.qaIteration).toBe(1);
+            expect(executionMock.create).toHaveBeenCalledWith(expect.objectContaining({
+                isQaTest: true,
+                qaBatchId: QA_BATCH_ID,
+                qaCaseId: QA_CASE_ID,
+                qaIteration: 1,
+                executionMode
+            }));
+            expect(execute).toHaveBeenCalledWith(expect.objectContaining({
+                schedule: expect.objectContaining({ qaIteration: 1, executionMode }),
+                precreatedExecutionId: EXECUTION_ID
+            }));
+        }
+    );
 
     it('counts only selected non-skip tasks inside the schedule local day', () => {
         const now = new Date('2026-07-20T18:00:00.000Z'); // 01:00 on July 21 in Ho Chi Minh City
@@ -277,6 +350,12 @@ describe('BlogAutomationScheduleService concurrency and recovery', () => {
 
     it('guards completion by lock owner and never writes enabled=true from stale state', async () => {
         const schedule = baseSchedule();
+        scheduleMock.findOne.mockReturnValue(selectLeanResult({ _id: SCHEDULE_ID }));
+        executionMock.findOne.mockReturnValue(selectLeanResult({
+            _id: EXECUTION_ID,
+            isQaTest: false,
+            metadata: { leaseOwner: schedule.lockedBy }
+        }));
         executionMock.create.mockResolvedValue({
             _id: EXECUTION_ID,
             toObject: () => ({ _id: EXECUTION_ID })
@@ -377,6 +456,7 @@ describe('BlogAutomationScheduleService concurrency and recovery', () => {
             workOrderId,
             claimToken: staleClaimToken,
             status: 'failed',
+            fromStatuses: ['running', 'committing'],
             updates: { error: 'WRITER_FAILED' }
         });
         expect(executionMock.updateOne.mock.calls.some(([, update]) => update?.$set?.status === 'failed')).toBe(false);

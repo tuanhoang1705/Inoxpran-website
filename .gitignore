@@ -26,7 +26,12 @@ deploy/nginx/www/
 deploy/nginx/auth/.htpasswd
 deploy/openclaw-lab/
 deploy/openclaw/data/
-deploy/openclaw/workspaces/
+deploy/openclaw/workspaces/*
+!deploy/openclaw/workspaces/senior-blog-acceptance-auditor/
+!deploy/openclaw/workspaces/senior-blog-acceptance-auditor/AGENTS.md
+!deploy/openclaw/workspaces/senior-blog-acceptance-auditor/BOOTSTRAP.md
+!deploy/openclaw/workspaces/senior-blog-acceptance-auditor/IDENTITY.md
+!deploy/openclaw/workspaces/senior-blog-acceptance-auditor/USER.md
 deploy/openclaw/reports/
 
 # Manual inspection workspace

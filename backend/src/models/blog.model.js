@@ -66,6 +66,15 @@ const contentImageSchema = new Schema(
 
 const blogSchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        qaIteration: { type: Number, default: 0, min: 0, max: 3, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', trim: true, maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', trim: true, maxlength: 320 },
+        qaTopicReservationId: { type: String, default: '', trim: true, maxlength: 160 },
         blog_title: { type: String, required: true, trim: true },
         blog_slug: { type: String, required: true, trim: true, unique: true, index: true },
         blog_excerpt: { type: String, required: true, trim: true },
@@ -165,8 +174,35 @@ blogSchema.index({
     blog_excerpt: 'text',
     blog_tags: 'text'
 });
+blogSchema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_blog_batch_case' });
+blogSchema.index(
+    { qaCaseId: 1, qaIteration: 1 },
+    {
+        unique: true,
+        partialFilterExpression: { isQaTest: true },
+        name: 'qa_blog_case_iteration_unique'
+    }
+);
 
 blogSchema.pre('validate', function (next) {
+    if (this.isQaTest === true) {
+        const unsafeIndex = this.indexability?.index === true || this.indexability?.follow === true;
+        if (
+            !this.qaBatchId ||
+            !this.qaCaseId ||
+            !['local', 'staging'].includes(this.environment) ||
+            !['run_now', 'schedule_run_now', 'actual_schedule'].includes(this.executionMode) ||
+            !this.originalTopicSeed ||
+            !this.normalizedTopicKey ||
+            !this.qaTopicReservationId ||
+            this.isDraft !== true ||
+            this.isPublished === true ||
+            this.publishedAt ||
+            unsafeIndex
+        ) {
+            return next(new Error('QA blog violates trusted draft-only and no-index provenance'));
+        }
+    }
     const source = this.blog_slug || this.blog_title || '';
     const normalized = slugify(
         String(source).replace(/[\u0111\u0110]/g, (char) => (char === '\u0111' ? 'd' : 'D')),

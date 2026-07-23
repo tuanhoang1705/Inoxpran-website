@@ -4,6 +4,13 @@ const { Schema, model } = require('mongoose');
 
 const evidenceEntrySchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', maxlength: 320 },
         evidenceKey: { type: String, required: true, trim: true, maxlength: 160 },
         claim: { type: String, required: true, trim: true, maxlength: 3000 },
         classification: { type: String, enum: ['verified', 'inferred', 'unknown', 'conflicting'], required: true },
@@ -22,6 +29,13 @@ const evidenceEntrySchema = new Schema(
 
 const evidenceMapSchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', maxlength: 320 },
         contentWorkOrderId: { type: Schema.Types.ObjectId, ref: 'ContentWorkOrder', required: true, index: true },
         unifiedContentBriefId: { type: Schema.Types.ObjectId, ref: 'UnifiedContentBrief', required: true, index: true },
         researchBundleId: { type: Schema.Types.ObjectId, ref: 'ResearchBundle', default: null, index: true },
@@ -35,6 +49,7 @@ const evidenceMapSchema = new Schema(
 );
 
 evidenceMapSchema.index({ contentWorkOrderId: 1, version: 1 }, { unique: true });
+evidenceMapSchema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_evidence_map' });
 
 module.exports = {
     EvidenceEntrySchema: evidenceEntrySchema,

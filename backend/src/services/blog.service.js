@@ -1,5 +1,6 @@
 'use strict'
 
+const crypto = require('crypto');
 const sanitizeHtml = require('sanitize-html');
 const slugify = require('slugify');
 const { blog, BLOG_CATEGORY_KEYS } = require('../models/blog.model');
@@ -30,6 +31,11 @@ const normalizeString = (value) => {
     if (typeof value !== 'string') return '';
     return value.trim();
 };
+
+const hashPersistedBlogContent = (value) => crypto
+    .createHash('sha256')
+    .update(String(value || ''))
+    .digest('hex');
 
 const parseNumber = (value, fallback) => {
     if (value === undefined || value === null || value === '') return fallback;
@@ -505,6 +511,7 @@ class BlogService {
         const normalized = BlogService.normalizePayload(payload);
         BlogService.validateCreatePayload(normalized);
         normalized.sourceType = 'manual';
+        normalized.contentRevisionHash = hashPersistedBlogContent(normalized.blog_content);
 
         normalized.blog_slug = await BlogService.ensureUniqueSlug(
             normalized.blog_slug || normalized.blog_title
@@ -549,7 +556,30 @@ class BlogService {
         if (!current) throw new NotFoundError('Blog not found');
         const wasPublished = Boolean(current.isPublished);
 
+        if (
+            current.isQaTest === true &&
+            (
+                String(payload.status || '').trim().toLowerCase() === 'published' ||
+                payload.isPublished === true ||
+                String(payload.isPublished || '').trim().toLowerCase() === 'true' ||
+                payload.isDraft === false ||
+                Boolean(payload.publishedAt || payload.blog_date || payload.date)
+            )
+        ) {
+            throw new BadRequestError('QA drafts cannot be published or assigned a public publish date');
+        }
+
         const normalized = BlogService.normalizePayload(payload, { isUpdate: true });
+        if (
+            current.isQaTest === true &&
+            (
+                normalized.isPublished === true ||
+                normalized.isDraft === false ||
+                Boolean(normalized.publishedAt)
+            )
+        ) {
+            throw new BadRequestError('QA drafts cannot be transitioned to a public state');
+        }
         if (
             normalized.blog_category_key &&
             Object.prototype.hasOwnProperty.call(normalized, 'blog_category_key')
@@ -583,6 +613,10 @@ class BlogService {
             !updateDoc.blog_content
         ) {
             throw new BadRequestError('blog_content cannot be empty');
+        }
+
+        if (Object.prototype.hasOwnProperty.call(updateDoc, 'blog_content')) {
+            updateDoc.contentRevisionHash = hashPersistedBlogContent(updateDoc.blog_content);
         }
 
         if (
@@ -757,6 +791,11 @@ class BlogService {
 
         const found = await blog.findById(objectId).lean();
         if (!found) throw new NotFoundError('Blog not found');
+        if (found.isQaTest === true) {
+            throw new BadRequestError(
+                'QA drafts are retained audit evidence and cannot be deleted through the standard blog workflow'
+            );
+        }
 
         await blog.updateMany(
             { blog_related_post_ids: objectId },
@@ -791,6 +830,9 @@ class BlogService {
         if (!objectId) throw new BadRequestError('Invalid blog id');
         const current = await blog.findById(objectId).lean();
         if (!current) throw new NotFoundError('Blog not found');
+        if (current.isQaTest === true) {
+            throw new BadRequestError('QA drafts are permanently blocked from public publishing');
+        }
         if (!areAgenticImagesReviewed(current)) {
             throw new BadRequestError(
                 'All agentic images must be approved or replaced before publishing'

@@ -7,6 +7,15 @@ const COLLECTION_NAME = 'BlogAutomationExecutions';
 
 const executionSchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        qaIteration: { type: Number, default: 0, min: 0, max: 3, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', trim: true, maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', trim: true, maxlength: 320 },
+        qaTopicReservationId: { type: String, default: '', trim: true, maxlength: 160 },
         scheduleId: {
             type: Schema.Types.ObjectId,
             ref: 'BlogAutomationSchedule',
@@ -16,7 +25,7 @@ const executionSchema = new Schema(
         executionKey: { type: String, required: true, unique: true, index: true },
         status: {
             type: String,
-            enum: ['queued', 'running', 'draft_created', 'maintenance_created', 'published', 'completed', 'blocked', 'failed', 'skipped'],
+            enum: ['queued', 'running', 'committing', 'draft_created', 'maintenance_created', 'published', 'completed', 'blocked', 'failed', 'skipped'],
             default: 'queued',
             index: true
         },
@@ -77,6 +86,25 @@ const executionSchema = new Schema(
 
 executionSchema.index({ scheduleId: 1, createdAt: -1 });
 executionSchema.index({ status: 1, createdAt: -1 });
+executionSchema.index({ qaBatchId: 1, qaCaseId: 1, createdAt: -1 }, { name: 'qa_execution_batch_case' });
+executionSchema.index({ qaCaseId: 1, qaIteration: 1, createdAt: -1 }, { name: 'qa_execution_case_iteration' });
+
+executionSchema.pre('validate', function validateQaExecution(next) {
+    if (this.isQaTest !== true) return next();
+    if (
+        !this.qaBatchId ||
+        !this.qaCaseId ||
+        !['local', 'staging'].includes(this.environment) ||
+        !['run_now', 'schedule_run_now', 'actual_schedule'].includes(this.executionMode) ||
+        !this.originalTopicSeed ||
+        !this.normalizedTopicKey ||
+        !this.qaTopicReservationId ||
+        this.mode === 'publish'
+    ) {
+        return next(new Error('QA execution violates trusted draft-only provenance'));
+    }
+    next();
+});
 
 module.exports = {
     BlogAutomationExecution: model(DOCUMENT_NAME, executionSchema)

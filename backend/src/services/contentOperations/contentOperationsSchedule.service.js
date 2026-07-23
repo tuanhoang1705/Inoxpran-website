@@ -13,6 +13,7 @@ const {
   ContentOperationsRun,
 } = require("../../models/contentOperationsRun.model");
 const { safeErrorCode } = require("../../utils/httpError.util");
+const { qaScopeFilter } = require("../../utils/qaProvenance.util");
 const {
   ContentOperationsPlanningService,
 } = require("./contentOperationsPlanning.service");
@@ -56,6 +57,13 @@ const getScheduleDayBounds = ({ schedule = {}, now = new Date() } = {}) => {
 const buildRealTaskCountQuery = ({ schedule, now }) => {
   const bounds = getScheduleDayBounds({ schedule, now });
   return {
+    ...qaScopeFilter(null),
+    qaBatchId: null,
+    qaCaseId: null,
+    environment: { $in: [null, ""] },
+    executionMode: { $in: [null, ""] },
+    originalTopicSeed: { $in: [null, ""] },
+    normalizedTopicKey: { $in: [null, ""] },
     trigger: "scheduled",
     createdAt: { $gte: bounds.start, $lt: bounds.end },
     status: { $in: ["running", "completed", "partial", "blocked", "failed"] },

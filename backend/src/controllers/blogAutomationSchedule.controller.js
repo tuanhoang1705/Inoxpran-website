@@ -73,7 +73,9 @@ class BlogAutomationScheduleController {
         new CREATED({
             message: 'Run OpenClaw blog schedule success',
             metadata: await BlogAutomationScheduleService.runNow({
-                scheduleId: req.params.scheduleId
+                scheduleId: req.params.scheduleId,
+                idempotencyKey: req.get('Idempotency-Key'),
+                adminId: req.user?.userId
             })
         }).send(res);
     };

@@ -111,12 +111,15 @@ export const statusTone = (value) => {
 			'passed',
 			'published',
 			'resolved',
-			'healthy'
+			'healthy',
+			'expected_disabled',
+			'not_applicable'
 		].includes(status)
 	) {
 		return 'good';
 	}
-	if (['failed', 'blocked', 'critical', 'rejected', 'error'].includes(status)) return 'danger';
+	if (['failed', 'blocked', 'critical', 'rejected', 'error', 'missing_config'].includes(status))
+		return 'danger';
 	if (
 		[
 			'partial',
@@ -126,7 +129,10 @@ export const statusTone = (value) => {
 			'needs_review',
 			'draft',
 			'paused',
-			'unavailable'
+			'unavailable',
+			'pending_check',
+			'manual_review',
+			'remediating'
 		].includes(status)
 	) {
 		return 'warn';
@@ -138,7 +144,9 @@ export const sourceState = (source) => {
 	if (!source || typeof source !== 'object') return 'unknown';
 	if (source.enabled === false) return 'disabled';
 	if (source.configured === false) return 'not_configured';
-	const status = String(source.status || '').trim().toLowerCase();
+	const status = String(source.status || '')
+		.trim()
+		.toLowerCase();
 	if (status === 'available') return 'ready';
 	if (status === 'partial') return 'degraded';
 	if (status === 'failed') return 'failed';

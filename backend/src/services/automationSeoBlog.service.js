@@ -3,6 +3,8 @@
 const crypto = require('node:crypto');
 const { blog } = require('../models/blog.model');
 const { BlogAutomationExecution } = require('../models/blogAutomationExecution.model');
+const { BlogAutomationSchedule } = require('../models/blogAutomationSchedule.model');
+const { AgenticBlogQaBatch } = require('../models/agenticBlogQaBatch.model');
 const { ResearchBundle } = require('../models/researchBundle.model');
 const { BlogStrategyPlan } = require('../models/blogStrategyPlan.model');
 const { ProductSeedPlan } = require('../models/productSeedPlan.model');
@@ -21,6 +23,11 @@ const { BadRequestError } = require('../core/error.response');
 const { normalizeString } = require('../utils/seoBlogSanitizer');
 const { normalizeForSimilarity } = require('../utils/agenticBlogCore.util');
 const { validateAutomationPayload } = require('../utils/seoBlogValidation');
+const {
+  hasQaProvenanceMarkers,
+  normalizeTrustedQaProvenance,
+  qaProvenanceMatches
+} = require('../utils/qaProvenance.util');
 const { runImagePipeline } = require('./openclaw/imagePipeline.service');
 const { GoogleIntelligenceService } = require('./googleIntelligence.service');
 const { AgenticBlogCoreService } = require('./agenticBlogCore.service');
@@ -65,6 +72,102 @@ const SCOPED_MAINTENANCE_ACTIONS = new Set([
   'internal_link_maintenance',
   'content_maintenance'
 ]);
+
+const publisherProvenanceError = label =>
+  new BadRequestError(
+    `${String(label || 'artifact')} does not match the trusted publisher provenance scope`
+  );
+
+/**
+ * The publisher is the final shared persistence boundary. Persisted artifacts
+ * must therefore prove their scope independently of payload IDs before either
+ * a readiness report or a Blog document can be created.
+ *
+ * A clean production snapshot may be reused as immutable source intelligence
+ * by a QA run. Derived case artifacts never receive that exception.
+ */
+const assertPublisherArtifactProvenance = ({
+  label,
+  artifact,
+  qaContext = null,
+  allowCleanProductionReuse = false
+} = {}) => {
+  if (!artifact || typeof artifact !== 'object') {
+    throw publisherProvenanceError(label);
+  }
+
+  if (!qaContext) {
+    if (hasQaProvenanceMarkers(artifact)) {
+      throw publisherProvenanceError(label);
+    }
+    return 'production_clean';
+  }
+
+  const expected = normalizeTrustedQaProvenance(qaContext);
+  if (artifact.isQaTest !== true) {
+    if (allowCleanProductionReuse && !hasQaProvenanceMarkers(artifact)) {
+      return 'production_reused';
+    }
+    throw publisherProvenanceError(label);
+  }
+
+  let actual;
+  try {
+    actual = normalizeTrustedQaProvenance(artifact);
+  } catch {
+    throw publisherProvenanceError(label);
+  }
+  if (!qaProvenanceMatches(expected, actual)) {
+    throw publisherProvenanceError(label);
+  }
+  return 'qa_exact';
+};
+
+const assertPublisherArtifactChainProvenance = ({
+  artifacts = {},
+  qaContext = null
+} = {}) => {
+  for (const [label, artifact] of Object.entries(artifacts)) {
+    assertPublisherArtifactProvenance({ label, artifact, qaContext });
+  }
+  return true;
+};
+
+const assertTrustedQaExecutionFence = async ({ executionId, qaContext, now = new Date() }) => {
+  if (!qaContext) return true;
+  const execution = await BlogAutomationExecution.findOne({
+    _id: executionId,
+    status: 'committing',
+    isQaTest: true,
+    qaBatchId: qaContext.qaBatchId,
+    qaCaseId: qaContext.qaCaseId,
+    qaIteration: qaContext.qaIteration,
+    environment: qaContext.environment,
+    executionMode: qaContext.executionMode
+  }).select('_id scheduleId metadata.leaseOwner').lean();
+  const lockOwner = String(execution?.metadata?.leaseOwner || '');
+  if (!execution || !lockOwner) throw createWorkOrderLeaseLostError();
+  const [schedule, batch] = await Promise.all([
+    BlogAutomationSchedule.findOne({
+      _id: execution.scheduleId,
+      isQaTest: true,
+      qaBatchId: qaContext.qaBatchId,
+      qaCaseId: qaContext.qaCaseId,
+      lockedBy: lockOwner,
+      leaseUntil: { $gt: now }
+    }).select('_id').lean(),
+    AgenticBlogQaBatch.findOne({
+      _id: qaContext.qaBatchId,
+      isQaTest: true,
+      environment: qaContext.environment,
+      iteration: qaContext.qaIteration,
+      status: { $in: ['planned', 'running'] },
+      stopNewDrafts: { $ne: true }
+    }).select('_id').lean()
+  ]);
+  if (!schedule || !batch) throw createWorkOrderLeaseLostError();
+  return true;
+};
 
 const parseBoolean = (value, fallback = false) => {
     if (typeof value === 'boolean') return value;
@@ -592,17 +695,49 @@ const buildRevisionSectionChanges = ({
   };
 };
 
+const normalizeTrustedQaContext = value => {
+  if (!value) return null;
+  if (
+    value.isQaTest !== true ||
+    !value.qaBatchId ||
+    !value.qaCaseId ||
+    !['local', 'staging'].includes(value.environment) ||
+    !['run_now', 'schedule_run_now', 'actual_schedule'].includes(value.executionMode) ||
+    !Number.isInteger(Number(value.qaIteration)) ||
+    Number(value.qaIteration) < 0 ||
+    Number(value.qaIteration) > 3 ||
+    !value.originalTopicSeed ||
+    !value.normalizedTopicKey ||
+    !value.qaTopicReservationId
+  ) {
+    throw new BadRequestError('Trusted QA context is incomplete or unsafe');
+  }
+  return {
+    isQaTest: true,
+    qaBatchId: value.qaBatchId,
+    qaCaseId: value.qaCaseId,
+    qaIteration: Number(value.qaIteration),
+    environment: value.environment,
+    executionMode: value.executionMode,
+    originalTopicSeed: String(value.originalTopicSeed),
+    normalizedTopicKey: String(value.normalizedTopicKey),
+    qaTopicReservationId: String(value.qaTopicReservationId)
+  };
+};
+
 const createBlogDocument = ({
   normalized,
   shouldPublish,
   imagePipeline,
-  lifecycle = {}
+  lifecycle = {},
+  qaContext = null
 }) => ({
   sourceType: 'agentic',
   generationMetadata: {
     provider: 'openclaw',
     generatedAt: new Date().toISOString(),
     pipelineVersion: 'agentic-blog-core-v2',
+    ...(qaContext || {}),
     ...normalized.metadata
   },
   googleIntelSnapshotId: normalized.googleIntelSnapshotId,
@@ -632,6 +767,11 @@ const createBlogDocument = ({
   editorialProductPlacementReview: normalized.editorialProductPlacementReview,
   contentDecision: normalized.contentDecision,
   ...lifecycle,
+  ...(qaContext || {}),
+  ...(qaContext ? {
+    canonicalUrl: '',
+    indexability: { index: false, follow: false, determinable: true, reason: 'qa_draft_only' }
+  } : {}),
   structuralFingerprint: normalized.structuralFingerprint,
   agenticReviews: normalized.agenticReviews,
   blog_title: normalized.title,
@@ -658,9 +798,9 @@ const createBlogDocument = ({
   blog_seo_title: normalized.seoTitle,
   blog_seo_description: normalized.seoDescription,
   blog_shop: 'Inoxpran',
-  publishedAt: shouldPublish ? new Date() : null,
-  isDraft: !shouldPublish,
-  isPublished: shouldPublish
+  publishedAt: qaContext ? null : (shouldPublish ? new Date() : null),
+  isDraft: qaContext ? true : !shouldPublish,
+  isPublished: qaContext ? false : shouldPublish
 });
 
 const buildContentActionContract = (context = {}) => {
@@ -1119,10 +1259,20 @@ class AutomationSeoBlogService {
     };
   }
 
-  static async publishSeoBlog({ payload = {} }) {
+  static async publishSeoBlog({ payload = {}, trustedQaContext = null }) {
+    const qaContext = normalizeTrustedQaContext(trustedQaContext);
+    const qaPayloadKeys = [
+      'isQaTest', 'qaBatchId', 'qaCaseId', 'environment', 'executionMode',
+      'qaIteration', 'originalTopicSeed', 'normalizedTopicKey', 'qaTopicReservationId'
+    ];
+    if (!qaContext && qaPayloadKeys.some(key => payload[key] !== undefined || payload.metadata?.[key] !== undefined)) {
+      throw new BadRequestError('QA provenance cannot be supplied through the automation payload');
+    }
     const normalized = validateAutomationPayload(payload);
-    const currentSnapshot =
-      await GoogleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate();
+    if (qaContext) normalized.mode = 'draft';
+    const currentSnapshot = qaContext
+      ? await GoogleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate({ trustedQaContext: qaContext })
+      : await GoogleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate();
     if (
       String(currentSnapshot.id) !== String(normalized.googleIntelSnapshotId)
     ) {
@@ -1138,6 +1288,12 @@ class AutomationSeoBlogService {
         'googleIntelSnapshotDate does not match the current daily snapshot'
       );
     }
+    assertPublisherArtifactProvenance({
+      label: 'googleIntelligenceSnapshot',
+      artifact: currentSnapshot,
+      qaContext,
+      allowCleanProductionReuse: Boolean(qaContext)
+    });
 
     let verifiedExecution = null;
     let verifiedWorkOrder = null;
@@ -1177,6 +1333,18 @@ class AutomationSeoBlogService {
           'The persisted Content Operations artifact chain is incomplete'
         );
       }
+      assertPublisherArtifactChainProvenance({
+        qaContext,
+        artifacts: {
+          execution,
+          workOrder,
+          unifiedContentBrief: brief,
+          evidenceMap,
+          opportunityDecision: decision,
+          researchBundle,
+          strategyPlan
+        }
+      });
       const artifactChecks = [
         [
           'executionContentOperationsSnapshotId',
@@ -1367,6 +1535,20 @@ class AutomationSeoBlogService {
       });
     }
 
+    if (qaContext) {
+      const persistedExecution = verifiedExecution || await BlogAutomationExecution.findById(normalized.agenticExecutionId).lean();
+      assertPublisherArtifactProvenance({
+        label: 'execution',
+        artifact: persistedExecution,
+        qaContext
+      });
+      for (const key of ['qaBatchId', 'qaCaseId', 'environment', 'executionMode', 'qaIteration', 'originalTopicSeed', 'normalizedTopicKey', 'qaTopicReservationId']) {
+        if (String(persistedExecution[key] || '') !== String(qaContext[key] || '')) {
+          throw new BadRequestError(`Trusted QA ${key} does not match the persisted execution`);
+        }
+      }
+    }
+
     let verifiedProductPlan = null;
     let verifiedPlacementPlan = null;
     if (normalized.productSeedingMode !== 'off') {
@@ -1389,6 +1571,14 @@ class AutomationSeoBlogService {
         throw new BadRequestError(
           'Editorial Product Placement Plan was not found'
         );
+      assertPublisherArtifactChainProvenance({
+        qaContext,
+        artifacts: {
+          productValidationExecution: execution,
+          productSeedPlan: plan,
+          editorialProductPlacementPlan: placementPlan
+        }
+      });
       const idChecks = [
         [
           'productSeedPlanId',
@@ -1519,6 +1709,11 @@ class AutomationSeoBlogService {
           throw new BadRequestError(
             'Editorial Product Placement Plan was not found'
           );
+        assertPublisherArtifactProvenance({
+          label: 'editorialProductPlacementPlan',
+          artifact: placementPlan,
+          qaContext
+        });
         if (placementPlan.decision !== 'no_product')
           throw new BadRequestError(
             'Product seeding mode is off but placement plan authorizes a product'
@@ -1591,7 +1786,44 @@ class AutomationSeoBlogService {
       appendDraftReason(reasons, 'post_publish_verification_disabled');
 
     let imagePipeline;
-    if (isRevision) {
+    if (qaContext && isRevision) {
+      throw new BadRequestError('QA executions cannot revise or mutate an existing blog');
+    }
+    if (qaContext) {
+      imagePipeline = {
+        visualPlan: {
+          status: 'planned_pending_generation',
+          providerExecution: 'forbidden_in_qa',
+          cover: {
+            required: true,
+            purpose: 'Explain the article topic without making unsupported product claims',
+            altText: `Planned cover image for ${normalized.title}`.slice(0, 300),
+            reviewRequired: true
+          },
+          inlineImages: [],
+          safety: {
+            paidProviderCalled: false,
+            externalImageSearchCalled: false,
+            publishWithoutReviewAllowed: false
+          }
+        },
+        coverImage: {
+          url: normalized.imageUrl || '/og-image.png',
+          alt: `Pending reviewed cover image for ${normalized.title}`.slice(0, 300),
+          sourceType: 'qa_placeholder',
+          status: 'pending_generation',
+          reviewStatus: 'pending_review',
+          warning: 'qa_paid_image_pipeline_disabled'
+        },
+        contentImages: [],
+        contentHtml: normalized.contentHtml,
+        status: 'pending',
+        warnings: ['qa_paid_image_pipeline_disabled'],
+        coverReadyForPublish: false,
+        publishReady: false
+      };
+      appendDraftReason(reasons, 'qa_draft_only');
+    } else if (isRevision) {
       imagePipeline = {
         visualPlan: targetBlog.visualPlan || null,
         coverImage: targetBlog.coverImage || {
@@ -1771,6 +2003,11 @@ class AutomationSeoBlogService {
         },
         existingQualityGates: normalized.agenticReviews || {}
       });
+      assertPublisherArtifactProvenance({
+        label: 'publishReadinessReport',
+        artifact: readinessReport,
+        qaContext
+      });
       normalized.publishReadinessReportId = readinessReport._id;
       if (!readinessReport.pass)
         appendDraftReason(reasons,
@@ -1779,6 +2016,7 @@ class AutomationSeoBlogService {
         }
 
         const shouldPublish =
+      !qaContext &&
       !isRevision &&
       requestedPublish &&
             envAutoPublish &&
@@ -1796,6 +2034,10 @@ class AutomationSeoBlogService {
           claimToken: verifiedWorkOrderClaimToken
         });
       }
+      await assertTrustedQaExecutionFence({
+        executionId: normalized.agenticExecutionId,
+        qaContext
+      });
       if (isRevision) {
         created = targetBlog;
       } else {
@@ -1809,24 +2051,41 @@ class AutomationSeoBlogService {
           normalized,
           shouldPublish,
           imagePipeline,
-          lifecycle
+          lifecycle,
+          qaContext
         });
         created = await blog.create(document);
       }
     } catch (error) {
-            if (error?.code === 11000)
+      if (error?.code === 11000 && qaContext) {
+        const retainedQaDraft = await blog.findOne({
+          isQaTest: true,
+          qaCaseId: qaContext.qaCaseId,
+          qaIteration: qaContext.qaIteration
+        }).lean();
+        if (
+          retainedQaDraft &&
+          String(retainedQaDraft.agenticExecutionId || '') === String(normalized.agenticExecutionId || '')
+        ) {
+          created = retainedQaDraft;
+        } else {
+          throw new BadRequestError('The QA draft slot for this case iteration is already consumed');
+        }
+      } else if (error?.code === 11000) {
         throw new BadRequestError('blog_slug already exists');
+      } else {
       throw error;
+      }
         }
         const createdObject = typeof created.toObject === 'function' ? created.toObject() : created;
         const blogId = String(createdObject?._id || createdObject?.id || '');
         const mode = isRevision ? 'revision' : shouldPublish ? 'publish' : 'draft';
 
-        if (verifiedPlacementPlan && blogId) {
+        if (verifiedPlacementPlan && blogId && !qaContext) {
             await EditorialProductPlacementPlanningService.attachRelations({ planId: verifiedPlacementPlan._id, executionId: normalized.agenticExecutionId, strategyPlanId: normalized.strategyPlanId, blogId });
         }
 
-        if (verifiedProductPlan && blogId && !isRevision) {
+        if (verifiedProductPlan && blogId && !isRevision && !qaContext) {
             const blocks = extractPlacementBlocks(normalized.contentHtml);
             const selected = [verifiedProductPlan.primaryProduct, ...(verifiedProductPlan.supportingProducts || [])].filter(Boolean);
             await Promise.all(selected.map(item => {
@@ -1914,15 +2173,17 @@ class AutomationSeoBlogService {
           claimToken: verifiedWorkOrderClaimToken,
           status: executionStatus,
           completedAt,
+          fromStatuses: qaContext ? ['committing'] : ['running', 'committing'],
           updates: executionUpdates
         })
       : await ContentWorkOrderService.transitionExecutionUnclaimed({
           executionId: normalized.agenticExecutionId,
           status: executionStatus,
           completedAt,
+          fromStatuses: qaContext ? ['committing'] : ['running', 'committing'],
           updates: executionUpdates
         });
-    if (verifiedWorkOrder && !executionTransitioned)
+    if (!executionTransitioned)
       throw createWorkOrderLeaseLostError();
 
     const { monitoringTasks, postPublishVerification, postCommitWarnings } =
@@ -1982,5 +2243,11 @@ class AutomationSeoBlogService {
 
 AutomationSeoBlogService.buildBlogLifecycleMetadata =
   buildBlogLifecycleMetadata;
+AutomationSeoBlogService.assertTrustedQaExecutionFence =
+  assertTrustedQaExecutionFence;
+AutomationSeoBlogService.assertPublisherArtifactProvenance =
+  assertPublisherArtifactProvenance;
+AutomationSeoBlogService.assertPublisherArtifactChainProvenance =
+  assertPublisherArtifactChainProvenance;
 
 module.exports = AutomationSeoBlogService;

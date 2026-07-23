@@ -11,6 +11,7 @@ const {
     commercialDensityFor,
     normalizeProductSeedingOptions
 } = require('../config/productSeeding.config');
+const { normalizeTrustedQaProvenance, qaScopeFilter } = require('../utils/qaProvenance.util');
 
 const text = (value, max = 300) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 const list = (value, max = 30) => {
@@ -153,6 +154,7 @@ class ProductSeedPlanningService {
     static async createPlan({ brief: briefInput = {}, googleIntelSnapshotId, executionId = null, now = new Date(), persist = true } = {}) {
         const config = await ProductSeedingConfigService.getConfig();
         const brief = normalizeBlogBrief(briefInput, config);
+        const qaContext = normalizeTrustedQaProvenance(briefInput.qaContext ?? null);
         brief.productSeeding.maxPrimaryProducts = Math.min(brief.productSeeding.maxPrimaryProducts, config.maxPrimaryProducts);
         brief.productSeeding.maxSupportingProducts = Math.min(brief.productSeeding.maxSupportingProducts, config.maxSupportingProducts);
         if (!brief.topic) throw new Error('product_seeding_topic_required');
@@ -168,7 +170,11 @@ class ProductSeedPlanningService {
                 riskFlags: [], reviewRequirements: [], warnings: [], errorCodes: []
             };
         } else {
-            const snapshot = await ProductCatalogIntelligenceService.ensureSnapshot({ now, config });
+            const snapshot = await ProductCatalogIntelligenceService.ensureSnapshot({
+                now,
+                config,
+                ...(qaContext ? { trustedQaContext: qaContext } : {})
+            });
             if (snapshot.status === 'failed') {
                 const blocked = brief.productSeeding.mode === 'required';
                 planDocument = {
@@ -185,7 +191,10 @@ class ProductSeedPlanningService {
             } else {
                 const candidates = snapshot.safeProducts || await ProductCatalogIntelligenceService.readSafeCatalog({ config });
                 const lookback = new Date(now.getTime() - config.lookbackDays * 86_400_000);
-                const exposureRows = await ProductSeedExposure.find({ createdAt: { $gte: lookback } }).lean();
+                const exposureRows = await ProductSeedExposure.find({
+                    createdAt: { $gte: lookback },
+                    ...qaScopeFilter(qaContext)
+                }).lean();
                 const exposureSummary = summarizeExposures({ rows: exposureRows, now });
                 const exposures = Object.fromEntries(candidates.map((candidate) => [
                     String(candidate.productId),
@@ -201,6 +210,7 @@ class ProductSeedPlanningService {
         if (!persist) return { ...planDocument, brief };
         const created = await ProductSeedPlan.create({
             ...planDocument,
+            ...(qaContext || {}),
             executionId,
             contentWorkOrderId: briefInput.contentWorkOrderId || null,
             unifiedContentBriefId: briefInput.unifiedContentBriefId || null

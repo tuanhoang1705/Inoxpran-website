@@ -8,6 +8,12 @@ const {
 const {
   ContentOpportunityDecision,
 } = require("../../models/contentOpportunityDecision.model");
+const {
+  hasQaProvenanceMarkers,
+  normalizeTrustedQaProvenance,
+  qaProvenanceMatches,
+  qaScopeFilter,
+} = require("../../utils/qaProvenance.util");
 
 const ACTION_VALUES = Object.freeze(Object.values(ACTIONS));
 const PRODUCTION_ACTIONS = new Set([
@@ -16,6 +22,15 @@ const PRODUCTION_ACTIONS = new Set([
   ACTIONS.EXPAND,
   ACTIONS.MERGE,
 ]);
+const CLEAN_PRODUCTION_PROVENANCE = Object.freeze({
+  isQaTest: false,
+  qaBatchId: null,
+  qaCaseId: null,
+  environment: "",
+  executionMode: "",
+  originalTopicSeed: "",
+  normalizedTopicKey: "",
+});
 
 const clamp01 = (value) => {
   const parsed = Number(value);
@@ -399,11 +414,15 @@ class ContentOpportunityDecisionService {
     contentInventorySnapshotId = null,
     planningRunId = null,
     candidates = [],
+    qaContext = null,
     config,
     DecisionModel = ContentOpportunityDecision,
   }) {
     if (!contentOperationsSnapshotId)
       throw new Error("contentOperationsSnapshotId is required");
+    const qaProvenance = normalizeTrustedQaProvenance(qaContext);
+    const decisionScope = qaScopeFilter(qaProvenance);
+    const persistedProvenance = qaProvenance || CLEAN_PRODUCTION_PROVENANCE;
     const result = chooseBestAction({ candidates, config });
     const selectedId = result.selected.candidateId;
     const documents = [...result.rankedCandidates];
@@ -415,6 +434,7 @@ class ContentOpportunityDecisionService {
       const isSelected = item.candidateId === selectedId;
       const document = {
         ...item,
+        ...persistedProvenance,
         contentOperationsSnapshotId,
         contentInventorySnapshotId,
         status: isSelected ? "selected" : "candidate",
@@ -428,6 +448,7 @@ class ContentOpportunityDecisionService {
       delete document.selectedAt;
       document.metadata = {
         ...(document.metadata || {}),
+        ...(qaProvenance || {}),
         latestPreviewSelected: isSelected,
         latestPreviewAt: new Date(),
       };
@@ -450,13 +471,24 @@ class ContentOpportunityDecisionService {
               selectedAt: initialSelectedAt,
             },
           };
-      persisted.push(
-        await DecisionModel.findOneAndUpdate(
-          { contentOperationsSnapshotId, candidateId: item.candidateId },
+      const saved = await DecisionModel.findOneAndUpdate(
+          { contentOperationsSnapshotId, candidateId: item.candidateId, ...decisionScope },
           update,
           { upsert: true, new: true, runValidators: true },
-        ),
-      );
+        );
+      if (qaProvenance) {
+        const storedProvenance = normalizeTrustedQaProvenance(saved);
+        if (!qaProvenanceMatches(qaProvenance, storedProvenance)) {
+          const error = new Error("Persisted opportunity decision QA provenance mismatch");
+          error.code = "TRUSTED_QA_PROVENANCE_INVALID";
+          throw error;
+        }
+      } else if (hasQaProvenanceMarkers(saved)) {
+        const error = new Error("Production opportunity decision resolved to a QA-scoped artifact");
+        error.code = "TRUSTED_QA_PROVENANCE_INVALID";
+        throw error;
+      }
+      persisted.push(saved);
     }
     return { ...result, persisted };
   }

@@ -24,6 +24,18 @@ const { UnifiedContentBriefService } = require('../src/services/contentOperation
 const { AgenticBlogCoreService } = require('../src/services/agenticBlogCore.service');
 
 const objectId = (suffix) => `507f1f77bcf86cd79943a0${suffix}`;
+const productionScopeFilter = () => ({
+    isQaTest: { $ne: true },
+    qaBatchId: null,
+    qaCaseId: null,
+    environment: { $in: [null, ''] },
+    executionMode: { $in: [null, ''] },
+    originalTopicSeed: { $in: [null, ''] },
+    normalizedTopicKey: { $in: [null, ''] },
+    'metadata.isQaTest': { $ne: true },
+    'metadata.qaBatchId': null,
+    'metadata.qaCaseId': null
+});
 
 beforeEach(() => {
     vi.clearAllMocks();
@@ -248,7 +260,7 @@ describe('Content Operations admin input safety', () => {
 
             expect(result.opportunity.status).toBe('accepted');
             expect(transitionSpy).toHaveBeenCalledWith(
-                { _id: opportunityId, status: 'selected' },
+                { _id: opportunityId, status: 'selected', ...productionScopeFilter() },
                 { $set: { status: 'accepted' } },
                 { new: true, runValidators: true }
             );
@@ -311,7 +323,7 @@ describe('Content Operations admin input safety', () => {
         const transitionSpy = vi.spyOn(ContentOpportunityDecision, 'findOneAndUpdate')
             .mockResolvedValueOnce({ ...base, status: 'converted' });
         const workOrderSpy = vi.spyOn(ContentWorkOrder, 'findOne').mockResolvedValue(null);
-        const snapshotSpy = vi.spyOn(ContentOperationsDailySnapshot, 'findById').mockReturnValue({
+        const snapshotSpy = vi.spyOn(ContentOperationsDailySnapshot, 'findOne').mockReturnValue({
             lean: vi.fn().mockResolvedValue(null)
         });
 
@@ -329,6 +341,10 @@ describe('Content Operations admin input safety', () => {
 
             expect(transitionSpy.mock.invocationCallOrder[0]).toBeLessThan(workOrderSpy.mock.invocationCallOrder[0]);
             expect(transitionSpy).toHaveBeenCalledTimes(1);
+            expect(snapshotSpy).toHaveBeenCalledWith({
+                _id: snapshotId,
+                ...productionScopeFilter()
+            });
             expect(auditSpy).toHaveBeenCalledWith(expect.objectContaining({
                 action: 'opportunity_convert_artifact_incomplete',
                 metadata: expect.objectContaining({ statusRetained: 'converted' })
@@ -401,7 +417,7 @@ describe('Content Operations admin input safety', () => {
         const briefFindSpy = vi.spyOn(UnifiedContentBrief, 'findOne').mockReturnValue({
             sort: vi.fn().mockResolvedValue(null)
         });
-        const snapshotSpy = vi.spyOn(ContentOperationsDailySnapshot, 'findById').mockReturnValue({
+        const snapshotSpy = vi.spyOn(ContentOperationsDailySnapshot, 'findOne').mockReturnValue({
             lean: vi.fn().mockResolvedValue({
                 _id: snapshotId,
                 googleIntelSnapshotId: objectId('15'),
@@ -431,6 +447,10 @@ describe('Content Operations admin input safety', () => {
             expect(result.workOrder.id).toBe(workOrderId);
             expect(result.brief.id).toBe(briefId);
             expect(transitionSpy).not.toHaveBeenCalled();
+            expect(snapshotSpy).toHaveBeenCalledWith({
+                _id: snapshotId,
+                ...productionScopeFilter()
+            });
             expect(createWorkOrderSpy).toHaveBeenCalledOnce();
             expect(createBriefSpy).toHaveBeenCalledOnce();
             expect(attachSpy).toHaveBeenCalledWith({

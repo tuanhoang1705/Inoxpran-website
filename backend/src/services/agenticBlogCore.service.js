@@ -8,6 +8,10 @@ const { EditorialStyleProfile } = require('../models/editorialStyleProfile.model
 const { BlogStrategyPlan } = require('../models/blogStrategyPlan.model');
 const { GoogleIntelligenceService } = require('./googleIntelligence.service');
 const {
+  normalizeTrustedQaProvenance,
+  qaScopeFilter
+} = require('../utils/qaProvenance.util');
+const {
   getContentOperationsConfig
 } = require('../config/contentOperations.config');
 const {
@@ -38,6 +42,7 @@ const { reviewEditorialProductPlacement } = require('./editorialProductPlacement
 const { safeSourceFetch } = require('./safeSourceFetch.service');
 const { dateInTimezone } = require('../utils/googleIntelligence.util');
 const { safeErrorCode } = require('../utils/httpError.util');
+const { QaTopicUniquenessService } = require('./qaTopicUniqueness.service');
 const { normalizeSlug, normalizeString } = require('../utils/seoBlogSanitizer');
 const {
     normalizeForSimilarity,
@@ -60,6 +65,8 @@ const ARTICLE_TYPES = [
     'listicle', 'myth-vs-fact', 'checklist', 'mistakes-to-avoid', 'use-case-guide', 'seasonal-guide',
     'maintenance-calendar', 'faq-synthesis', 'product-education', 'existing-article-update'
 ];
+
+const qaTopicUniquenessService = new QaTopicUniquenessService();
 
 const STYLE_CONFIG = {
     'problem-solution': ['problem-first', 'problem-to-resolution', 'short-long-short', 'balanced', 'examples-plus-checklist', 'household-scenarios', 'soft-consultation', 'problem-process-result', 'direct-answer'],
@@ -682,12 +689,12 @@ const buildArchitecture = ({
   decision,
   researchBundle,
   productSeedPlan = null,
-  editorialPlacementPlan = null
+  editorialPlacementPlan = null,
+  plannedOutline = []
 }) => {
-  const headings = headingSetForStyle({
-    styleFamily: style.styleFamily,
-    topic
-  });
+  const headings = Array.isArray(plannedOutline) && plannedOutline.length
+    ? plannedOutline.map(item => String(item || '').trim()).filter(Boolean).slice(0, 8)
+    : headingSetForStyle({ styleFamily: style.styleFamily, topic });
   const placementSequence = editorialPlacementPlan?.placementSequence || [];
   const minimumSections = Number(
     editorialPlacementPlan?.firstProductMention?.minimumSectionsBeforeProduct ||
@@ -955,6 +962,11 @@ const applyProductSeedPlanToHtml = ({ html, plan }) => {
   });
 };
 
+const buildOriginalityCorpusFilter = ({ targetIds = [], qaContext = null } = {}) => ({
+  _id: { $nin: Array.from(targetIds, String) },
+  ...qaScopeFilter(qaContext)
+});
+
 class AgenticBlogCoreService {
   static async seedStyleLibrary() {
     const cooldown = Math.min(
@@ -983,12 +995,18 @@ class AgenticBlogCoreService {
 
   static async chooseStyleProfile({
     now = new Date(),
-    timezone = 'Asia/Ho_Chi_Minh'
+    timezone = 'Asia/Ho_Chi_Minh',
+    qaContext = null
   } = {}) {
-    await AgenticBlogCoreService.seedStyleLibrary();
-    const date = dateInTimezone(now, timezone);
-    const existing = await EditorialStyleProfile.findOne({ date }).lean();
+    const trustedQaContext = normalizeTrustedQaProvenance(qaContext);
+    const provenanceScope = qaScopeFilter(trustedQaContext);
+    if (!trustedQaContext) await AgenticBlogCoreService.seedStyleLibrary();
+    const date = trustedQaContext
+      ? `qa:${String(trustedQaContext.environment)}:${String(trustedQaContext.qaCaseId)}`
+      : dateInTimezone(now, timezone);
+    const existing = await EditorialStyleProfile.findOne({ date, ...provenanceScope }).lean();
     if (existing) {
+      if (trustedQaContext) return { ...existing, activeVariant: existing.articleVariants?.[0] || null };
       const usageCount = Number(existing.usageCount || 0) + 1;
       const variant = {
         key: `${existing.styleFamily}-${crypto.randomUUID().slice(0, 8)}`,
@@ -1010,7 +1028,7 @@ class AgenticBlogCoreService {
         const lookback = new Date(now.getTime() - lookbackDays * 86_400_000);
         const [definitions, recent] = await Promise.all([
       EditorialStyleDefinition.find({ enabled: true }).sort({ locked: -1, lastUsedAt: 1, useCount: 1 }).lean(),
-      EditorialStyleProfile.find({ createdAt: { $gte: lookback } }).sort({ createdAt: -1 }).lean()
+      EditorialStyleProfile.find({ createdAt: { $gte: lookback }, ...provenanceScope }).sort({ createdAt: -1 }).lean()
     ]);
     if (!definitions.length) throw new Error('No enabled editorial styles');
     const yesterdayFamily = recent[0]?.styleFamily || '';
@@ -1049,6 +1067,7 @@ const selected =
     let profile;
     try {
       profile = await EditorialStyleProfile.create({
+        ...(trustedQaContext || {}),
         date,
         styleFamily: selected.styleFamily,
         openingMode: values[0],
@@ -1095,13 +1114,15 @@ const selected =
     });
     } catch (error) {
       if (error?.code === 11000)
-        return AgenticBlogCoreService.chooseStyleProfile({ now, timezone });
+        return AgenticBlogCoreService.chooseStyleProfile({ now, timezone, qaContext: trustedQaContext });
       throw error;
     }
-    await EditorialStyleDefinition.updateOne(
-      { _id: selected._id },
-      { $set: { lastUsedAt: now }, $inc: { useCount: 1 } }
-    );
+    if (!trustedQaContext) {
+      await EditorialStyleDefinition.updateOne(
+        { _id: selected._id },
+        { $set: { lastUsedAt: now }, $inc: { useCount: 1 } }
+      );
+    }
     return { ...profile.toObject(), activeVariant: profile.articleVariants[0] };
   }
 
@@ -1109,8 +1130,10 @@ const selected =
     sourceUrls = [],
     fetchOptions = {},
     contentWorkOrderId = null,
-    unifiedContentBriefId = null
+    unifiedContentBriefId = null,
+    qaContext = null
   }) {
+    const trustedQaContext = normalizeTrustedQaProvenance(qaContext);
     const enabled = process.env.INDUSTRY_RESEARCH_ENABLED !== 'false';
     const maxSources = Math.min(
       Math.max(Number(process.env.INDUSTRY_RESEARCH_MAX_SOURCES || 8), 1),
@@ -1181,6 +1204,7 @@ const selected =
           : 'low';
     const editorialPatterns = synthesizePatterns(patterns);
     const bundle = await ResearchBundle.create({
+      ...(trustedQaContext || {}),
       contentWorkOrderId,
       unifiedContentBriefId,
       topic,
@@ -1227,14 +1251,21 @@ const selected =
     contentOperations = {}
   }) {
     const operationsConfig = getContentOperationsConfig();
+    const qaProvenance = normalizeTrustedQaProvenance(contentOperations.qaContext ?? null);
+    const qaContext = qaProvenance
+      ? { ...contentOperations.qaContext, ...qaProvenance }
+      : null;
+    const planningContentOperations = { ...contentOperations };
+    delete planningContentOperations.qaContext;
         const contentPlanning = operationsConfig.enabled
       ? await new ContentOperationsPlanningService({
           config: operationsConfig
         }).plan({
           trigger: 'pipeline',
           adminId: contentOperations.adminId || null,
+          ...(qaContext ? { trustedQaContext: qaContext } : {}),
           input: {
-            ...contentOperations,
+            ...planningContentOperations,
             topic,
             primaryKeyword,
             secondaryKeywords,
@@ -1251,7 +1282,8 @@ const selected =
         const snapshot =
       contentPlanning?.googleSnapshot ||
       (await GoogleIntelligenceService.ensureGoogleIntelligenceSnapshotForDate({
-        now
+        now,
+        ...(qaContext ? { trustedQaContext: qaContext } : {})
       }));
     let contentWorkOrder = contentPlanning?.workOrder || null;
     const unifiedBrief = contentPlanning?.brief || null;
@@ -1349,6 +1381,7 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         throw new Error('Scoped maintenance requires an existing target blog');
     const sourceEvidence = (selected.positiveEvidence || []).slice(0, 10);
     const evidenceMap = await EvidenceMapService.create({
+        qaContext,
         contentWorkOrderId: contentWorkOrder._id || contentWorkOrder.id,
         unifiedContentBriefId: unifiedBrief._id || unifiedBrief.id,
         entries: [
@@ -1401,6 +1434,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
     }
     const productSeedPlan = await ProductSeedPlanningService.createPlan({
       brief: {
+        ...(qaContext || {}),
+        qaContext,
         ...(unifiedBrief || {}),
         topic: plannedTopic,
         primaryKeyword,
@@ -1462,6 +1497,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
     const editorialPlacementPlan =
       await EditorialProductPlacementPlanningService.createPlan({
         brief: {
+          ...(qaContext || {}),
+          qaContext,
           ...(unifiedBrief || {}),
           topic: plannedTopic,
           primaryKeyword,
@@ -1507,7 +1544,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       topic: effectiveTopic,
       sourceUrls,
       contentWorkOrderId: contentWorkOrder?._id || contentWorkOrder?.id || null,
-      unifiedContentBriefId: unifiedBrief?._id || unifiedBrief?.id || null
+      unifiedContentBriefId: unifiedBrief?._id || unifiedBrief?.id || null,
+      qaContext
     });
     const selectedProducts = [
       productSeedPlan.primaryProduct,
@@ -1588,6 +1626,7 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         )
       ].filter(entry => entry.claim);
       evidenceMap = await EvidenceMapService.create({
+        qaContext,
         contentWorkOrderId: contentWorkOrder._id || contentWorkOrder.id,
         unifiedContentBriefId: unifiedBrief._id || unifiedBrief.id,
         researchBundleId: researchBundle._id,
@@ -1607,7 +1646,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
     }
     const style = await AgenticBlogCoreService.chooseStyleProfile({
       now,
-      timezone: snapshot.timezone
+      timezone: snapshot.timezone,
+      qaContext
     });
             const chosenArticleType = [
       'update',
@@ -1632,9 +1672,11 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       decision: opportunity.decision,
       researchBundle,
       productSeedPlan,
-      editorialPlacementPlan
+      editorialPlacementPlan,
+      plannedOutline: unifiedBrief?.plannedOutline || contentOperations.plannedOutline || []
     });
     const strategy = await BlogStrategyPlan.create({
+      ...(qaContext || {}),
       googleIntelSnapshotId: snapshot.id || snapshot._id,
       contentWorkOrderId: contentWorkOrder?._id || contentWorkOrder?.id || null,
       unifiedContentBriefId: unifiedBrief?._id || unifiedBrief?.id || null,
@@ -1959,6 +2001,21 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         'đồ gia dụng inox cho gia đình'
     );
         const primaryKeyword = normalizeString(config.primaryKeyword || topic);
+        const qaReservationResult = await qaTopicUniquenessService.reserveBeforeWriter({
+      schedule,
+      executionId,
+      topic
+    });
+    const qaContext = schedule.isQaTest === true ? {
+      isQaTest: true,
+      qaBatchId: schedule.qaBatchId,
+      qaCaseId: schedule.qaCaseId,
+      environment: schedule.environment,
+      executionMode: schedule.executionMode,
+      originalTopicSeed: schedule.originalTopicSeed,
+      normalizedTopicKey: schedule.normalizedTopicKey,
+      qaTopicReservationId: String(qaReservationResult?.reservation?._id || schedule.qaTopicReservationId || '')
+    } : null;
         const context = await AgenticBlogCoreService.prepareContext({
       topic,
       primaryKeyword,
@@ -1981,6 +2038,13 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         workOrderId: config.workOrderId || config.selectedWorkOrderId,
         draftOnly: schedule.draftOnly !== false,
         primaryBusinessGoal: config.primaryBusinessGoal,
+        targetAudience: config.audience ? [config.audience] : undefined,
+        primarySearchIntent: config.searchIntent,
+        userProblems: config.userProblem ? [config.userProblem] : undefined,
+        mainEntity: config.mainEntity,
+        topicCore: config.topicCore,
+        contentRole: config.contentRole,
+        plannedOutline: Array.isArray(config.outline) ? config.outline : [],
         successMetrics: config.successMetrics,
         targetBlogId: config.targetBlogId,
         mergeSourceBlogIds: config.mergeSourceBlogIds,
@@ -1988,10 +2052,12 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         minimumOpportunityScore: schedule.minimumOpportunityScore,
         allowSkip: schedule.allowSkip,
         executionId,
+        qaContext,
         claimWorkOrder: true,
         claimMaintenanceWorkOrder: true
       }
     });
+    if (qaContext) context.qaContext = qaContext;
     if (
       context.contentPlanning &&
       context.contentWorkOrder &&
@@ -2115,7 +2181,10 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       ...(primaryTarget ? [String(primaryTarget._id)] : []),
       ...mergeSources.map(item => String(item._id))
     ]);
-        const comparisonCorpus = await blog.find({ _id: { $nin: Array.from(targetIds) } }).sort({ updatedAt: -1 }).limit(50).select('_id blog_title blog_content structuralFingerprint').lean();
+        const comparisonCorpus = await blog.find(buildOriginalityCorpusFilter({
+            targetIds,
+            qaContext
+        })).sort({ updatedAt: -1 }).limit(50).select('_id blog_title blog_content structuralFingerprint').lean();
         const recentTitles = [
             ...context.opportunity.targets.map(item => item.blog_title),
             ...comparisonCorpus.map(item => item.blog_title)
@@ -2211,10 +2280,11 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         const slug = target?.blog_slug || normalizeSlug(`${llmDraft?.title || context.effectiveTopic || topic}-${date}-${sha256(executionKey).slice(0, 6)}`);
         const excerpt = (llmDraft?.excerpt || `Hướng dẫn thực tế về ${context.effectiveTopic || topic} cho gia đình Việt: tiêu chí lựa chọn, cách sử dụng và lưu ý an toàn.`).slice(0, 240);
         const payload = {
-            mode:
+            mode: qaContext ? 'draft' :
         schedule.draftOnly === false &&
         Boolean(schedule.autoPublish) && !highRisk ? 'publish' : 'draft',
             source: 'openclaw-daily-seo', primaryKeyword, secondaryKeywords: config.secondaryKeywords || [],
+            ...(qaContext || {}),
             title, slug, excerpt, contentHtml,
             imageSearchQuery: llmDraft?.imageQuery || '',
             seoTitle: title.slice(0, 60), seoDescription: excerpt.slice(0, 155),
@@ -2281,6 +2351,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             agenticReviews: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview, editorialProductPlacement: editorialPlacementReview },
             metadata: {
                 provider: 'openclaw', executionKey, pipelineVersion: 'agentic-blog-core-v2',
+                ...(qaContext || {}),
+                ...(qaContext ? { plannedOutline: context.architecture.headings.map(item => item.heading) } : {}),
                 googleIntelSnapshotId: context.snapshot.id || String(context.snapshot._id || ''),
         contentOperationsSnapshotId:
           context.contentPlanning?.contentOperationsSnapshotId ||
@@ -2350,14 +2422,14 @@ const claimed = await ContentWorkOrderService.claimForProduction({
                 seoAeoGeo: seoAeoGeo.passed ? 'pass' : 'fail'
             }
         };
-        return { skipped: false, payload, context, reviews: payload.agenticReviews, highRisk };
+        return { skipped: false, payload, context, qaContext, reviews: payload.agenticReviews, highRisk };
     }
 
     static async listStyles() {
         await AgenticBlogCoreService.seedStyleLibrary();
         const [styles, recentProfiles] = await Promise.all([
             EditorialStyleDefinition.find().sort({ enabled: -1, lastUsedAt: -1, styleFamily: 1 }).lean(),
-            EditorialStyleProfile.find().sort({ createdAt: -1 }).limit(30).lean()
+            EditorialStyleProfile.find({ isQaTest: { $ne: true } }).sort({ createdAt: -1 }).limit(30).lean()
         ]);
         return { styles: styles.map(item => ({ ...item, id: String(item._id) })), recentProfiles: recentProfiles.map(item => ({ ...item, id: String(item._id) })) };
     }
@@ -2376,13 +2448,13 @@ const claimed = await ContentWorkOrderService.claimForProduction({
     }
 
     static async getResearchBundle({ bundleId }) {
-        const bundle = await ResearchBundle.findById(bundleId).lean();
+        const bundle = await ResearchBundle.findOne({ _id: bundleId, isQaTest: { $ne: true } }).lean();
         if (!bundle) throw new Error('Research bundle not found');
         return { ...bundle, id: String(bundle._id) };
     }
 
     static async getStrategy({ strategyId }) {
-        const strategy = await BlogStrategyPlan.findById(strategyId).lean();
+        const strategy = await BlogStrategyPlan.findOne({ _id: strategyId, isQaTest: { $ne: true } }).lean();
         if (!strategy) throw new Error('Blog strategy not found');
         return { ...strategy, id: String(strategy._id) };
     }
@@ -2395,6 +2467,7 @@ module.exports = {
     applyEditorialProductPlacementPlanToHtml,
     applyProductSeedPlanToHtml,
     buildArchitecture,
+    buildOriginalityCorpusFilter,
   buildEvidenceWritingContract,
   buildLlmDraftMessages,
   buildRevisionWritingContext,

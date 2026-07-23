@@ -315,6 +315,7 @@ class DashboardMetricsService {
 					}
 				]),
 				blog.aggregate([
+					{ $match: { isQaTest: { $ne: true } } },
 					{
 						$group: {
 							_id: null,

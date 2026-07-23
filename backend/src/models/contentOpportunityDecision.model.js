@@ -7,6 +7,13 @@ const ACTION_VALUES = Object.freeze(Object.values(ACTIONS));
 
 const contentOpportunityDecisionSchema = new Schema(
   {
+    isQaTest: { type: Boolean, default: false, index: true },
+    qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+    qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+    environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+    executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+    originalTopicSeed: { type: String, default: '', maxlength: 300 },
+    normalizedTopicKey: { type: String, default: '', maxlength: 320 },
     contentOperationsSnapshotId: {
       type: Schema.Types.ObjectId,
       ref: "ContentOperationsDailySnapshot",
@@ -78,14 +85,21 @@ const contentOpportunityDecisionSchema = new Schema(
 );
 
 contentOpportunityDecisionSchema.index(
-  { contentOperationsSnapshotId: 1, candidateId: 1 },
-  { unique: true },
+  {
+    contentOperationsSnapshotId: 1,
+    candidateId: 1,
+    isQaTest: 1,
+    qaBatchId: 1,
+    qaCaseId: 1,
+  },
+  { unique: true, name: "content_opportunity_scope_unique" },
 );
 contentOpportunityDecisionSchema.index({
   contentOperationsSnapshotId: 1,
   totalScore: -1,
   candidateId: 1,
 });
+contentOpportunityDecisionSchema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_opportunity_decision' });
 
 module.exports = {
   ACTION_VALUES,

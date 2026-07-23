@@ -74,6 +74,7 @@ const buildUnifiedBriefDocument = ({
       "Skip work orders do not invoke brief or writer production",
     );
   const document = {
+    ...(input.qaContext || {}),
     contentWorkOrderId,
     version,
     status: input.status || "complete",
@@ -102,6 +103,7 @@ const buildUnifiedBriefDocument = ({
     ),
     articleType: String(input.articleType || "").trim(),
     contentRole: String(input.contentRole || "").trim(),
+    plannedOutline: asStrings(input.plannedOutline),
     editorialAngle: String(input.editorialAngle || "").trim(),
     primaryTerms: asStrings(input.primaryTerms),
     relatedTerms: asStrings(input.relatedTerms),

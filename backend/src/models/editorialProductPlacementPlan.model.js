@@ -3,6 +3,13 @@
 const { Schema, model } = require('mongoose');
 
 const schema = new Schema({
+    isQaTest: { type: Boolean, default: false, index: true },
+    qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+    qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+    environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+    executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+    originalTopicSeed: { type: String, default: '', maxlength: 300 },
+    normalizedTopicKey: { type: String, default: '', maxlength: 320 },
     executionId: { type: Schema.Types.ObjectId, ref: 'BlogAutomationExecution', default: null, index: true },
     contentWorkOrderId: { type: Schema.Types.ObjectId, ref: 'ContentWorkOrder', default: null, index: true },
     unifiedContentBriefId: { type: Schema.Types.ObjectId, ref: 'UnifiedContentBrief', default: null, index: true },
@@ -35,5 +42,6 @@ const schema = new Schema({
 }, { collection: 'EditorialProductPlacementPlans', timestamps: true });
 
 schema.index({ createdAt: -1, placementStyle: 1 });
+schema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_editorial_product_placement_plan' });
 
 module.exports = { EditorialProductPlacementPlan: model('EditorialProductPlacementPlan', schema) };

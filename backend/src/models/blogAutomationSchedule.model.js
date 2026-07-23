@@ -7,6 +7,15 @@ const COLLECTION_NAME = 'BlogAutomationSchedules';
 
 const scheduleSchema = new Schema(
     {
+        isQaTest: { type: Boolean, default: false, index: true },
+        qaBatchId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaBatch', default: null, index: true },
+        qaCaseId: { type: Schema.Types.ObjectId, ref: 'AgenticBlogQaCase', default: null, index: true },
+        qaIteration: { type: Number, default: 0, min: 0, max: 3, index: true },
+        environment: { type: String, enum: ['', 'local', 'staging'], default: '' },
+        executionMode: { type: String, enum: ['', 'run_now', 'schedule_run_now', 'actual_schedule'], default: '' },
+        originalTopicSeed: { type: String, default: '', trim: true, maxlength: 300 },
+        normalizedTopicKey: { type: String, default: '', trim: true, maxlength: 320 },
+        qaTopicReservationId: { type: String, default: '', trim: true, maxlength: 160 },
         name: { type: String, required: true, trim: true, maxlength: 120 },
         description: { type: String, default: '', trim: true, maxlength: 500 },
         enabled: { type: Boolean, default: true, index: true },
@@ -57,6 +66,31 @@ const scheduleSchema = new Schema(
 
 scheduleSchema.index({ enabled: 1, nextRunAt: 1 });
 scheduleSchema.index({ leaseUntil: 1, lockedBy: 1 });
+scheduleSchema.index(
+    { qaCaseId: 1 },
+    { unique: true, partialFilterExpression: { isQaTest: true }, name: 'qa_schedule_case_unique' }
+);
+
+scheduleSchema.pre('validate', function validateQaSchedule(next) {
+    if (this.isQaTest !== true) return next();
+    const config = this.agentConfig || {};
+    if (
+        !this.qaBatchId ||
+        !this.qaCaseId ||
+        !['local', 'staging'].includes(this.environment) ||
+        !['run_now', 'schedule_run_now', 'actual_schedule'].includes(this.executionMode) ||
+        this.mode !== 'fixed_brief' ||
+        this.draftOnly !== true ||
+        this.autoPublish === true ||
+        config.generateImages === true ||
+        !this.originalTopicSeed ||
+        !this.normalizedTopicKey ||
+        !this.qaTopicReservationId
+    ) {
+        return next(new Error('QA schedule violates trusted draft-only provenance'));
+    }
+    next();
+});
 
 module.exports = {
     BlogAutomationSchedule: model(DOCUMENT_NAME, scheduleSchema)

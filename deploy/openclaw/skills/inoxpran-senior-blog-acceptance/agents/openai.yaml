@@ -1,0 +1,4 @@
+interface:
+  display_name: "Senior Blog Acceptance"
+  short_description: "Blind final acceptance for Inoxpran blog drafts"
+  default_prompt: "Use $inoxpran-senior-blog-acceptance to independently audit a persisted QA blog draft and return the schema-valid rubric assessment."

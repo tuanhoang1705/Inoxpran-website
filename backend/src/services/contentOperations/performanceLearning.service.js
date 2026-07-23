@@ -27,6 +27,10 @@ const { ContentWorkOrder } = require("../../models/contentWorkOrder.model");
 const { blog } = require("../../models/blog.model");
 const { ContentWorkOrderService } = require("./workOrder.service");
 const {
+  hasQaProvenanceMarkers,
+  qaScopeFilter,
+} = require("../../utils/qaProvenance.util");
+const {
   writeContentOperationsAudit,
 } = require("./contentOperationsAudit.service");
 const { SearchConsoleAdapter } = require("./searchConsole.adapter");
@@ -43,6 +47,34 @@ const WINDOW_MS = Object.freeze({
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MONITORING_LEASE_MS = 10 * 60 * 1000;
 const LEARNING_LEASE_MS = 10 * 60 * 1000;
+
+const productionArtifactScopeFilter = () => ({
+  ...qaScopeFilter(null),
+  qaBatchId: null,
+  qaCaseId: null,
+  environment: { $in: [null, ""] },
+  executionMode: { $in: [null, ""] },
+  originalTopicSeed: { $in: [null, ""] },
+  normalizedTopicKey: { $in: [null, ""] },
+  "metadata.isQaTest": { $ne: true },
+  "metadata.qaBatchId": null,
+  "metadata.qaCaseId": null,
+});
+
+const assertProductionArtifact = (value, label) => {
+  if (!value) return value;
+  const source = typeof value?.toObject === "function" ? value.toObject() : value;
+  if (
+    hasQaProvenanceMarkers(source) ||
+    hasQaProvenanceMarkers(source?.metadata) ||
+    hasQaProvenanceMarkers(source?.qaContext)
+  ) {
+    const error = new Error(`${label}_qa_scope_forbidden`);
+    error.code = "PRODUCTION_ARTIFACT_SCOPE_INVALID";
+    throw error;
+  }
+  return value;
+};
 
 const createLeaseOwner = (workerId, scope = "content-performance") => {
   const normalizedWorkerId =
@@ -271,10 +303,11 @@ const collectMonitoringSources = async ({
   const currentBlog = await blog
     .findById(task.blogId)
     .select(
-      "_id blog_slug canonicalUrl contentRevisionHash isPublished isDraft createdAt updatedAt",
+      "_id blog_slug canonicalUrl contentRevisionHash isPublished isDraft createdAt updatedAt isQaTest qaBatchId qaCaseId environment executionMode originalTopicSeed normalizedTopicKey",
     )
     .lean();
   if (!currentBlog) throw new Error("monitored_blog_not_found");
+  assertProductionArtifact(currentBlog, "monitored_blog");
   const publicBase = String(
     process.env.PUBLIC_SITE_URL ||
       process.env.APP_BASE_URL ||
@@ -308,7 +341,10 @@ const collectMonitoringSources = async ({
       PostPublishVerification.findOne(verificationFilter)
         .sort({ checkedAt: -1 })
         .lean(),
-      ContentInventoryItem.findOne({ blogId: task.blogId })
+      ContentInventoryItem.findOne({
+        blogId: task.blogId,
+        ...productionArtifactScopeFilter(),
+      })
         .sort({ createdAt: -1 })
         .lean(),
     ]);
@@ -588,7 +624,10 @@ const createLearningWorkOrder = async (
   const LearningModel = dependencies.LearningModel || ContentLearningRecord;
   const auditWriter = dependencies.auditWriter || writeContentOperationsAudit;
   if (learning.generatedWorkOrderId) {
-    return resolveQuery(WorkOrderModel.findById(learning.generatedWorkOrderId));
+    const generated = await resolveQuery(
+      WorkOrderModel.findById(learning.generatedWorkOrderId),
+    );
+    return assertProductionArtifact(generated, "generated_learning_work_order");
   }
   const learningId = learning._id || learning.id;
   if (!learningId || typeof LearningModel.findOneAndUpdate !== "function") {
@@ -626,9 +665,10 @@ const createLearningWorkOrder = async (
         ? await resolveQuery(LearningModel.findById(learningId))
         : null;
     if (current?.generatedWorkOrderId) {
-      return resolveQuery(
+      const generated = await resolveQuery(
         WorkOrderModel.findById(current.generatedWorkOrderId),
       );
+      return assertProductionArtifact(generated, "generated_learning_work_order");
     }
     throw new Error("learning_record_claim_unavailable");
   }
@@ -647,6 +687,7 @@ const createLearningWorkOrder = async (
     const sourceWorkOrder = await resolveQuery(
       WorkOrderModel.findById(sourceWorkOrderId),
     );
+    assertProductionArtifact(sourceWorkOrder, "learning_source_work_order");
     if (
       !sourceWorkOrder?.contentOperationsSnapshotId ||
       !sourceWorkOrder?.googleIntelSnapshotId
@@ -715,10 +756,12 @@ const createLearningWorkOrder = async (
         contentOperationsSnapshotId:
           decisionDocument.contentOperationsSnapshotId,
         candidateId,
+        ...productionArtifactScopeFilter(),
       },
       { $setOnInsert: decisionDocument },
       { upsert: true, new: true, runValidators: true },
     );
+    assertProductionArtifact(decision, "learning_opportunity_decision");
     const workOrder = await ContentWorkOrderService.createFromDecision({
       decision,
       WorkOrderModel,
@@ -754,6 +797,7 @@ const createLearningWorkOrder = async (
         },
       },
     });
+    assertProductionArtifact(workOrder, "learning_work_order");
     const workOrderId = workOrder?._id || workOrder?.id || null;
     const terminal = await LearningModel.updateOne(
       {

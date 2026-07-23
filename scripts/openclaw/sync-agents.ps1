@@ -89,37 +89,46 @@ foreach ($agentFile in Get-ChildItem -Path $agentsDir -Filter '*.md' | Sort-Obje
     $identityPath = Join-Path $workspace 'IDENTITY.md'
     $userPath = Join-Path $workspace 'USER.md'
 
-    @(
-        "# $agentId",
-        '',
-        'This workspace is managed by scripts/openclaw/sync-agents.ps1.',
-        'Follow AGENTS.md for role, constraints, and handoff rules.',
-        '',
-        'Project: Inoxpran SEO automation.',
-        'Default output: create draft-only blog workflow artifacts unless explicitly instructed by the reviewer/publisher policy.'
-    ) | Set-Content -Path $bootstrapPath -Encoding UTF8
+    if ($agentId -eq 'senior-blog-acceptance-auditor') {
+        foreach ($requiredPath in @($bootstrapPath, $agentsPath, $identityPath, $userPath)) {
+            if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+                throw "Missing repository-managed Senior Auditor workspace file: $requiredPath"
+            }
+        }
+        Write-Host 'Preserving repository-managed read-only Senior Auditor workspace.'
+    } else {
+        @(
+            "# $agentId",
+            '',
+            'This workspace is managed by scripts/openclaw/sync-agents.ps1.',
+            'Follow AGENTS.md for role, constraints, and handoff rules.',
+            '',
+            'Project: Inoxpran SEO automation.',
+            'Default output: follow AGENTS.md exactly and never perform publication or another external side effect unless the role policy explicitly permits it.'
+        ) | Set-Content -Path $bootstrapPath -Encoding UTF8
 
-    @(
-        "# $agentId",
-        '',
-        $agentInstructions
-    ) | Set-Content -Path $agentsPath -Encoding UTF8
+        @(
+            "# $agentId",
+            '',
+            $agentInstructions
+        ) | Set-Content -Path $agentsPath -Encoding UTF8
 
-    @(
-        '# IDENTITY.md',
-        '',
-        "- **Name:** $agentId",
-        '- **Vibe:** focused SEO operations agent',
-        '- **Emoji:**',
-        '- **Avatar:**'
-    ) | Set-Content -Path $identityPath -Encoding UTF8
+        @(
+            '# IDENTITY.md',
+            '',
+            "- **Name:** $agentId",
+            '- **Vibe:** focused SEO operations agent',
+            '- **Emoji:**',
+            '- **Avatar:**'
+        ) | Set-Content -Path $identityPath -Encoding UTF8
 
-    @(
-        '# USER.md',
-        '',
-        'The user owns the Inoxpran website and wants a conservative daily SEO blog automation workflow.',
-        'Never expose credentials. Never publish directly unless backend safety gates and reviewer conditions pass.'
-    ) | Set-Content -Path $userPath -Encoding UTF8
+        @(
+            '# USER.md',
+            '',
+            'The user owns the Inoxpran website and wants a conservative daily SEO blog automation workflow.',
+            'Never expose credentials. Never publish directly unless backend safety gates and reviewer conditions pass.'
+        ) | Set-Content -Path $userPath -Encoding UTF8
+    }
 
     if ($existingAgents.ContainsKey($agentId)) {
         Write-Host "Agent already registered: $agentId"

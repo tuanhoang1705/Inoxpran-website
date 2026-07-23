@@ -299,6 +299,15 @@ const evaluatePublishReadiness = ({
             ? (requestedMode === 'publish' ? 'publish' : 'draft')
             : ['high', 'critical'].includes(riskLevel) ? 'rewrite' : 'draft';
     const report = {
+        ...(workOrder.isQaTest === true ? {
+            isQaTest: true,
+            qaBatchId: workOrder.qaBatchId,
+            qaCaseId: workOrder.qaCaseId,
+            environment: workOrder.environment,
+            executionMode: workOrder.executionMode,
+            originalTopicSeed: workOrder.originalTopicSeed,
+            normalizedTopicKey: workOrder.normalizedTopicKey
+        } : {}),
         contentWorkOrderId: workOrder._id || workOrder.id,
         unifiedContentBriefId: brief._id || brief.id,
         evidenceMapId: evidenceMap?._id || evidenceMap?.id || null,

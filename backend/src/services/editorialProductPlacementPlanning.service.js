@@ -9,6 +9,7 @@ const {
     normalizeProductPlacementOptions,
     placementDensityFor
 } = require('../config/productPlacement.config');
+const { normalizeTrustedQaProvenance, qaScopeFilter } = require('../utils/qaProvenance.util');
 
 const DAY_MS = 86_400_000;
 const text = (value, max = 300) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -223,19 +224,25 @@ class EditorialProductPlacementPlanningService {
     static async createPlan({ brief = {}, productSeedPlan, executionId = null, now = new Date(), persist = true } = {}) {
         if (!productSeedPlan?._id && !productSeedPlan?.id) throw new Error('product_seed_plan_required_for_editorial_placement');
         const config = buildEnvProductPlacementConfig();
+        const qaContext = normalizeTrustedQaProvenance(brief.qaContext ?? null);
         const options = normalizeProductPlacementOptions(brief.productPlacement || brief.agentConfig?.productPlacement || {}, config);
         const lookback = new Date(now.getTime() - Math.max(config.rankingPositionLookbackDays, config.styleLookbackDays) * DAY_MS);
-        const recentPlans = await EditorialProductPlacementPlan.find({ createdAt: { $gte: lookback }, decision: 'place_product' }).sort({ createdAt: -1 }).limit(50).lean();
+        const recentPlans = await EditorialProductPlacementPlan.find({
+            createdAt: { $gte: lookback },
+            decision: 'place_product',
+            ...qaScopeFilter(qaContext)
+        }).sort({ createdAt: -1 }).limit(50).lean();
         const document = buildPlanDocument({ brief, productSeedPlan, options, config, recentPlans, now });
         if (!persist) return document;
-        await EditorialProductPlacementPlanningService.seedStyleLibrary(config);
+        if (!qaContext) await EditorialProductPlacementPlanningService.seedStyleLibrary(config);
         const created = await EditorialProductPlacementPlan.create({
             ...document,
+            ...(qaContext || {}),
             executionId,
             contentWorkOrderId: brief.contentWorkOrderId || null,
             unifiedContentBriefId: brief.unifiedContentBriefId || null
         });
-        if (document.placementStyle !== 'no-product') {
+        if (!qaContext && document.placementStyle !== 'no-product') {
             await ProductPlacementStyleDefinition.updateOne({ styleId: document.placementStyle }, { $set: { lastUsedAt: now }, $inc: { useCount: 1 } });
         }
         return typeof created.toObject === 'function' ? created.toObject() : created;

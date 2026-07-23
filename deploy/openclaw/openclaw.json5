@@ -18,6 +18,11 @@
         exemptLoopback: true,
       },
     },
+    http: {
+      endpoints: {
+        responses: { enabled: true },
+      },
+    },
     controlUi: {
       enabled: true,
       basePath: "/openclaw-dashboard",
@@ -374,6 +379,22 @@
           "inoxpran-content-operations-contract",
           "inoxpran-publish-readiness",
           "inoxpran-post-publish-verification",
+        ],
+      },
+      {
+        id: "senior-blog-acceptance-auditor",
+        workspace: "/workspaces/senior-blog-acceptance-auditor",
+        // The authenticated backend supplies the complete blind review package.
+        // This auditor needs no filesystem, runtime, web, session, automation, or messaging tool.
+        tools: { profile: "minimal", deny: ["session_status"] },
+        skills: [
+          "inoxpran-senior-blog-acceptance",
+          "inoxpran-content-operations-contract",
+          "inoxpran-publish-readiness",
+          "inoxpran-seo-review",
+          "inoxpran-source-attribution",
+          "inoxpran-product-seeding-review",
+          "inoxpran-image-quality",
         ],
       },
       {

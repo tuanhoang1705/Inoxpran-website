@@ -13,6 +13,9 @@ const {
   ContentWorkOrder,
   WORK_ORDER_STATUSES,
 } = require("../../models/contentWorkOrder.model");
+const {
+  inheritTrustedQaProvenance,
+} = require("../../utils/qaProvenance.util");
 
 const TARGET_REQUIRED = new Set([
   ACTIONS.UPDATE,
@@ -102,6 +105,9 @@ const getActiveClaimToken = (workOrder) =>
 const getExecutionClaimToken = (execution) =>
   String(execution?.metadata?.contentWorkOrderClaimToken || "").trim();
 
+const hashClaimToken = (claimToken) =>
+  crypto.createHash("sha256").update(String(claimToken || "")).digest("hex");
+
 const isWorkOrderRunnable = (workOrder, { now = new Date() } = {}) =>
   Boolean(
     workOrder &&
@@ -158,7 +164,13 @@ const buildWorkOrderDocument = ({ decision, input = {} } = {}) => {
   if (successMetrics.length === 0)
     throw new Error("At least one measurable success metric is required");
 
+  const qaProvenance = inheritTrustedQaProvenance({
+    anchor: decision,
+    candidates: [input, input.qaContext, input.metadata],
+  });
+
   return {
+    ...(qaProvenance || {}),
     contentOperationsSnapshotId,
     googleIntelSnapshotId,
     contentOpportunityDecisionId: decisionId,
@@ -364,16 +376,22 @@ class ContentWorkOrderService {
     status,
     updates = {},
     completedAt = new Date(),
+    fromStatuses = ["running"],
     ExecutionModel = BlogAutomationExecution,
   }) {
     validateExecutionTransition({ executionId, status, updates });
     if (!workOrderId || !claimToken)
       throw new Error("workOrderId and claimToken are required");
+    const allowedFromStatuses = asNonEmptyStrings(fromStatuses).filter(
+      (item) => item === "running" || item === "committing",
+    );
+    if (!allowedFromStatuses.length)
+      throw new Error("At least one supported claimed execution source status is required");
     const result = await ExecutionModel.updateOne(
       {
         _id: executionId,
         contentWorkOrderId: workOrderId,
-        status: "running",
+        status: { $in: allowedFromStatuses },
         "metadata.contentWorkOrderClaimToken": String(claimToken),
       },
       {
@@ -381,6 +399,7 @@ class ContentWorkOrderService {
           ...updates,
           status,
           completedAt,
+          "metadata.completedWorkOrderClaimTokenHash": hashClaimToken(claimToken),
           "metadata.contentWorkOrderClaimToken": "",
         },
       },
@@ -398,7 +417,7 @@ class ContentWorkOrderService {
   }) {
     validateExecutionTransition({ executionId, status, updates });
     const allowedFromStatuses = asNonEmptyStrings(fromStatuses).filter(
-      (item) => item === "queued" || item === "running",
+      (item) => item === "queued" || item === "running" || item === "committing",
     );
     if (!allowedFromStatuses.length)
       throw new Error(
@@ -445,6 +464,7 @@ class ContentWorkOrderService {
           ...updates,
           status,
           lockedAt: null,
+          "metadata.completedClaimTokenHash": hashClaimToken(claimToken),
           "metadata.activeClaimToken": "",
         },
       },

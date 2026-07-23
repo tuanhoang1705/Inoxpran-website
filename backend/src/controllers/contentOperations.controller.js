@@ -3,9 +3,24 @@
 const { OK, CREATED } = require('../core/success.response')
 const { BadRequestError } = require('../core/error.response')
 const { ContentOperationsAdminService } = require('../services/contentOperations/contentOperationsAdmin.service')
+const { OpenClawCapabilityHealthService } = require('../services/openclawCapabilityHealth.service')
+
+const hasCapabilityViewPermission = req => (
+    (Array.isArray(req?.adminPermissions) && req.adminPermissions.includes('openclaw_capability.view'))
+    || (Array.isArray(req?.adminRoles) && req.adminRoles.some(role => ['ADMIN', 'SUPER_ADMIN'].includes(role)))
+)
 
 class ContentOperationsController {
-    status = async (_req, res) => new OK({ metadata: await ContentOperationsAdminService.getStatus() }).send(res)
+    status = async (req, res) => {
+        const status = await ContentOperationsAdminService.getStatus()
+        if (!hasCapabilityViewPermission(req)) {
+            const contentOperationsStatus = { ...(status || {}) }
+            delete contentOperationsStatus.capabilityHealth
+            return new OK({ metadata: contentOperationsStatus }).send(res)
+        }
+        const capabilityHealth = await OpenClawCapabilityHealthService.getStatus()
+        return new OK({ metadata: { ...status, capabilityHealth } }).send(res)
+    }
     preview = async (req, res) => new CREATED({ metadata: await ContentOperationsAdminService.preview({ payload: req.body || {}, adminId: req.user.userId }) }).send(res)
     runNow = async (req, res) => new CREATED({ metadata: await ContentOperationsAdminService.runNow({ payload: req.body || {}, adminId: req.user.userId }) }).send(res)
 

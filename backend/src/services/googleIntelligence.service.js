@@ -13,6 +13,12 @@ const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { convertToObjectIdMongodb } = require('../utils');
 const { normalizeString } = require('../utils/seoBlogSanitizer');
 const { safeErrorCode, safeStoredErrorCode } = require('../utils/httpError.util');
+const {
+    normalizeTrustedQaProvenance,
+    qaExecutionScopeKey,
+    qaProvenanceDocument,
+    qaScopeFilter
+} = require('../utils/qaProvenance.util');
 const { calculateNextRun, normalizeTimes, parseBoolean } = require('../utils/blogSchedule.util');
 const {
     calculateSnapshotStatus,
@@ -49,14 +55,15 @@ const normalizeExecutionKeyPart = (value, fallback) => String(value || fallback)
     .trim()
     .replace(/[^A-Za-z0-9_.:@+-]/g, '_')
     .slice(0, 160);
-const buildGoogleExecutionSlotKey = ({ triggeredBy = 'gate', snapshotDate, timezone, dueAt } = {}) => {
+const buildGoogleExecutionSlotKey = ({ triggeredBy = 'gate', snapshotDate, timezone, dueAt, scopeKey = '' } = {}) => {
+    const scopeSuffix = scopeKey ? `:${normalizeExecutionKeyPart(scopeKey, 'qa')}` : '';
     if (triggeredBy === 'scheduled') {
         const due = new Date(dueAt || 0);
         if (!Number.isFinite(due.getTime())) throw new Error('GOOGLE_INTELLIGENCE_DUE_SLOT_INVALID');
-        return `google-intelligence:scheduled:${normalizeExecutionKeyPart(timezone, DEFAULT_TIMEZONE)}:${due.toISOString()}`;
+        return `google-intelligence:scheduled:${normalizeExecutionKeyPart(timezone, DEFAULT_TIMEZONE)}:${due.toISOString()}${scopeSuffix}`;
     }
     const base = `google-intelligence:${normalizeExecutionKeyPart(snapshotDate, 'unknown-date')}:${normalizeExecutionKeyPart(timezone, DEFAULT_TIMEZONE)}`;
-    return `${base}:${normalizeExecutionKeyPart(triggeredBy, 'gate')}`;
+    return `${base}:${normalizeExecutionKeyPart(triggeredBy, 'gate')}${scopeSuffix}`;
 };
 const buildGoogleExecutionKey = ({ generation, nonce, ...input } = {}) => {
     const slotKey = buildGoogleExecutionSlotKey(input);
@@ -398,6 +405,13 @@ const mapSource = (source) => ({
 
 const mapSnapshot = (snapshot) => snapshot ? {
     id: String(snapshot._id || snapshot.id),
+    isQaTest: snapshot.isQaTest === true,
+    qaBatchId: snapshot.qaBatchId ? String(snapshot.qaBatchId) : '',
+    qaCaseId: snapshot.qaCaseId ? String(snapshot.qaCaseId) : '',
+    environment: snapshot.environment || '',
+    executionMode: snapshot.executionMode || '',
+    originalTopicSeed: snapshot.originalTopicSeed || '',
+    normalizedTopicKey: snapshot.normalizedTopicKey || '',
     snapshotDate: snapshot.snapshotDate,
     timezone: snapshot.timezone,
     status: snapshot.status,
@@ -593,8 +607,10 @@ class GoogleIntelligenceService {
 
     static async executeWorkflow({
         now = new Date(), triggeredBy = 'gate', adminId = null, force = false,
-        fetchOptions = {}, dueAt = null
+        fetchOptions = {}, dueAt = null, trustedQaContext = null
     } = {}, dependencies = {}) {
+        const qaContext = normalizeTrustedQaProvenance(trustedQaContext);
+        const provenance = qaProvenanceDocument(qaContext);
         const SourceModel = dependencies.SourceModel || GoogleIntelligenceSource;
         const RunModel = dependencies.RunModel || GoogleIntelligenceRun;
         const SnapshotModel = dependencies.SnapshotModel || GoogleIntelligenceSnapshot;
@@ -602,11 +618,15 @@ class GoogleIntelligenceService {
         const clock = dependencies.clock || (() => new Date());
         const sleep = dependencies.sleep || ((duration) => new Promise((resolve) => setTimeout(resolve, duration)));
         const heartbeatFactory = dependencies.buildHeartbeatFactory || createGoogleBuildLeaseHeartbeat;
-        await (dependencies.seedDefaultSources || GoogleIntelligenceService.seedDefaultSources)();
-        const config = dependencies.config || await GoogleIntelligenceService.getGateConfig();
+        if (!qaContext) {
+            await (dependencies.seedDefaultSources || GoogleIntelligenceService.seedDefaultSources)();
+        }
+        const config = dependencies.config || await GoogleIntelligenceService.getGateConfig({ createSchedule: !qaContext });
         const timezone = fetchOptions.timezone || config.timezone;
         const snapshotDate = dateInTimezone(now, timezone);
-        const snapshotKey = { snapshotDate, timezone };
+        const snapshotBase = { snapshotDate, timezone };
+        const snapshotKey = { ...snapshotBase, ...qaScopeFilter(qaContext) };
+        const snapshotDocument = { ...snapshotBase, ...provenance };
         let existingQuery = SnapshotModel.findOne(snapshotKey);
         existingQuery = selectInternalBuildFields(existingQuery);
         const existing = await leanQuery(existingQuery);
@@ -632,7 +652,7 @@ class GoogleIntelligenceService {
         };
         const leaseUpdate = {
             $setOnInsert: {
-                ...snapshotKey,
+                ...snapshotDocument,
                 checkedAt: now,
                 contentHash: sha256(`${snapshotDate}:${timezone}:building`)
             },
@@ -689,7 +709,8 @@ class GoogleIntelligenceService {
             snapshotDate,
             timezone,
             dueAt: dueAt || now,
-            generation: buildGeneration
+            generation: buildGeneration,
+            scopeKey: qaExecutionScopeKey(qaContext)
         });
         const startedAt = new Date(clock());
         let run = null;
@@ -707,6 +728,7 @@ class GoogleIntelligenceService {
                 {
                     $setOnInsert: { executionKey },
                     $set: {
+                        ...provenance,
                         executionSlotKey,
                         scheduledAt: dueAt || now,
                         startedAt,
@@ -794,6 +816,7 @@ class GoogleIntelligenceService {
             });
 
             const snapshotPayload = {
+                ...provenance,
                 snapshotDate, timezone, status, checkedAt: now, sourcesChecked: results.length,
                 successfulSources: successful.length, failedSources: failed.length, mandatorySourcesSucceeded,
                 noMaterialChanges: changedResults.length === 0,
@@ -858,42 +881,46 @@ class GoogleIntelligenceService {
             await heartbeat.stop();
 
             let deferredError = '';
-            for (const result of results) {
-                try {
-                    await SourceModel.updateOne(
-                        sourceGenerationFilter({ sourceId: result.sourceId, snapshotDate, buildGeneration }),
-                        {
-                            $set: {
-                                ...(result.deferredSourceUpdate || {}),
-                                baselineSnapshotDate: snapshotDate,
-                                baselineGeneration: buildGeneration
+            if (!qaContext) {
+                for (const result of results) {
+                    try {
+                        await SourceModel.updateOne(
+                            sourceGenerationFilter({ sourceId: result.sourceId, snapshotDate, buildGeneration }),
+                            {
+                                $set: {
+                                    ...(result.deferredSourceUpdate || {}),
+                                    baselineSnapshotDate: snapshotDate,
+                                    baselineGeneration: buildGeneration
+                                }
                             }
-                        }
-                    );
-                } catch (error) {
-                    deferredError ||= safeGoogleWriteError(error?.code, 'GOOGLE_SOURCE_BASELINE_COMMIT_FAILED');
+                        );
+                    } catch (error) {
+                        deferredError ||= safeGoogleWriteError(error?.code, 'GOOGLE_SOURCE_BASELINE_COMMIT_FAILED');
+                    }
                 }
             }
 
-            for (const draft of changeDrafts) {
-                try {
-                    await ChangeModel.updateOne(
-                        {
-                            fingerprint: draft.fingerprint,
-                            $or: [
-                                { snapshotId: snapshot._id, snapshotGeneration: { $exists: false } },
-                                { snapshotId: snapshot._id, snapshotGeneration: { $lte: buildGeneration } },
-                                { snapshotId: { $exists: false }, snapshotGeneration: { $exists: false } },
-                                { snapshotId: null, snapshotGeneration: { $exists: false } },
-                                { snapshotId: null, snapshotGeneration: { $lte: buildGeneration } }
-                            ]
-                        },
-                        { $set: { ...draft, snapshotId: snapshot._id, snapshotGeneration: buildGeneration } },
-                        { upsert: true }
-                    );
-                } catch (error) {
-                    if (error?.code !== 11000) {
-                        deferredError ||= safeGoogleWriteError(error?.code, 'GOOGLE_CHANGE_COMMIT_FAILED');
+            if (!qaContext) {
+                for (const draft of changeDrafts) {
+                    try {
+                        await ChangeModel.updateOne(
+                            {
+                                fingerprint: draft.fingerprint,
+                                $or: [
+                                    { snapshotId: snapshot._id, snapshotGeneration: { $exists: false } },
+                                    { snapshotId: snapshot._id, snapshotGeneration: { $lte: buildGeneration } },
+                                    { snapshotId: { $exists: false }, snapshotGeneration: { $exists: false } },
+                                    { snapshotId: null, snapshotGeneration: { $exists: false } },
+                                    { snapshotId: null, snapshotGeneration: { $lte: buildGeneration } }
+                                ]
+                            },
+                            { $set: { ...draft, snapshotId: snapshot._id, snapshotGeneration: buildGeneration } },
+                            { upsert: true }
+                        );
+                    } catch (error) {
+                        if (error?.code !== 11000) {
+                            deferredError ||= safeGoogleWriteError(error?.code, 'GOOGLE_CHANGE_COMMIT_FAILED');
+                        }
                     }
                 }
             }
@@ -951,16 +978,43 @@ class GoogleIntelligenceService {
         }
     }
 
-    static async ensureGoogleIntelligenceSnapshotForDate({ now = new Date(), fetchOptions = {}, createSchedule = true } = {}) {
-        const config = await GoogleIntelligenceService.getGateConfig({ createSchedule });
+    static async ensureGoogleIntelligenceSnapshotForDate({
+        now = new Date(),
+        fetchOptions = {},
+        createSchedule = true,
+        trustedQaContext = null
+    } = {}) {
+        const qaContext = normalizeTrustedQaProvenance(trustedQaContext);
+        const config = await GoogleIntelligenceService.getGateConfig({ createSchedule: qaContext ? false : createSchedule });
         const snapshotDate = dateInTimezone(now, config.timezone);
-        let snapshot = await GoogleIntelligenceSnapshot.findOne({ snapshotDate, timezone: config.timezone }).lean();
+        const snapshotBase = { snapshotDate, timezone: config.timezone };
+        if (qaContext) {
+            const productionSnapshot = await GoogleIntelligenceSnapshot.findOne({
+                ...snapshotBase,
+                isQaTest: { $ne: true }
+            }).lean();
+            if (isSnapshotAcceptable({ snapshot: productionSnapshot, strictGate: config.strictGate, maxAgeHours: config.maxSnapshotAgeHours, now })) {
+                return mapSnapshot(productionSnapshot);
+            }
+        }
+        let snapshot = await GoogleIntelligenceSnapshot.findOne({
+            ...snapshotBase,
+            ...qaScopeFilter(qaContext)
+        }).lean();
         if (!isSnapshotAcceptable({ snapshot, strictGate: config.strictGate, maxAgeHours: config.maxSnapshotAgeHours, now })) {
             if (config.enabled) {
-                const result = await GoogleIntelligenceService.executeWorkflow({ now, triggeredBy: 'gate', fetchOptions });
+                const result = await GoogleIntelligenceService.executeWorkflow({
+                    now,
+                    triggeredBy: 'gate',
+                    fetchOptions,
+                    ...(qaContext ? { trustedQaContext: qaContext } : {})
+                });
                 snapshot = await GoogleIntelligenceSnapshot.findById(result.snapshot.id).lean();
             } else if (config.allowLastSuccessfulSnapshot) {
-                snapshot = await GoogleIntelligenceSnapshot.findOne({ status: { $in: ['completed_with_changes', 'completed_no_change', 'partial', 'manually_overridden'] } }).sort({ checkedAt: -1 }).lean();
+                snapshot = await GoogleIntelligenceSnapshot.findOne({
+                    isQaTest: { $ne: true },
+                    status: { $in: ['completed_with_changes', 'completed_no_change', 'partial', 'manually_overridden'] }
+                }).sort({ checkedAt: -1 }).lean();
             }
         }
         if (!isSnapshotAcceptable({ snapshot, strictGate: config.strictGate, maxAgeHours: config.maxSnapshotAgeHours, now })) {
@@ -973,8 +1027,8 @@ class GoogleIntelligenceService {
         await GoogleIntelligenceService.seedDefaultSources();
         const [config, latestSnapshot, latestRun, sourceCounts, schedule] = await Promise.all([
             GoogleIntelligenceService.getGateConfig(),
-            GoogleIntelligenceSnapshot.findOne().sort({ checkedAt: -1 }).lean(),
-            GoogleIntelligenceRun.findOne().sort({ createdAt: -1 }).lean(),
+            GoogleIntelligenceSnapshot.findOne({ isQaTest: { $ne: true } }).sort({ checkedAt: -1 }).lean(),
+            GoogleIntelligenceRun.findOne({ isQaTest: { $ne: true } }).sort({ createdAt: -1 }).lean(),
             GoogleIntelligenceSource.aggregate([{ $group: { _id: null, total: { $sum: 1 }, enabled: { $sum: { $cond: ['$enabled', 1, 0] } }, failing: { $sum: { $cond: [{ $ne: ['$lastError', ''] }, 1, 0] } } } }]),
             GoogleIntelligenceService.getOrCreateSchedule()
         ]);
@@ -1000,8 +1054,8 @@ class GoogleIntelligenceService {
         const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), MAX_LIST_LIMIT);
         const safePage = Math.max(Number(page) || 1, 1);
         const [items, total] = await Promise.all([
-            GoogleIntelligenceSnapshot.find().sort({ checkedAt: -1 }).skip((safePage - 1) * safeLimit).limit(safeLimit).lean(),
-            GoogleIntelligenceSnapshot.countDocuments()
+            GoogleIntelligenceSnapshot.find({ isQaTest: { $ne: true } }).sort({ checkedAt: -1 }).skip((safePage - 1) * safeLimit).limit(safeLimit).lean(),
+            GoogleIntelligenceSnapshot.countDocuments({ isQaTest: { $ne: true } })
         ]);
         return { snapshots: items.map(mapSnapshot), pagination: { page: safePage, limit: safeLimit, total, pages: Math.max(1, Math.ceil(total / safeLimit)) } };
     }
@@ -1009,7 +1063,10 @@ class GoogleIntelligenceService {
     static async getSnapshot({ snapshotId }) {
         const objectId = convertToObjectIdMongodb(snapshotId);
         if (!objectId) throw new BadRequestError('Invalid snapshot id');
-        let snapshotQuery = GoogleIntelligenceSnapshot.findById(objectId);
+        let snapshotQuery = GoogleIntelligenceSnapshot.findOne({
+            _id: objectId,
+            isQaTest: { $ne: true }
+        });
         snapshotQuery = selectInternalBuildFields(snapshotQuery);
         const snapshot = await leanQuery(snapshotQuery);
         if (!snapshot) throw new NotFoundError('Google Intelligence snapshot not found');
@@ -1116,9 +1173,15 @@ class GoogleIntelligenceService {
         if (!objectId) throw new BadRequestError('Invalid snapshot id');
         if (!adminObjectId) throw new BadRequestError('Valid admin is required');
         if (normalizedReason.length < 10) throw new BadRequestError('Override reason must be at least 10 characters');
-        const current = await GoogleIntelligenceSnapshot.findById(objectId).lean();
+        const current = await GoogleIntelligenceSnapshot.findOne({
+            _id: objectId,
+            isQaTest: { $ne: true }
+        }).lean();
         if (!current) throw new NotFoundError('Google Intelligence snapshot not found');
-        const updated = await GoogleIntelligenceSnapshot.findByIdAndUpdate(objectId, {
+        const updated = await GoogleIntelligenceSnapshot.findOneAndUpdate({
+            _id: objectId,
+            isQaTest: { $ne: true }
+        }, {
             $set: {
                 status: 'manually_overridden',
                 'override.reason': normalizedReason.slice(0, 1000),
@@ -1139,7 +1202,7 @@ class GoogleIntelligenceService {
     }
 
     static async listExecutions({ limit = 30 } = {}) {
-        const runs = await GoogleIntelligenceRun.find().sort({ createdAt: -1 }).limit(Math.min(Math.max(Number(limit) || 30, 1), MAX_LIST_LIMIT)).lean();
+        const runs = await GoogleIntelligenceRun.find({ isQaTest: { $ne: true } }).sort({ createdAt: -1 }).limit(Math.min(Math.max(Number(limit) || 30, 1), MAX_LIST_LIMIT)).lean();
         return { executions: runs.map((run) => ({
             id: String(run._id), executionKey: run.executionKey, snapshotDate: run.snapshotDate,
             timezone: run.timezone, status: run.status, startedAt: run.startedAt, completedAt: run.completedAt,
@@ -1154,7 +1217,10 @@ class GoogleIntelligenceService {
     }
 
     static async listRelatedBlogs({ limit = 30 } = {}) {
-        const blogs = await Blog.find({ googleIntelSnapshotId: { $ne: null } })
+        const blogs = await Blog.find({
+            googleIntelSnapshotId: { $ne: null },
+            isQaTest: { $ne: true }
+        })
             .sort({ createdAt: -1 })
             .limit(Math.min(Math.max(Number(limit) || 30, 1), MAX_LIST_LIMIT))
             .select('_id blog_title isDraft isPublished googleIntelSnapshotId googleIntelSnapshotDate googleIntelStatus researchBundleId editorialStyleProfileId strategyPlanId agenticExecutionId structuralFingerprint agenticReviews createdAt updatedAt')

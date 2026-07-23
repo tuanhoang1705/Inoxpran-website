@@ -39,11 +39,11 @@
 		Array.isArray(scheduleData?.schedules) ? scheduleData.schedules : []
 	);
 	// svelte-ignore state_referenced_locally
-	let runSchedules = $state(Array.isArray(scheduleData?.schedules) ? [...scheduleData.schedules] : []);
-	// svelte-ignore state_referenced_locally
-	let selectedRunScheduleId = $state(
-		selectDefaultDailyDraftSchedule(runSchedules)?.id || ''
+	let runSchedules = $state(
+		Array.isArray(scheduleData?.schedules) ? [...scheduleData.schedules] : []
 	);
+	// svelte-ignore state_referenced_locally
+	let selectedRunScheduleId = $state(selectDefaultDailyDraftSchedule(runSchedules)?.id || '');
 	const selectedRunSchedule = $derived(
 		selectDefaultDailyDraftSchedule(runSchedules, selectedRunScheduleId)
 	);
@@ -95,6 +95,27 @@
 	let pollTimer = null;
 	let pollStartedAt = 0;
 	let pollInFlight = false;
+	let runIdempotency = $state({ scheduleId: '', key: '' });
+
+	const createIdempotencyKey = () =>
+		typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+			? crypto.randomUUID()
+			: `daily-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+
+	const idempotencyKeyForSchedule = (scheduleId) => {
+		if (runIdempotency.scheduleId === scheduleId && runIdempotency.key) {
+			return runIdempotency.key;
+		}
+		const key = createIdempotencyKey();
+		runIdempotency = { scheduleId, key };
+		return key;
+	};
+
+	const clearRunIdempotency = (scheduleId) => {
+		if (!scheduleId || runIdempotency.scheduleId === scheduleId) {
+			runIdempotency = { scheduleId: '', key: '' };
+		}
+	};
 
 	const t = $derived({
 		back: isEn ? 'Back to OpenClaw' : 'Quay lại OpenClaw',
@@ -459,6 +480,7 @@
 			activeRun = normalizeDailyDraftExecution(match, queuedRun);
 			if (!isDailyDraftRunActive(match.status)) {
 				running = false;
+				clearRunIdempotency(queuedRun.scheduleId);
 				stopPolling();
 				await refreshRunSchedules().catch(() => null);
 			}
@@ -475,14 +497,17 @@
 		void pollDailyDraftExecution(queuedRun);
 		pollTimer = setInterval(() => {
 			if (Date.now() - pollStartedAt > 35 * 60 * 1000) {
-				activeRun = normalizeDailyDraftExecution({}, {
-					...queuedRun,
-					...activeRun,
-					status: 'tracking_timeout',
-					error: isEn
-						? 'Live tracking ended. The backend run may still be active; inspect run history before retrying.'
-						: 'Đã dừng theo dõi trực tiếp. Backend có thể vẫn đang chạy; hãy kiểm tra lịch sử trước khi chạy lại.'
-				});
+				activeRun = normalizeDailyDraftExecution(
+					{},
+					{
+						...queuedRun,
+						...activeRun,
+						status: 'tracking_timeout',
+						error: isEn
+							? 'Live tracking ended. The backend run may still be active; inspect run history before retrying.'
+							: 'Đã dừng theo dõi trực tiếp. Backend có thể vẫn đang chạy; hãy kiểm tra lịch sử trước khi chạy lại.'
+					}
+				);
 				running = false;
 				stopPolling();
 				return;
@@ -502,11 +527,15 @@
 			const schedule = selectDefaultDailyDraftSchedule(runSchedules, selectedRunScheduleId);
 			if (!schedule?.id) throw new Error(t.noSchedule);
 			const queuedAt = new Date().toISOString();
+			const idempotencyKey = idempotencyKeyForSchedule(schedule.id);
 			const response = await fetch(
 				resolveAdminPath(
 					`/admin/api/openclaw/blog-schedules/${encodeURIComponent(schedule.id)}/run-now`
 				),
-				{ method: 'POST' }
+				{
+					method: 'POST',
+					headers: { 'Idempotency-Key': idempotencyKey }
+				}
 			);
 			const payload = await response.json().catch(() => null);
 			if (!response.ok) {
@@ -824,7 +853,8 @@
 										? 'Unavailable'
 										: 'Không khả dụng'}</b
 						>
-						{#if gatewayHealth.checkedAt}<small>{formatDateTime(gatewayHealth.checkedAt)}</small>{/if}
+						{#if gatewayHealth.checkedAt}<small>{formatDateTime(gatewayHealth.checkedAt)}</small
+							>{/if}
 					</div>
 				</div>
 			</div>
@@ -871,7 +901,11 @@
 				</div>
 				<div class="dd-confirm__item">
 					<span>{t.topic}</span>
-					<b>{selectedRunSchedule?.agentConfig?.topic || selectedRunSchedule?.agentConfig?.primaryKeyword || '--'}</b>
+					<b
+						>{selectedRunSchedule?.agentConfig?.topic ||
+							selectedRunSchedule?.agentConfig?.primaryKeyword ||
+							'--'}</b
+					>
 				</div>
 				<div class="dd-confirm__item">
 					<span>{t.publishingMode}</span>
@@ -919,8 +953,7 @@
 					type="button"
 					class="oc-btn oc-btn--primary"
 					onclick={confirmRun}
-					disabled={!selectedRunSchedule || running}
-					>{t.confirmRun}</button
+					disabled={!selectedRunSchedule || running}>{t.confirmRun}</button
 				>
 			</div>
 		</div>
@@ -1413,12 +1446,6 @@
 	.dd-status__value small {
 		color: var(--oc-muted);
 		font-size: 0.7rem;
-	}
-
-	.dd-status__row--stack {
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 5px;
 	}
 
 	/* ── Modal ── */

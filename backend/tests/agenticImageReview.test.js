@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
+import crypto from "node:crypto";
 import {
   getAdminBlogCategoryTranslationKey,
   getAdminBlogSourceTranslationKey,
@@ -297,6 +298,10 @@ describe("prompt suggestions and exact replacement", () => {
   });
 
   it("builds a persisted inline replacement update without changing the cover", () => {
+    const staleContentRevisionHash = crypto
+      .createHash("sha256")
+      .update(post.blog_content)
+      .digest("hex");
     const resolved = resolveImageTarget(post, {
       type: "inline",
       imageId: "inline-stain",
@@ -321,6 +326,10 @@ describe("prompt suggestions and exact replacement", () => {
     expect(update.contentImages[0].reviewStatus).toBe("replaced");
     expect(update.blog_content).toContain("new-inline.webp");
     expect(update.blog_content).toContain('data-image-id="inline-stain"');
+    expect(update.contentRevisionHash).toBe(
+      crypto.createHash("sha256").update(update.blog_content).digest("hex"),
+    );
+    expect(update.contentRevisionHash).not.toBe(staleContentRevisionHash);
   });
 });
 

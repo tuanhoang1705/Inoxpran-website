@@ -1,7 +1,21 @@
 <script>
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { locale } from '$lib/i18n/admin/index.js';
+	import CapabilityHealthPanel from '$lib/components/admin/openclaw/CapabilityHealthPanel.svelte';
+	import {
+		createOpenClawActionIdempotencyManager,
+		shouldRetainOpenClawActionKey
+	} from '$lib/openclaw/actionIdempotency.js';
+	import {
+		capabilityTone,
+		findCapability,
+		humanizeCapabilityToken,
+		normalizeCapability,
+		normalizeCapabilityHealth,
+		sanitizeDashboardUrl
+	} from '$lib/openclaw/capabilityHealth.js';
 
 	let { data } = $props();
 
@@ -12,19 +26,31 @@
 	// svelte-ignore state_referenced_locally
 	let selectedRunId = $state(runs[0]?.id || '');
 	let busyAction = $state('');
+	let refreshingDashboard = $state(false);
+	let refreshingRuns = $state(false);
 	// svelte-ignore state_referenced_locally
 	let pageError = $state(data?.loadError || '');
-	let lastUpdatedAt = $state(new Date().toISOString());
 	// svelte-ignore state_referenced_locally
-	const initialSchedulesData = data?.schedules || {};
-	let scheduleRuntime = $state(initialSchedulesData?.runtime || {});
+	let capabilityHealth = $state(
+		normalizeCapabilityHealth(
+			data?.capabilityHealth || { capabilities: dashboard?.capabilities || {} }
+		)
+	);
+	// svelte-ignore state_referenced_locally
+	let lastUpdatedAt = $state(
+		capabilityHealth.checkedAt || dashboard?.checkedAt || dashboard?.updatedAt || null
+	);
+	// svelte-ignore state_referenced_locally
+	let schedulesData = $state(data?.schedules || {});
+	// svelte-ignore state_referenced_locally
+	let scheduleRuntime = $state(schedulesData?.runtime || {});
+	const actionIdempotency = createOpenClawActionIdempotencyManager();
 
 	const isEn = $derived($locale === 'en');
 	const automation = $derived(dashboard?.automation || {});
 	const env = $derived(dashboard?.env || {});
 	const featureFlags = $derived(dashboard?.featureFlags || {});
 	const capabilities = $derived(dashboard?.capabilities || {});
-	const gatewayHealth = $derived(dashboard?.openclaw?.health || {});
 	const actions = $derived(Array.isArray(dashboard?.actions) ? dashboard.actions : []);
 	const agents = $derived(Array.isArray(dashboard?.agents) ? dashboard.agents : []);
 	const localSkills = $derived(Array.isArray(dashboard?.localSkills) ? dashboard.localSkills : []);
@@ -32,38 +58,93 @@
 	const telegramConfigured = $derived(
 		Boolean(
 			env.TELEGRAM_BOT_TOKEN &&
-				env.TELEGRAM_WEBHOOK_SECRET &&
-				(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)
+			env.TELEGRAM_WEBHOOK_SECRET &&
+			(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)
 		)
 	);
 	const enabledScheduleCount = $derived(
-		(Array.isArray(initialSchedulesData?.schedules) ? initialSchedulesData.schedules : []).filter(
+		(Array.isArray(schedulesData?.schedules) ? schedulesData.schedules : []).filter(
 			(schedule) => schedule?.enabled
 		).length
 	);
+	const resolvedCapability = (canonicalKey, legacyKey = canonicalKey) =>
+		findCapability(capabilityHealth, canonicalKey, legacyKey) ||
+		normalizeCapability(capabilities?.[legacyKey] || {}, canonicalKey);
+	const seoCapability = $derived(resolvedCapability('seo_agent', 'seoAgent'));
+	const gatewayCapability = $derived(resolvedCapability('openclaw_gateway', 'openclawGateway'));
+	const telegramCapability = $derived(resolvedCapability('telegram_bot', 'telegram'));
+	const cronCapability = $derived(
+		resolvedCapability('content_operations_cron', 'contentOperationsCron')
+	);
+	const blogCronCapability = $derived(resolvedCapability('blog_cron', 'blogCron'));
+	const imagePipelineCapability = $derived(resolvedCapability('image_pipeline', 'imagePipeline'));
 	const dataCapabilityRows = $derived([
-		['GOOGLE_INTELLIGENCE_ENABLED', capabilities.googleIntelligence],
-		['SEARCH_CONSOLE_ENABLED', capabilities.searchConsole],
-		['CONTENT_ANALYTICS_ENABLED', capabilities.aggregateAnalytics],
-		['CONTENT_TRENDS_ENABLED', capabilities.trends],
-		['CONTENT_INVENTORY_ENABLED', capabilities.inventory],
-		['CONTENT_SIGNALS_ENABLED', capabilities.contentSignals]
+		[
+			isEn ? 'Google Intelligence' : 'Google Intelligence',
+			'GOOGLE_INTELLIGENCE_ENABLED',
+			resolvedCapability('google_intelligence', 'googleIntelligence')
+		],
+		[
+			isEn ? 'Search Console' : 'Search Console',
+			'SEARCH_CONSOLE_ENABLED',
+			resolvedCapability('search_console', 'searchConsole')
+		],
+		[
+			isEn ? 'Aggregate analytics' : 'Analytics tổng hợp',
+			'CONTENT_ANALYTICS_ENABLED',
+			resolvedCapability('content_analytics', 'aggregateAnalytics')
+		],
+		[
+			isEn ? 'Market trends' : 'Xu hướng thị trường',
+			'CONTENT_TRENDS_ENABLED',
+			resolvedCapability('market_trends', 'trends')
+		],
+		[
+			isEn ? 'Content inventory' : 'Kho nội dung',
+			'CONTENT_INVENTORY_ENABLED',
+			resolvedCapability('content_inventory', 'inventory')
+		],
+		[
+			isEn ? 'Content signals' : 'Tín hiệu nội dung',
+			'CONTENT_SIGNALS_ENABLED',
+			resolvedCapability('content_signals', 'contentSignals')
+		]
 	]);
 	const operationsCapabilityRows = $derived([
-		['CONTENT_OPERATIONS_ENABLED', capabilities.contentOperations],
-		['CONTENT_OPERATIONS_CRON_ENABLED', capabilities.contentOperationsCron],
-		['CONTENT_PERFORMANCE_MONITORING_ENABLED', capabilities.performanceMonitoring],
-		['CONTENT_LEARNING_ENABLED', capabilities.learning]
+		[
+			isEn ? 'Content operations' : 'Vận hành nội dung',
+			'CONTENT_OPERATIONS_ENABLED',
+			resolvedCapability('content_operations', 'contentOperations')
+		],
+		[
+			isEn ? 'Operations schedule' : 'Lịch vận hành',
+			'CONTENT_OPERATIONS_CRON_ENABLED',
+			cronCapability
+		],
+		[
+			isEn ? 'Performance monitoring' : 'Theo dõi hiệu quả',
+			'CONTENT_PERFORMANCE_MONITORING_ENABLED',
+			resolvedCapability('content_performance_monitoring', 'performanceMonitoring')
+		],
+		[
+			isEn ? 'Content learning' : 'Vòng học nội dung',
+			'CONTENT_LEARNING_ENABLED',
+			resolvedCapability('content_learning', 'learning')
+		]
 	]);
-	const activeRuns = $derived(runs.filter((run) => run.status === 'running'));
-	const selectedRun = $derived(
-		runs.find((run) => run.id === selectedRunId) || runs[0] || null
+	const activeRuns = $derived(
+		runs.filter((run) => ['queued', 'running'].includes(String(run.status || '').toLowerCase()))
 	);
+	const actionIsActive = (action) =>
+		action !== 'status' && activeRuns.some((run) => run.action === action);
+	const selectedRun = $derived(runs.find((run) => run.id === selectedRunId) || runs[0] || null);
 	const dashboardUrl = $derived(
-		selectedRun?.dashboardUrl ||
-			runs.find((run) => run.dashboardUrl)?.dashboardUrl ||
-			dashboard?.openclaw?.dashboardUrl ||
-			''
+		sanitizeDashboardUrl(
+			selectedRun?.dashboardUrl ||
+				runs.find((run) => run.dashboardUrl)?.dashboardUrl ||
+				dashboard?.openclaw?.dashboardUrl ||
+				''
+		)
 	);
 
 	const copy = $derived({
@@ -86,7 +167,9 @@
 		refresh: isEn ? 'Refresh' : 'Làm mới',
 		dashboard: isEn ? 'Open dashboard' : 'Mở dashboard',
 		noRuns: isEn ? 'No runs yet.' : 'Chưa có run nào.',
-		noRunsHint: isEn ? 'Trigger a command to see activity here.' : 'Chạy một lệnh để xem hoạt động tại đây.',
+		noRunsHint: isEn
+			? 'Trigger a command to see activity here.'
+			: 'Chạy một lệnh để xem hoạt động tại đây.',
 		noOutput: isEn ? 'No output yet.' : 'Chưa có output.',
 		noOutputHint: isEn ? 'Select a run to view its log.' : 'Chọn một run để xem nhật ký.',
 		loadFailed: isEn ? 'Load failed' : 'Tải dữ liệu lỗi',
@@ -103,7 +186,8 @@
 		gateScheduling: isEn ? 'Scheduling & Telegram' : 'Lịch & Telegram',
 		capabilities: isEn ? 'Capabilities' : 'Năng lực hệ thống',
 		noReport: isEn ? 'No install report yet.' : 'Chưa có report cài đặt.',
-		starting: isEn ? 'Starting' : 'Đang khởi tạo'
+		starting: isEn ? 'Starting' : 'Đang khởi tạo',
+		refreshing: isEn ? 'Refreshing' : 'Đang làm mới'
 	});
 
 	const actionMeta = $derived({
@@ -168,21 +252,35 @@
 	};
 
 	const capabilityLabel = (capability = {}) => {
-		if (capability.enabled && !capability.configured) return isEn ? 'Missing config' : 'Thiếu cấu hình';
-		if (!capability.enabled && capability.configured) return isEn ? 'Off · configured' : 'Tắt · đã cấu hình';
-		if (!capability.enabled) return isEn ? 'Off' : 'Tắt';
-		if (capability.availability === 'available') return isEn ? 'Ready' : 'Sẵn sàng';
-		if (capability.availability === 'degraded') return isEn ? 'Degraded' : 'Hoạt động một phần';
-		if (capability.availability === 'unavailable') return isEn ? 'Unavailable' : 'Không khả dụng';
-		return isEn ? 'On · not checked' : 'Bật · chưa kiểm tra';
-	};
-
-	const capabilityTone = (capability = {}) => {
-		if (capability.enabled && !capability.configured) return 'danger';
-		if (!capability.enabled) return 'muted';
-		if (capability.availability === 'available') return 'good';
-		if (capability.availability === 'degraded' || capability.availability === 'unknown') return 'warn';
-		return 'danger';
+		const normalized = normalizeCapability(capability);
+		const labels = isEn
+			? {
+					healthy: 'Ready',
+					degraded: 'Degraded',
+					unavailable: 'Unavailable',
+					failed: 'Failed',
+					expected_disabled: 'Expected off',
+					missing_config: 'Missing config',
+					pending_check: 'Pending check',
+					manual_review: 'Manual review',
+					not_applicable: 'Not applicable',
+					disabled: 'Off',
+					unknown: 'Unknown'
+				}
+			: {
+					healthy: 'Sẵn sàng',
+					degraded: 'Suy giảm',
+					unavailable: 'Không khả dụng',
+					failed: 'Thất bại',
+					expected_disabled: 'Tắt theo thiết kế',
+					missing_config: 'Thiếu cấu hình',
+					pending_check: 'Chờ kiểm tra',
+					manual_review: 'Kiểm tra thủ công',
+					not_applicable: 'Không áp dụng',
+					disabled: 'Tắt',
+					unknown: 'Chưa rõ'
+				};
+		return labels[normalized.status] || humanizeCapabilityToken(normalized.status);
 	};
 
 	const resolveAdminPath = (path) => {
@@ -194,52 +292,88 @@
 
 	const upsertRun = (run) => {
 		if (!run?.id) return;
-		const index = runs.findIndex((item) => item.id === run.id);
+		const safeDashboardUrl = sanitizeDashboardUrl(run.dashboardUrl);
+		const safeRun = { ...run, dashboardUrl: safeDashboardUrl || undefined };
+		const index = runs.findIndex((item) => item.id === safeRun.id);
 		if (index >= 0) {
-			runs = [...runs.slice(0, index), run, ...runs.slice(index + 1)];
+			runs = [...runs.slice(0, index), safeRun, ...runs.slice(index + 1)];
 		} else {
-			runs = [run, ...runs].slice(0, 30);
+			runs = [safeRun, ...runs].slice(0, 30);
 		}
-		if (!selectedRunId) selectedRunId = run.id;
-		if (run.dashboardUrl) {
+		if (!selectedRunId) selectedRunId = safeRun.id;
+		if (safeDashboardUrl) {
 			dashboard = {
 				...dashboard,
 				openclaw: {
 					...(dashboard?.openclaw || {}),
-					dashboardUrl: run.dashboardUrl
+					dashboardUrl: safeDashboardUrl
 				}
 			};
 		}
 	};
 
 	const refreshDashboard = async () => {
+		if (refreshingDashboard) return;
+		refreshingDashboard = true;
 		pageError = '';
-		const response = await fetch(resolveAdminPath('/admin/api/openclaw'));
-		const payload = await response.json().catch(() => null);
-		if (!response.ok) {
-			pageError = payload?.error || copy.loadFailed;
-			return;
+		try {
+			const [response, schedulesResponse] = await Promise.all([
+				fetch(resolveAdminPath('/admin/api/openclaw')),
+				fetch(resolveAdminPath('/admin/api/openclaw/blog-schedules?limit=50&page=1'))
+			]);
+			const [payload, schedulesPayload] = await Promise.all([
+				response.json().catch(() => null),
+				schedulesResponse.json().catch(() => null)
+			]);
+			if (!response.ok) {
+				pageError = payload?.error || copy.loadFailed;
+				return;
+			}
+			dashboard = payload || {};
+			runs = Array.isArray(payload?.runs) ? payload.runs : runs;
+			if (schedulesResponse.ok) {
+				schedulesData = schedulesPayload || {};
+				scheduleRuntime = schedulesPayload?.runtime || {};
+			}
+			capabilityHealth = normalizeCapabilityHealth(
+				payload?.capabilityHealth || { capabilities: payload?.capabilities || {} }
+			);
+			lastUpdatedAt =
+				capabilityHealth.checkedAt || payload?.checkedAt || payload?.updatedAt || lastUpdatedAt;
+		} catch {
+			pageError = copy.loadFailed;
+		} finally {
+			refreshingDashboard = false;
 		}
-		dashboard = payload || {};
-		runs = Array.isArray(payload?.runs) ? payload.runs : runs;
-		lastUpdatedAt = new Date().toISOString();
 	};
 
 	const refreshRuns = async () => {
-		const response = await fetch(resolveAdminPath('/admin/api/openclaw/runs'));
+		if (refreshingRuns) return;
+		refreshingRuns = true;
+		try {
+			const response = await fetch(resolveAdminPath('/admin/api/openclaw/runs'));
 			const payload = await response.json().catch(() => null);
 			if (!response.ok) return;
-		runs = Array.isArray(payload?.runs) ? payload.runs : runs;
-		const latestDashboardRun = runs.find((run) => run.dashboardUrl);
-		if (latestDashboardRun?.dashboardUrl) {
-			dashboard = {
-				...dashboard,
-				openclaw: {
-					...(dashboard?.openclaw || {}),
-					dashboardUrl: latestDashboardRun.dashboardUrl
-				}
-			};
+			runs = Array.isArray(payload?.runs) ? payload.runs : runs;
+			const latestDashboardRun = runs.find((run) => sanitizeDashboardUrl(run.dashboardUrl));
+			const nextDashboardUrl = sanitizeDashboardUrl(latestDashboardRun?.dashboardUrl);
+			if (nextDashboardUrl) {
+				dashboard = {
+					...dashboard,
+					openclaw: {
+						...(dashboard?.openclaw || {}),
+						dashboardUrl: nextDashboardUrl
+					}
+				};
+			}
+		} finally {
+			refreshingRuns = false;
 		}
+	};
+
+	const handleCapabilityUpdate = (nextHealth) => {
+		capabilityHealth = normalizeCapabilityHealth(nextHealth);
+		lastUpdatedAt = capabilityHealth.checkedAt || lastUpdatedAt;
 	};
 
 	const startRun = async (action) => {
@@ -251,26 +385,39 @@
 					? 'Update OpenClaw to the latest stable Docker image now? The Gateway may be unavailable briefly and will roll back automatically if health checks fail.'
 					: 'Cập nhật OpenClaw lên Docker image stable mới nhất ngay bây giờ? Gateway có thể gián đoạn ngắn và sẽ tự rollback nếu health check thất bại.'
 			)
-		) return;
+		)
+			return;
 		busyAction = action;
 		pageError = '';
+		const profile = dashboard?.profile || 'inoxpran';
+		const idempotencyKey = actionIdempotency.acquire({ action, profile });
 
 		try {
 			const response = await fetch(resolveAdminPath('/admin/api/openclaw/runs'), {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
+				headers: {
+					'content-type': 'application/json',
+					'Idempotency-Key': idempotencyKey
+				},
 				body: JSON.stringify({
 					action,
-					profile: dashboard?.profile || 'inoxpran'
+					profile
 				})
 			});
 			const payload = await response.json().catch(() => null);
+			if (!shouldRetainOpenClawActionKey(response.status)) {
+				actionIdempotency.clear({ action, profile, key: idempotencyKey });
+			}
 			if (!response.ok) {
 				pageError = payload?.error || 'Unable to start OpenClaw run';
 				return;
 			}
 			upsertRun(payload);
 			selectedRunId = payload.id;
+		} catch {
+			pageError = isEn
+				? 'The response was interrupted. Retry the same action to safely check the original request.'
+				: 'Phản hồi bị gián đoạn. Hãy thử lại đúng hành động này để kiểm tra an toàn yêu cầu ban đầu.';
 		} finally {
 			busyAction = '';
 		}
@@ -278,7 +425,7 @@
 
 	onMount(() => {
 		const timer = window.setInterval(() => {
-			if (activeRuns.length || selectedRun?.status === 'running') {
+			if (activeRuns.length) {
 				refreshRuns();
 			}
 		}, 2500);
@@ -299,20 +446,56 @@
 			<p class="oc-header__sub">{copy.subtitle}</p>
 		</div>
 		<div class="oc-header__actions">
-			<a class="oc-btn oc-btn--ghost" href={resolveAdminPath('/admin/openclaw/content-operations')}>
+			<a
+				class="oc-btn oc-btn--ghost"
+				href={resolve(resolveAdminPath('/admin/openclaw/content-operations'))}
+			>
 				<span>{copy.contentOperations}</span>
 			</a>
-			<button type="button" class="oc-btn oc-btn--ghost" onclick={refreshDashboard}>
-				<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.3M21 12a9 9 0 0 1-15.5 6.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 3v3.5H14.5M6 21v-3.5H9.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-				<span>{copy.refresh}</span>
+			<button
+				type="button"
+				class="oc-btn oc-btn--ghost"
+				onclick={refreshDashboard}
+				disabled={refreshingDashboard}
+				aria-busy={refreshingDashboard}
+			>
+				<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
+					><path
+						d="M3 12a9 9 0 0 1 15.5-6.3M21 12a9 9 0 0 1-15.5 6.3"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+					/><path
+						d="M18 3v3.5H14.5M6 21v-3.5H9.5"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/></svg
+				>
+				<span>{refreshingDashboard ? copy.refreshing : copy.refresh}</span>
 			</button>
 			{#if dashboardUrl}
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 				<a class="oc-btn oc-btn--primary" href={dashboardUrl} target="_blank" rel="noreferrer">
 					<span>{copy.dashboard}</span>
-					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
+						><path
+							d="M14 4h6v6M20 4l-9 9M18 13v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h5"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/></svg
+					>
 				</a>
 			{:else}
-				<button class="oc-btn oc-btn--primary" type="button" disabled title="OpenClaw Control UI chỉ được mở qua SSH tunnel hoặc mạng riêng">
+				<button
+					class="oc-btn oc-btn--primary"
+					type="button"
+					disabled
+					title="OpenClaw Control UI chỉ được mở qua SSH tunnel hoặc mạng riêng"
+				>
 					<span>{isEn ? 'Private dashboard' : 'Dashboard nội bộ'}</span>
 				</button>
 			{/if}
@@ -329,36 +512,48 @@
 				<span class="oc-status__label">{copy.automation}</span>
 				<span
 					class="oc-badge"
-					class:is-good={capabilityTone(capabilities.seoAgent) === 'good'}
-					class:is-warn={capabilityTone(capabilities.seoAgent) === 'warn'}
-					class:is-danger={capabilityTone(capabilities.seoAgent) === 'danger'}
-					class:is-muted={capabilityTone(capabilities.seoAgent) === 'muted'}
+					class:is-good={capabilityTone(seoCapability) === 'good'}
+					class:is-warn={capabilityTone(seoCapability) === 'warn'}
+					class:is-danger={capabilityTone(seoCapability) === 'danger'}
+					class:is-muted={capabilityTone(seoCapability) === 'muted'}
 				>
-					<span class="oc-dot"></span>{capabilityLabel(capabilities.seoAgent)}
+					<span class="oc-dot"></span>{capabilityLabel(seoCapability)}
 				</span>
 			</div>
 			<div class="oc-status__item">
 				<span class="oc-status__label">{copy.autoPublish}</span>
-				<span class="oc-badge" class:is-warn={automation.autoPublish} class:is-good={!automation.autoPublish}>
+				<span
+					class="oc-badge"
+					class:is-warn={automation.autoPublish}
+					class:is-good={!automation.autoPublish}
+				>
 					<span class="oc-dot"></span>{automation.autoPublish ? 'ON' : 'DRAFT'}
 				</span>
 			</div>
 			<div class="oc-status__item">
-				<span class="oc-status__label" title={`${enabledScheduleCount} enabled schedule(s)`}>Blog cron · {enabledScheduleCount}</span>
-				<span class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>
-					<span class="oc-dot"></span>{scheduleRuntime.cronEnabled ? 'ON' : 'OFF'}
+				<span class="oc-status__label" title={`${enabledScheduleCount} enabled schedule(s)`}
+					>Blog cron · {enabledScheduleCount}</span
+				>
+				<span
+					class="oc-badge"
+					class:is-good={capabilityTone(blogCronCapability) === 'good'}
+					class:is-warn={capabilityTone(blogCronCapability) === 'warn'}
+					class:is-danger={capabilityTone(blogCronCapability) === 'danger'}
+					class:is-muted={capabilityTone(blogCronCapability) === 'muted'}
+				>
+					<span class="oc-dot"></span>{capabilityLabel(blogCronCapability)}
 				</span>
 			</div>
 			<div class="oc-status__item">
 				<span class="oc-status__label">Telegram</span>
 				<span
 					class="oc-badge"
-					class:is-good={capabilityTone(capabilities.telegram) === 'good'}
-					class:is-warn={capabilityTone(capabilities.telegram) === 'warn'}
-					class:is-danger={capabilityTone(capabilities.telegram) === 'danger'}
-					class:is-muted={capabilityTone(capabilities.telegram) === 'muted'}
+					class:is-good={capabilityTone(telegramCapability) === 'good'}
+					class:is-warn={capabilityTone(telegramCapability) === 'warn'}
+					class:is-danger={capabilityTone(telegramCapability) === 'danger'}
+					class:is-muted={capabilityTone(telegramCapability) === 'muted'}
 				>
-					<span class="oc-dot"></span>{capabilityLabel(capabilities.telegram)}
+					<span class="oc-dot"></span>{capabilityLabel(telegramCapability)}
 				</span>
 			</div>
 			<div class="oc-status__item">
@@ -369,21 +564,12 @@
 				<span class="oc-status__label">{copy.gateway}</span>
 				<span
 					class="oc-badge"
-					class:is-good={gatewayHealth.ready}
-					class:is-warn={gatewayHealth.live && !gatewayHealth.ready}
-					class:is-danger={gatewayHealth.reachable === false}
+					class:is-good={capabilityTone(gatewayCapability) === 'good'}
+					class:is-warn={capabilityTone(gatewayCapability) === 'warn'}
+					class:is-danger={capabilityTone(gatewayCapability) === 'danger'}
+					class:is-muted={capabilityTone(gatewayCapability) === 'muted'}
 				>
-					<span class="oc-dot"></span>{gatewayHealth.ready
-						? isEn
-							? 'Ready'
-							: 'Sẵn sàng'
-						: gatewayHealth.live
-							? isEn
-								? 'Starting'
-								: 'Đang khởi động'
-							: isEn
-								? 'Unavailable'
-								: 'Không khả dụng'}
+					<span class="oc-dot"></span>{capabilityLabel(gatewayCapability)}
 				</span>
 			</div>
 			<div class="oc-status__item">
@@ -392,6 +578,8 @@
 			</div>
 		</div>
 	</section>
+
+	<CapabilityHealthPanel health={capabilityHealth} onUpdated={handleCapabilityUpdate} />
 
 	<div class="oc-grid oc-grid--main">
 		<section class="oc-panel oc-panel--command">
@@ -404,20 +592,23 @@
 				<div class="oc-actions__group">
 					<p class="oc-actions__label">{copy.groupGateway}</p>
 					<div class="oc-actions__grid">
-						{#each actions.filter((a) => ['start-openclaw', 'stop-openclaw', 'status', 'update-openclaw'].includes(a.id)) as action (action.id)}
+						{#each actions.filter( (a) => ['start-openclaw', 'stop-openclaw', 'status', 'update-openclaw'].includes(a.id) ) as action (action.id)}
 							<button
 								type="button"
 								class="oc-action"
 								class:oc-action--warn={action.id === 'stop-openclaw'}
 								class:oc-action--update={action.id === 'update-openclaw'}
-								disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+								disabled={action.id !== 'daily-draft' &&
+									(Boolean(busyAction) || actionIsActive(action.id))}
 								onclick={() =>
 									action.id === 'daily-draft'
-										? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+										? goto(resolve(resolveAdminPath('/admin/openclaw/daily-draft')))
 										: startRun(action.id)}
 							>
 								<span class="oc-action__title">{actionMeta[action.id]?.label || action.label}</span>
-								<span class="oc-action__detail">{actionMeta[action.id]?.detail || action.label}</span>
+								<span class="oc-action__detail"
+									>{actionMeta[action.id]?.detail || action.label}</span
+								>
 								{#if busyAction === action.id}
 									<span class="oc-action__state">{copy.starting}…</span>
 								{/if}
@@ -429,18 +620,21 @@
 				<div class="oc-actions__group">
 					<p class="oc-actions__label">{copy.groupSetup}</p>
 					<div class="oc-actions__grid">
-						{#each actions.filter((a) => ['install-skills', 'sync-agents'].includes(a.id)) as action (action.id)}
+						{#each actions.filter( (a) => ['install-skills', 'sync-agents'].includes(a.id) ) as action (action.id)}
 							<button
 								type="button"
 								class="oc-action"
-								disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+								disabled={action.id !== 'daily-draft' &&
+									(Boolean(busyAction) || actionIsActive(action.id))}
 								onclick={() =>
 									action.id === 'daily-draft'
-										? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+										? goto(resolve(resolveAdminPath('/admin/openclaw/daily-draft')))
 										: startRun(action.id)}
 							>
 								<span class="oc-action__title">{actionMeta[action.id]?.label || action.label}</span>
-								<span class="oc-action__detail">{actionMeta[action.id]?.detail || action.label}</span>
+								<span class="oc-action__detail"
+									>{actionMeta[action.id]?.detail || action.label}</span
+								>
 								{#if busyAction === action.id}
 									<span class="oc-action__state">{copy.starting}…</span>
 								{/if}
@@ -452,19 +646,22 @@
 				<div class="oc-actions__group">
 					<p class="oc-actions__label">{copy.groupAutomation}</p>
 					<div class="oc-actions__grid">
-						{#each actions.filter((a) => ['smoke-test', 'daily-draft'].includes(a.id)) as action (action.id)}
+						{#each actions.filter( (a) => ['smoke-test', 'daily-draft'].includes(a.id) ) as action (action.id)}
 							<button
 								type="button"
 								class="oc-action"
 								class:oc-action--link={action.id === 'daily-draft'}
-								disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+								disabled={action.id !== 'daily-draft' &&
+									(Boolean(busyAction) || actionIsActive(action.id))}
 								onclick={() =>
 									action.id === 'daily-draft'
-										? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+										? goto(resolve(resolveAdminPath('/admin/openclaw/daily-draft')))
 										: startRun(action.id)}
 							>
 								<span class="oc-action__title">{actionMeta[action.id]?.label || action.label}</span>
-								<span class="oc-action__detail">{actionMeta[action.id]?.detail || action.label}</span>
+								<span class="oc-action__detail"
+									>{actionMeta[action.id]?.detail || action.label}</span
+								>
 								{#if busyAction === action.id}
 									<span class="oc-action__state">{copy.starting}…</span>
 								{/if}
@@ -477,18 +674,23 @@
 					<div class="oc-actions__group">
 						<p class="oc-actions__label">{copy.groupOther}</p>
 						<div class="oc-actions__grid">
-						{#each actions.filter((a) => !['start-openclaw', 'stop-openclaw', 'status', 'update-openclaw', 'install-skills', 'sync-agents', 'smoke-test', 'daily-draft'].includes(a.id)) as action (action.id)}
+							{#each actions.filter((a) => !['start-openclaw', 'stop-openclaw', 'status', 'update-openclaw', 'install-skills', 'sync-agents', 'smoke-test', 'daily-draft'].includes(a.id)) as action (action.id)}
 								<button
 									type="button"
 									class="oc-action"
-									disabled={action.id !== 'daily-draft' && Boolean(busyAction)}
+									disabled={action.id !== 'daily-draft' &&
+										(Boolean(busyAction) || actionIsActive(action.id))}
 									onclick={() =>
 										action.id === 'daily-draft'
-											? goto(resolveAdminPath('/admin/openclaw/daily-draft'))
+											? goto(resolve(resolveAdminPath('/admin/openclaw/daily-draft')))
 											: startRun(action.id)}
 								>
-									<span class="oc-action__title">{actionMeta[action.id]?.label || action.label}</span>
-									<span class="oc-action__detail">{actionMeta[action.id]?.detail || action.label}</span>
+									<span class="oc-action__title"
+										>{actionMeta[action.id]?.label || action.label}</span
+									>
+									<span class="oc-action__detail"
+										>{actionMeta[action.id]?.detail || action.label}</span
+									>
 									{#if busyAction === action.id}
 										<span class="oc-action__state">{copy.starting}…</span>
 									{/if}
@@ -509,60 +711,116 @@
 			<div class="oc-gate-group">
 				<p class="oc-gate-group__label">{copy.gateAutomation}</p>
 				<div class="oc-gate__row">
-					<span>SEO_AGENT_ENABLED</span>
-					<b class="oc-badge" class:is-good={automation.enabled} class:is-muted={!automation.enabled}>{automation.enabled ? 'true' : 'false'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'SEO agent automation' : 'Tự động hóa SEO agent'}</strong><code
+							>SEO_AGENT_ENABLED</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={automation.enabled}
+						class:is-muted={!automation.enabled}>{automation.enabled ? 'true' : 'false'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>SEO_AGENT_AUTO_PUBLISH</span>
-					<b class="oc-badge" class:is-good={!automation.autoPublish} class:is-warn={automation.autoPublish}>{automation.autoPublish ? 'enabled' : 'draft review'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Automatic publication' : 'Tự động xuất bản'}</strong><code
+							>SEO_AGENT_AUTO_PUBLISH</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={!automation.autoPublish}
+						class:is-warn={automation.autoPublish}
+						>{automation.autoPublish ? 'enabled' : 'draft review'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>API_KEY</span>
-					<b class="oc-badge" class:is-good={env.API_KEY} class:is-warn={!env.API_KEY}>{env.API_KEY ? 'set' : 'missing'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Backend API credential' : 'Khóa API backend'}</strong><code
+							>API_KEY</code
+						></span
+					>
+					<b class="oc-badge" class:is-good={env.API_KEY} class:is-warn={!env.API_KEY}
+						>{env.API_KEY ? 'set' : 'missing'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>SEO_AGENT_API_KEY</span>
-					<b class="oc-badge" class:is-good={env.SEO_AGENT_API_KEY} class:is-warn={!env.SEO_AGENT_API_KEY}>{env.SEO_AGENT_API_KEY ? 'set' : 'missing'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'SEO agent API credential' : 'Khóa API SEO agent'}</strong><code
+							>SEO_AGENT_API_KEY</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={env.SEO_AGENT_API_KEY}
+						class:is-warn={!env.SEO_AGENT_API_KEY}>{env.SEO_AGENT_API_KEY ? 'set' : 'missing'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>SEO_AGENT_HMAC_SECRET</span>
-					<b class="oc-badge" class:is-good={env.SEO_AGENT_HMAC_SECRET} class:is-warn={!env.SEO_AGENT_HMAC_SECRET}>{env.SEO_AGENT_HMAC_SECRET ? 'set' : 'missing'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Request signature secret' : 'Bí mật ký request'}</strong><code
+							>SEO_AGENT_HMAC_SECRET</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={env.SEO_AGENT_HMAC_SECRET}
+						class:is-warn={!env.SEO_AGENT_HMAC_SECRET}
+						>{env.SEO_AGENT_HMAC_SECRET ? 'set' : 'missing'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>OPENAI_API_KEY</span>
-					<b class="oc-badge" class:is-good={env.OPENAI_API_KEY} class:is-warn={!env.OPENAI_API_KEY}>{env.OPENAI_API_KEY ? 'set' : 'missing'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'OpenAI provider credential' : 'Khóa nhà cung cấp OpenAI'}</strong
+						><code>OPENAI_API_KEY</code></span
+					>
+					<b class="oc-badge" class:is-good={env.OPENAI_API_KEY} class:is-warn={!env.OPENAI_API_KEY}
+						>{env.OPENAI_API_KEY ? 'set' : 'missing'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>OPENCLAW_GATEWAY_TOKEN</span>
-					<b class="oc-badge" class:is-good={env.OPENCLAW_GATEWAY_TOKEN} class:is-warn={!env.OPENCLAW_GATEWAY_TOKEN}>{env.OPENCLAW_GATEWAY_TOKEN ? 'set' : 'missing'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Private gateway credential' : 'Khóa Gateway nội bộ'}</strong><code
+							>OPENCLAW_GATEWAY_TOKEN</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={gatewayCapability.configured}
+						class:is-warn={!gatewayCapability.configured}
+						>{gatewayCapability.configured ? 'set' : 'missing'}</b
+					>
 				</div>
 			</div>
 
 			<div class="oc-gate-group">
-				<p class="oc-gate-group__label">{isEn ? 'Content Ops & data sources' : 'Content Ops & nguồn dữ liệu'}</p>
-				{#each operationsCapabilityRows as [name, capability] (name)}
+				<p class="oc-gate-group__label">
+					{isEn ? 'Content Ops & data sources' : 'Content Ops & nguồn dữ liệu'}
+				</p>
+				{#each operationsCapabilityRows as [label, name, capability] (name)}
 					<div class="oc-gate__row">
-						<span>{name}</span>
+						<span class="oc-gate__identity"><strong>{label}</strong><code>{name}</code></span>
 						<b
 							class="oc-badge"
 							class:is-good={capabilityTone(capability) === 'good'}
 							class:is-warn={capabilityTone(capability) === 'warn'}
 							class:is-danger={capabilityTone(capability) === 'danger'}
 							class:is-muted={capabilityTone(capability) === 'muted'}
-						>{capabilityLabel(capability)}</b
+							>{capabilityLabel(capability)}</b
 						>
 					</div>
 				{/each}
-				{#each dataCapabilityRows as [name, capability] (name)}
+				{#each dataCapabilityRows as [label, name, capability] (name)}
 					<div class="oc-gate__row">
-						<span>{name}</span>
+						<span class="oc-gate__identity"><strong>{label}</strong><code>{name}</code></span>
 						<b
 							class="oc-badge"
 							class:is-good={capabilityTone(capability) === 'good'}
 							class:is-warn={capabilityTone(capability) === 'warn'}
 							class:is-danger={capabilityTone(capability) === 'danger'}
 							class:is-muted={capabilityTone(capability) === 'muted'}
-						>{capabilityLabel(capability)}</b
+							>{capabilityLabel(capability)}</b
 						>
 					</div>
 				{/each}
@@ -571,68 +829,160 @@
 			<div class="oc-gate-group">
 				<p class="oc-gate-group__label">{copy.gateImages}</p>
 				<div class="oc-gate__row">
-					<span>IMAGE_PIPELINE</span>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Image pipeline' : 'Pipeline hình ảnh'}</strong><code
+							>OPENCLAW_IMAGE_PIPELINE_ENABLED</code
+						></span
+					>
 					<b
 						class="oc-badge"
-						class:is-good={capabilityTone(capabilities.imagePipeline) === 'good'}
-						class:is-warn={capabilityTone(capabilities.imagePipeline) === 'warn'}
-						class:is-danger={capabilityTone(capabilities.imagePipeline) === 'danger'}
-						class:is-muted={capabilityTone(capabilities.imagePipeline) === 'muted'}
-					>{capabilityLabel(capabilities.imagePipeline)}</b
+						class:is-good={capabilityTone(imagePipelineCapability) === 'good'}
+						class:is-warn={capabilityTone(imagePipelineCapability) === 'warn'}
+						class:is-danger={capabilityTone(imagePipelineCapability) === 'danger'}
+						class:is-muted={capabilityTone(imagePipelineCapability) === 'muted'}
+						>{capabilityLabel(imagePipelineCapability)}</b
 					>
 				</div>
 				<div class="oc-gate__row">
-					<span>REQUIRE_COVER</span>
-					<b class="oc-badge" class:is-good={automation.requireCoverForPublish} class:is-muted={!automation.requireCoverForPublish}>{automation.requireCoverForPublish ? 'true' : 'false'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Cover requirement' : 'Yêu cầu ảnh bìa'}</strong><code
+							>REQUIRE_COVER</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={automation.requireCoverForPublish}
+						class:is-muted={!automation.requireCoverForPublish}
+						>{automation.requireCoverForPublish ? 'true' : 'false'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>IMAGE_SEARCH</span>
-					<b class="oc-badge" class:is-good={capabilities.imageSearch?.configured} class:is-muted={!capabilities.imageSearch?.configured}>{capabilities.imageSearch?.configured ? `${automation.imageSearchProvider} / set` : 'disabled / missing'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Image search provider' : 'Nhà cung cấp tìm ảnh'}</strong><code
+							>IMAGE_SEARCH_PROVIDER</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={capabilities.imageSearch?.configured}
+						class:is-muted={!capabilities.imageSearch?.configured}
+						>{capabilities.imageSearch?.configured
+							? `${automation.imageSearchProvider} / set`
+							: 'disabled / missing'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>AI_IMAGE</span>
-					<b class="oc-badge" class:is-good={capabilities.aiImage?.configured} class:is-muted={!capabilities.aiImage?.configured}>{capabilities.aiImage?.configured ? `${automation.aiImageProvider} / set` : 'disabled / missing'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'AI image provider' : 'Nhà cung cấp ảnh AI'}</strong><code
+							>AI_IMAGE_PROVIDER</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={capabilities.aiImage?.configured}
+						class:is-muted={!capabilities.aiImage?.configured}
+						>{capabilities.aiImage?.configured
+							? `${automation.aiImageProvider} / set`
+							: 'disabled / missing'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>FIRECRAWL_API_KEY</span>
-					<b class="oc-badge" class:is-good={env.FIRECRAWL_API_KEY} class:is-muted={!env.FIRECRAWL_API_KEY}>{env.FIRECRAWL_API_KEY ? 'set' : 'optional'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Optional Firecrawl credential' : 'Khóa Firecrawl tùy chọn'}</strong
+						><code>FIRECRAWL_API_KEY</code></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={env.FIRECRAWL_API_KEY}
+						class:is-muted={!env.FIRECRAWL_API_KEY}>{env.FIRECRAWL_API_KEY ? 'set' : 'optional'}</b
+					>
 				</div>
 			</div>
 
 			<div class="oc-gate-group">
 				<p class="oc-gate-group__label">{copy.gateScheduling}</p>
 				<div class="oc-gate__row">
-					<span>OPENCLAW_BLOG_CRON_ENABLED</span>
-					<b class="oc-badge" class:is-good={scheduleRuntime.cronEnabled} class:is-muted={!scheduleRuntime.cronEnabled}>{scheduleRuntime.cronEnabled ? 'true' : 'false'} · {enabledScheduleCount} {isEn ? 'schedule(s)' : 'lịch'}</b>
-				</div>
-				<div class="oc-gate__row">
-					<span>TELEGRAM_BOT_ENABLED</span>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Blog schedule' : 'Lịch tạo blog'}</strong><code
+							>OPENCLAW_BLOG_CRON_ENABLED</code
+						></span
+					>
 					<b
 						class="oc-badge"
-						class:is-good={capabilityTone(capabilities.telegram) === 'good'}
-						class:is-warn={capabilityTone(capabilities.telegram) === 'warn'}
-						class:is-danger={capabilityTone(capabilities.telegram) === 'danger'}
-						class:is-muted={capabilityTone(capabilities.telegram) === 'muted'}
-					>{capabilityLabel(capabilities.telegram)}</b
+						class:is-good={capabilityTone(blogCronCapability) === 'good'}
+						class:is-warn={capabilityTone(blogCronCapability) === 'warn'}
+						class:is-danger={capabilityTone(blogCronCapability) === 'danger'}
+						class:is-muted={capabilityTone(blogCronCapability) === 'muted'}
+						>{capabilityLabel(blogCronCapability)} &middot; {enabledScheduleCount}
+						{isEn ? 'schedule(s)' : 'lịch'}</b
+					>
+				</div>
+				<div class="oc-gate__row">
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Telegram approval' : 'Duyệt qua Telegram'}</strong><code
+							>TELEGRAM_BOT_ENABLED</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={capabilityTone(telegramCapability) === 'good'}
+						class:is-warn={capabilityTone(telegramCapability) === 'warn'}
+						class:is-danger={capabilityTone(telegramCapability) === 'danger'}
+						class:is-muted={capabilityTone(telegramCapability) === 'muted'}
+						>{capabilityLabel(telegramCapability)}</b
 					>
 				</div>
 				{#if scheduleRuntime.telegramEnabled || telegramConfigured}
 					<div class="oc-gate__row">
-						<span>TELEGRAM_BOT_TOKEN</span>
-						<b class="oc-badge" class:is-good={env.TELEGRAM_BOT_TOKEN} class:is-warn={!env.TELEGRAM_BOT_TOKEN}>{env.TELEGRAM_BOT_TOKEN ? 'set' : 'missing'}</b>
+						<span class="oc-gate__identity"
+							><strong>{isEn ? 'Telegram bot credential' : 'Khóa Telegram bot'}</strong><code
+								>TELEGRAM_BOT_TOKEN</code
+							></span
+						>
+						<b
+							class="oc-badge"
+							class:is-good={env.TELEGRAM_BOT_TOKEN}
+							class:is-warn={!env.TELEGRAM_BOT_TOKEN}
+							>{env.TELEGRAM_BOT_TOKEN ? 'set' : 'missing'}</b
+						>
 					</div>
 					<div class="oc-gate__row">
-						<span>TELEGRAM_WEBHOOK_SECRET</span>
-						<b class="oc-badge" class:is-good={env.TELEGRAM_WEBHOOK_SECRET} class:is-warn={!env.TELEGRAM_WEBHOOK_SECRET}>{env.TELEGRAM_WEBHOOK_SECRET ? 'set' : 'missing'}</b>
+						<span class="oc-gate__identity"
+							><strong>{isEn ? 'Telegram webhook signature' : 'Chữ ký webhook Telegram'}</strong
+							><code>TELEGRAM_WEBHOOK_SECRET</code></span
+						>
+						<b
+							class="oc-badge"
+							class:is-good={env.TELEGRAM_WEBHOOK_SECRET}
+							class:is-warn={!env.TELEGRAM_WEBHOOK_SECRET}
+							>{env.TELEGRAM_WEBHOOK_SECRET ? 'set' : 'missing'}</b
+						>
 					</div>
 					<div class="oc-gate__row">
-						<span>TELEGRAM_ALLOWLIST</span>
-						<b class="oc-badge" class:is-good={env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS} class:is-warn={!(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)}>{env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS ? 'set' : 'missing'}</b>
+						<span class="oc-gate__identity"
+							><strong>{isEn ? 'Telegram allowlist' : 'Danh sách Telegram được phép'}</strong><code
+								>TELEGRAM_ALLOWLIST</code
+							></span
+						>
+						<b
+							class="oc-badge"
+							class:is-good={env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS}
+							class:is-warn={!(env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS)}
+							>{env.TELEGRAM_ALLOWED_CHAT_IDS || env.TELEGRAM_ALLOWED_USER_IDS
+								? 'set'
+								: 'missing'}</b
+						>
 					</div>
 				{:else}
 					<div class="oc-gate__row">
-						<span>TELEGRAM_APPROVAL</span>
-						<b class="oc-badge is-muted">{isEn ? 'optional / not configured' : 'tùy chọn / chưa cấu hình'}</b>
+						<span class="oc-gate__identity"
+							><strong>{isEn ? 'Telegram approval' : 'Duyệt qua Telegram'}</strong><code
+								>TELEGRAM_APPROVAL</code
+							></span
+						>
+						<b class="oc-badge is-muted"
+							>{isEn ? 'optional / not configured' : 'tùy chọn / chưa cấu hình'}</b
+						>
 					</div>
 				{/if}
 			</div>
@@ -640,16 +990,42 @@
 			<div class="oc-gate-group">
 				<p class="oc-gate-group__label">{isEn ? 'Review safety' : 'An toàn kiểm duyệt'}</p>
 				<div class="oc-gate__row">
-					<span>CONTENT_LEARNING_AUTO_APPLY</span>
-					<b class="oc-badge" class:is-good={!featureFlags.CONTENT_LEARNING_AUTO_APPLY} class:is-warn={featureFlags.CONTENT_LEARNING_AUTO_APPLY}>{featureFlags.CONTENT_LEARNING_AUTO_APPLY ? 'automatic' : 'manual review'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Automatic learning changes' : 'Tự áp dụng thay đổi học được'}</strong
+						><code>CONTENT_LEARNING_AUTO_APPLY</code></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={!featureFlags.CONTENT_LEARNING_AUTO_APPLY}
+						class:is-warn={featureFlags.CONTENT_LEARNING_AUTO_APPLY}
+						>{featureFlags.CONTENT_LEARNING_AUTO_APPLY ? 'automatic' : 'manual review'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>CONTENT_PUBLISH_READINESS_ENABLED</span>
-					<b class="oc-badge" class:is-good={featureFlags.CONTENT_PUBLISH_READINESS_ENABLED} class:is-danger={!featureFlags.CONTENT_PUBLISH_READINESS_ENABLED}>{featureFlags.CONTENT_PUBLISH_READINESS_ENABLED ? 'true' : 'false'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Publish readiness gate' : 'Cổng sẵn sàng xuất bản'}</strong><code
+							>CONTENT_PUBLISH_READINESS_ENABLED</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={featureFlags.CONTENT_PUBLISH_READINESS_ENABLED}
+						class:is-danger={!featureFlags.CONTENT_PUBLISH_READINESS_ENABLED}
+						>{featureFlags.CONTENT_PUBLISH_READINESS_ENABLED ? 'true' : 'false'}</b
+					>
 				</div>
 				<div class="oc-gate__row">
-					<span>CONTENT_POST_PUBLISH_VERIFY_ENABLED</span>
-					<b class="oc-badge" class:is-good={featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED} class:is-danger={!featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED}>{featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED ? 'true' : 'false'}</b>
+					<span class="oc-gate__identity"
+						><strong>{isEn ? 'Post-publish verification' : 'Xác minh sau xuất bản'}</strong><code
+							>CONTENT_POST_PUBLISH_VERIFY_ENABLED</code
+						></span
+					>
+					<b
+						class="oc-badge"
+						class:is-good={featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED}
+						class:is-danger={!featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED}
+						>{featureFlags.CONTENT_POST_PUBLISH_VERIFY_ENABLED ? 'true' : 'false'}</b
+					>
 				</div>
 			</div>
 		</aside>
@@ -678,7 +1054,15 @@
 					{/each}
 				{:else}
 					<div class="oc-empty">
-						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
+							><path
+								d="M12 8v4l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/></svg
+						>
 						<p>{copy.noRuns}</p>
 						<small>{copy.noRunsHint}</small>
 					</div>
@@ -690,14 +1074,23 @@
 					<div class="oc-run-output__meta">
 						<div>
 							<span>{selectedRun.label}</span>
-							<strong class={`oc-run-status ${selectedRun.status}`}>{statusLabel(selectedRun.status)}</strong>
+							<strong class={`oc-run-status ${selectedRun.status}`}
+								>{statusLabel(selectedRun.status)}</strong
+							>
 						</div>
 						<code>{selectedRun.command}</code>
 					</div>
 					<pre class="oc-log">{selectedRun.output || selectedRun.error || copy.noOutput}</pre>
 				{:else}
 					<div class="oc-empty">
-						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
+							><path
+								d="M4 5h16M4 12h16M4 19h10"
+								stroke="currentColor"
+								stroke-width="1.7"
+								stroke-linecap="round"
+							/></svg
+						>
 						<p>{copy.noOutput}</p>
 						<small>{copy.noOutputHint}</small>
 					</div>
@@ -744,7 +1137,15 @@
 				</div>
 			{:else}
 				<div class="oc-empty">
-					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7 9 18l-5-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+					<svg viewBox="0 0 24 24" fill="none" aria-hidden="true"
+						><path
+							d="M20 7 9 18l-5-5"
+							stroke="currentColor"
+							stroke-width="1.7"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						/></svg
+					>
 					<p>{copy.noReport}</p>
 				</div>
 			{/if}
@@ -835,7 +1236,10 @@
 		font-size: 0.88rem;
 		cursor: pointer;
 		text-decoration: none;
-		transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease,
+		transition:
+			background 0.18s ease,
+			border-color 0.18s ease,
+			box-shadow 0.18s ease,
 			transform 0.18s ease;
 	}
 
@@ -1076,7 +1480,10 @@
 		background: var(--oc-surface);
 		color: var(--oc-text);
 		cursor: pointer;
-		transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease,
+		transition:
+			border-color 0.18s ease,
+			background 0.18s ease,
+			box-shadow 0.18s ease,
 			transform 0.18s ease;
 	}
 
@@ -1166,6 +1573,24 @@
 		overflow-wrap: anywhere;
 	}
 
+	.oc-gate__identity {
+		display: grid;
+		gap: 2px;
+		min-width: 0;
+	}
+
+	.oc-gate__identity strong {
+		color: var(--oc-text);
+		font-family: inherit;
+		font-size: 0.74rem;
+	}
+
+	.oc-gate__identity code {
+		color: var(--oc-muted);
+		font-size: 0.6rem;
+		overflow-wrap: anywhere;
+	}
+
 	/* ── Runtime ── */
 	.oc-run-layout {
 		display: grid;
@@ -1190,7 +1615,9 @@
 		border: 1px solid var(--oc-border);
 		background: var(--oc-surface);
 		cursor: pointer;
-		transition: border-color 0.18s ease, background 0.18s ease;
+		transition:
+			border-color 0.18s ease,
+			background 0.18s ease;
 	}
 
 	.oc-run-row:hover {

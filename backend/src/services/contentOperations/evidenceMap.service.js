@@ -72,7 +72,7 @@ const normalizeEvidenceEntry = (entry = {}, { now = new Date() } = {}) => {
     };
 };
 
-const buildEvidenceMapDocument = ({ contentWorkOrderId, unifiedContentBriefId, researchBundleId = null, entries = [], version = 1 } = {}) => {
+const buildEvidenceMapDocument = ({ contentWorkOrderId, unifiedContentBriefId, researchBundleId = null, entries = [], version = 1, qaContext = null } = {}) => {
     if (!contentWorkOrderId || !unifiedContentBriefId) throw new Error('contentWorkOrderId and unifiedContentBriefId are required');
     const normalizedEntries = entries.map((entry) => normalizeEvidenceEntry(entry));
     const status = normalizedEntries.length === 0 || normalizedEntries.some((entry) => entry.status === 'blocked')
@@ -83,6 +83,7 @@ const buildEvidenceMapDocument = ({ contentWorkOrderId, unifiedContentBriefId, r
         .map((entry) => `${entry.evidenceKey}:${entry.status}`);
     if (normalizedEntries.length === 0) warnings.push('no_evidence_entries');
     const document = {
+        ...(qaContext?.isQaTest === true ? qaContext : {}),
         contentWorkOrderId,
         unifiedContentBriefId,
         researchBundleId,

@@ -232,8 +232,16 @@ class TelegramApprovalService {
         coverImageUrl = '', snapshotStatus = '', styleFamily = '', reviewStatus = ''
     }) {
         const validBlogId = assertBlogId(blogId);
-        const savedBlog = await Blog.findById(validBlogId).select('blog_title blog_slug blog_image coverImage isDraft isPublished').lean();
+        const savedBlog = await Blog.findById(validBlogId).select('blog_title blog_slug blog_image coverImage isDraft isPublished isQaTest qaBatchId qaCaseId').lean();
         if (!savedBlog) throw new BadRequestError('Blog draft not found for Telegram approval');
+        if (savedBlog.isQaTest === true) {
+            return {
+                approvalId: '',
+                approvalCode: '',
+                status: 'not_sent',
+                reason: 'qa_telegram_forbidden'
+            };
+        }
         const idempotencyKey = `blog-approval:${validBlogId}:${String(executionId || scheduleId || 'manual')}`;
         const ttlHours = Math.max(1, Number(process.env.TELEGRAM_APPROVAL_TTL_HOURS || DEFAULT_APPROVAL_TTL_HOURS));
         let approval = await TelegramBlogApproval.findOne({ idempotencyKey });

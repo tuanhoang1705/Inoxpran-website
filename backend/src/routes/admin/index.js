@@ -9,6 +9,7 @@ const googleIntelligenceController = require("../../controllers/googleIntelligen
 const agenticBlogCoreController = require("../../controllers/agenticBlogCore.controller");
 const productSeedingAdminController = require("../../controllers/productSeedingAdmin.controller");
 const contentOperationsController = require("../../controllers/contentOperations.controller");
+const agenticBlogQaRouter = require("./agenticBlogQa.routes");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
 const { upload, uploadLarge } = require("../../middleware/upload");
@@ -44,6 +45,7 @@ router.post("/signup", asyncHandler(adminController.signUp));
 router.post("/login", asyncHandler(adminController.login));
 
 router.use(authenticationAdmin);
+router.use("/openclaw", agenticBlogQaRouter);
 
 router.post("/logout", asyncHandler(adminController.logout));
 router.post(
@@ -106,6 +108,21 @@ router.get(
   "/openclaw",
   requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
   asyncHandler(openclawDashboardController.getDashboard),
+);
+router.get(
+  "/openclaw/capabilities/status",
+  requireAdminPermission(["openclaw_capability.view"]),
+  asyncHandler(openclawDashboardController.getCapabilityStatus),
+);
+router.post(
+  "/openclaw/capabilities/check",
+  requireAdminPermission(["openclaw_capability.check"]),
+  asyncHandler(openclawDashboardController.checkCapabilities),
+);
+router.post(
+  "/openclaw/capabilities/:featureKey/check",
+  requireAdminPermission(["openclaw_capability.check"]),
+  asyncHandler(openclawDashboardController.checkCapability),
 );
 router.get(
   "/openclaw/runs",

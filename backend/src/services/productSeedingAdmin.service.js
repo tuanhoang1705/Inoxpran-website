@@ -15,6 +15,15 @@ const pageValues = (query = {}) => ({
     page: Math.max(Number(query.page) || 1, 1),
     limit: Math.min(Math.max(Number(query.limit) || 20, 1), 100)
 });
+const PRODUCTION_SCOPE = Object.freeze({ isQaTest: { $ne: true } });
+const QA_PREVIEW_KEYS = new Set([
+    'isQaTest', 'qaBatchId', 'qaCaseId', 'qaIteration', 'qaContext',
+    'environment', 'executionMode', 'originalTopicSeed', 'normalizedTopicKey',
+    'qaTopicReservationId'
+]);
+const sanitizePreviewPayload = (payload = {}) => Object.fromEntries(
+    Object.entries(payload).filter(([key]) => !QA_PREVIEW_KEYS.has(key))
+);
 const snapshot = (admin) => ({
     adminId: admin?._id ? String(admin._id) : null,
     name: admin?.name || null,
@@ -53,15 +62,16 @@ class ProductSeedingAdminService {
     }
 
     static async preview({ payload = {} }) {
-        const topic = String(payload.topic || payload.primaryKeyword || '').trim();
+        const safePayload = sanitizePreviewPayload(payload);
+        const topic = String(safePayload.topic || safePayload.primaryKeyword || '').trim();
         if (!topic) throw new BadRequestError('topic is required');
-        const googleIntelSnapshotId = String(payload.googleIntelSnapshotId || '000000000000000000000000');
+        const googleIntelSnapshotId = String(safePayload.googleIntelSnapshotId || '000000000000000000000000');
         const plan = await ProductSeedPlanningService.createPlan({
-            brief: { ...payload, topic }, googleIntelSnapshotId, persist: false
+            brief: { ...safePayload, topic }, googleIntelSnapshotId, persist: false
         });
         const previewSeedPlan = { ...plan, id: '000000000000000000000001', googleIntelSnapshotId };
         const placementPlan = await EditorialProductPlacementPlanningService.createPlan({
-            brief: { ...payload, topic, productPlacement: payload.productPlacement || {} },
+            brief: { ...safePayload, topic, productPlacement: safePayload.productPlacement || {} },
             productSeedPlan: previewSeedPlan,
             persist: false
         });
@@ -101,7 +111,7 @@ class ProductSeedingAdminService {
 
     static async listPlans(query = {}) {
         const { page, limit } = pageValues(query);
-        const filter = {};
+        const filter = { ...PRODUCTION_SCOPE };
         if (query.mode && ['off', 'auto', 'required'].includes(query.mode)) filter.mode = query.mode;
         if (query.decision) filter.decision = query.decision;
         const [items, total] = await Promise.all([
@@ -113,14 +123,14 @@ class ProductSeedingAdminService {
 
     static async getPlan({ planId }) {
         if (!/^[a-f0-9]{24}$/i.test(String(planId || ''))) throw new BadRequestError('Invalid Product Seed Plan id');
-        const item = await ProductSeedPlan.findById(planId).lean();
+        const item = await ProductSeedPlan.findOne({ _id: planId, ...PRODUCTION_SCOPE }).lean();
         if (!item) throw new NotFoundError('Product Seed Plan not found');
         return { ...item, id: String(item._id) };
     }
 
     static async listPlacementPlans(query = {}) {
         const { page, limit } = pageValues(query);
-        const filter = {};
+        const filter = { ...PRODUCTION_SCOPE };
         if (query.style) filter.placementStyle = String(query.style).trim();
         if (query.decision && ['place_product', 'no_product'].includes(query.decision)) filter.decision = query.decision;
         const [items, total] = await Promise.all([
@@ -132,14 +142,14 @@ class ProductSeedingAdminService {
 
     static async getPlacementPlan({ planId }) {
         if (!/^[a-f0-9]{24}$/i.test(String(planId || ''))) throw new BadRequestError('Invalid Editorial Product Placement Plan id');
-        const item = await EditorialProductPlacementPlan.findById(planId).lean();
+        const item = await EditorialProductPlacementPlan.findOne({ _id: planId, ...PRODUCTION_SCOPE }).lean();
         if (!item) throw new NotFoundError('Editorial Product Placement Plan not found');
         return { ...item, id: String(item._id) };
     }
 
     static async listExposures(query = {}) {
         const { page, limit } = pageValues(query);
-        const filter = {};
+        const filter = { ...PRODUCTION_SCOPE };
         if (query.productId) {
             if (!/^[a-f0-9]{24}$/i.test(String(query.productId))) throw new BadRequestError('Invalid product id');
             filter.productId = query.productId;

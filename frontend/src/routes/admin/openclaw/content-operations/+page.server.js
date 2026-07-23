@@ -1,4 +1,5 @@
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import { sanitizeOpenClawClientPayload } from '$lib/server/openclawClientPayload.js';
 
 const read = async ({ cookies, fetch, path, fallback, errorKey, errors }) => {
 	try {
@@ -21,7 +22,7 @@ const read = async ({ cookies, fetch, path, fallback, errorKey, errors }) => {
 export const load = async ({ cookies, fetch }) => {
 	const loadErrors = {};
 	const base = '/admin/openclaw/content-operations';
-	const [status, snapshots, opportunities, workOrders, signals, inventory, schedule] =
+	const [status, snapshots, opportunities, workOrders, signals, inventory, schedule, qaAccess] =
 		await Promise.all([
 			read({
 				cookies,
@@ -78,17 +79,34 @@ export const load = async ({ cookies, fetch }) => {
 				fallback: {},
 				errorKey: 'schedule',
 				errors: loadErrors
+			}),
+			read({
+				cookies,
+				fetch,
+				path: '/admin/openclaw/qa-batches?limit=1&page=1',
+				fallback: { featureEnabled: false, actions: [] },
+				errorKey: 'qaAccess',
+				errors: loadErrors
 			})
 		]);
+	const safeStatus = sanitizeOpenClawClientPayload(status);
+	const capabilityHealth =
+		status?.capabilityHealth &&
+		typeof status.capabilityHealth === 'object' &&
+		!Array.isArray(status.capabilityHealth)
+			? status.capabilityHealth
+			: { capabilities: {} };
 
 	return {
-		status,
+		status: safeStatus,
+		capabilityHealth: sanitizeOpenClawClientPayload(capabilityHealth),
 		snapshots,
 		opportunities,
 		workOrders,
 		signals,
 		inventory,
 		schedule,
+		qaAccess: sanitizeOpenClawClientPayload(qaAccess),
 		loadErrors
 	};
 };

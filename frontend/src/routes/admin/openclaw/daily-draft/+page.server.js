@@ -1,4 +1,5 @@
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import { sanitizeOpenClawClientPayload } from '$lib/server/openclawClientPayload.js';
 
 const read = async ({ cookies, fetch, path }) => {
 	try {
@@ -47,7 +48,7 @@ export const load = async ({ cookies, fetch }) => {
 	}
 
 	return {
-		dashboard: dashboardResult.payload?.metadata || null,
+		dashboard: sanitizeOpenClawClientPayload(dashboardResult.payload?.metadata || null),
 		schedules: schedulesResult.ok ? schedulesResult.payload?.metadata || null : null,
 		contentOperations: contentOperationsResult.ok
 			? (contentOperationsResult.payload?.metadata ?? contentOperationsResult.payload ?? null)
