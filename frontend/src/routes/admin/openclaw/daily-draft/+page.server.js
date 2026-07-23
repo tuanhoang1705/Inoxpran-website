@@ -12,23 +12,29 @@ const read = async ({ cookies, fetch, path }) => {
 };
 
 export const load = async ({ cookies, fetch }) => {
-	const [dashboardResult, schedulesResult, contentOperationsResult] = await Promise.all([
-		read({
-			cookies,
-			fetch,
-			path: '/admin/openclaw'
-		}),
-		read({
-			cookies,
-			fetch,
-			path: '/admin/openclaw/blog-schedules?limit=50&page=1'
-		}),
-		read({
-			cookies,
-			fetch,
-			path: '/admin/openclaw/content-operations/status'
-		})
-	]);
+	const [dashboardResult, schedulesResult, contentOperationsResult, runtimeControlsResult] =
+		await Promise.all([
+			read({
+				cookies,
+				fetch,
+				path: '/admin/openclaw'
+			}),
+			read({
+				cookies,
+				fetch,
+				path: '/admin/openclaw/blog-schedules?limit=50&page=1'
+			}),
+			read({
+				cookies,
+				fetch,
+				path: '/admin/openclaw/content-operations/status'
+			}),
+			read({
+				cookies,
+				fetch,
+				path: '/admin/openclaw/runtime-controls'
+			})
+		]);
 
 	if (!dashboardResult.ok) {
 		return {
@@ -36,6 +42,9 @@ export const load = async ({ cookies, fetch }) => {
 			schedules: schedulesResult.ok ? schedulesResult.payload?.metadata || null : null,
 			contentOperations: contentOperationsResult.ok
 				? (contentOperationsResult.payload?.metadata ?? contentOperationsResult.payload ?? null)
+				: null,
+			runtimeControls: runtimeControlsResult.ok
+				? (runtimeControlsResult.payload?.metadata ?? runtimeControlsResult.payload ?? null)
 				: null,
 			loadError:
 				dashboardResult.status >= 500
@@ -52,6 +61,11 @@ export const load = async ({ cookies, fetch }) => {
 		schedules: schedulesResult.ok ? schedulesResult.payload?.metadata || null : null,
 		contentOperations: contentOperationsResult.ok
 			? (contentOperationsResult.payload?.metadata ?? contentOperationsResult.payload ?? null)
+			: null,
+		runtimeControls: runtimeControlsResult.ok
+			? sanitizeOpenClawClientPayload(
+					runtimeControlsResult.payload?.metadata ?? runtimeControlsResult.payload ?? null
+				)
 			: null,
 		loadError: ''
 	};

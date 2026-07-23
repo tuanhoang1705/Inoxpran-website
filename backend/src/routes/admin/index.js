@@ -4,6 +4,7 @@ const express = require("express");
 const adminController = require("../../controllers/admin.controller");
 const contactController = require("../../controllers/contact.controller");
 const openclawDashboardController = require("../../controllers/openclawDashboard.controller");
+const openclawRuntimeControlController = require("../../controllers/openclawRuntimeControl.controller");
 const blogAutomationScheduleController = require("../../controllers/blogAutomationSchedule.controller");
 const googleIntelligenceController = require("../../controllers/googleIntelligence.controller");
 const agenticBlogCoreController = require("../../controllers/agenticBlogCore.controller");
@@ -17,7 +18,10 @@ const {
   cleanupUploadedArtifacts,
   uploadSingleImage,
 } = require("../../middleware/firebaseUpload");
-const { requireAdminPermission, requireAdminRole } = require("../../middleware/requireAdminRole");
+const {
+  requireAdminPermission,
+  requireAdminRole,
+} = require("../../middleware/requireAdminRole");
 
 const router = express.Router();
 const DESCRIPTION_IMAGE_MAX_SIZE = Number(
@@ -123,6 +127,19 @@ router.post(
   "/openclaw/capabilities/:featureKey/check",
   requireAdminPermission(["openclaw_capability.check"]),
   asyncHandler(openclawDashboardController.checkCapability),
+);
+router.get(
+  "/openclaw/runtime-controls",
+  requireAdminPermission(
+    ["openclaw_runtime_control.view"],
+    ["ADMIN", "SUPER_ADMIN"],
+  ),
+  asyncHandler(openclawRuntimeControlController.getControls),
+);
+router.patch(
+  "/openclaw/runtime-controls/:controlKey",
+  requireAdminPermission(["openclaw_runtime_control.manage"], ["SUPER_ADMIN"]),
+  asyncHandler(openclawRuntimeControlController.updateControl),
 );
 router.get(
   "/openclaw/runs",

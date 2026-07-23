@@ -28,13 +28,38 @@
 	let pageError = $state(data?.loadError || '');
 	// svelte-ignore state_referenced_locally
 	let contentOperations = $state(data?.contentOperations || {});
+	// svelte-ignore state_referenced_locally
+	let runtimeControls = $state(data?.runtimeControls || {});
 	let operationsPreview = $state(null);
 	let operationsBusy = $state('');
 	let operationsMessage = $state('');
 
 	const automation = $derived(dashboard?.automation || {});
 	const scheduleData = $derived(data?.schedules || {});
-	const scheduleRuntime = $derived(scheduleData?.runtime || {});
+	// svelte-ignore state_referenced_locally
+	let scheduleRuntimeState = $state(scheduleData?.runtime || {});
+	const scheduleRuntime = $derived(scheduleRuntimeState);
+	const runtimeControlMap = $derived.by(() =>
+		Object.fromEntries(
+			(Array.isArray(runtimeControls?.controls) ? runtimeControls.controls : []).map((control) => [
+				control.controlKey,
+				control
+			])
+		)
+	);
+	const canManageRuntimeControls = $derived(runtimeControls?.actions?.manage === true);
+	const blogCronEnabled = $derived(
+		runtimeControlMap.blog_cron?.enabled ?? Boolean(scheduleRuntime.cronEnabled)
+	);
+	const autoPublishEnabled = $derived(
+		runtimeControlMap.auto_publish?.enabled ?? Boolean(automation.autoPublish)
+	);
+	const telegramApprovalEnabled = $derived(
+		runtimeControlMap.telegram_approval?.enabled ?? Boolean(automation.telegramEnabled)
+	);
+	const imagePipelineEnabled = $derived(
+		runtimeControlMap.image_pipeline?.enabled ?? Boolean(automation.imagePipelineEnabled)
+	);
 	const initialSchedules = $derived(
 		Array.isArray(scheduleData?.schedules) ? scheduleData.schedules : []
 	);
@@ -96,6 +121,11 @@
 	let pollStartedAt = 0;
 	let pollInFlight = false;
 	let runIdempotency = $state({ scheduleId: '', key: '' });
+	let controlDialog = $state(null);
+	let controlReason = $state('');
+	let controlAcknowledged = $state(false);
+	let controlBusy = $state('');
+	let controlMessage = $state('');
 
 	const createIdempotencyKey = () =>
 		typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -193,6 +223,65 @@
 		on: isEn ? 'On' : 'Bật',
 		off: isEn ? 'Off' : 'Tắt',
 		statusTitle: isEn ? 'System status' : 'Trạng thái hệ thống',
+		controlHint: isEn
+			? 'Protected runtime controls · changes are audited'
+			: 'Điều khiển runtime có bảo vệ · mọi thay đổi đều được lưu audit',
+		viewOnly: isEn ? 'View only' : 'Chỉ xem',
+		controlTitle: isEn ? 'Confirm runtime change' : 'Xác nhận thay đổi runtime',
+		controlEnable: isEn ? 'Enable' : 'Bật',
+		controlDisable: isEn ? 'Disable' : 'Tắt',
+		controlReason: isEn ? 'Operational reason' : 'Lý do vận hành',
+		controlReasonPlaceholder: isEn
+			? 'Describe why this change is required (at least 10 characters).'
+			: 'Mô tả lý do cần thay đổi (ít nhất 10 ký tự).',
+		controlAcknowledge: isEn
+			? 'I understand this changes the live backend runtime and is recorded in the audit log.'
+			: 'Tôi hiểu thao tác này thay đổi runtime backend đang chạy và được ghi vào audit log.',
+		controlReady: isEn ? 'Ready to enable' : 'Đủ điều kiện bật',
+		controlBlocked: isEn ? 'Blocked by safety checks' : 'Đang bị chặn bởi chốt an toàn',
+		controlSuccess: isEn
+			? 'Runtime control updated successfully.'
+			: 'Đã cập nhật công tắc runtime thành công.',
+		controlNoPermission: isEn
+			? 'Super Admin or the runtime-control permission is required.'
+			: 'Cần quyền Super Admin hoặc quyền điều khiển runtime.',
+		controlApply: isEn ? 'Apply change' : 'Áp dụng thay đổi',
+		controlRisk: {
+			scheduled_writes: isEn
+				? 'Enabling lets the scheduler claim due schedules and create real executions.'
+				: 'Khi bật, scheduler có thể nhận lịch đến hạn và tạo execution thật.',
+			public_publish: isEn
+				? 'Enabling permits eligible, fully gated runs to publish publicly.'
+				: 'Khi bật, lượt chạy đủ toàn bộ chốt có thể xuất bản công khai.',
+			external_notification: isEn
+				? 'Enabling permits approval messages to configured Telegram targets.'
+				: 'Khi bật, hệ thống có thể gửi yêu cầu duyệt đến Telegram đã cấu hình.',
+			paid_external_provider: isEn
+				? 'Enabling permits external image providers and may incur cost.'
+				: 'Khi bật, hệ thống có thể gọi nhà cung cấp ảnh bên ngoài và phát sinh chi phí.'
+		},
+		controlPrecondition: {
+			seo_agent_enabled: isEn ? 'SEO Agent is enabled' : 'SEO Agent đang bật',
+			enabled_schedule_exists: isEn
+				? 'At least one production schedule is enabled'
+				: 'Có ít nhất một lịch production đang bật',
+			no_active_runs: isEn
+				? 'No active execution or lease'
+				: 'Không có execution hoặc lease đang chạy',
+			publish_readiness_enabled: isEn
+				? 'Publish-readiness gate is enabled'
+				: 'Chốt sẵn sàng xuất bản đang bật',
+			post_publish_verification_enabled: isEn
+				? 'Post-publish verification is enabled'
+				: 'Xác minh sau xuất bản đang bật',
+			image_pipeline_enabled: isEn ? 'Image pipeline is enabled' : 'Pipeline ảnh đang bật',
+			telegram_configured: isEn
+				? 'Telegram token, allowlist, target and webhook are configured'
+				: 'Telegram đã đủ token, allowlist, đích nhận và webhook',
+			image_provider_configured: isEn
+				? 'At least one image provider is configured'
+				: 'Có ít nhất một nhà cung cấp ảnh đã cấu hình'
+		},
 		seoAgent: isEn ? 'SEO agent' : 'SEO agent',
 		blogCron: isEn ? 'Blog cron' : 'Blog cron',
 		telegram: isEn ? 'Telegram approval' : 'Duyệt qua Telegram',
@@ -218,6 +307,130 @@
 			return path;
 		}
 		return path.replace(/^\/admin(?=\/|$)/, '') || '/';
+	};
+
+	const runtimeControlLabel = (controlKey) =>
+		({
+			blog_cron: t.blogCron,
+			auto_publish: t.autoPublish,
+			telegram_approval: t.telegram,
+			image_pipeline: t.imagePipeline
+		})[controlKey] || controlKey;
+
+	const createControlIdempotencyKey = () =>
+		typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+			? `runtime-${crypto.randomUUID()}`
+			: `runtime-${Date.now()}-${Math.random().toString(36).slice(2, 14)}`;
+
+	const applyRuntimeControlState = (payload) => {
+		runtimeControls = payload && typeof payload === 'object' ? payload : {};
+		const controls = Object.fromEntries(
+			(Array.isArray(payload?.controls) ? payload.controls : []).map((control) => [
+				control.controlKey,
+				control
+			])
+		);
+		const nextBlogCron = Boolean(controls.blog_cron?.enabled);
+		const nextAutoPublish = Boolean(controls.auto_publish?.enabled);
+		const nextTelegram = Boolean(controls.telegram_approval?.enabled);
+		const nextImagePipeline = Boolean(controls.image_pipeline?.enabled);
+		scheduleRuntimeState = { ...scheduleRuntimeState, cronEnabled: nextBlogCron };
+		dashboard = {
+			...dashboard,
+			automation: {
+				...(dashboard?.automation || {}),
+				blogCronEnabled: nextBlogCron,
+				autoPublish: nextAutoPublish,
+				telegramEnabled: nextTelegram,
+				imagePipelineEnabled: nextImagePipeline
+			}
+		};
+	};
+
+	const refreshRuntimeControls = async () => {
+		const response = await fetch(resolveAdminPath('/admin/api/openclaw/runtime-controls'));
+		const payload = await response.json().catch(() => null);
+		if (!response.ok) {
+			throw new Error(
+				payload?.error ||
+					(isEn ? 'Unable to refresh runtime controls' : 'Không thể làm mới công tắc runtime')
+			);
+		}
+		applyRuntimeControlState(payload);
+		return payload;
+	};
+
+	const openRuntimeControlDialog = (controlKey) => {
+		controlMessage = '';
+		const control = runtimeControlMap[controlKey];
+		if (!control) {
+			controlMessage = isEn
+				? 'Runtime control status is unavailable.'
+				: 'Chưa tải được trạng thái công tắc runtime.';
+			return;
+		}
+		if (!canManageRuntimeControls) {
+			controlMessage = t.controlNoPermission;
+			return;
+		}
+		controlDialog = {
+			...control,
+			targetEnabled: control.enabled !== true
+		};
+		controlReason = '';
+		controlAcknowledged = false;
+	};
+
+	const closeRuntimeControlDialog = () => {
+		if (controlBusy) return;
+		controlDialog = null;
+		controlReason = '';
+		controlAcknowledged = false;
+	};
+
+	const submitRuntimeControl = async () => {
+		if (!controlDialog || controlBusy) return;
+		const reason = controlReason.trim();
+		if (reason.length < 10 || !controlAcknowledged) return;
+		if (controlDialog.targetEnabled && controlDialog.readyToEnable !== true) return;
+		const controlKey = controlDialog.controlKey;
+		controlBusy = controlKey;
+		controlMessage = '';
+		try {
+			const response = await fetch(
+				resolveAdminPath(`/admin/api/openclaw/runtime-controls/${encodeURIComponent(controlKey)}`),
+				{
+					method: 'PATCH',
+					headers: {
+						'content-type': 'application/json',
+						'Idempotency-Key': createControlIdempotencyKey()
+					},
+					body: JSON.stringify({
+						enabled: controlDialog.targetEnabled,
+						expectedRevision: Number(controlDialog.revision || 0),
+						reason,
+						acknowledgement: controlDialog.acknowledgement
+					})
+				}
+			);
+			const payload = await response.json().catch(() => null);
+			if (!response.ok) {
+				if (response.status === 409) await refreshRuntimeControls().catch(() => null);
+				throw new Error(
+					payload?.error ||
+						(isEn ? 'Runtime control update failed' : 'Cập nhật công tắc runtime thất bại')
+				);
+			}
+			applyRuntimeControlState(payload);
+			controlDialog = null;
+			controlReason = '';
+			controlAcknowledged = false;
+			controlMessage = t.controlSuccess;
+		} catch (error) {
+			controlMessage = error.message;
+		} finally {
+			controlBusy = '';
+		}
 	};
 
 	const contentOperationsRequest = async (path, body) => {
@@ -402,7 +615,7 @@
 
 	const telegramStatus = $derived.by(() => {
 		const telegram = dashboard?.telegram || {};
-		const enabled = Boolean(automation.telegramEnabled);
+		const enabled = telegramApprovalEnabled;
 		const complete = Boolean(
 			telegram.tokenConfigured &&
 			telegram.webhookSecretConfigured &&
@@ -436,6 +649,7 @@
 			);
 		}
 		runSchedules = Array.isArray(payload?.schedules) ? payload.schedules : [];
+		scheduleRuntimeState = payload?.runtime || scheduleRuntimeState;
 		selectedRunScheduleId =
 			selectDefaultDailyDraftSchedule(runSchedules, selectedRunScheduleId)?.id || '';
 		return runSchedules;
@@ -694,10 +908,10 @@
 				<span class="oc-muted">{t.publishingMode}</span>
 				<span
 					class="oc-badge"
-					class:is-warn={automation.autoPublish}
-					class:is-good={!automation.autoPublish}
+					class:is-warn={autoPublishEnabled}
+					class:is-good={!autoPublishEnabled}
 				>
-					<span class="oc-dot"></span>{automation.autoPublish ? t.autoPublish : t.draftOnly}
+					<span class="oc-dot"></span>{autoPublishEnabled ? t.autoPublish : t.draftOnly}
 				</span>
 			</div>
 
@@ -775,7 +989,13 @@
 
 		<aside class="oc-panel dd-status">
 			<div class="oc-panel__head">
-				<h2>{t.statusTitle}</h2>
+				<div>
+					<h2>{t.statusTitle}</h2>
+					<p class="dd-status__hint">{t.controlHint}</p>
+				</div>
+				{#if !canManageRuntimeControls}
+					<span class="dd-status__readonly">{t.viewOnly}</span>
+				{/if}
 			</div>
 			<div class="dd-status__list">
 				<div class="dd-status__row">
@@ -791,46 +1011,76 @@
 				<div class="dd-status__row">
 					<span>{t.blogCron}</span>
 					<div class="dd-status__value">
-						<b
-							class="oc-badge"
-							class:is-good={scheduleRuntime.cronEnabled}
-							class:is-muted={!scheduleRuntime.cronEnabled}
+						<button
+							type="button"
+							class="dd-control-toggle"
+							class:is-on={blogCronEnabled}
+							role="switch"
+							aria-checked={blogCronEnabled}
+							aria-label={`${blogCronEnabled ? t.controlDisable : t.controlEnable} ${t.blogCron}`}
+							disabled={!canManageRuntimeControls || Boolean(controlBusy)}
+							onclick={() => openRuntimeControlDialog('blog_cron')}
 						>
-							<span class="oc-dot"></span>{scheduleRuntime.cronEnabled ? t.enabled : t.disabled}
-						</b>
+							<span class="dd-control-toggle__state"
+								>{blogCronEnabled ? t.enabled : t.disabled}</span
+							>
+							<span class="dd-control-toggle__track"><span></span></span>
+						</button>
 						<small>{enabledScheduleCount} {isEn ? 'enabled schedule(s)' : 'lịch đang bật'}</small>
 					</div>
 				</div>
 				<div class="dd-status__row">
 					<span>{t.autoPublish}</span>
-					<b
-						class="oc-badge"
-						class:is-warn={automation.autoPublish}
-						class:is-good={!automation.autoPublish}
+					<button
+						type="button"
+						class="dd-control-toggle"
+						class:is-on={autoPublishEnabled}
+						class:is-critical={autoPublishEnabled}
+						role="switch"
+						aria-checked={autoPublishEnabled}
+						aria-label={`${autoPublishEnabled ? t.controlDisable : t.controlEnable} ${t.autoPublish}`}
+						disabled={!canManageRuntimeControls || Boolean(controlBusy)}
+						onclick={() => openRuntimeControlDialog('auto_publish')}
 					>
-						<span class="oc-dot"></span>{automation.autoPublish ? t.autoPublish : t.draftOnly}
-					</b>
+						<span class="dd-control-toggle__state"
+							>{autoPublishEnabled ? t.autoPublish : t.draftOnly}</span
+						>
+						<span class="dd-control-toggle__track"><span></span></span>
+					</button>
 				</div>
 				<div class="dd-status__row">
 					<span>{t.telegram}</span>
-					<b
-						class="oc-badge"
-						class:is-good={telegramStatus.tone === 'good'}
-						class:is-warn={telegramStatus.tone === 'warn'}
-						class:is-muted={telegramStatus.tone === 'neutral'}
+					<button
+						type="button"
+						class="dd-control-toggle"
+						class:is-on={telegramApprovalEnabled}
+						role="switch"
+						aria-checked={telegramApprovalEnabled}
+						aria-label={`${telegramApprovalEnabled ? t.controlDisable : t.controlEnable} ${t.telegram}`}
+						disabled={!canManageRuntimeControls || Boolean(controlBusy)}
+						onclick={() => openRuntimeControlDialog('telegram_approval')}
 					>
-						<span class="oc-dot"></span>{telegramStatus.label}
-					</b>
+						<span class="dd-control-toggle__state">{telegramStatus.label}</span>
+						<span class="dd-control-toggle__track"><span></span></span>
+					</button>
 				</div>
 				<div class="dd-status__row">
 					<span>{t.imagePipeline}</span>
-					<b
-						class="oc-badge"
-						class:is-good={automation.imagePipelineEnabled}
-						class:is-muted={!automation.imagePipelineEnabled}
+					<button
+						type="button"
+						class="dd-control-toggle"
+						class:is-on={imagePipelineEnabled}
+						role="switch"
+						aria-checked={imagePipelineEnabled}
+						aria-label={`${imagePipelineEnabled ? t.controlDisable : t.controlEnable} ${t.imagePipeline}`}
+						disabled={!canManageRuntimeControls || Boolean(controlBusy)}
+						onclick={() => openRuntimeControlDialog('image_pipeline')}
 					>
-						<span class="oc-dot"></span>{automation.imagePipelineEnabled ? t.enabled : t.disabled}
-					</b>
+						<span class="dd-control-toggle__state"
+							>{imagePipelineEnabled ? t.enabled : t.disabled}</span
+						>
+						<span class="dd-control-toggle__track"><span></span></span>
+					</button>
 				</div>
 				<div class="dd-status__row">
 					<span>{t.gateway}</span>
@@ -858,11 +1108,129 @@
 					</div>
 				</div>
 			</div>
+			{#if controlMessage}
+				<p class="dd-status__message" aria-live="polite">{controlMessage}</p>
+			{/if}
 		</aside>
 	</div>
 
 	<BlogSchedulesPanel {initialSchedules} initialRuntime={scheduleRuntime} />
 </section>
+
+{#if controlDialog}
+	<div
+		class="dd-modal"
+		role="button"
+		tabindex="0"
+		aria-label={t.cancel}
+		onclick={(event) => {
+			if (event.target === event.currentTarget) closeRuntimeControlDialog();
+		}}
+		onkeydown={(event) => {
+			if (event.key === 'Escape') closeRuntimeControlDialog();
+		}}
+	>
+		<div
+			class="dd-modal__box dd-control-modal"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="runtime-control-title"
+		>
+			<div class="dd-control-modal__heading">
+				<div>
+					<p class="oc-eyebrow">LIVE RUNTIME / AUDITED</p>
+					<h3 id="runtime-control-title">{t.controlTitle}</h3>
+				</div>
+				<span
+					class="dd-control-modal__intent"
+					class:is-enable={controlDialog.targetEnabled}
+					class:is-disable={!controlDialog.targetEnabled}
+				>
+					{controlDialog.targetEnabled ? t.controlEnable : t.controlDisable}
+				</span>
+			</div>
+
+			<div class="dd-control-modal__target">
+				<span>{runtimeControlLabel(controlDialog.controlKey)}</span>
+				<code>{controlDialog.envKey}</code>
+			</div>
+
+			<div
+				class="dd-control-modal__risk"
+				class:is-critical={controlDialog.risk === 'public_publish'}
+			>
+				{t.controlRisk[controlDialog.risk] || controlDialog.risk}
+			</div>
+
+			{#if controlDialog.targetEnabled}
+				<div class="dd-control-checks">
+					<div class="dd-control-checks__head">
+						<strong>{controlDialog.readyToEnable ? t.controlReady : t.controlBlocked}</strong>
+						<span
+							>{controlDialog.preconditions?.filter((check) => check.pass).length ||
+								0}/{controlDialog.preconditions?.length || 0}</span
+						>
+					</div>
+					<ul>
+						{#each controlDialog.preconditions || [] as check (check.key)}
+							<li class:is-pass={check.pass} class:is-fail={!check.pass}>
+								<span aria-hidden="true">{check.pass ? '✓' : '!'}</span>
+								{t.controlPrecondition[check.key] || check.key}
+								{#if Number.isFinite(Number(check.value))}
+									<small>({check.value})</small>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{:else}
+				<p class="dd-control-modal__disable-note">
+					{isEn
+						? 'Disabling applies to subsequent runtime decisions and does not cancel an execution already in progress.'
+						: 'Tắt áp dụng cho các quyết định runtime tiếp theo và không hủy execution đã bắt đầu.'}
+				</p>
+			{/if}
+
+			<label class="dd-control-reason">
+				<span>{t.controlReason}</span>
+				<textarea
+					rows="3"
+					maxlength="500"
+					bind:value={controlReason}
+					placeholder={t.controlReasonPlaceholder}
+				></textarea>
+				<small>{controlReason.trim().length}/500</small>
+			</label>
+
+			<label class="dd-control-ack">
+				<input type="checkbox" bind:checked={controlAcknowledged} />
+				<span>{t.controlAcknowledge}</span>
+			</label>
+
+			<div class="dd-modal__actions">
+				<button
+					type="button"
+					class="oc-btn oc-btn--ghost"
+					onclick={closeRuntimeControlDialog}
+					disabled={Boolean(controlBusy)}>{t.cancel}</button
+				>
+				<button
+					type="button"
+					class="oc-btn"
+					class:oc-btn--primary={controlDialog.risk !== 'public_publish'}
+					class:oc-btn--danger={controlDialog.risk === 'public_publish'}
+					onclick={submitRuntimeControl}
+					disabled={Boolean(controlBusy) ||
+						controlReason.trim().length < 10 ||
+						!controlAcknowledged ||
+						(controlDialog.targetEnabled && controlDialog.readyToEnable !== true)}
+				>
+					{controlBusy ? (isEn ? 'Applying…' : 'Đang áp dụng…') : t.controlApply}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
 
 {#if confirmOpen}
 	<div
@@ -911,15 +1279,15 @@
 					<span>{t.publishingMode}</span>
 					<b
 						class="oc-badge"
-						class:is-warn={automation.autoPublish}
-						class:is-good={!automation.autoPublish}
+						class:is-warn={autoPublishEnabled}
+						class:is-good={!autoPublishEnabled}
 					>
-						{automation.autoPublish ? t.autoPublish : t.draftOnly}
+						{autoPublishEnabled ? t.autoPublish : t.draftOnly}
 					</b>
 				</div>
 				<div class="dd-confirm__item">
 					<span>{t.imagePipeline}</span>
-					<b>{automation.imagePipelineEnabled ? t.on : t.off}</b>
+					<b>{imagePipelineEnabled ? t.on : t.off}</b>
 				</div>
 				<div class="dd-confirm__item">
 					<span>{t.imageSearch}</span>
@@ -939,7 +1307,7 @@
 				</div>
 			</div>
 
-			{#if automation.autoPublish}
+			{#if autoPublishEnabled}
 				<div class="dd-confirm__warning">{t.autoPublishWarning}</div>
 			{/if}
 
@@ -1263,6 +1631,19 @@
 		color: var(--oc-primary-strong);
 	}
 
+	.oc-btn--danger {
+		background: #b42318;
+		border-color: #b42318;
+		color: #fff;
+		box-shadow: 0 2px 8px rgba(180, 35, 24, 0.18);
+	}
+
+	.oc-btn--danger:hover:not(:disabled) {
+		background: #8f1c13;
+		border-color: #8f1c13;
+		transform: translateY(-1px);
+	}
+
 	.oc-btn:disabled {
 		opacity: 0.62;
 		cursor: wait;
@@ -1413,6 +1794,24 @@
 		align-self: start;
 	}
 
+	.dd-status__hint {
+		margin: 5px 0 0;
+		max-width: 260px;
+		color: var(--oc-muted);
+		font-size: 0.68rem;
+		line-height: 1.4;
+	}
+
+	.dd-status__readonly {
+		padding: 3px 8px;
+		border: 1px solid var(--oc-border);
+		border-radius: 999px;
+		color: var(--oc-muted);
+		font-size: 0.68rem;
+		font-weight: 700;
+		white-space: nowrap;
+	}
+
 	.dd-status__list {
 		display: grid;
 		gap: 0;
@@ -1446,6 +1845,106 @@
 	.dd-status__value small {
 		color: var(--oc-muted);
 		font-size: 0.7rem;
+	}
+
+	.dd-control-toggle {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		min-height: 30px;
+		padding: 3px 5px 3px 10px;
+		border: 1px solid rgba(107, 114, 128, 0.2);
+		border-radius: 999px;
+		background: rgba(107, 114, 128, 0.08);
+		color: #4b5563;
+		font: inherit;
+		font-size: 0.72rem;
+		font-weight: 750;
+		cursor: pointer;
+		transition:
+			border-color 0.16s ease,
+			background 0.16s ease,
+			box-shadow 0.16s ease,
+			transform 0.16s ease;
+	}
+
+	.dd-control-toggle:hover:not(:disabled) {
+		border-color: rgba(15, 118, 110, 0.42);
+		box-shadow: 0 3px 10px rgba(15, 118, 110, 0.1);
+		transform: translateY(-1px);
+	}
+
+	.dd-control-toggle:focus-visible {
+		outline: 2px solid var(--oc-primary);
+		outline-offset: 2px;
+	}
+
+	.dd-control-toggle:disabled {
+		cursor: not-allowed;
+		opacity: 0.62;
+	}
+
+	.dd-control-toggle.is-on {
+		border-color: rgba(5, 150, 105, 0.28);
+		background: rgba(5, 150, 105, 0.1);
+		color: #047857;
+	}
+
+	.dd-control-toggle.is-critical {
+		border-color: rgba(217, 119, 6, 0.34);
+		background: rgba(217, 119, 6, 0.1);
+		color: #a74f05;
+	}
+
+	.dd-control-toggle__state {
+		max-width: 130px;
+		text-align: right;
+	}
+
+	.dd-control-toggle__track {
+		position: relative;
+		width: 30px;
+		height: 18px;
+		flex: 0 0 auto;
+		border-radius: 999px;
+		background: #cbd0d8;
+		box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.08);
+		transition: background 0.16s ease;
+	}
+
+	.dd-control-toggle__track span {
+		position: absolute;
+		top: 3px;
+		left: 3px;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: #fff;
+		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.3);
+		transition: transform 0.18s ease;
+	}
+
+	.dd-control-toggle.is-on .dd-control-toggle__track {
+		background: var(--oc-primary);
+	}
+
+	.dd-control-toggle.is-critical .dd-control-toggle__track {
+		background: var(--oc-warning);
+	}
+
+	.dd-control-toggle.is-on .dd-control-toggle__track span {
+		transform: translateX(12px);
+	}
+
+	.dd-status__message {
+		margin: 12px 0 0;
+		padding: 9px 10px;
+		border: 1px solid rgba(15, 118, 110, 0.18);
+		border-radius: 8px;
+		background: var(--oc-primary-soft);
+		color: var(--oc-primary-strong);
+		font-size: 0.74rem;
+		line-height: 1.45;
 	}
 
 	/* ── Modal ── */
@@ -1539,6 +2038,214 @@
 		font-size: 0.88rem;
 	}
 
+	.dd-control-modal {
+		width: min(620px, 100%);
+		gap: 14px;
+	}
+
+	.dd-control-modal__heading {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	.dd-control-modal__heading .oc-eyebrow {
+		margin-bottom: 5px;
+	}
+
+	.dd-control-modal__intent {
+		padding: 5px 10px;
+		border-radius: 999px;
+		font-size: 0.72rem;
+		font-weight: 800;
+		letter-spacing: 0.03em;
+		text-transform: uppercase;
+	}
+
+	.dd-control-modal__intent.is-enable {
+		background: rgba(5, 150, 105, 0.12);
+		color: #047857;
+	}
+
+	.dd-control-modal__intent.is-disable {
+		background: rgba(107, 114, 128, 0.12);
+		color: #4b5563;
+	}
+
+	.dd-control-modal__target {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 12px 14px;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
+	}
+
+	.dd-control-modal__target span {
+		font-weight: 750;
+	}
+
+	.dd-control-modal__target code {
+		overflow-wrap: anywhere;
+		color: var(--oc-muted);
+		font-size: 0.7rem;
+		text-align: right;
+	}
+
+	.dd-control-modal__risk,
+	.dd-control-modal__disable-note {
+		margin: 0;
+		padding: 11px 13px;
+		border: 1px solid rgba(217, 119, 6, 0.24);
+		border-radius: var(--oc-radius-sm);
+		background: rgba(217, 119, 6, 0.07);
+		color: #9a5a08;
+		font-size: 0.8rem;
+		line-height: 1.5;
+	}
+
+	.dd-control-modal__risk.is-critical {
+		border-color: rgba(180, 35, 24, 0.28);
+		background: rgba(180, 35, 24, 0.07);
+		color: #9f2117;
+	}
+
+	.dd-control-modal__disable-note {
+		border-color: rgba(107, 114, 128, 0.2);
+		background: rgba(107, 114, 128, 0.06);
+		color: #4b5563;
+	}
+
+	.dd-control-checks {
+		overflow: hidden;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+	}
+
+	.dd-control-checks__head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 9px 12px;
+		border-bottom: 1px solid var(--oc-border);
+		background: var(--oc-surface-2);
+		font-size: 0.78rem;
+	}
+
+	.dd-control-checks__head span {
+		color: var(--oc-muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.dd-control-checks ul {
+		display: grid;
+		gap: 0;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+
+	.dd-control-checks li {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 12px;
+		border-bottom: 1px solid var(--oc-border-soft);
+		color: #9f2117;
+		font-size: 0.76rem;
+	}
+
+	.dd-control-checks li:last-child {
+		border-bottom: 0;
+	}
+
+	.dd-control-checks li > span {
+		display: inline-grid;
+		width: 18px;
+		height: 18px;
+		place-items: center;
+		flex: 0 0 auto;
+		border-radius: 50%;
+		background: rgba(180, 35, 24, 0.1);
+		font-weight: 900;
+	}
+
+	.dd-control-checks li.is-pass {
+		color: #047857;
+	}
+
+	.dd-control-checks li.is-pass > span {
+		background: rgba(5, 150, 105, 0.12);
+	}
+
+	.dd-control-checks li small {
+		margin-left: auto;
+		color: inherit;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.dd-control-reason {
+		position: relative;
+		display: grid;
+		gap: 6px;
+		color: var(--oc-text);
+		font-size: 0.78rem;
+		font-weight: 700;
+	}
+
+	.dd-control-reason textarea {
+		width: 100%;
+		resize: vertical;
+		min-height: 88px;
+		padding: 10px 12px 22px;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface);
+		color: var(--oc-text);
+		font: inherit;
+		font-size: 0.82rem;
+		line-height: 1.5;
+	}
+
+	.dd-control-reason textarea:focus {
+		outline: 2px solid rgba(15, 118, 110, 0.2);
+		border-color: var(--oc-primary);
+	}
+
+	.dd-control-reason small {
+		position: absolute;
+		right: 9px;
+		bottom: 7px;
+		color: var(--oc-muted);
+		font-size: 0.66rem;
+		font-weight: 500;
+	}
+
+	.dd-control-ack {
+		display: flex;
+		align-items: flex-start;
+		gap: 9px;
+		padding: 10px 12px;
+		border: 1px solid var(--oc-border);
+		border-radius: var(--oc-radius-sm);
+		background: var(--oc-surface-2);
+		color: #4b5563;
+		font-size: 0.75rem;
+		line-height: 1.45;
+		cursor: pointer;
+	}
+
+	.dd-control-ack input {
+		width: 16px;
+		height: 16px;
+		margin: 1px 0 0;
+		accent-color: var(--oc-primary);
+	}
+
 	.dd-modal__actions {
 		display: flex;
 		justify-content: flex-end;
@@ -1554,6 +2261,16 @@
 	}
 
 	@media (max-width: 640px) {
+		.dd-control-modal__heading,
+		.dd-control-modal__target {
+			align-items: flex-start;
+			flex-direction: column;
+		}
+
+		.dd-control-modal__target code {
+			text-align: left;
+		}
+
 		.dd-operations__decision {
 			grid-template-columns: 1fr;
 		}
