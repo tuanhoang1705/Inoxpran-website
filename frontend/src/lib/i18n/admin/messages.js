@@ -746,6 +746,12 @@ export const messages = {
 						'Probe runtime đang tắt theo cấu hình; dữ liệu bên dưới chỉ để tham khảo.',
 					empty: 'Chưa có dữ liệu kiểm tra năng lực.',
 					emptyHint: 'Dùng “Kiểm tra tất cả” để chạy probe read-only có giới hạn.',
+					legend: {
+						label: 'Ý nghĩa màu trạng thái',
+						good: 'Xanh: runtime đã được xác minh hoặc năng lực đang tắt đúng thiết kế.',
+						warn: 'Vàng: dữ liệu còn thiếu/cũ hoặc cần kiểm tra thủ công; không đồng nghĩa hệ thống ngừng hoạt động.',
+						danger: 'Đỏ: lỗi thực tế, thiếu cấu hình hoặc runtime không khả dụng.'
+					},
 					features: {
 						seo_agent: 'Automation API',
 						openclaw_gateway: 'OpenClaw Gateway',
@@ -868,7 +874,7 @@ export const messages = {
 					description:
 						'Theo dõi batch, từng ca chạy, báo cáo Senior và vòng khắc phục mà không xuất bản công khai.',
 					badge: 'DRAFT ONLY / 81+',
-					openQa: 'Mở QA Batch',
+					openQa: 'QA Blog',
 					back: 'Vận hành nội dung',
 					createBatch: 'Tạo batch QA',
 					creating: 'Đang tạo…',
@@ -2447,6 +2453,12 @@ export const messages = {
 						'Runtime probes are disabled by configuration; the data below is informational.',
 					empty: 'No capability check data is available.',
 					emptyHint: 'Use “Check all” to run bounded read-only probes.',
+					legend: {
+						label: 'Status color meaning',
+						good: 'Green: runtime verified, or the capability is disabled as designed.',
+						warn: 'Amber: evidence is missing/stale or manual verification is required; this does not mean an outage.',
+						danger: 'Red: a real failure, missing configuration, or unavailable runtime.'
+					},
 					features: {
 						seo_agent: 'Automation API',
 						openclaw_gateway: 'OpenClaw Gateway',
@@ -2569,7 +2581,7 @@ export const messages = {
 					description:
 						'Track batches, execution cases, Senior reports, and bounded remediation without public publication.',
 					badge: 'DRAFT ONLY / 81+',
-					openQa: 'Open QA batches',
+					openQa: 'Blog QA',
 					back: 'Content operations',
 					createBatch: 'Create QA batch',
 					creating: 'Creating…',

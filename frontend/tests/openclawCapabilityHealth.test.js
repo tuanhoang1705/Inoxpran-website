@@ -46,6 +46,10 @@ const qaPageSource = readFileSync(
 	new URL('../src/routes/admin/openclaw/content-operations/qa/+page.svelte', import.meta.url),
 	'utf8'
 );
+const capabilityPanelSource = readFileSync(
+	new URL('../src/lib/components/admin/openclaw/CapabilityHealthPanel.svelte', import.meta.url),
+	'utf8'
+);
 
 test('normalizes the canonical capability contract without treating configuration as readiness', () => {
 	const health = normalizeCapabilityHealth({
@@ -183,10 +187,21 @@ test('content operations bootstrap reuses embedded capability health without a d
 	);
 });
 
-test('QA navigation remains hidden unless view access is explicitly granted', () => {
+test('QA navigation remains permission-gated but visible when production execution is disabled', () => {
 	assert.match(contentOperationsPageSource, /qaFeatureAccess\(data\?\.qaAccess\)/);
-	assert.match(contentOperationsPageSource, /canUseQaAction\(qaAccess, 'view'\)/);
+	assert.match(contentOperationsPageSource, /hasQaActionPermission\(qaAccess, 'view'\)/);
 	assert.match(contentOperationsPageSource, /\{#if canViewQa\}/);
+});
+
+test('capability panel explains green, amber, and red states in both locales', () => {
+	assert.match(capabilityPanelSource, /capabilities\.legend\.good/);
+	assert.match(capabilityPanelSource, /capabilities\.legend\.warn/);
+	assert.match(capabilityPanelSource, /capabilities\.legend\.danger/);
+	for (const locale of ['vi', 'en']) {
+		assert.match(messages[locale].admin.contentOperations.capabilities.legend.good, /\S/);
+		assert.match(messages[locale].admin.contentOperations.capabilities.legend.warn, /\S/);
+		assert.match(messages[locale].admin.contentOperations.capabilities.legend.danger, /\S/);
+	}
 });
 
 test('new capability and QA proxies keep narrow path allowlists and sanitize responses', () => {

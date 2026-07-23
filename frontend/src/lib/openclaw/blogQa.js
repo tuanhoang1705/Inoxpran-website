@@ -49,8 +49,11 @@ export const qaFeatureAccess = (payload = {}) => {
 	return { enabled: explicitEnabled, actions };
 };
 
+export const hasQaActionPermission = (access, action) =>
+	access?.actions instanceof Set && access.actions.has(action);
+
 export const canUseQaAction = (access, action) =>
-	access?.enabled === true && access?.actions instanceof Set && access.actions.has(action);
+	access?.enabled === true && hasQaActionPermission(access, action);
 
 export const normalizeQaReport = (value = {}) => {
 	const report = value && typeof value === 'object' ? value : {};

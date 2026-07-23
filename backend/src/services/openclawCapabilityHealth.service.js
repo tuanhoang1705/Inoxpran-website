@@ -1361,7 +1361,7 @@ class CapabilityHealthService {
             case 'imageSearch':
             case 'aiImage':
                 return {
-                    status: 'degraded',
+                    status: 'manual_review',
                     reasonCode: 'external_provider_not_probed',
                     runtime: { serviceRegistered: true, latestArtifactStatus: 'configured' },
                     warnings: ['external_provider_not_called_by_health_check'],

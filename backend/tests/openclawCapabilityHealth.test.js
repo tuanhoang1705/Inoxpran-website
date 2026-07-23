@@ -301,7 +301,7 @@ describe('OpenClaw capability health service', () => {
 
         await expect(service.checkOne({ featureKey: 'image_search' })).resolves.toMatchObject({
             checked: true,
-            status: 'degraded',
+            status: 'manual_review',
             reasonCode: 'external_provider_not_probed',
             safeDetails: { providerConfigured: true, runtimeVerified: false }
         });

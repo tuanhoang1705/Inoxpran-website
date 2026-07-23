@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { t } from '$lib/i18n/admin/index.js';
 	import { untrack } from 'svelte';
-	import { canUseQaAction, qaFeatureAccess } from '$lib/openclaw/blogQa.js';
+	import { hasQaActionPermission, qaFeatureAccess } from '$lib/openclaw/blogQa.js';
 	import {
 		CONTENT_OPERATION_VIEWS,
 		entityId,
@@ -47,7 +47,8 @@
 	const failedLoads = $derived(Object.keys(data?.loadErrors || {}));
 	const qaAccess = $derived(qaFeatureAccess(data?.qaAccess));
 	const canViewQa = $derived(
-		canUseQaAction(qaAccess, 'view') || canUseQaAction(qaAccess, 'agentic_blog_qa.view')
+		hasQaActionPermission(qaAccess, 'view') ||
+			hasQaActionPermission(qaAccess, 'agentic_blog_qa.view')
 	);
 	const counts = $derived({
 		today: preview ? 1 : firstList(snapshots, ['snapshots', 'items']).length,

@@ -223,6 +223,24 @@
 		</div>
 	</header>
 
+	<ul
+		class="capability-panel__legend"
+		aria-label={$t('admin.contentOperations.capabilities.legend.label')}
+	>
+		<li class="is-good">
+			<i aria-hidden="true"></i>
+			<span>{$t('admin.contentOperations.capabilities.legend.good')}</span>
+		</li>
+		<li class="is-warn">
+			<i aria-hidden="true"></i>
+			<span>{$t('admin.contentOperations.capabilities.legend.warn')}</span>
+		</li>
+		<li class="is-danger">
+			<i aria-hidden="true"></i>
+			<span>{$t('admin.contentOperations.capabilities.legend.danger')}</span>
+		</li>
+	</ul>
+
 	{#if requestError}
 		<p class="capability-panel__error" role="alert">{requestError}</p>
 	{/if}
@@ -367,6 +385,50 @@
 	.capability-panel__actions span {
 		display: grid;
 		gap: 0.1rem;
+	}
+	.capability-panel__legend {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 0.45rem;
+		margin: 0;
+		padding: 0;
+		list-style: none;
+	}
+	.capability-panel__legend li {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.45rem;
+		min-width: 0;
+		padding: 0.55rem 0.65rem;
+		border: 1px solid #dce4e1;
+		border-radius: 8px;
+		background: rgba(247, 249, 248, 0.9);
+		color: var(--admin-muted, #64748b);
+		font-size: 0.64rem;
+		line-height: 1.4;
+	}
+	.capability-panel__legend i {
+		width: 0.42rem;
+		height: 0.42rem;
+		margin-top: 0.18rem;
+		border-radius: 50%;
+		background: currentColor;
+		flex: none;
+	}
+	.capability-panel__legend li.is-good {
+		border-color: #c6e2d8;
+		background: #f2faf7;
+		color: #0b765f;
+	}
+	.capability-panel__legend li.is-warn {
+		border-color: #efd5a9;
+		background: #fffaf0;
+		color: #8a580f;
+	}
+	.capability-panel__legend li.is-danger {
+		border-color: #efc4c4;
+		background: #fff5f5;
+		color: #a32d2d;
 	}
 	.capability-panel button {
 		display: inline-flex;
@@ -577,6 +639,9 @@
 	@media (max-width: 720px) {
 		.capability-panel__header {
 			display: grid;
+		}
+		.capability-panel__legend {
+			grid-template-columns: 1fr;
 		}
 		.capability-panel__actions {
 			justify-content: space-between;

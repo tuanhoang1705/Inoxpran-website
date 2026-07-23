@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
 	canUseQaAction,
 	canResumeArticleQaRemediation,
+	hasQaActionPermission,
 	latestQaReportForCase,
 	normalizeQaBatch,
 	normalizeQaBatchDetail,
@@ -43,6 +44,11 @@ test('QA access is fail-closed unless the backend explicitly enables the feature
 		canUseQaAction(qaFeatureAccess({ featureEnabled: false, actions: ['run'] }), 'run'),
 		false
 	);
+	assert.equal(
+		hasQaActionPermission(qaFeatureAccess({ featureEnabled: false, actions: ['view'] }), 'view'),
+		true
+	);
+	assert.equal(hasQaActionPermission(qaFeatureAccess({ featureEnabled: false }), 'view'), false);
 });
 
 test('normalizes persisted QA cases and keeps server scores without calculating a client total', () => {
