@@ -29,6 +29,17 @@ plane. They are audit references, not credentials:
 - `OPENCLAW_DATA_HOST_PATH` and `OPENCLAW_WORKSPACES_HOST_PATH`: distinct
   absolute persistent directories outside the repository checkout. They must
   already exist with the ownership/mode required by the pinned OpenClaw image.
+- `NINE_ROUTER_DATA_HOST_PATH`: a third non-overlapping persistent directory
+  outside the checkout, writable by the pinned 9router container user
+  `1000:1000`.
+
+For a new or restored 9router directory, seed its database before the first
+start. The seed must contain only the reviewed active provider connections,
+must persist `settings.requireApiKey=true`, and must register exactly one active
+API key equal to `NINE_ROUTER_API_KEY`; passing that value as a container
+environment variable alone does not create the database record. Before traffic
+switching, require invalid-key `401`, authenticated model completion, and an
+OpenClaw response whose `provider_model` equals the pinned production model.
 
 Do not place database credentials, API keys, tokens, private certificate
 material, or secret-store values in these references.

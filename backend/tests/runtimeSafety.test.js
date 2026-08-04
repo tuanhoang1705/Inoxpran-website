@@ -131,6 +131,13 @@ describe("runtime production safety", () => {
       ),
       "utf8",
     );
+    const containerContract = fs.readFileSync(
+      path.join(
+        repositoryRoot,
+        ".github/scripts/validate-container-contracts.mjs",
+      ),
+      "utf8",
+    );
 
     expect(compose).toMatch(
       /OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL:\s*\$\{OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL:\?/,
@@ -142,17 +149,35 @@ describe("runtime production safety", () => {
       /\n  nine-router:\n([\s\S]*?)\n  openclaw:\n/,
     )?.[1];
     expect(nineRouterService).toMatch(/REQUIRE_API_KEY:\s*"true"/);
+    expect(nineRouterService).toMatch(/OBSERVABILITY_ENABLED:\s*"false"/);
+    expect(nineRouterService).toMatch(/user:\s*"1000:1000"/);
+    expect(nineRouterService).toMatch(/entrypoint:\s*\["node"\]/);
+    expect(nineRouterService).toMatch(/command:\s*\["custom-server\.js"\]/);
+    expect(nineRouterService).toMatch(/networks:\s*\n\s+- modelnet/);
+    expect(nineRouterService).not.toMatch(/\n\s+- appnet/);
     expect(nineRouterService).not.toContain("\n    ports:");
+    const redisService = compose.match(
+      /\n  redis:\n([\s\S]*?)\n  backend:\n/,
+    )?.[1];
+    expect(redisService).toMatch(/user:\s*"999:1000"/);
+    const openclawService = compose.match(
+      /\n  openclaw:\n([\s\S]*?)\n  openclaw-worker:\n/,
+    )?.[1];
+    expect(openclawService).toMatch(
+      /networks:\s*\n\s+- appnet\s*\n\s+- modelnet/,
+    );
+    expect(compose).toMatch(/\n  modelnet:\n\s+driver:\s+bridge/);
+    expect(compose).not.toMatch(/\n  modelnet:\n[\s\S]*?internal:\s*true/);
     expect(compose).toMatch(/FIRECRAWL_API_KEY:\s*\$\{FIRECRAWL_API_KEY:-\}/);
     expect(deployScript).toContain(
       "OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL must be present in OPENCLAW_TOPIC_ALLOWED_RESOLVED_MODELS",
     );
-    expect(deployScript).toContain("firecrawl) require_config FIRECRAWL_API_KEY");
+    expect(deployScript).toContain(
+      "firecrawl) require_config FIRECRAWL_API_KEY",
+    );
     expect(deployScript).toContain("--verify-patched");
     expect(deployScript).toContain("OPENCLAW_PACKAGE_ROOT");
-    expect(exampleEnv).toMatch(
-      /^OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL=$/m,
-    );
+    expect(exampleEnv).toMatch(/^OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL=$/m);
     expect(exampleEnv).toMatch(/^OPENCLAW_PACKAGE_ROOT=$/m);
     expect(exampleEnv).toMatch(/^OPENCLAW_MARKET_SEARCH_PROVIDER=disabled$/m);
     expect(openclawConfig).toContain(
@@ -161,9 +186,32 @@ describe("runtime production safety", () => {
     expect(openclawConfig).toContain('baseUrl: "http://nine-router:20128/v1"');
     expect(openclawConfig).toContain('apiKey: "${NINE_ROUTER_API_KEY}"');
     expect(openclawConfig).toContain('id: "cx/gpt-5.6-sol"');
+    expect(openclawConfig).toContain("contextWindow: 272000");
     expect(openclawConfig).toMatch(/fallbacks:\s*\[\]/);
     expect(patcher).toContain("version: '2026.6.11'");
     expect(patcher).toContain("provider_model: params.providerModel");
+    for (const variableName of [
+      "NINE_ROUTER_IMAGE",
+      "NINE_ROUTER_DATA_HOST_PATH",
+      "NINE_ROUTER_API_KEY",
+      "NINE_ROUTER_JWT_SECRET",
+      "NINE_ROUTER_INITIAL_PASSWORD",
+      "NINE_ROUTER_API_KEY_SECRET",
+      "NINE_ROUTER_MACHINE_ID_SALT",
+    ]) {
+      expect(deployScript).toContain(variableName);
+      expect(containerContract).toContain(variableName);
+    }
+    expect(deployScript).toContain("9router secrets must be distinct");
+    expect(containerContract).toContain("9router secrets must be distinct");
+    expect(deployScript).toContain("--user 1000:1000");
+    expect(deployScript).toContain("--user 999:1000");
+    expect(deployScript).toContain(
+      "NINE_ROUTER_DATA_HOST_PATH must be readable and writable by container UID/GID 1000:1000",
+    );
+    expect(deployScript).toContain(
+      "REDIS_TLS_CERT_DIR must be traversable and readable by container UID/GID 999:1000",
+    );
   });
 
   it("rejects production auto-index and missing Redis credentials", () => {

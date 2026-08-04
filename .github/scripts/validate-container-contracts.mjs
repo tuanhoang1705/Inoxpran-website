@@ -13,6 +13,7 @@ const requiredImageVariables = [
   "NGINX_IMAGE",
   "CERTBOT_IMAGE",
   "OPENCLAW_IMAGE",
+  "NINE_ROUTER_IMAGE",
 ];
 
 const n8nDisabledImageReference =
@@ -25,6 +26,7 @@ const reviewedImageVariables = automationImageIsConfigured
 const serviceImageVariables = new Map([
   ["redis", "REDIS_IMAGE"],
   ["telegram-relay", "NGINX_IMAGE"],
+  ["nine-router", "NINE_ROUTER_IMAGE"],
   ["openclaw", "OPENCLAW_IMAGE"],
   ["nginx", "NGINX_IMAGE"],
   ["certbot", "CERTBOT_IMAGE"],
@@ -32,6 +34,15 @@ const serviceImageVariables = new Map([
 
 const violations = [];
 const imageValues = new Map();
+const nineRouterSecretVariables = [
+  "NINE_ROUTER_API_KEY",
+  "NINE_ROUTER_JWT_SECRET",
+  "NINE_ROUTER_INITIAL_PASSWORD",
+  "NINE_ROUTER_API_KEY_SECRET",
+  "NINE_ROUTER_MACHINE_ID_SALT",
+];
+const placeholderSecretPattern =
+  /change[-_]this|replace[-_]me|example[-_](?:secret|token)|your[-_](?:secret|token)/i;
 
 for (const variableName of reviewedImageVariables) {
   const value = process.env[variableName]?.trim() ?? "";
@@ -66,6 +77,88 @@ for (const variableName of reviewedImageVariables) {
   imageValues.set(variableName, value);
 }
 
+const nineRouterSecretValues = new Map();
+for (const variableName of nineRouterSecretVariables) {
+  const value = process.env[variableName]?.trim() ?? "";
+  if (value.length < 32) {
+    violations.push(`${variableName} must contain at least 32 characters`);
+    continue;
+  }
+  if (placeholderSecretPattern.test(value)) {
+    violations.push(`${variableName} must not use a placeholder value`);
+    continue;
+  }
+  if (/[\0\r\n]/.test(value)) {
+    violations.push(`${variableName} must not contain control characters`);
+    continue;
+  }
+  nineRouterSecretValues.set(variableName, value);
+}
+for (
+  let leftIndex = 0;
+  leftIndex < nineRouterSecretVariables.length;
+  leftIndex += 1
+) {
+  for (
+    let rightIndex = leftIndex + 1;
+    rightIndex < nineRouterSecretVariables.length;
+    rightIndex += 1
+  ) {
+    const leftName = nineRouterSecretVariables[leftIndex];
+    const rightName = nineRouterSecretVariables[rightIndex];
+    const leftValue = nineRouterSecretValues.get(leftName);
+    const rightValue = nineRouterSecretValues.get(rightName);
+    if (leftValue && rightValue && leftValue === rightValue) {
+      violations.push(
+        `9router secrets must be distinct: ${leftName} and ${rightName} collide`,
+      );
+    }
+  }
+}
+
+const nineRouterDataHostPath =
+  process.env.NINE_ROUTER_DATA_HOST_PATH?.trim() ?? "";
+const pathIsInsideRepository = (candidatePath) => {
+  const relativeToRepository = path.relative(repositoryRoot, candidatePath);
+  return (
+    relativeToRepository === "" ||
+    (!relativeToRepository.startsWith(`..${path.sep}`) &&
+      relativeToRepository !== ".." &&
+      !path.isAbsolute(relativeToRepository))
+  );
+};
+if (!nineRouterDataHostPath || !path.isAbsolute(nineRouterDataHostPath)) {
+  violations.push(
+    "NINE_ROUTER_DATA_HOST_PATH must be an explicit absolute host directory",
+  );
+} else {
+  try {
+    const resolvedDataPath = fs.realpathSync(nineRouterDataHostPath);
+    if (resolvedDataPath === path.parse(resolvedDataPath).root) {
+      violations.push(
+        "NINE_ROUTER_DATA_HOST_PATH must not resolve to a filesystem root",
+      );
+    }
+    if (
+      pathIsInsideRepository(path.resolve(nineRouterDataHostPath)) ||
+      pathIsInsideRepository(resolvedDataPath)
+    ) {
+      violations.push(
+        "NINE_ROUTER_DATA_HOST_PATH must remain outside the repository checkout",
+      );
+    }
+    if (!fs.statSync(resolvedDataPath).isDirectory()) {
+      violations.push("NINE_ROUTER_DATA_HOST_PATH must reference a directory");
+    } else {
+      fs.accessSync(resolvedDataPath, fs.constants.R_OK | fs.constants.W_OK);
+    }
+  } catch (error) {
+    violations.push(
+      `NINE_ROUTER_DATA_HOST_PATH must reference an existing readable and writable directory: ${error.code ?? error.message}`,
+    );
+  }
+}
+
 const composeSource = fs.readFileSync(composePath, "utf8");
 const localComposeSource = fs.readFileSync(localComposePath, "utf8");
 for (const variableName of requiredImageVariables.filter(
@@ -93,6 +186,17 @@ if (!composeSource.includes(expectedDisabledN8nReference)) {
 const backendServiceSource = composeSource.match(
   /^  backend:\s*$([\s\S]*?)(?=^  frontend:\s*$)/m,
 )?.[1];
+const redisServiceSource = composeSource.match(
+  /^  redis:\s*$([\s\S]*?)(?=^  backend:\s*$)/m,
+)?.[1];
+if (
+  !redisServiceSource ||
+  !/^\s{4}user:\s*["']999:1000["']\s*$/m.test(redisServiceSource)
+) {
+  violations.push(
+    "docker-compose.yml Redis must run as 999:1000 for its external TLS group access",
+  );
+}
 if (!backendServiceSource) {
   violations.push("docker-compose.yml must define the backend service");
 } else {
@@ -180,7 +284,7 @@ if (!localN8nServiceSource) {
 }
 
 const n8nServiceSource = composeSource.match(
-  /^  n8n:\s*$([\s\S]*?)(?=^  openclaw:\s*$)/m,
+  /^  n8n:\s*$([\s\S]*?)(?=^  nine-router:\s*$)/m,
 )?.[1];
 if (!n8nServiceSource) {
   violations.push("docker-compose.yml must define the opt-in n8n service");
@@ -208,6 +312,103 @@ if (!n8nServiceSource) {
       violations.push(`docker-compose.yml must ${description}`);
     }
   }
+}
+
+const nineRouterServiceSource = composeSource.match(
+  /^  nine-router:\s*$([\s\S]*?)(?=^  openclaw:\s*$)/m,
+)?.[1];
+if (!nineRouterServiceSource) {
+  violations.push(
+    "docker-compose.yml must define the private nine-router service",
+  );
+} else {
+  for (const [description, pattern] of [
+    ["require API-key authentication", /REQUIRE_API_KEY:\s*["']true["']/],
+    ["disable request logging", /ENABLE_REQUEST_LOGS:\s*["']false["']/],
+    ["disable observability export", /OBSERVABILITY_ENABLED:\s*["']false["']/],
+    [
+      "require NINE_ROUTER_JWT_SECRET",
+      /JWT_SECRET:\s*\$\{NINE_ROUTER_JWT_SECRET:\?[^}\r\n]+\}/,
+    ],
+    [
+      "require NINE_ROUTER_INITIAL_PASSWORD",
+      /INITIAL_PASSWORD:\s*\$\{NINE_ROUTER_INITIAL_PASSWORD:\?[^}\r\n]+\}/,
+    ],
+    [
+      "require NINE_ROUTER_API_KEY_SECRET",
+      /API_KEY_SECRET:\s*\$\{NINE_ROUTER_API_KEY_SECRET:\?[^}\r\n]+\}/,
+    ],
+    [
+      "require NINE_ROUTER_MACHINE_ID_SALT",
+      /MACHINE_ID_SALT:\s*\$\{NINE_ROUTER_MACHINE_ID_SALT:\?[^}\r\n]+\}/,
+    ],
+    [
+      "bind the fail-closed external data directory",
+      /\$\{NINE_ROUTER_DATA_HOST_PATH:\?[^}\r\n]+\}:\/app\/data/,
+    ],
+    ["keep its root filesystem read-only", /^\s{4}read_only:\s*true\s*$/m],
+    ["run as the external data owner", /^\s{4}user:\s*["']1000:1000["']\s*$/m],
+    [
+      "bypass the image privilege-dropping entrypoint",
+      /^\s{4}entrypoint:\s*\[["']node["']\]\s*$/m,
+    ],
+    [
+      "start the reviewed server directly",
+      /^\s{4}command:\s*\[["']custom-server\.js["']\]\s*$/m,
+    ],
+    ["join only the dedicated model network", /^\s{6}- modelnet\s*$/m],
+  ]) {
+    if (!pattern.test(nineRouterServiceSource)) {
+      violations.push(`docker-compose.yml nine-router must ${description}`);
+    }
+  }
+  if (/^\s{4}ports:\s*$/m.test(nineRouterServiceSource)) {
+    violations.push(
+      "docker-compose.yml nine-router must not publish host ports",
+    );
+  }
+  if (/^\s{6}- appnet\s*$/m.test(nineRouterServiceSource)) {
+    violations.push("docker-compose.yml nine-router must not join appnet");
+  }
+}
+
+const openclawServiceSource = composeSource.match(
+  /^  openclaw:\s*$([\s\S]*?)(?=^  openclaw-worker:\s*$)/m,
+)?.[1];
+if (!openclawServiceSource) {
+  violations.push("docker-compose.yml must define the openclaw service");
+} else {
+  for (const [description, pattern] of [
+    [
+      "require NINE_ROUTER_API_KEY",
+      /NINE_ROUTER_API_KEY:\s*\$\{NINE_ROUTER_API_KEY:\?[^}\r\n]+\}/,
+    ],
+    ["join appnet", /^\s{6}- appnet\s*$/m],
+    ["join the dedicated model network", /^\s{6}- modelnet\s*$/m],
+  ]) {
+    if (!pattern.test(openclawServiceSource)) {
+      violations.push(`docker-compose.yml openclaw must ${description}`);
+    }
+  }
+}
+
+const modelNetworkSource = composeSource.match(
+  /^  modelnet:\s*$([\s\S]*?)(?=^volumes:\s*$)/m,
+)?.[1];
+if (
+  !modelNetworkSource ||
+  !/^\s{4}driver:\s*bridge\s*$/m.test(modelNetworkSource)
+) {
+  violations.push(
+    "docker-compose.yml must define modelnet as a bridge network",
+  );
+} else if (/^\s{4}internal:\s*true\s*$/m.test(modelNetworkSource)) {
+  violations.push("docker-compose.yml modelnet must allow 9router egress");
+}
+if ((composeSource.match(/^\s{6}- modelnet\s*$/gm) ?? []).length !== 2) {
+  violations.push(
+    "docker-compose.yml must attach only openclaw and nine-router to modelnet",
+  );
 }
 
 const buildArgumentReference =
@@ -252,6 +453,14 @@ for (const relativeDockerfile of [
 
 const composeJsonIndex = process.argv.indexOf("--compose-json");
 const requireN8nService = process.argv.includes("--require-n8n");
+const renderedNetworkNames = (service) => {
+  const networks = service?.networks;
+  if (Array.isArray(networks)) return [...networks].sort();
+  if (networks && typeof networks === "object") {
+    return Object.keys(networks).sort();
+  }
+  return [];
+};
 if (requireN8nService && !automationImageIsConfigured) {
   violations.push("--require-n8n requires a reviewed N8N_IMAGE");
 }
@@ -260,10 +469,16 @@ if (composeJsonIndex !== -1) {
   if (!composeJsonArgument) {
     violations.push("--compose-json requires a file path");
   } else {
-    const composeJsonPath = path.resolve(process.cwd(), composeJsonArgument);
     let renderedCompose;
     try {
-      renderedCompose = JSON.parse(fs.readFileSync(composeJsonPath, "utf8"));
+      const composeJsonSource =
+        composeJsonArgument === "-"
+          ? fs.readFileSync(0, "utf8")
+          : fs.readFileSync(
+              path.resolve(process.cwd(), composeJsonArgument),
+              "utf8",
+            );
+      renderedCompose = JSON.parse(composeJsonSource);
     } catch (error) {
       violations.push(`could not read rendered Compose JSON: ${error.message}`);
     }
@@ -307,6 +522,142 @@ if (composeJsonIndex !== -1) {
       if (renderedBackend?.depends_on?.redis?.condition !== "service_healthy") {
         violations.push(
           "rendered backend must wait for the Redis service healthcheck",
+        );
+      }
+
+      if (renderedCompose.services?.redis?.user !== "999:1000") {
+        violations.push(
+          "rendered Redis must run as 999:1000 for its external TLS group access",
+        );
+      }
+
+      const renderedNineRouter = renderedCompose.services?.["nine-router"];
+      if (!renderedNineRouter) {
+        violations.push(
+          "rendered Compose must include the private nine-router service",
+        );
+      } else {
+        const routerEnvironment = renderedNineRouter.environment ?? {};
+        for (const [name, expectedValue] of [
+          ["REQUIRE_API_KEY", "true"],
+          ["ENABLE_REQUEST_LOGS", "false"],
+          ["OBSERVABILITY_ENABLED", "false"],
+        ]) {
+          if (String(routerEnvironment[name] ?? "") !== expectedValue) {
+            violations.push(
+              `rendered nine-router must set ${name} to ${expectedValue}`,
+            );
+          }
+        }
+        for (const [containerName, environmentName] of [
+          ["JWT_SECRET", "NINE_ROUTER_JWT_SECRET"],
+          ["INITIAL_PASSWORD", "NINE_ROUTER_INITIAL_PASSWORD"],
+          ["API_KEY_SECRET", "NINE_ROUTER_API_KEY_SECRET"],
+          ["MACHINE_ID_SALT", "NINE_ROUTER_MACHINE_ID_SALT"],
+        ]) {
+          if (
+            routerEnvironment[containerName] !== process.env[environmentName]
+          ) {
+            violations.push(
+              `rendered nine-router must receive the reviewed ${environmentName}`,
+            );
+          }
+        }
+        if (renderedNineRouter.read_only !== true) {
+          violations.push(
+            "rendered nine-router must keep its root filesystem read-only",
+          );
+        }
+        if (renderedNineRouter.user !== "1000:1000") {
+          violations.push(
+            "rendered nine-router must run as 1000:1000 for external data access",
+          );
+        }
+        if (
+          JSON.stringify(renderedNineRouter.entrypoint) !==
+            JSON.stringify(["node"]) ||
+          JSON.stringify(renderedNineRouter.command) !==
+            JSON.stringify(["custom-server.js"])
+        ) {
+          violations.push(
+            "rendered nine-router must bypass the image su-exec entrypoint and start custom-server.js directly",
+          );
+        }
+        if ((renderedNineRouter.ports ?? []).length > 0) {
+          violations.push("rendered nine-router must not publish host ports");
+        }
+        const routerDataMount = renderedNineRouter.volumes?.find(
+          (volume) => volume?.target === "/app/data",
+        );
+        if (
+          routerDataMount?.source !== nineRouterDataHostPath ||
+          routerDataMount?.read_only === true
+        ) {
+          violations.push(
+            "rendered nine-router must use the exact reviewed writable external data directory",
+          );
+        }
+        if (
+          JSON.stringify(renderedNetworkNames(renderedNineRouter)) !==
+          JSON.stringify(["modelnet"])
+        ) {
+          violations.push("rendered nine-router must join only modelnet");
+        }
+      }
+
+      const renderedOpenclaw = renderedCompose.services?.openclaw;
+      if (!renderedOpenclaw) {
+        violations.push("rendered Compose must include the openclaw service");
+      } else {
+        if (
+          renderedOpenclaw.environment?.NINE_ROUTER_API_KEY !==
+          process.env.NINE_ROUTER_API_KEY
+        ) {
+          violations.push(
+            "rendered openclaw must receive the reviewed NINE_ROUTER_API_KEY",
+          );
+        }
+        if (
+          JSON.stringify(renderedNetworkNames(renderedOpenclaw)) !==
+          JSON.stringify(["appnet", "modelnet"])
+        ) {
+          violations.push(
+            "rendered openclaw must join appnet and modelnet only",
+          );
+        }
+        if (
+          renderedOpenclaw.depends_on?.["nine-router"]?.condition !==
+          "service_healthy"
+        ) {
+          violations.push(
+            "rendered openclaw must wait for the nine-router healthcheck",
+          );
+        }
+      }
+
+      const renderedModelNetwork = renderedCompose.networks?.modelnet;
+      if (
+        renderedModelNetwork?.driver !== "bridge" ||
+        renderedModelNetwork?.internal === true
+      ) {
+        violations.push(
+          "rendered modelnet must be a non-internal bridge so private 9router keeps egress",
+        );
+      }
+      const modelNetworkConsumers = Object.entries(
+        renderedCompose.services ?? {},
+      )
+        .filter(([, service]) =>
+          renderedNetworkNames(service).includes("modelnet"),
+        )
+        .map(([serviceName]) => serviceName)
+        .sort();
+      if (
+        JSON.stringify(modelNetworkConsumers) !==
+        JSON.stringify(["nine-router", "openclaw"])
+      ) {
+        violations.push(
+          "rendered modelnet must be shared only by openclaw and nine-router",
         );
       }
 

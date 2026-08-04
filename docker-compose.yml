@@ -2,6 +2,7 @@
   redis:
     image: ${REDIS_IMAGE:?Set REDIS_IMAGE to a reviewed immutable digest}
     container_name: app_redis
+    user: "999:1000"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD through the deployment secret store}
     command:
@@ -334,6 +335,9 @@
   nine-router:
     image: ${NINE_ROUTER_IMAGE:?Set NINE_ROUTER_IMAGE to the reviewed immutable 9router digest}
     container_name: app_nine_router
+    user: "1000:1000"
+    entrypoint: ["node"]
+    command: ["custom-server.js"]
     environment:
       NODE_ENV: production
       PORT: 20128
@@ -346,6 +350,7 @@
       API_KEY_SECRET: ${NINE_ROUTER_API_KEY_SECRET:?Set the 9router API-key signing secret through the deployment secret store}
       MACHINE_ID_SALT: ${NINE_ROUTER_MACHINE_ID_SALT:?Set the 9router machine-id salt through the deployment secret store}
       ENABLE_REQUEST_LOGS: "false"
+      OBSERVABILITY_ENABLED: "false"
       REQUIRE_API_KEY: "true"
       AUTH_COOKIE_SECURE: "false"
     volumes:
@@ -370,7 +375,7 @@
       retries: 10
       start_period: 30s
     networks:
-      - appnet
+      - modelnet
 
   openclaw:
     # TODO: Verify the official OpenClaw deployment image on the VPS. Replace this if the
@@ -432,6 +437,7 @@
       start_period: 20s
     networks:
       - appnet
+      - modelnet
     depends_on:
       backend:
         condition: service_healthy
@@ -566,6 +572,8 @@
 
 networks:
   appnet:
+    driver: bridge
+  modelnet:
     driver: bridge
 
 volumes:

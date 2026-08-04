@@ -175,6 +175,12 @@ jobs:
       REDIS_TLS_CERT_DIR: /tmp/inoxpran-ci-redis-tls
       OPENCLAW_DATA_HOST_PATH: /tmp/inoxpran-ci-openclaw-data
       OPENCLAW_WORKSPACES_HOST_PATH: /tmp/inoxpran-ci-openclaw-workspaces
+      NINE_ROUTER_DATA_HOST_PATH: /tmp/inoxpran-ci-nine-router-data
+      NINE_ROUTER_API_KEY: ci-nine-router-api-key-validation-only-000001
+      NINE_ROUTER_JWT_SECRET: ci-nine-router-jwt-secret-validation-only-000002
+      NINE_ROUTER_INITIAL_PASSWORD: ci-nine-router-initial-password-validation-only-000003
+      NINE_ROUTER_API_KEY_SECRET: ci-nine-router-signing-secret-validation-only-000004
+      NINE_ROUTER_MACHINE_ID_SALT: ci-nine-router-machine-salt-validation-only-000005
       N8N_ENCRYPTION_KEY: ci-n8n-encryption-key-not-used-outside-validation-000000000000
       N8N_HOST: n8n.inoxpran.example
       N8N_PROTOCOL: https
@@ -196,6 +202,7 @@ jobs:
       CERTBOT_IMAGE: ${{ vars.CERTBOT_IMAGE }}
       N8N_IMAGE: ${{ vars.N8N_IMAGE }}
       OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE }}
+      NINE_ROUTER_IMAGE: ${{ vars.NINE_ROUTER_IMAGE }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -204,7 +211,10 @@ jobs:
         with:
           node-version: 24.18.0
       - name: Reject mutable, missing, or placeholder image references
-        run: node .github/scripts/validate-container-contracts.mjs
+        shell: bash
+        run: |
+          install -d -m 700 "$NINE_ROUTER_DATA_HOST_PATH"
+          node .github/scripts/validate-container-contracts.mjs
       - name: Validate Compose without publishing
         shell: bash
         run: |
@@ -263,6 +273,7 @@ jobs:
       CERTBOT_IMAGE: ${{ vars.CERTBOT_IMAGE }}
       N8N_IMAGE: ${{ vars.N8N_IMAGE }}
       OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE }}
+      NINE_ROUTER_IMAGE: ${{ vars.NINE_ROUTER_IMAGE }}
     steps:
       - name: Pull exact reviewed third-party image digests
         shell: bash
@@ -271,6 +282,7 @@ jobs:
           docker pull "$NGINX_IMAGE"
           docker pull "$CERTBOT_IMAGE"
           docker pull "$OPENCLAW_IMAGE"
+          docker pull "$NINE_ROUTER_IMAGE"
           if [[ -n "$N8N_IMAGE" ]]; then
             docker pull "$N8N_IMAGE"
           else
@@ -309,5 +321,12 @@ jobs:
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
         with:
           image: ${{ env.OPENCLAW_IMAGE }}
+          fail-build: true
+          severity-cutoff: high
+      - name: Scan 9router image
+        if: always()
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: ${{ env.NINE_ROUTER_IMAGE }}
           fail-build: true
           severity-cutoff: high

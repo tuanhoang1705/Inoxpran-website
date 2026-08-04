@@ -107,6 +107,13 @@ for required_key in \
   NGINX_IMAGE \
   CERTBOT_IMAGE \
   OPENCLAW_IMAGE \
+  NINE_ROUTER_IMAGE \
+  NINE_ROUTER_DATA_HOST_PATH \
+  NINE_ROUTER_API_KEY \
+  NINE_ROUTER_JWT_SECRET \
+  NINE_ROUTER_INITIAL_PASSWORD \
+  NINE_ROUTER_API_KEY_SECRET \
+  NINE_ROUTER_MACHINE_ID_SALT \
   OPENCLAW_PACKAGE_ROOT \
   OPENCLAW_GATEWAY_TOKEN \
   OPENCLAW_NO_AUTO_UPDATE \
@@ -219,13 +226,40 @@ for secret_key in \
   PUBLIC_API_KEY \
   USER_API_KEY \
   ADMIN_BFF_API_KEY \
-  OPENCLAW_INTERNAL_API_KEY
+  OPENCLAW_INTERNAL_API_KEY \
+  NINE_ROUTER_API_KEY \
+  NINE_ROUTER_JWT_SECRET \
+  NINE_ROUTER_INITIAL_PASSWORD \
+  NINE_ROUTER_API_KEY_SECRET \
+  NINE_ROUTER_MACHINE_ID_SALT
 do
   secret_value="$(config_value "$secret_key")"
   if [ -n "$secret_value" ] && looks_like_placeholder "$secret_value"; then
     echo "Unsafe placeholder rejected for $secret_key." >&2
     exit 1
   fi
+  if [[ "$secret_value" == *$'\n'* || "$secret_value" == *$'\r'* ]]; then
+    echo "$secret_key must not contain line-break control characters." >&2
+    exit 1
+  fi
+done
+
+nine_router_secret_names=(
+  NINE_ROUTER_API_KEY
+  NINE_ROUTER_JWT_SECRET
+  NINE_ROUTER_INITIAL_PASSWORD
+  NINE_ROUTER_API_KEY_SECRET
+  NINE_ROUTER_MACHINE_ID_SALT
+)
+for ((i = 0; i < ${#nine_router_secret_names[@]}; i++)); do
+  for ((j = i + 1; j < ${#nine_router_secret_names[@]}; j++)); do
+    left_key="${nine_router_secret_names[$i]}"
+    right_key="${nine_router_secret_names[$j]}"
+    if [ "$(config_value "$left_key")" = "$(config_value "$right_key")" ]; then
+      echo "9router secrets must be distinct: $left_key and $right_key collide." >&2
+      exit 1
+    fi
+  done
 done
 
 redis_password="$(config_value REDIS_PASSWORD)"
@@ -243,7 +277,12 @@ for strong_secret in \
   PUBLIC_API_KEY \
   USER_API_KEY \
   ADMIN_BFF_API_KEY \
-  OPENCLAW_INTERNAL_API_KEY
+  OPENCLAW_INTERNAL_API_KEY \
+  NINE_ROUTER_API_KEY \
+  NINE_ROUTER_JWT_SECRET \
+  NINE_ROUTER_INITIAL_PASSWORD \
+  NINE_ROUTER_API_KEY_SECRET \
+  NINE_ROUTER_MACHINE_ID_SALT
 do
   strong_secret_value="$(config_value "$strong_secret")"
   if [ "${#strong_secret_value}" -lt 32 ]; then
@@ -282,7 +321,8 @@ for image_key in \
   REDIS_IMAGE \
   NGINX_IMAGE \
   CERTBOT_IMAGE \
-  OPENCLAW_IMAGE
+  OPENCLAW_IMAGE \
+  NINE_ROUTER_IMAGE
 do
   image_value="$(config_value "$image_key")"
   if [[ ! "$image_value" =~ ^[^[:space:]@]+:[^[:space:]@/]+@sha256:[a-fA-F0-9]{64}$ ]]; then
@@ -377,10 +417,47 @@ resolve_external_runtime_directory() {
 
 openclaw_data_host_path="$(resolve_external_runtime_directory OPENCLAW_DATA_HOST_PATH)"
 openclaw_workspaces_host_path="$(resolve_external_runtime_directory OPENCLAW_WORKSPACES_HOST_PATH)"
+nine_router_data_host_path="$(resolve_external_runtime_directory NINE_ROUTER_DATA_HOST_PATH)"
 if [ "$openclaw_data_host_path" = "$openclaw_workspaces_host_path" ] ||
    [[ "$openclaw_data_host_path" == "$openclaw_workspaces_host_path/"* ]] ||
    [[ "$openclaw_workspaces_host_path" == "$openclaw_data_host_path/"* ]]; then
   echo "OpenClaw data and workspace host directories must be distinct and non-overlapping." >&2
+  exit 1
+fi
+for openclaw_runtime_path in "$openclaw_data_host_path" "$openclaw_workspaces_host_path"; do
+  if [ "$nine_router_data_host_path" = "$openclaw_runtime_path" ] ||
+     [[ "$nine_router_data_host_path" == "$openclaw_runtime_path/"* ]] ||
+     [[ "$openclaw_runtime_path" == "$nine_router_data_host_path/"* ]]; then
+    echo "9router data and OpenClaw runtime directories must be distinct and non-overlapping." >&2
+    exit 1
+  fi
+done
+
+if ! docker run --rm \
+  --network none \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --user 1000:1000 \
+  --entrypoint sh \
+  --mount "type=bind,src=$nine_router_data_host_path,dst=/app/data" \
+  "$(config_value NINE_ROUTER_IMAGE)" \
+  -ec 'test -r /app/data && test -w /app/data'; then
+  echo "NINE_ROUTER_DATA_HOST_PATH must be readable and writable by container UID/GID 1000:1000." >&2
+  exit 1
+fi
+
+if ! docker run --rm \
+  --network none \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  --user 999:1000 \
+  --entrypoint sh \
+  --mount "type=bind,src=$redis_tls_cert_dir,dst=/run/secrets/redis,readonly" \
+  "$(config_value REDIS_IMAGE)" \
+  -ec 'test -r /run/secrets/redis/ca.crt && test -r /run/secrets/redis/server.crt && test -r /run/secrets/redis/server.key'; then
+  echo "REDIS_TLS_CERT_DIR must be traversable and readable by container UID/GID 999:1000." >&2
   exit 1
 fi
 
@@ -393,11 +470,11 @@ if [[ ",$compose_profiles," == *,automation,* ]]; then
   require_config N8N_WEBHOOK_URL
   require_config N8N_DATA_HOST_PATH
   n8n_data_host_path="$(resolve_external_runtime_directory N8N_DATA_HOST_PATH)"
-  for openclaw_runtime_path in "$openclaw_data_host_path" "$openclaw_workspaces_host_path"; do
-    if [ "$n8n_data_host_path" = "$openclaw_runtime_path" ] ||
-       [[ "$n8n_data_host_path" == "$openclaw_runtime_path/"* ]] ||
-       [[ "$openclaw_runtime_path" == "$n8n_data_host_path/"* ]]; then
-      echo "N8N data and OpenClaw runtime directories must be distinct and non-overlapping." >&2
+  for runtime_data_path in "$openclaw_data_host_path" "$openclaw_workspaces_host_path" "$nine_router_data_host_path"; do
+    if [ "$n8n_data_host_path" = "$runtime_data_path" ] ||
+       [[ "$n8n_data_host_path" == "$runtime_data_path/"* ]] ||
+       [[ "$runtime_data_path" == "$n8n_data_host_path/"* ]]; then
+      echo "N8N data and other runtime directories must be distinct and non-overlapping." >&2
       exit 1
     fi
   done
@@ -526,7 +603,7 @@ SAFE_RELEASE_TOPOLOGY_REQUIRED
 
 Preflight validated:
   - Compose configuration and mandatory safety invariants
-  - external, non-overlapping OpenClaw runtime directories outside the checkout
+  - external, writable, non-overlapping OpenClaw and 9router runtime directories outside the checkout
   - public/admin/SEO-agent hostname contract for certificate SAN coverage
   - explicit backup reference and restore-drill acknowledgement
   - exact immutable release commit and clean worktree

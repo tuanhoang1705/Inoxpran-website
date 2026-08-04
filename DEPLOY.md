@@ -53,6 +53,12 @@ OPENCLAW_PACKAGE_ROOT=/reviewed/path/to/node_modules/openclaw
 # Persistent OpenClaw runtime paths must be outside this Git checkout.
 OPENCLAW_DATA_HOST_PATH=/var/lib/inoxpran/openclaw/data
 OPENCLAW_WORKSPACES_HOST_PATH=/var/lib/inoxpran/openclaw/workspaces
+NINE_ROUTER_DATA_HOST_PATH=/var/lib/inoxpran/9router
+NINE_ROUTER_API_KEY=...
+NINE_ROUTER_JWT_SECRET=...
+NINE_ROUTER_INITIAL_PASSWORD=...
+NINE_ROUTER_API_KEY_SECRET=...
+NINE_ROUTER_MACHINE_ID_SALT=...
 GOOGLE_APPLICATION_CREDENTIALS_HOST_PATH=/etc/inoxpran/secrets/firebase-service-account.json
 NODE_RUNTIME_IMAGE=node:<reviewed-version>@sha256:<reviewed-64-hex-digest>
 REDIS_IMAGE=redis:<reviewed-version>@sha256:<reviewed-64-hex-digest>
@@ -60,6 +66,7 @@ NGINX_IMAGE=nginx:<reviewed-version>@sha256:<reviewed-64-hex-digest>
 CERTBOT_IMAGE=certbot/certbot:<reviewed-version>@sha256:<reviewed-64-hex-digest>
 N8N_IMAGE=n8nio/n8n:<reviewed-version>@sha256:<reviewed-64-hex-digest>
 OPENCLAW_IMAGE=<reviewed-registry>/<reviewed-openclaw-image>:<reviewed-version>@sha256:<reviewed-64-hex-digest>
+NINE_ROUTER_IMAGE=decolua/9router:<reviewed-version>@sha256:<reviewed-64-hex-digest>
 
 N8N_HOST=n8n.inoxpran.com
 N8N_PROTOCOL=https
@@ -137,6 +144,24 @@ repository-relative values in `.env.example` are local-development defaults
 only. Never mount `deploy/openclaw-lab`, ignored runtime data, or ignored
 workspaces into production, and never copy their contents into tracked files.
 
+Provision `NINE_ROUTER_DATA_HOST_PATH` as a third distinct readable/writable
+absolute directory outside the checkout, owned for container UID/GID
+`1000:1000`. Configure `NINE_ROUTER_API_KEY`, `NINE_ROUTER_JWT_SECRET`,
+`NINE_ROUTER_INITIAL_PASSWORD`, `NINE_ROUTER_API_KEY_SECRET`, and
+`NINE_ROUTER_MACHINE_ID_SALT` as five distinct non-placeholder values of at
+least 32 characters. The 9router port is not published; only OpenClaw shares its
+dedicated non-internal bridge network.
+
+Before the first production start or any restore into an empty 9router data
+directory, import a reviewed database seed containing the intended active
+provider connections, `settings.requireApiKey=true`, and exactly one active API
+key equal to `NINE_ROUTER_API_KEY`. The environment variable does not register
+that key in 9router by itself. Keep the seed and SQLite files mode `0600` under
+the container data owner. Gate the release with three private-network probes:
+an unauthenticated and an invalid-key `/v1/responses` request must return `401`,
+an authenticated model request must complete, and the OpenClaw response must
+report the exact reviewed `provider_model`.
+
 Production preflight checks only for existence, never contents, and rejects
 checkout-local `.env`, `backend/.env`, `frontend/.env`,
 `.local-secret-backups/`, `.tmp-chrome-trace/`, `deploy/openclaw-lab/`, and
@@ -156,8 +181,9 @@ requires a non-localhost production `N8N_HOST`, `N8N_PROTOCOL=https`, an
 absolute root `N8N_WEBHOOK_URL` matching that host, and a non-placeholder
 `N8N_ENCRYPTION_KEY` of at least 32 characters. `N8N_DATA_HOST_PATH` must resolve
 to a dedicated readable/writable directory outside the checkout and must not
-overlap either OpenClaw runtime tree. The n8n container root filesystem remains
-read-only, with only its data mount and bounded temporary filesystems writable.
+overlap either OpenClaw runtime tree or the 9router data directory. The n8n
+container root filesystem remains read-only, with only its data mount and
+bounded temporary filesystems writable.
 Compose does not currently add an n8n public nginx route; keep the profile
 disabled unless a reviewed ingress exists, and require an HTTPS webhook/health
 smoke test through that ingress before release.
@@ -167,8 +193,9 @@ both an explicit non-`latest` version tag and an immutable `@sha256:` digest;
 the production deploy rejects missing, mutable, and all-zero placeholder
 references. Compose does not publish images.
 
-The CI repository variables `REDIS_IMAGE`, `NGINX_IMAGE`, `CERTBOT_IMAGE`, and
-`OPENCLAW_IMAGE` must contain the same reviewed references. CI renders Compose,
+The CI repository variables `REDIS_IMAGE`, `NGINX_IMAGE`, `CERTBOT_IMAGE`,
+`OPENCLAW_IMAGE`, and `NINE_ROUTER_IMAGE` must contain the same reviewed
+references. CI renders Compose,
 checks that every service resolves to the exact supplied digest, and scans the
 application images plus every third-party runtime image at the high/critical
 gate. `N8N_IMAGE` is optional while the automation profile is intentionally
