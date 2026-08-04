@@ -135,6 +135,9 @@ describe("runtime production safety", () => {
     expect(compose).toMatch(
       /OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL:\s*\$\{OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL:\?/,
     );
+    expect(compose).toMatch(
+      /NINE_ROUTER_API_KEY:\s*\$\{NINE_ROUTER_API_KEY:\?/,
+    );
     expect(compose).toMatch(/FIRECRAWL_API_KEY:\s*\$\{FIRECRAWL_API_KEY:-\}/);
     expect(deployScript).toContain(
       "OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL must be present in OPENCLAW_TOPIC_ALLOWED_RESOLVED_MODELS",
@@ -150,6 +153,9 @@ describe("runtime production safety", () => {
     expect(openclawConfig).toContain(
       'primary: "${OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL}"',
     );
+    expect(openclawConfig).toContain('baseUrl: "http://nine-router:20128/v1"');
+    expect(openclawConfig).toContain('apiKey: "${NINE_ROUTER_API_KEY}"');
+    expect(openclawConfig).toContain('id: "cx/gpt-5.6-sol"');
     expect(openclawConfig).toMatch(/fallbacks:\s*\[\]/);
     expect(patcher).toContain("version: '2026.6.11'");
     expect(patcher).toContain("provider_model: params.providerModel");

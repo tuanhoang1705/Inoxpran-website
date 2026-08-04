@@ -356,6 +356,7 @@
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Set OPENCLAW_GATEWAY_TOKEN through the deployment secret store}
       OPENCLAW_NO_AUTO_UPDATE: "1"
       OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL: ${OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL:?Set the canonical model pinned in the OpenClaw gateway}
+      NINE_ROUTER_API_KEY: ${NINE_ROUTER_API_KEY:?Set the private 9router bearer key through the deployment secret store}
       OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY through the deployment secret store}
       INOXPRAN_BACKEND_API_BASE: http://backend:3056/v1/api
       INOXPRAN_PUBLIC_SITE_URL: https://inoxpran.com
