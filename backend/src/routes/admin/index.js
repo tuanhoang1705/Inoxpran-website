@@ -13,6 +13,7 @@ const contentOperationsController = require("../../controllers/contentOperations
 const agenticBlogQaRouter = require("./agenticBlogQa.routes");
 const asyncHandler = require("../../helpers/asyncHandler");
 const { authenticationAdmin } = require("../../auth/authUtils");
+const { permission, PERMISSIONS } = require("../../auth/checkAuth");
 const { upload, uploadLarge } = require("../../middleware/upload");
 const {
   cleanupUploadedArtifacts,
@@ -48,6 +49,7 @@ const PRODUCT_IMAGE_VALIDATION = {
 router.post("/signup", asyncHandler(adminController.signUp));
 router.post("/login", asyncHandler(adminController.login));
 
+router.use(permission(PERMISSIONS.ADMIN));
 router.use(authenticationAdmin);
 router.use("/openclaw", agenticBlogQaRouter);
 
@@ -520,6 +522,11 @@ router.post(
   asyncHandler(blogAutomationScheduleController.createSchedule),
 );
 router.get(
+  "/openclaw/blog-schedules/execution-summaries",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.listExecutionSummaries),
+);
+router.get(
   "/openclaw/blog-schedules/:scheduleId",
   requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
   asyncHandler(blogAutomationScheduleController.getSchedule),
@@ -544,6 +551,17 @@ router.post(
   requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
   asyncHandler(blogAutomationScheduleController.disableSchedule),
 );
+// Simple scheduling contract aliases used by the Blog Scheduling page.
+router.post(
+  "/openclaw/blog-schedules/:scheduleId/resume",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.enableSchedule),
+);
+router.post(
+  "/openclaw/blog-schedules/:scheduleId/pause",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.disableSchedule),
+);
 router.post(
   "/openclaw/blog-schedules/:scheduleId/run-now",
   requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
@@ -553,6 +571,21 @@ router.get(
   "/openclaw/blog-schedules/:scheduleId/executions",
   requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
   asyncHandler(blogAutomationScheduleController.listExecutions),
+);
+router.get(
+  "/openclaw/blog-schedules/:scheduleId/roadmap",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.getTopicRoadmap),
+);
+router.post(
+  "/openclaw/blog-schedules/:scheduleId/roadmap/regenerate",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.regenerateTopicRoadmap),
+);
+router.post(
+  "/openclaw/blog-schedules/:scheduleId/roadmap/items/:itemId/dismiss",
+  requireAdminRole(["ADMIN", "SUPER_ADMIN"]),
+  asyncHandler(blogAutomationScheduleController.dismissTopicRoadmapItem),
 );
 router.get(
   "/openclaw/runs/:runId",

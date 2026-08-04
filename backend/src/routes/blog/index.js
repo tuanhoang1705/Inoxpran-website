@@ -19,7 +19,7 @@ const BLOG_IMAGE_VALIDATION = {
     maxSizeBytes: BLOG_IMAGE_MAX_SIZE,
     requireDimensions: false
 };
-const requireAdmin = [permission(PERMISSIONS.ADMIN_SYSTEM), authenticationAdmin];
+const requireAdmin = [permission(PERMISSIONS.ADMIN), authenticationAdmin];
 
 router.get('', asyncHandler(blogController.listPublicBlogs));
 

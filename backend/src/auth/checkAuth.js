@@ -25,21 +25,23 @@ const PERMISSION_IMPLICATIONS = {
 };
 
 const { findById } = require('../services/apiKey.service')
-const { ensureApiKey, getApiKey } = require('../helpers/bootstrapApiKey')
+const {
+    ensureApiKey,
+    findConfiguredApiKeyDefinition
+} = require('../helpers/bootstrapApiKey')
 
-let apiKeyBootstrapPromise = null;
+const apiKeyBootstrapPromises = new Map();
 
 const recoverConfiguredApiKey = async (key) => {
-    const configuredKey = getApiKey();
-    if (!configuredKey || key !== configuredKey) return null;
+    if (!findConfiguredApiKeyDefinition(key)) return null;
 
-    if (!apiKeyBootstrapPromise) {
-        apiKeyBootstrapPromise = ensureApiKey().finally(() => {
-            apiKeyBootstrapPromise = null;
-        });
+    if (!apiKeyBootstrapPromises.has(key)) {
+        apiKeyBootstrapPromises.set(key, ensureApiKey(key).finally(() => {
+            apiKeyBootstrapPromises.delete(key);
+        }));
     }
 
-    await apiKeyBootstrapPromise;
+    await apiKeyBootstrapPromises.get(key);
     return await findById(key);
 };
 
@@ -48,7 +50,11 @@ const apiKey = async (req, res, next) => {
         const key = req.headers[HEADER.API_KEY]?.toString();
         if (!key) {
             return res.status(403).json({
-                message: 'Forbidden Error1'
+                status: 'error',
+                code: 403,
+                errorCode: 'API_KEY_REQUIRED',
+                message: 'Forbidden',
+                requestId: req.requestId
             })
         }
         // check objKey
@@ -58,7 +64,11 @@ const apiKey = async (req, res, next) => {
         }
         if (!objKey) {
             return res.status(403).json({
-                message: 'Forbidden Error2'
+                status: 'error',
+                code: 403,
+                errorCode: 'API_KEY_INVALID',
+                message: 'Forbidden',
+                requestId: req.requestId
             })
         }
 
@@ -86,7 +96,11 @@ const permission = (requiredPermissions = []) => {
     return (req, res, next) => {
         if (!req.objKey.permissions) {
             return res.status(403).json({
-                message: 'permission dinied',
+                status: 'error',
+                code: 403,
+                errorCode: 'API_KEY_PERMISSION_DENIED',
+                message: 'Permission denied',
+                requestId: req.requestId
             })
         }
 
@@ -94,7 +108,11 @@ const permission = (requiredPermissions = []) => {
         const validPermission = requiredList.length === 0 || requiredList.some((perm) => grantedPermissions.includes(perm));
         if (!validPermission) {
             return res.status(403).json({
-                message: 'permission denied',
+                status: 'error',
+                code: 403,
+                errorCode: 'API_KEY_PERMISSION_DENIED',
+                message: 'Permission denied',
+                requestId: req.requestId
             })
         }
         return next();

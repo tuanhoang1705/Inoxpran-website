@@ -28,9 +28,10 @@ const productImageValidation = {
 router.get('/search/:keySearch', asyncHandler(productController.getListSearchProduct));
 router.get('/best-selling', asyncHandler(productController.getBestSellingProducts));
 router.get('', asyncHandler(productController.findAllProducts));
-router.get('/:productId/review-meta', authenticationUser, asyncHandler(productController.getReviewMeta));
+router.get('/:productId/review-meta', permission(PERMISSIONS.USER), authenticationUser, asyncHandler(productController.getReviewMeta));
 router.post(
     '/:productId/reviews',
+    permission(PERMISSIONS.USER),
     authenticationUser,
     uploadLarge.fields([{ name: 'review_images', maxCount: 4 }]),
     uploadMultipleImages({
@@ -43,7 +44,7 @@ router.post(
 router.get('/:productId', asyncHandler(productController.findProduct));
 // authentication (admin system only)
 
-router.use(permission(PERMISSIONS.ADMIN_SYSTEM));
+router.use(permission(PERMISSIONS.ADMIN));
 router.use(authenticationAdmin);
 ////////////////////////////////////
 

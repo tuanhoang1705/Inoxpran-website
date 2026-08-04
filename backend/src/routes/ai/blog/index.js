@@ -9,7 +9,7 @@ const { authenticationAdmin } = require('../../../auth/authUtils');
 const { permission, PERMISSIONS } = require('../../../auth/checkAuth');
 
 const router = express.Router();
-const requireAdmin = [permission(PERMISSIONS.ADMIN_SYSTEM), authenticationAdmin];
+const requireAdmin = [permission(PERMISSIONS.ADMIN), authenticationAdmin];
 const BLOG_IMAGE_MAX_SIZE = Number(process.env.UPLOAD_BLOG_MAX_SIZE || 5 * 1024 * 1024);
 const BLOG_IMAGE_VALIDATION = {
     maxSizeBytes: BLOG_IMAGE_MAX_SIZE,

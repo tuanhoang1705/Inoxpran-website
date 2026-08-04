@@ -4,6 +4,7 @@ const express = require('express');
 const userController = require('../../controllers/user.controller');
 const asyncHandler = require('../../helpers/asyncHandler');
 const { authenticationUser } = require('../../auth/authUtils');
+const { permission, PERMISSIONS } = require('../../auth/checkAuth');
 const { upload } = require('../../middleware/upload');
 const { uploadSingleImage } = require('../../middleware/firebaseUpload');
 
@@ -17,6 +18,7 @@ router.post('/verify/resend', asyncHandler(userController.resendVerification));
 router.post('/forgot-password', asyncHandler(userController.requestPasswordReset));
 router.post('/reset-password', asyncHandler(userController.resetPassword));
 
+router.use(permission(PERMISSIONS.USER));
 router.use(authenticationUser);
 
 router.post('/logout', asyncHandler(userController.logout));
