@@ -138,6 +138,11 @@ describe("runtime production safety", () => {
     expect(compose).toMatch(
       /NINE_ROUTER_API_KEY:\s*\$\{NINE_ROUTER_API_KEY:\?/,
     );
+    const nineRouterService = compose.match(
+      /\n  nine-router:\n([\s\S]*?)\n  openclaw:\n/,
+    )?.[1];
+    expect(nineRouterService).toMatch(/REQUIRE_API_KEY:\s*"true"/);
+    expect(nineRouterService).not.toContain("\n    ports:");
     expect(compose).toMatch(/FIRECRAWL_API_KEY:\s*\$\{FIRECRAWL_API_KEY:-\}/);
     expect(deployScript).toContain(
       "OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL must be present in OPENCLAW_TOPIC_ALLOWED_RESOLVED_MODELS",

@@ -331,6 +331,47 @@
       backend:
         condition: service_healthy
 
+  nine-router:
+    image: ${NINE_ROUTER_IMAGE:?Set NINE_ROUTER_IMAGE to the reviewed immutable 9router digest}
+    container_name: app_nine_router
+    environment:
+      NODE_ENV: production
+      PORT: 20128
+      HOSTNAME: 0.0.0.0
+      DATA_DIR: /app/data
+      BASE_URL: http://nine-router:20128
+      NEXT_PUBLIC_BASE_URL: http://nine-router:20128
+      JWT_SECRET: ${NINE_ROUTER_JWT_SECRET:?Set the 9router dashboard JWT secret through the deployment secret store}
+      INITIAL_PASSWORD: ${NINE_ROUTER_INITIAL_PASSWORD:?Set a strong initial 9router dashboard password}
+      API_KEY_SECRET: ${NINE_ROUTER_API_KEY_SECRET:?Set the 9router API-key signing secret through the deployment secret store}
+      MACHINE_ID_SALT: ${NINE_ROUTER_MACHINE_ID_SALT:?Set the 9router machine-id salt through the deployment secret store}
+      ENABLE_REQUEST_LOGS: "false"
+      REQUIRE_API_KEY: "true"
+      AUTH_COOKIE_SECURE: "false"
+    volumes:
+      - ${NINE_ROUTER_DATA_HOST_PATH:?Set the external 9router data directory}:/app/data
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:20128/api/health').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - appnet
+
   openclaw:
     # TODO: Verify the official OpenClaw deployment image on the VPS. Replace this if the
     # OpenClaw docs specify a different image.
@@ -395,6 +436,8 @@
       backend:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      nine-router:
         condition: service_healthy
 
   openclaw-worker:
