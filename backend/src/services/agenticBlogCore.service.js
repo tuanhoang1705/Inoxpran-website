@@ -53,6 +53,16 @@ const {
   reviewEditorialQuality
 } = require('./contentOperations/editorialReviewBoard.service');
 const {
+  buildPresentationSignature,
+  comparePresentation
+} = require('./contentOperations/presentationSignature.service');
+const { PresentationBlueprintService } = require('./contentOperations/presentationBlueprint.service');
+const { SeniorEditorReviewService } = require('./contentOperations/seniorEditorReview.service');
+// How many recent articles a new layout must differ from. Large enough that a
+// habit cannot re-emerge after two or three posts, small enough that the space
+// of workable layouts is not exhausted.
+const PRESENTATION_HISTORY_SIZE = 8;
+const {
   ACCEPTANCE_SCORE,
   MIN_NOVELTY_SUBTOTAL,
   RUBRIC_VERSION,
@@ -432,7 +442,8 @@ const buildEvidenceWritingContract = evidenceMap => ({
   evidenceMap = null,
   editorialBrief = null,
   avoidStructures = null,
-  revisionBrief = null
+  revisionBrief = null,
+  presentationBlueprint = null
 }) => {
   const evidenceContract = buildEvidenceWritingContract(evidenceMap);
   const system = [
@@ -465,6 +476,12 @@ const buildEvidenceWritingContract = evidenceMap => ({
     'TRẢ LỜI TRƯỚC: ngay dưới mỗi <h2>, đoạn đầu tiên phải dài 25-90 từ và trả lời thẳng câu hỏi của mục đó; lý do, bằng chứng và chi tiết đặt ở các đoạn sau.',
     'GIÁ TRỊ MỚI (bắt buộc, ít nhất 3 trong 6): con số hoặc ngưỡng đo cụ thể kèm đơn vị; một tình huống sử dụng thật; một điều nhiều người vẫn làm sai kèm lý do; dẫn nguồn hoặc khuyến cáo nhà sản xuất; một bảng hoặc danh sách so sánh; chỉ dẫn theo điều kiện dạng "nếu… thì…". Bài chỉ nhắc lại kiến thức phổ thông sẽ bị trả lại.',
     'Mỗi đoạn <p> tối đa 120 từ, mỗi đoạn một ý; phần liệt kê phải chuyển thành <ul> hoặc <ol>.',
+    // Layout variety is enforced downstream against the last eight articles, so
+    // the contract must be followed rather than reinterpreted.
+    'Nếu có "presentationContract": đó là BẢN VẼ TRÌNH BÀY bắt buộc do kiến trúc sư nội dung thiết kế riêng cho bài này. Bám đúng: "openingDevice" quyết định bài mở ra bằng gì; mỗi phần tử trong "sections" là một mục <h2> theo đúng thứ tự, với "shape" quyết định mục đó dùng bảng, danh sách đánh số, danh sách gạch đầu dòng, hộp lưu ý hay chỉ văn xuôi, và "headingMode" quyết định tiêu đề mục là câu hỏi, câu mệnh lệnh, câu khẳng định hay đánh số; "closingDevice" quyết định bài kết bằng gì.',
+    'Tự đặt câu chữ cho tiêu đề và nội dung từng mục — "label" và "intent" chỉ là ý đồ, không phải văn bản để chép.',
+    'Nếu có "presentationContract.voiceRegister": viết theo đúng sắc thái giọng đó (và "rhythm" nếu có) trong khuôn khổ giọng thương hiệu đã nêu ở trên. Sắc thái thay đổi giữa các bài; các điều cấm về giọng vẫn giữ nguyên tuyệt đối.',
+    'Bố cục bài này PHẢI khác rõ rệt các bài gần đây: khác cách mở, khác hình dạng các mục, khác vị trí đặt bảng/danh sách, khác cách kết. Nội dung mới nhưng trình bày y hệt bài trước sẽ bị trả lại.',
     'OUTPUT CONTRACT: the JSON must also include "materialClaims": [{"evidenceKey": string, "contentExcerpt": string, "qualificationApplied": boolean}]. The excerpt must occur verbatim in html. Use an empty array only when html contains no material factual claim.',
     'Never invent or silently omit a material claim from materialClaims. Editorial advice without a factual assertion does not need an evidence entry.',
     ...(revisionContext
@@ -556,6 +573,19 @@ const buildEvidenceWritingContract = evidenceMap => ({
       : null,
     evidenceContract,
     revisionContext,
+    // The architect's design is a contract, not a suggestion: the board later
+    // measures the rendered article against these same mechanics.
+    presentationContract: presentationBlueprint
+      ? {
+          layoutName: presentationBlueprint.layoutName,
+          why: presentationBlueprint.why,
+          openingDevice: presentationBlueprint.openingDevice,
+          closingDevice: presentationBlueprint.closingDevice,
+          voiceRegister: presentationBlueprint.voiceRegister,
+          rhythm: presentationBlueprint.rhythm,
+          sections: presentationBlueprint.sections
+        }
+      : null,
     // A retry that is only told "write it differently" changes the wording and
     // fails the same gate again. When the board has already judged the previous
     // attempt, hand back the named defects and their remedies so the rewrite is
@@ -609,7 +639,8 @@ const generateLlmDraft = async ({
   evidenceMap = null,
   editorialBrief = null,
   avoidStructures = null,
-  revisionBrief = null
+  revisionBrief = null,
+  presentationBlueprint = null
 }) => {
   const useOpenClawWriter = normalizeString(process.env.OPENCLAW_TOPIC_AGENTIC_WRITER_ENABLED).toLowerCase() !== 'false';
   const parsedTemperature = Number(process.env.OPENAI_WRITER_TEMPERATURE);
@@ -634,7 +665,8 @@ const generateLlmDraft = async ({
     evidenceMap,
     editorialBrief,
     avoidStructures,
-    revisionBrief
+    revisionBrief,
+    presentationBlueprint
   });
   if (useOpenClawWriter) {
     const adapter = new OpenClawAgentAdapter({ fetchImpl });
@@ -2593,6 +2625,39 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             openingSnippets: recentStructures.map(item => item.openingSnippet).filter(Boolean).slice(0, 5),
             faqCounts: recentStructures.map(item => item.faqCount).filter(count => count > 0).slice(0, 5)
         };
+        // Layout repetition is what a reader notices first: the same opening, the
+        // same section shapes, the table always in the same place. The recent
+        // presentation signatures make that measurable, and the writer must beat
+        // every one of them, not merely their average.
+        const recentPresentations = comparisonCorpus
+            .slice(0, PRESENTATION_HISTORY_SIZE)
+            .map(item => ({
+                ...buildPresentationSignature(item.blog_content || ''),
+                sourceId: String(item._id || '')
+            }))
+            .filter(entry => entry.sectionCount > 0);
+        // An architect designs the shape of THIS article before a word is written,
+        // having been shown every recent layout. Naming what to build beats telling
+        // the writer what to avoid: a negative constraint alone let it drift back
+        // to the shape it knows best.
+        let presentationBlueprint = null;
+        try {
+            const designed = await new PresentationBlueprintService().design({
+                topic: context.effectiveTopic || topic,
+                primaryQuestion: roadmapContext?.primaryQuestion || '',
+                searchIntent: roadmapContext?.searchIntent || context.strategy?.searchIntent || '',
+                articleType: context.strategy?.articleType || '',
+                recentPresentations,
+                recentVoiceRegisters: recentPresentations.map(entry => entry.voiceRegister).filter(Boolean),
+                sessionKey: `layout:${primaryKeyword}`
+            });
+            presentationBlueprint = designed.blueprint;
+        } catch (error) {
+            // Layout design is an enhancement, not a precondition. If the architect
+            // is unavailable the draft still proceeds and the board still enforces
+            // that the rendered layout differs from recent articles.
+            presentationBlueprint = null;
+        }
         const maxOriginalityAttempts = 3;
         let contentHtml = '';
         let originality = null;
@@ -2636,7 +2701,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
           evidenceMap: context.evidenceMap,
           editorialBrief,
           avoidStructures,
-          revisionBrief
+          revisionBrief,
+          presentationBlueprint
         });
             } catch (error) {
                 llmGenerationError = safeErrorCode({ code: error?.code || 'LLM_GENERATION_FAILED' });
@@ -2723,7 +2789,11 @@ const claimed = await ContentWorkOrderService.claimForProduction({
               primaryQuestion: roadmapContext?.primaryQuestion || '',
               productNames: (context.productSeedPlan?.selected || context.productSeedPlan?.products || [])
                 .map(item => item?.name || item?.sku)
-                .filter(Boolean)
+                .filter(Boolean),
+              presentation: comparePresentation({
+                candidate: buildPresentationSignature(contentHtml),
+                recent: recentPresentations
+              })
             });
             const boardPassed = originality.passed &&
               factuality.passed &&
@@ -2732,7 +2802,31 @@ const claimed = await ContentWorkOrderService.claimForProduction({
               productReviews.pass &&
               editorialPlacementReview.pass &&
               editorialReview.passed;
-            if (boardPassed) {
+            // The senior editor is consulted only once the measurable rules pass,
+            // so a draft that already fails one never spends an agent call.
+            let seniorReview = null;
+            if (boardPassed && !qaContext) {
+              try {
+                seniorReview = await new SeniorEditorReviewService().review({
+                  html: contentHtml,
+                  title: llmDraft?.title || context.effectiveTopic || topic,
+                  topic: context.effectiveTopic || topic,
+                  primaryQuestion: roadmapContext?.primaryQuestion || '',
+                  searchIntent: roadmapContext?.searchIntent || context.strategy?.searchIntent || '',
+                  productNames: (context.productSeedPlan?.selected || context.productSeedPlan?.products || [])
+                    .map(item => item?.name || item?.sku)
+                    .filter(Boolean),
+                  attempt: originalityAttempts,
+                  maxAttempts: maxOriginalityAttempts,
+                  sessionKey: `senior:${primaryKeyword}`
+                });
+              } catch (error) {
+                // An unreachable editor must not block a draft that already
+                // satisfies every enforceable rule.
+                seniorReview = null;
+              }
+            }
+            if (boardPassed && (!seniorReview || seniorReview.passed)) {
               revisionBrief = null;
               break;
             }
@@ -2748,6 +2842,7 @@ const claimed = await ContentWorkOrderService.claimForProduction({
                 { name: 'lớp sản phẩm', passed: productReviews.pass, reasons: productReviews.reasons },
                 { name: 'cài đặt sản phẩm', passed: editorialPlacementReview.pass, reasons: editorialPlacementReview.reasons }
               ],
+              seniorFindings: seniorReview?.findings || [],
               attempt: originalityAttempts,
               maxAttempts: maxOriginalityAttempts
             });

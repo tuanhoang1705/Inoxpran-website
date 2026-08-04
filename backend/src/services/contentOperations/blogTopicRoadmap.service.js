@@ -78,6 +78,19 @@ const uniquenessKeyFor = (idea) => sha256([
     normalizeTopicKey(idea?.angle),
     normalizeTopicKey(idea?.primaryQuestion)
 ].join('\0'))
+// Two plans that ask the same question about the same product are the same plan,
+// however differently their angles are worded. Comparing only the concatenated
+// topic+angle+question let a distinct angle dilute an identical subject, so one
+// batch could hold both "…mở nắp sau khi nấu" and "…mở nắp sau khi nấu?".
+// Measured on real collisions: near-identical plans score 0.79-1.00 while
+// genuinely distinct plans about the same product score 0.08-0.31, so the
+// threshold sits inside a wide empty gap rather than on a boundary.
+const FOCUS_COLLISION_THRESHOLD = 0.75
+const topicFocusCollides = (left = {}, right = {}, threshold = FOCUS_COLLISION_THRESHOLD) => (
+    textSimilarity(String(left.topic || ''), String(right.topic || ''), 2) >= threshold ||
+    Boolean(left.primaryQuestion && right.primaryQuestion &&
+        textSimilarity(String(left.primaryQuestion), String(right.primaryQuestion), 2) >= threshold)
+)
 const isDuplicateKeyError = (error) => error?.code === 11000
 const publicCode = (value) => {
     const candidate = text(value, 160)
@@ -1182,6 +1195,14 @@ class BlogTopicRoadmapService {
                 ...comparisonHistory.map((item) => `${item.topic || ''} ${item.angle || ''} ${item.primaryQuestion || ''}`),
                 ...inventoryItems.map((item) => `${item.title || item.blog_title || ''} ${item.topicSummary || ''} ${(item.entitySummary || []).join(' ')}`)
             ].filter(Boolean)
+            // Comparing only the concatenated topic+angle+question let a distinct
+            // angle dilute an identical subject, so a batch could hold both
+            // "…mở nắp sau khi nấu" and "…mở nắp sau khi nấu?" as separate plans.
+            // The focus fields are therefore also compared on their own.
+            const comparisonFocuses = comparisonHistory.map((item) => ({
+                topic: item.topic || '',
+                primaryQuestion: item.primaryQuestion || ''
+            }))
             const ideaByTopic = new Map((ideation.ideas || []).map((idea) => [idea.topic, idea]))
             const accepted = []
             const rejected = []
@@ -1193,11 +1214,14 @@ class BlogTopicRoadmapService {
                 }
                 const uniquenessKey = uniquenessKeyFor(idea)
                 const candidateText = `${idea.topic} ${idea.angle || ''} ${idea.primaryQuestion || ''}`
+                const similarityThreshold = Number(this.roadmapConfig.similarityThreshold || 0.72)
+                const focusCollides = (other) => topicFocusCollides(idea, other)
                 const nearExisting = comparisonTexts.some((other) =>
-                    textSimilarity(candidateText, other, 2) >= Number(this.roadmapConfig.similarityThreshold || 0.72)
-                )
+                    textSimilarity(candidateText, other, 2) >= similarityThreshold
+                ) || comparisonFocuses.some(focusCollides)
                 const withinBatch = accepted.some((item) =>
-                    textSimilarity(candidateText, `${item.topic} ${item.angle} ${item.primaryQuestion}`, 2) >= Number(this.roadmapConfig.similarityThreshold || 0.72)
+                    textSimilarity(candidateText, `${item.topic} ${item.angle} ${item.primaryQuestion}`, 2) >= similarityThreshold ||
+                    focusCollides(item)
                 )
                 if (seenKeys.has(uniquenessKey) || nearExisting || withinBatch) {
                     rejected.push({ topic: idea.topic, reason: 'roadmap_near_duplicate' })
@@ -2119,8 +2143,10 @@ module.exports = {
     mapProductEvidence,
     isTransientFailureCode,
     marketSourceHealthEntries,
+    FOCUS_COLLISION_THRESHOLD,
     normalizeDirection,
     retainAlignedMarketEvidence,
+    topicFocusCollides,
     retainBoundProductEvidence,
     safeItemView,
     safeRegenerationView,

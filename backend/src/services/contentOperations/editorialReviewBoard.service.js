@@ -100,13 +100,23 @@ const resolveWordRange = (searchIntent) => {
     return { ...DEFAULT_WORD_RANGE, intent: 'default' }
 }
 
+const DEVICE_LABELS = Object.freeze({
+    openingDevice: 'cách mở bài',
+    deviceSequence: 'trình tự các khối nội dung',
+    sectionShapes: 'hình dạng từng mục',
+    headingModes: 'kiểu đặt tiêu đề mục',
+    devicePlacement: 'vị trí đặt bảng/danh sách/hộp lưu ý',
+    closingDevice: 'cách kết bài'
+})
+
 const reviewEditorialQuality = ({
     html = '',
     title = '',
     primaryKeyword = '',
     searchIntent = '',
     primaryQuestion = '',
-    productNames = []
+    productNames = [],
+    presentation = null
 } = {}) => {
     const findings = []
     const total = wordCount(html)
@@ -264,6 +274,23 @@ const reviewEditorialQuality = ({
         }
     }
 
+    // Repeating a recent layout is a defect in its own right: the article can be
+    // entirely new and still read as "the same post again" because nothing about
+    // its shape changed.
+    if (presentation && presentation.passed === false) {
+        const repeated = (presentation.repeatedDimensions || []).map((key) => DEVICE_LABELS[key] || key)
+        findings.push(finding(
+            'presentation_repeats_recent_layout', 'presentation', 'high',
+            `Bố cục bài này trùng cách trình bày của bài gần đây ở: ${repeated.join(', ') || 'nhiều điểm'}.`,
+            `Thiết kế lại cách trình bày cho khác hẳn — đổi ít nhất ba trong số: ${Object.values(DEVICE_LABELS).join('; ')}. Giữ nguyên nội dung và lập luận, chỉ đổi hình thức thể hiện.`,
+            {
+                repeatedDimensions: presentation.repeatedDimensions || [],
+                collidesWith: (presentation.collisions || []).map((entry) => entry.sourceId).slice(0, 3),
+                requiredDifferingDimensions: presentation.minDifferingDimensions
+            }
+        ))
+    }
+
     const ranked = [...findings].sort((left, right) =>
         SEVERITY_ORDER[left.severity] - SEVERITY_ORDER[right.severity] ||
         left.code.localeCompare(right.code))
@@ -302,12 +329,28 @@ const REMEDIATION_LIBRARY = Object.freeze({
     brand_voice_violation: 'Viết lại theo giọng tư vấn thực tế, trung tính; bỏ lời hứa tuyệt đối và ngôn ngữ thổi phồng.'
 })
 
-const buildRevisionBrief = ({ editorial = null, reviews = [], attempt = 0, maxAttempts = 3 } = {}) => {
+const buildRevisionBrief = ({
+    editorial = null,
+    reviews = [],
+    seniorFindings = [],
+    attempt = 0,
+    maxAttempts = 3
+} = {}) => {
     const items = []
     for (const entry of editorial?.findings || []) {
         items.push({
             code: entry.code,
             severity: entry.severity,
+            problem: entry.problem,
+            fix: entry.fix
+        })
+    }
+    // The senior editor judges what rules cannot, so its findings lead the brief.
+    for (const entry of Array.isArray(seniorFindings) ? seniorFindings : []) {
+        if (!entry?.problem || !entry?.fix) continue
+        items.push({
+            code: String(entry.code || 'senior_finding'),
+            severity: entry.severity || 'high',
             problem: entry.problem,
             fix: entry.fix
         })
