@@ -95,7 +95,7 @@ const getContentOperationsConfig = (env = process.env) => ({
         maxItems: asNumber(env.CONTENT_INVENTORY_MAX_ITEMS, 10000, { min: 1, max: 100000 })
     }),
     contentSignals: Object.freeze({
-        enabled: asBoolean(env.CONTENT_SIGNALS_ENABLED, true),
+        enabled: asBoolean(env.CONTENT_SIGNALS_ENABLED, false),
         defaultTtlDays: asNumber(env.CONTENT_SIGNAL_DEFAULT_TTL_DAYS, 90, { min: 1, max: 730 }),
         maxTextLength: asNumber(
             env.CONTENT_SIGNAL_MAX_LENGTH ?? env.CONTENT_SIGNAL_MAX_TEXT_LENGTH,
@@ -161,7 +161,57 @@ const getContentOperationsConfig = (env = process.env) => ({
         minimumAgeDays: asNumber(env.CONTENT_LEARNING_MIN_AGE_DAYS, 14, { min: 1, max: 3650 }),
         minimumImpressions: asNumber(env.CONTENT_LEARNING_MIN_IMPRESSIONS, 100, { min: 1, max: 1_000_000_000 }),
         autoApply: asBoolean(env.CONTENT_LEARNING_AUTO_APPLY, false)
+    }),
+    // Creative ideation layer: widens the daily candidate funnel with fresh,
+    // diverse ideas. Enabled by default; it only proposes candidates and can never
+    // bypass a downstream gate. maxIdeasPerRun bounds how many compete each run.
+    ideation: Object.freeze({
+        enabled: asBoolean(env.CONTENT_IDEATION_ENABLED, true),
+        maxIdeasPerRun: asNumber(env.CONTENT_IDEATION_MAX_IDEAS, 12, { min: 1, max: 40 })
+    }),
+    // Rolling topic roadmap for simple Blog schedules. This is deliberately
+    // independent from CONTENT_OPERATIONS_ENABLED: a simple schedule must never
+    // silently collapse its manager direction into a repeated article topic.
+    topicRoadmap: Object.freeze({
+        enabled: asBoolean(env.OPENCLAW_TOPIC_ROADMAP_ENABLED, true),
+        minimumReady: asNumber(env.OPENCLAW_TOPIC_ROADMAP_MIN_READY, 3, { min: 1, max: 24 }),
+        targetReady: asNumber(env.OPENCLAW_TOPIC_ROADMAP_TARGET_READY, 8, { min: 2, max: 40 }),
+        maxCandidatesPerRefill: asNumber(env.OPENCLAW_TOPIC_ROADMAP_MAX_CANDIDATES, 24, { min: 4, max: 80 }),
+        refillLeaseMs: asNumber(env.OPENCLAW_TOPIC_ROADMAP_REFILL_LEASE_MS, 10 * 60 * 1000, { min: 30 * 1000, max: 60 * 60 * 1000 }),
+        // Heartbeats renew active work every lease/3. A two-minute orphan lease
+        // keeps long agent calls owned while allowing a crashed worker to be
+        // recovered promptly instead of leaving the admin queue stuck for 10m.
+        regenerationLeaseMs: asNumber(env.OPENCLAW_TOPIC_ROADMAP_REGENERATION_LEASE_MS, 2 * 60 * 1000, { min: 30 * 1000, max: 60 * 60 * 1000 }),
+        regenerationRetryDelayMs: asNumber(env.OPENCLAW_TOPIC_ROADMAP_REGENERATION_RETRY_DELAY_MS, 30 * 1000, { min: 1_000, max: 60 * 60 * 1000 }),
+        regenerationMaxAttempts: asNumber(env.OPENCLAW_TOPIC_ROADMAP_REGENERATION_MAX_ATTEMPTS, 5, { min: 1, max: 10 }),
+        claimLeaseMs: asNumber(env.OPENCLAW_TOPIC_ROADMAP_CLAIM_LEASE_MS, 90 * 60 * 1000, { min: 10 * 60 * 1000, max: 4 * 60 * 60 * 1000 }),
+        maxClaimAttempts: asNumber(env.OPENCLAW_TOPIC_ROADMAP_MAX_CLAIM_ATTEMPTS, 3, { min: 1, max: 10 }),
+        similarityThreshold: asNumber(env.OPENCLAW_TOPIC_ROADMAP_SIMILARITY_THRESHOLD, 0.72, { min: 0.4, max: 0.95 }),
+        // The audited 82/48 policy stays the default. The floors below only bound
+        // how far an operator may explicitly relax the gate from the environment,
+        // so a live site can be tuned without a code change and a redeploy.
+        acceptanceScore: asNumber(env.OPENCLAW_TOPIC_ACCEPTANCE_SCORE, 82, { min: 60, max: 100 }),
+        minimumNoveltySubtotal: asNumber(env.OPENCLAW_TOPIC_MIN_NOVELTY_SUBTOTAL, 48, { min: 30, max: 65 }),
+        agenticIdeationEnabled: asBoolean(env.OPENCLAW_TOPIC_AGENTIC_IDEATION_ENABLED, true),
+        maxAgentRounds: asNumber(env.OPENCLAW_TOPIC_MAX_AGENT_ROUNDS, 3, { min: 1, max: 3 }),
+        maxAgentCalls: asNumber(env.OPENCLAW_TOPIC_MAX_AGENT_CALLS, 12, { min: 4, max: 12 }),
+        agentDeadlineMs: asNumber(env.OPENCLAW_TOPIC_AGENT_DEADLINE_MS, 600000, { min: 30000, max: 900000 }),
+        sourceRelevanceMin: asNumber(env.OPENCLAW_SOURCE_RELEVANCE_MIN, 0.58, { min: 0, max: 1 }),
+        marketResearch: Object.freeze({
+            enabled: asBoolean(env.OPENCLAW_MARKET_RESEARCH_ENABLED, true),
+            sourceUrls: asList(env.OPENCLAW_MARKET_RESEARCH_SOURCE_URLS, []),
+            ttlHours: asNumber(env.OPENCLAW_MARKET_RESEARCH_TTL_HOURS, 24, { min: 1, max: 168 }),
+            requestTimeoutMs: asNumber(env.OPENCLAW_MARKET_RESEARCH_TIMEOUT_MS, DEFAULT_EXTERNAL_ADAPTER_TIMEOUT_MS, { min: 1000, max: 60 * 1000 }),
+            maxResponseBytes: asNumber(env.OPENCLAW_MARKET_RESEARCH_MAX_RESPONSE_BYTES, 512 * 1024, { min: 16 * 1024, max: 2 * 1024 * 1024 }),
+            maxSources: asNumber(env.OPENCLAW_MARKET_RESEARCH_MAX_SOURCES, 12, { min: 1, max: 30 }),
+            maxSignals: asNumber(env.OPENCLAW_MARKET_RESEARCH_MAX_SIGNALS, 30, { min: 1, max: 100 })
+        })
     })
+});
+
+const resolveTopicRoadmapPolicy = (topicRoadmap = {}) => Object.freeze({
+    acceptanceScore: asNumber(topicRoadmap.acceptanceScore, 82, { min: 60, max: 100 }),
+    minimumNoveltySubtotal: asNumber(topicRoadmap.minimumNoveltySubtotal, 48, { min: 30, max: 65 })
 });
 
 module.exports = {
@@ -170,5 +220,6 @@ module.exports = {
     DEFAULT_MONITORING_WINDOWS,
     SEARCH_WINDOWS,
     buildContentOperationsConfig: getContentOperationsConfig,
-    getContentOperationsConfig
+    getContentOperationsConfig,
+    resolveTopicRoadmapPolicy
 };

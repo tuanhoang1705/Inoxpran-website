@@ -25,10 +25,24 @@ const parseBoolean = (value, fallback = false) => {
 
 const parseList = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 const getTelegramMode = () => normalizeString(process.env.TELEGRAM_MODE || 'webhook').toLowerCase() === 'polling' ? 'polling' : 'webhook';
-const isTelegramEnabled = () => parseBoolean(process.env.TELEGRAM_BOT_ENABLED, false) && Boolean(normalizeString(process.env.TELEGRAM_BOT_TOKEN));
+const isHttpsAdminBaseUrl = (value = process.env.ADMIN_BASE_URL) => {
+    try {
+        const parsed = new URL(normalizeString(value));
+        return parsed.protocol === 'https:' && Boolean(parsed.hostname) && !parsed.username && !parsed.password;
+    } catch {
+        return false;
+    }
+};
 const getNotifyChatIds = () => {
     const explicit = parseList(process.env.TELEGRAM_NOTIFY_CHAT_IDS);
     return explicit.length ? explicit : parseList(process.env.TELEGRAM_ALLOWED_CHAT_IDS);
+};
+const isTelegramEnabled = () => {
+    if (!parseBoolean(process.env.TELEGRAM_BOT_ENABLED, false)) return false;
+    if (!normalizeString(process.env.TELEGRAM_BOT_TOKEN) || !isHttpsAdminBaseUrl()) return false;
+    if (!parseList(process.env.TELEGRAM_ALLOWED_CHAT_IDS).length && !parseList(process.env.TELEGRAM_ALLOWED_USER_IDS).length) return false;
+    if (!getNotifyChatIds().length) return false;
+    return getTelegramMode() !== 'webhook' || Boolean(normalizeString(process.env.TELEGRAM_WEBHOOK_SECRET));
 };
 
 const isAuthorizedTelegramActor = ({ chatId, userId }) => {
@@ -221,7 +235,8 @@ class TelegramApprovalService {
             tokenConfigured: Boolean(process.env.TELEGRAM_BOT_TOKEN),
             allowlistConfigured: Boolean(process.env.TELEGRAM_ALLOWED_CHAT_IDS || process.env.TELEGRAM_ALLOWED_USER_IDS),
             webhookSecretConfigured: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET),
-            adminBaseUrlConfigured: Boolean(process.env.ADMIN_BASE_URL)
+            adminBaseUrlConfigured: Boolean(process.env.ADMIN_BASE_URL),
+            adminBaseUrlHttps: isHttpsAdminBaseUrl()
         };
     }
     static validateWebhookSecret({ headers }) { validateWebhookSecretHeader(headers); }
@@ -448,6 +463,7 @@ module.exports = {
     buildDraftMessage,
     buildHelpMessage,
     getTelegramMode,
+    isHttpsAdminBaseUrl,
     isAuthorizedTelegramActor,
     parseTelegramCommand,
     postTelegram,

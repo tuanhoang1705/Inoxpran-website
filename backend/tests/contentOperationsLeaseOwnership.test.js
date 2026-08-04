@@ -702,6 +702,42 @@ describe("Content Work Order lease ownership", () => {
     });
   });
 
+  it("adds the scheduler lease owner to claimed and unclaimed execution transitions", async () => {
+    const claimedModel = {
+      updateOne: vi.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+    };
+    const unclaimedModel = {
+      updateOne: vi.fn(async () => ({ matchedCount: 1, modifiedCount: 1 })),
+    };
+    const executionId = objectId("57");
+    const workOrderId = objectId("58");
+
+    await ContentWorkOrderService.transitionExecutionClaimed({
+      executionId,
+      workOrderId,
+      claimToken: "writer:claim",
+      expectedLeaseOwner: "scheduler-a:attempt-1",
+      status: "failed",
+      ExecutionModel: claimedModel,
+    });
+    await ContentWorkOrderService.transitionExecutionUnclaimed({
+      executionId,
+      expectedLeaseOwner: "scheduler-a:attempt-1",
+      status: "failed",
+      ExecutionModel: unclaimedModel,
+    });
+
+    expect(claimedModel.updateOne.mock.calls[0][0]).toMatchObject({
+      _id: executionId,
+      "metadata.leaseOwner": "scheduler-a:attempt-1",
+      "metadata.contentWorkOrderClaimToken": "writer:claim",
+    });
+    expect(unclaimedModel.updateOne.mock.calls[0][0]).toMatchObject({
+      _id: executionId,
+      "metadata.leaseOwner": "scheduler-a:attempt-1",
+    });
+  });
+
   it("fails closed when a database adapter omits ownership match counts", async () => {
     const ExecutionModel = {
       updateOne: vi.fn(async () => ({ acknowledged: true })),

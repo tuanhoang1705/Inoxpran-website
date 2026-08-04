@@ -8,6 +8,7 @@ const {
     buildAdminEditUrl,
     buildCommandResponse,
     buildDraftMessage,
+    isHttpsAdminBaseUrl,
     isAuthorizedTelegramActor,
     parseTelegramCommand,
     sendApprovalNotification,
@@ -84,6 +85,14 @@ describe('Telegram approval helpers', () => {
         expect(buildAdminEditUrl(id)).toBe(`https://admin.example.com/admin/blogs/${id}`);
         expect(buildAdminEditUrl(id, 'https://admin.example.com')).not.toContain('/blog/cach-chon-noi');
         expect(() => buildAdminEditUrl('cach-chon-noi-inox')).toThrow('valid blogId');
+    });
+
+    it('keeps Telegram disabled until ADMIN_BASE_URL is HTTPS', () => {
+        expect(isHttpsAdminBaseUrl()).toBe(true);
+        process.env.ADMIN_BASE_URL = 'http://admin.example.com';
+
+        expect(isHttpsAdminBaseUrl()).toBe(false);
+        expect(TelegramApprovalService.isEnabled()).toBe(false);
     });
 
     it('includes admin URL and blog ID in the approval message', () => {

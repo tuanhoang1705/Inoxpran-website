@@ -4,6 +4,7 @@ const { BadRequestError } = require('../core/error.response');
 const { normalizeString } = require('./seoBlogSanitizer');
 const { buildEnvProductSeedingConfig, normalizeProductSeedingOptions } = require('../config/productSeeding.config');
 const { buildEnvProductPlacementConfig, normalizeProductPlacementOptions } = require('../config/productPlacement.config');
+const { isProductionEnv } = require('../config/runtimeEnv');
 
 const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const MAX_TIMES_PER_SCHEDULE = 12;
@@ -37,6 +38,14 @@ const parseBoolean = (value, fallback = false) => {
     if (['0', 'false', 'no', 'off', 'draft'].includes(normalized)) return false;
     return fallback;
 };
+
+// Whether the simple scheduler may auto-publish articles that pass EVERY quality
+// gate. Default OFF so existing behaviour (draft-only) is unchanged until the
+// owner opts in. Even when ON, publication still requires the independent
+// SEO_AGENT_AUTO_PUBLISH gate plus all review/readiness gates downstream — this
+// flag only lets a passing article reach 'publish' mode instead of forced draft.
+const simpleScheduleAutoPublishEnabled = (env = process.env) =>
+    !isProductionEnv(env) && parseBoolean(env.OPENCLAW_BLOG_AUTO_PUBLISH, false);
 
 const parseInteger = (value, fallback = 0) => {
     if (value === undefined || value === null || value === '') return fallback;
@@ -118,6 +127,7 @@ const intervalToMinutes = ({ value, unit }) => {
 };
 
 const MAX_AGENT_TOPIC_LENGTH = 300;
+const MAX_DIRECTION_LENGTH = 500;
 
 const normalizeObjectId = (value, field) => {
     const normalized = normalizeString(value || '');
@@ -127,7 +137,10 @@ const normalizeObjectId = (value, field) => {
 
 const normalizeAgentConfig = (value = {}, operations = {}) => {
     const config = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
-    const topic = normalizeString(config.topic || config.primaryKeyword || 'noi inox cho gia dinh');
+    const simpleContract = config.simpleContract === true;
+    const topic = simpleContract
+        ? normalizeString(config.topic || '')
+        : normalizeString(config.topic || config.primaryKeyword || 'noi inox cho gia dinh');
     if (topic.length > MAX_AGENT_TOPIC_LENGTH) {
         throw new BadRequestError(`Topic must be at most ${MAX_AGENT_TOPIC_LENGTH} characters (received ${topic.length}). Use a short subject phrase.`);
     }
@@ -138,7 +151,9 @@ const normalizeAgentConfig = (value = {}, operations = {}) => {
         : [];
     return {
         topic,
-        primaryKeyword: normalizeString(config.primaryKeyword || config.topic || 'noi inox'),
+        primaryKeyword: simpleContract
+            ? normalizeString(config.primaryKeyword || '')
+            : normalizeString(config.primaryKeyword || config.topic || 'noi inox'),
         secondaryKeywords: Array.isArray(config.secondaryKeywords)
             ? config.secondaryKeywords.map((item) => normalizeString(item)).filter(Boolean).slice(0, 12)
             : String(config.secondaryKeywords || '')
@@ -173,7 +188,123 @@ const normalizeAgentConfig = (value = {}, operations = {}) => {
             config.productPlacement || {},
             buildEnvProductPlacementConfig()
         ),
-        rankingEvidence: config.rankingEvidence && typeof config.rankingEvidence === 'object' ? config.rankingEvidence : null
+        rankingEvidence: config.rankingEvidence && typeof config.rankingEvidence === 'object' ? config.rankingEvidence : null,
+        simpleContract,
+        topicRoadmapEnabled: simpleContract && config.topicRoadmapEnabled !== false,
+        direction: normalizeString(config.direction || '').slice(0, MAX_DIRECTION_LENGTH),
+        legacyConfig: config.legacyConfig && typeof config.legacyConfig === 'object' && !Array.isArray(config.legacyConfig)
+            ? config.legacyConfig
+            : null
+    };
+};
+
+const isSimpleSchedulePayload = (payload = {}) =>
+    Boolean(payload) && typeof payload === 'object' && !Array.isArray(payload) &&
+    (payload.simple === true || typeof payload.direction === 'string');
+
+const parseSimpleDate = (value, field) => {
+    const raw = normalizeString(value || '');
+    if (!raw) return null;
+    const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) throw new BadRequestError(`${field} must use the YYYY-MM-DD format`);
+    const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+    const probe = new Date(Date.UTC(year, month - 1, day));
+    if (
+        probe.getUTCFullYear() !== year ||
+        probe.getUTCMonth() !== month - 1 ||
+        probe.getUTCDate() !== day
+    ) {
+        throw new BadRequestError(`${field} is not a valid calendar date`);
+    }
+    return { year, month, day };
+};
+
+const parseSimpleTimes = (value) => {
+    const source = Array.isArray(value)
+        ? value.map((item) => String(item ?? ''))
+        : String(value ?? '').split(',');
+    const seen = new Set();
+    const times = [];
+    source.forEach((item) => {
+        const raw = String(item || '').replace(/\s+/g, '');
+        if (!raw) return;
+        const time = normalizeTime(raw);
+        if (!time) throw new BadRequestError(`"${raw.slice(0, 20)}" is not a valid HH:mm time`);
+        if (seen.has(time)) return;
+        seen.add(time);
+        times.push(time);
+    });
+    if (!times.length) throw new BadRequestError('times requires at least one HH:mm time');
+    if (times.length > MAX_TIMES_PER_SCHEDULE) {
+        throw new BadRequestError(`times supports at most ${MAX_TIMES_PER_SCHEDULE} times`);
+    }
+    return times.sort();
+};
+
+/**
+ * Expands the user-facing simple schedule contract
+ * { name, direction, times, startDate, endDate, enabled }
+ * into the full internal payload. Every internal decision (mode, product
+ * behavior, quality gates, draft-only) is resolved by the system, never by
+ * the user. Dates are interpreted in the fixed Vietnam timezone.
+ */
+const expandSimpleSchedulePayload = (payload = {}, { currentAgentConfig = null } = {}) => {
+    if (!isSimpleSchedulePayload(payload)) throw new BadRequestError('simple schedule payload is invalid');
+    const name = normalizeString(payload.name);
+    if (!name) throw new BadRequestError('name is required');
+    const direction = normalizeString(payload.direction).slice(0, MAX_DIRECTION_LENGTH);
+    if (!direction) throw new BadRequestError('direction is required');
+    const times = parseSimpleTimes(payload.times);
+    const startDate = parseSimpleDate(payload.startDate, 'startDate');
+    if (!startDate) throw new BadRequestError('startDate is required');
+    const endDate = parseSimpleDate(payload.endDate, 'endDate');
+    const startAt = zonedTimeToUtc({ ...startDate, hour: 0, minute: 0, timeZone: DEFAULT_TIMEZONE });
+    const endAt = endDate
+        ? zonedTimeToUtc({ ...endDate, hour: 23, minute: 59, second: 59, timeZone: DEFAULT_TIMEZONE })
+        : null;
+    if (endAt && endAt.getTime() <= startAt.getTime()) {
+        throw new BadRequestError('endDate cannot be earlier than startDate');
+    }
+    if (payload.enabled !== undefined && typeof payload.enabled !== 'boolean') {
+        throw new BadRequestError('enabled must be a boolean');
+    }
+    const preserved = currentAgentConfig && typeof currentAgentConfig === 'object' ? currentAgentConfig : {};
+    // Owner-controlled, quality-gated auto-publish. When the env flag is off this
+    // stays draft-only exactly as before; when on, a passing article can publish
+    // and a failing one still falls back to draft via the downstream gates.
+    const autoPublish = simpleScheduleAutoPublishEnabled();
+    return {
+        name,
+        description: direction,
+        enabled: payload.enabled === undefined ? true : payload.enabled,
+        scheduleType: 'daily',
+        timezone: DEFAULT_TIMEZONE,
+        daily: { times },
+        dailyTimes: times,
+        startAt,
+        endAt,
+        runLimit: 0,
+        autoPublish,
+        draftOnly: !autoPublish,
+        allowSkip: true,
+        mode: 'best_action',
+        maximumTasksPerDay: 0,
+        agentConfig: {
+            ...preserved,
+            // The manager's direction is a brief for the rolling topic brain, NOT
+            // a concrete article topic/keyword. Each execution consumes one claimed
+            // roadmap item; if no safe item exists the run fails closed instead of
+            // writing the direction verbatim again.
+            topic: '',
+            primaryKeyword: '',
+            simpleContract: true,
+            topicRoadmapEnabled: true,
+            direction,
+            contentAction: '',
+            workOrderId: '',
+            targetBlogId: '',
+            mergeSourceBlogIds: []
+        }
     };
 };
 
@@ -226,7 +357,16 @@ const normalizeSchedulePayload = (payload = {}) => {
     }
     const draftOnlyInput = payload.draftOnly ?? operations.draftOnly;
     if (draftOnlyInput !== undefined && typeof draftOnlyInput !== 'boolean') throw new BadRequestError('draftOnly must be a boolean');
-    const draftOnly = draftOnlyInput === undefined ? true : draftOnlyInput;
+    const productionDraftOnly = isProductionEnv();
+    if (
+        productionDraftOnly &&
+        (draftOnlyInput === false || parseBoolean(payload.autoPublish, false))
+    ) {
+        throw new BadRequestError('Production Blog schedules must remain draft-only with autoPublish disabled');
+    }
+    const draftOnly = productionDraftOnly
+        ? true
+        : draftOnlyInput === undefined ? true : draftOnlyInput;
     const sourceInput = payload.sourceRequirements ?? operations.sourceRequirements ?? [];
     if (!Array.isArray(sourceInput)) throw new BadRequestError('sourceRequirements must be an array');
     const sourceRequirements = [...new Set(sourceInput.map((item) => {
@@ -249,9 +389,9 @@ const normalizeSchedulePayload = (payload = {}) => {
     }
     const allowSkipInput = payload.allowSkip ?? operations.allowSkip;
     if (allowSkipInput !== undefined && typeof allowSkipInput !== 'boolean') throw new BadRequestError('allowSkip must be a boolean');
-    const maximumTasksPerDay = Number(payload.maximumTasksPerDay ?? payload.maxTasksPerDay ?? operations.maximumTasksPerDay ?? operations.maxTasksPerDay ?? 1);
-    if (!Number.isInteger(maximumTasksPerDay) || maximumTasksPerDay < 1 || maximumTasksPerDay > 24) {
-        throw new BadRequestError('maximumTasksPerDay must be an integer between 1 and 24');
+    const maximumTasksPerDay = Number(payload.maximumTasksPerDay ?? payload.maxTasksPerDay ?? operations.maximumTasksPerDay ?? operations.maxTasksPerDay ?? 0);
+    if (!Number.isInteger(maximumTasksPerDay) || maximumTasksPerDay < 0) {
+        throw new BadRequestError('maximumTasksPerDay must be a non-negative integer (0 = unlimited)');
     }
 
     return {
@@ -266,7 +406,7 @@ const normalizeSchedulePayload = (payload = {}) => {
         runLimit,
         startAt,
         endAt,
-        autoPublish: draftOnly ? false : parseBoolean(payload.autoPublish, false),
+        autoPublish: productionDraftOnly || draftOnly ? false : parseBoolean(payload.autoPublish, false),
         mode,
         sourceRequirements,
         minimumOpportunityScore,
@@ -428,10 +568,14 @@ module.exports = {
     SOURCE_REQUIREMENTS,
     calculateNextRun,
     describeSchedule,
+    expandSimpleSchedulePayload,
     getZonedParts,
     intervalToMinutes,
+    isSimpleSchedulePayload,
     normalizeSchedulePayload,
     normalizeTimes,
     parseBoolean,
+    parseSimpleTimes,
+    simpleScheduleAutoPublishEnabled,
     zonedTimeToUtc
 };

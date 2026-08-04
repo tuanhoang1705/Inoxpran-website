@@ -17,8 +17,10 @@ const {
 } = require('../src/services/safeSourceFetch.service');
 const {
     DEFAULT_SOURCES,
+    GOOGLE_SNAPSHOT_UNAVAILABLE_CODE,
     classifySeverity,
     extractDocumentDates,
+    googleSnapshotUnavailableError,
     officialHostAllowed,
     summarizeMaterialChange,
     stripMarkup
@@ -31,6 +33,12 @@ const { GoogleIntelligenceChange } = require('../src/models/googleIntelligenceCh
 const publicDns = vi.fn(async () => [{ address: '142.250.72.14', family: 4 }]);
 
 describe('Google Intelligence snapshot policy', () => {
+    it('uses a stable error code when the mandatory daily snapshot is unavailable', () => {
+        const error = googleSnapshotUnavailableError();
+        expect(error.code).toBe(GOOGLE_SNAPSHOT_UNAVAILABLE_CODE);
+        expect(error.message).toContain('no acceptable Google Intelligence snapshot');
+    });
+
     it('persists unique daily snapshots, execution keys, singleton schedules and change fingerprints', () => {
         const hasUniqueIndex = (model, expectedKeys) => model.schema.indexes().some(([keys, options]) =>
             options.unique && Object.entries(expectedKeys).every(([key, value]) => keys[key] === value));

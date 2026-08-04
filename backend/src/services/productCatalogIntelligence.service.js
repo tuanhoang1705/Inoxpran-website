@@ -27,9 +27,66 @@ const CATEGORY_NAMES = Object.freeze({
 
 const sha256 = (value) => crypto.createHash('sha256').update(String(value || '')).digest('hex');
 const text = (value, max = 300) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+const normalizeKey = (value) => String(value || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+const PUBLIC_VARIATION_KEYS = new Set([
+    'name', 'label', 'value', 'option', 'variant', 'variation',
+    'color', 'colour', 'mau', 'mausac',
+    'size', 'sizes', 'kichthuoc',
+    'capacity', 'volume', 'dungtich',
+    'material', 'chatlieu',
+    'model', 'type', 'style', 'finish', 'surface',
+    'diameter', 'duongkinh',
+    'length', 'width', 'height', 'chieudai', 'chieurong', 'chieucao',
+    'weight', 'khoiluong', 'unit', 'donvi'
+]);
+const publicScalarList = (value, {
+    maxItems = 30,
+    maxLength = 160,
+    maxDepth = 3
+} = {}) => {
+    const output = [];
+    const seen = new Set();
+    const push = (rawValue, rawKey = '') => {
+        const cleaned = text(rawValue, maxLength);
+        if (!cleaned || cleaned === '[object Object]') return;
+        const label = text(rawKey, 60);
+        const item = label ? `${label}: ${cleaned}`.slice(0, maxLength) : cleaned;
+        const identity = item.toLocaleLowerCase('vi');
+        if (!identity || seen.has(identity)) return;
+        seen.add(identity);
+        output.push(item);
+    };
+    const visit = (current, depth = 0, key = '') => {
+        if (output.length >= maxItems || current === null || current === undefined) return;
+        if (['string', 'number', 'boolean'].includes(typeof current)) {
+            if (!key || PUBLIC_VARIATION_KEYS.has(normalizeKey(key))) push(current, key);
+            return;
+        }
+        if (depth >= maxDepth || typeof current !== 'object' || current instanceof Date) return;
+        if (Array.isArray(current)) {
+            for (const item of current) {
+                visit(item, depth + 1, key);
+                if (output.length >= maxItems) break;
+            }
+            return;
+        }
+        for (const childKey of Object.keys(current).sort((left, right) => left.localeCompare(right, 'vi'))) {
+            visit(current[childKey], depth + 1, childKey);
+            if (output.length >= maxItems) break;
+        }
+    };
+    visit(value);
+    return output;
+};
 const textList = (value, maxItems = 30) => {
-    const source = Array.isArray(value) ? value : typeof value === 'string' ? value.split(/[,;|\n]/) : [];
-    return Array.from(new Set(source.map((item) => text(item, 160)).filter(Boolean))).slice(0, maxItems);
+    if (typeof value === 'string') {
+        return Array.from(new Set(value.split(/[,;|\n]/).map((item) => text(item, 160)).filter(Boolean))).slice(0, maxItems);
+    }
+    return publicScalarList(value, { maxItems, maxLength: 160 });
 };
 const stripDescription = (value) => text(sanitizeHtml(String(value || ''), { allowedTags: [], allowedAttributes: {} }), 600);
 
@@ -270,5 +327,6 @@ module.exports = {
     ProductCatalogIntelligenceService,
     buildSafeProduct,
     hashSafeCatalog,
+    publicScalarList,
     stableProductEvidence
 };

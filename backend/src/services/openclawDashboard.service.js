@@ -889,7 +889,7 @@ const buildCommand = ({ action, profile }) => {
       }
       return {
         internal: "gateway-probe",
-        display: `GET ${getGatewayHttpUrl()}/healthz + /readyz`,
+        display: `GET ${getGatewayHttpUrl()}/healthz + /readyz + /v1/models (authenticated)`,
       };
     }
     const gatewayActionByDashboardAction = {
@@ -1376,7 +1376,7 @@ const buildDashboard = ({ capabilities: checkedCapabilities = null } = {}) => {
   const capabilities =
     checkedCapabilities || buildCapabilityMatrix(process.env, telegramStatus);
   const requiredEnv = [
-    "API_KEY",
+    "OPENCLAW_INTERNAL_API_KEY",
     "SEO_AGENT_API_KEY",
     "SEO_AGENT_HMAC_SECRET",
     "OPENAI_API_KEY",

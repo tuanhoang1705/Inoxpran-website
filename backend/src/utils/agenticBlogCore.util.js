@@ -123,8 +123,29 @@ const reviewBrandVoice = (html) => {
     return { passed: violations.length === 0, status: violations.length ? 'fail' : 'pass', violations };
 };
 
+const FORMULAIC_HEADING_PATTERNS = [
+    /^chon kich ban/, /^kich ban (?:gia dinh|nau|uu tien)/, /^chon tieu chi theo kich ban/,
+    /^bai viet (?:huong dan|nay)/, /^huong dan chon\b.{0,4}$/
+];
+
+const detectFormulaicDraft = (html) => {
+    const headings = extractHeadings(html)
+        .filter((heading) => heading.level === 2)
+        .map((heading) => normalizeForSimilarity(heading.text));
+    const reasons = [];
+    if (headings.some((heading) => FORMULAIC_HEADING_PATTERNS.some((pattern) => pattern.test(heading)))) {
+        reasons.push('formulaic_scenario_heading');
+    }
+    const firstHeading = headings[0] || '';
+    if (FORMULAIC_HEADING_PATTERNS.some((pattern) => pattern.test(firstHeading))) {
+        reasons.push('formulaic_opening_heading');
+    }
+    return { matched: reasons.length > 0, reasons };
+};
+
 module.exports = {
     extractHeadings,
+    detectFormulaicDraft,
     jaccardSimilarity,
     normalizeForSimilarity,
     reviewBrandVoice,

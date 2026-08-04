@@ -3,8 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
-
-require('../src/dbs/init.mongodb');
+const database = require('../src/dbs/init.mongodb');
 
 const ProductService = require('../src/services/product.service');
 
@@ -75,6 +74,7 @@ const run = async () => {
         throw new Error('Missing --file argument');
     }
 
+    await database.connect();
     await waitForMongo();
     const entries = loadSeedEntries(args.file);
     const results = {

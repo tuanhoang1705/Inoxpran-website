@@ -19,6 +19,8 @@ const buildHarness = ({
   enabledScheduleCount = 1,
   activeExecutionCount = 0,
   activeContentOperationsRunCount = 0,
+  blogConfigured = true,
+  seoAgentConfigured = true,
   telegramConfigured = true,
   imageConfigured = true,
 } = {}) => {
@@ -128,6 +130,8 @@ const buildHarness = ({
     },
     envProvider: () => env,
     capabilityDefinitionsProvider: () => ({
+      blogCron: { configured: blogConfigured },
+      seoAgent: { configured: seoAgentConfigured },
       telegram: { configured: telegramConfigured },
       imagePipeline: { configured: imageConfigured },
     }),
@@ -188,6 +192,18 @@ describe("OpenClaw runtime controls", () => {
   it("fails closed when enabling cron without an enabled production schedule", async () => {
     const { service, applyEnvironment, audits } = buildHarness({
       enabledScheduleCount: 0,
+    });
+
+    await expect(service.update(updateRequest("blog_cron"))).rejects.toThrow(
+      "preconditions are not satisfied",
+    );
+    expect(applyEnvironment).not.toHaveBeenCalled();
+    expect(audits).toHaveLength(0);
+  });
+
+  it("fails closed when enabling cron without the configured model and gateway pipeline", async () => {
+    const { service, applyEnvironment, audits } = buildHarness({
+      blogConfigured: false,
     });
 
     await expect(service.update(updateRequest("blog_cron"))).rejects.toThrow(
@@ -268,6 +284,48 @@ describe("OpenClaw runtime controls", () => {
     );
   });
 
+  it("cannot enable or hydrate auto publish in production", async () => {
+    const retained = {
+      controlKey: "auto_publish",
+      enabled: true,
+      revision: 2,
+      reason: "Legacy retained rollout",
+      updatedBy: adminId,
+    };
+    const { service, env, applyEnvironment } = buildHarness({
+      env: {
+        NODE_ENV: "production",
+        OPENCLAW_IMAGE_PIPELINE_ENABLED: "true",
+      },
+      controls: [retained],
+    });
+
+    const listed = await service.list({ canManage: true });
+    expect(
+      listed.controls.find((item) => item.controlKey === "auto_publish"),
+    ).toMatchObject({
+      enabled: false,
+      policyLocked: true,
+      readyToEnable: false,
+      revision: 2,
+    });
+
+    await service.hydrate({ waitForConnection: false });
+    expect(env.SEO_AGENT_AUTO_PUBLISH).toBe("false");
+    expect(applyEnvironment).toHaveBeenCalledWith(
+      "SEO_AGENT_AUTO_PUBLISH",
+      false,
+    );
+
+    await expect(
+      service.update(
+        updateRequest("auto_publish", {
+          expectedRevision: 2,
+        }),
+      ),
+    ).rejects.toThrow("locked off by the production draft-only policy");
+  });
+
   it("starts and stops the polling runtime when Telegram changes", async () => {
     const { service, telegramRuntime } = buildHarness();
     const enabled = await service.update(updateRequest("telegram_approval"));
@@ -286,6 +344,60 @@ describe("OpenClaw runtime controls", () => {
 
     expect(telegramRuntime.start).toHaveBeenCalledTimes(1);
     expect(telegramRuntime.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a production Telegram polling override even when credentials are configured", async () => {
+    const { service, telegramRuntime } = buildHarness({
+      env: {
+        NODE_ENV: "production",
+        TELEGRAM_MODE: "polling",
+      },
+    });
+
+    const listed = await service.list({ canManage: true });
+    expect(
+      listed.controls.find(
+        (item) => item.controlKey === "telegram_approval",
+      ),
+    ).toMatchObject({
+      enabled: false,
+      policyLocked: true,
+      readyToEnable: false,
+    });
+    await expect(
+      service.update(updateRequest("telegram_approval")),
+    ).rejects.toThrow("preconditions are not satisfied");
+    expect(telegramRuntime.start).not.toHaveBeenCalled();
+  });
+
+  it("does not restore a persisted enable when required configuration became invalid", async () => {
+    const { service, env, applyEnvironment } = buildHarness({
+      blogConfigured: false,
+      controls: [
+        {
+          controlKey: "blog_cron",
+          enabled: true,
+          revision: 2,
+          reason: "Retained rollout",
+          updatedBy: adminId,
+        },
+      ],
+    });
+
+    await service.hydrate({ waitForConnection: false });
+
+    expect(env.OPENCLAW_BLOG_CRON_ENABLED).toBe("false");
+    expect(applyEnvironment).toHaveBeenCalledWith(
+      "OPENCLAW_BLOG_CRON_ENABLED",
+      false,
+    );
+    const listed = await service.list({ canManage: true });
+    expect(
+      listed.controls.find((item) => item.controlKey === "blog_cron"),
+    ).toMatchObject({
+      enabled: false,
+      readyToEnable: false,
+    });
   });
 
   it("restores persisted overrides and can force every control closed", async () => {

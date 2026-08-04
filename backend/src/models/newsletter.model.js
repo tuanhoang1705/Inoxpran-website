@@ -7,7 +7,7 @@ const COLLECTION_NAME = 'NewsletterSubscribers';
 
 const newsletterSchema = new Schema(
   {
-    email: { type: String, required: true, unique: true, index: true },
+    email: { type: String, required: true },
     status: { type: String, enum: ['subscribed', 'unsubscribed'], default: 'subscribed' },
     subscribedAt: { type: Date, default: Date.now },
     unsubscribedAt: { type: Date },

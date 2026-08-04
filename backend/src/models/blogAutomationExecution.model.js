@@ -4,6 +4,8 @@ const { Schema, model } = require('mongoose');
 
 const DOCUMENT_NAME = 'BlogAutomationExecution';
 const COLLECTION_NAME = 'BlogAutomationExecutions';
+const WORKER_HEARTBEAT_DOCUMENT_NAME = 'BlogAutomationWorkerHeartbeat';
+const WORKER_HEARTBEAT_COLLECTION_NAME = 'BlogAutomationWorkerHeartbeats';
 
 const executionSchema = new Schema(
     {
@@ -25,12 +27,21 @@ const executionSchema = new Schema(
         executionKey: { type: String, required: true, unique: true, index: true },
         status: {
             type: String,
-            enum: ['queued', 'running', 'committing', 'draft_created', 'maintenance_created', 'published', 'completed', 'blocked', 'failed', 'skipped'],
+            enum: ['queued', 'retry_wait', 'running', 'committing', 'draft_created', 'maintenance_created', 'published', 'completed', 'blocked', 'failed', 'skipped'],
             default: 'queued',
             index: true
         },
         startedAt: { type: Date, default: null },
         completedAt: { type: Date, default: null },
+        retryAt: { type: Date, default: null },
+        attemptCount: { type: Number, default: 0, min: 0, max: 10 },
+        maxAttempts: { type: Number, default: 3, min: 1, max: 10 },
+        currentStage: { type: String, default: 'queued', trim: true, maxlength: 80 },
+        failureClass: {
+            type: String,
+            enum: ['', 'transient', 'terminal'],
+            default: ''
+        },
         blogId: { type: Schema.Types.ObjectId, ref: 'BlogPost', default: null, index: true },
         blogSlug: { type: String, default: '' },
         blogTitle: { type: String, default: '' },
@@ -55,6 +66,10 @@ const executionSchema = new Schema(
         editorialStyleProfileId: { type: Schema.Types.ObjectId, ref: 'EditorialStyleProfile', default: null },
         strategyPlanId: { type: Schema.Types.ObjectId, ref: 'BlogStrategyPlan', default: null },
         productCatalogSnapshotId: { type: Schema.Types.ObjectId, ref: 'ProductCatalogSnapshot', default: null, index: true },
+        topicRoadmapId: { type: Schema.Types.ObjectId, ref: 'BlogTopicRoadmap', default: null, index: true },
+        topicRoadmapItemId: { type: Schema.Types.ObjectId, ref: 'BlogTopicRoadmapItem', default: null, index: true },
+        topicRoadmapGeneration: { type: Number, default: 0, min: 0 },
+        topicDirectionRevision: { type: Number, default: 0, min: 0 },
         productSeedPlanId: { type: Schema.Types.ObjectId, ref: 'ProductSeedPlan', default: null, index: true },
         editorialProductPlacementPlanId: { type: Schema.Types.ObjectId, ref: 'EditorialProductPlacementPlan', default: null, index: true },
         productSeedingMode: { type: String, enum: ['off', 'auto', 'required'], default: 'off', index: true },
@@ -75,6 +90,8 @@ const executionSchema = new Schema(
         monitoringTasks: { type: [Schema.Types.Mixed], default: [] },
         learningRecommendations: { type: [Schema.Types.Mixed], default: [] },
         agentSteps: { type: [Schema.Types.Mixed], default: [] },
+        agentExecutionRefs: { type: [Schema.Types.ObjectId], ref: 'TopicIdeationRun', default: [] },
+        topicScoreReport: { type: Schema.Types.Mixed, default: null },
         reviewerDecisions: { type: Schema.Types.Mixed, default: () => ({}) },
         publisherDecision: { type: Schema.Types.Mixed, default: () => ({}) }
     },
@@ -106,6 +123,45 @@ executionSchema.pre('validate', function validateQaExecution(next) {
     next();
 });
 
+const workerHeartbeatSchema = new Schema(
+    {
+        heartbeatKey: {
+            type: String,
+            required: true,
+            default: 'openclaw-blog-scheduler'
+        },
+        workerId: { type: String, required: true, trim: true, maxlength: 220 },
+        processRole: {
+            type: String,
+            enum: ['dedicated_worker', 'embedded_worker'],
+            default: 'dedicated_worker'
+        },
+        state: {
+            type: String,
+            enum: ['starting', 'running', 'stopping', 'stopped'],
+            default: 'starting'
+        },
+        acceptingClaims: { type: Boolean, default: false },
+        workerActive: { type: Boolean, default: false },
+        schedulerActive: { type: Boolean, default: false },
+        pollIntervalMs: { type: Number, default: 30000, min: 1000, max: 300000 },
+        registeredAt: { type: Date, default: null },
+        lastHeartbeatAt: { type: Date, required: true },
+        lastSuccessfulRunAt: { type: Date, default: null },
+        stoppedAt: { type: Date, default: null },
+        lastErrorCode: { type: String, default: '', maxlength: 80 },
+        enabledWorkloads: { type: Schema.Types.Mixed, default: () => ({}) }
+    },
+    {
+        collection: WORKER_HEARTBEAT_COLLECTION_NAME,
+        timestamps: true
+    }
+);
+
 module.exports = {
-    BlogAutomationExecution: model(DOCUMENT_NAME, executionSchema)
+    BlogAutomationExecution: model(DOCUMENT_NAME, executionSchema),
+    BlogAutomationWorkerHeartbeat: model(
+        WORKER_HEARTBEAT_DOCUMENT_NAME,
+        workerHeartbeatSchema
+    )
 };

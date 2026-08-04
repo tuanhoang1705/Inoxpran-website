@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto')
 const { ACTIONS } = require('../../config/contentOperations.config')
+const { textSimilarity } = require('../../utils/agenticBlogCore.util')
 
 const clamp01 = (value) => {
     const number = Number(value)
@@ -64,8 +65,16 @@ const factorSet = (overrides = {}) => ({
     ))
 })
 
-const candidate = ({ action, topic, targets = [], evidence = [], factors = {}, risks = [], reason, sourceKey }) => {
+const candidate = ({ action, topic, targets = [], evidence = [], factors = {}, risks = [], reason, sourceKey, penaltySignals = {} }) => {
     const targetBlogIds = targets.map((item) => String(item?.blogId || item)).filter(Boolean)
+    // Extra anti-sameness penalties (duplicateIntent, excessiveTopicExposure, ...)
+    // are read by the scorer but were never populated before; callers may now pass
+    // them in. Base structural penalties below still always apply.
+    const extraPenalties = Object.fromEntries(
+        Object.entries(penaltySignals || {})
+            .map(([key, value]) => [key, clamp01(value)])
+            .filter(([, value]) => value > 0)
+    )
     return {
         candidateId: stableId({ action, topic, targetBlogIds, sourceKey }),
         decisionType: action,
@@ -81,7 +90,8 @@ const candidate = ({ action, topic, targets = [], evidence = [], factors = {}, r
         penaltySignals: {
             cannibalizationRisk: risks.includes('cannibalization_risk') ? 0.8 : 0,
             staleProductData: risks.includes('stale_product_evidence') ? 0.35 : 0,
-            lowConfidence: factors.evidence && Number(factors.evidence) < 0.4 ? 0.4 : 0
+            lowConfidence: factors.evidence && Number(factors.evidence) < 0.4 ? 0.4 : 0,
+            ...extraPenalties
         },
         decisionReason: text(reason, 2000)
     }
@@ -239,14 +249,28 @@ const generateFixedBriefCandidate = ({ input = {}, snapshot, inventoryItems }) =
             ? inventoryItems.find((item) => item.slug === String(input.targetBlogSlug))
             : null
     if (requested !== ACTIONS.NEW && requested !== ACTIONS.SKIP && !target) return null
+    const roadmapEvidence = input.__trustedRoadmapSelection === true
+        ? (Array.isArray(input.requiredEvidence) ? input.requiredEvidence : []).slice(0, 40)
+        : []
     return candidate({
         action: requested,
         topic,
         targets: target ? [target] : [],
         sourceKey: `fixed:${topic}:${requested}`,
-        evidence: [{ source: 'operator_brief', type: 'explicit_topic', topic }, {
-            source: 'google_intelligence', type: 'daily_gate', snapshotId: String(snapshot.googleIntelSnapshotId || '')
-        }],
+        evidence: [
+            {
+                source: input.__trustedRoadmapSelection === true ? 'topic_roadmap' : 'operator_brief',
+                type: input.__trustedRoadmapSelection === true ? 'claimed_topic' : 'explicit_topic',
+                topic,
+                ...(input.__trustedRoadmapSelection === true
+                    ? { roadmapId: String(input.roadmapId || ''), roadmapItemId: String(input.roadmapItemId || ''), angle: text(input.editorialAngle, 400) }
+                    : {})
+            },
+            ...roadmapEvidence,
+            {
+                source: 'google_intelligence', type: 'daily_gate', snapshotId: String(snapshot.googleIntelSnapshotId || '')
+            }
+        ],
         factors: {
             userDemand: clamp01(input.userDemandScore ?? 0.72),
             contentGap: clamp01(input.contentGapScore ?? 0.75),
@@ -269,16 +293,148 @@ const deduplicate = (candidates) => {
     })
 }
 
-const generateOpportunityCandidates = ({ snapshot = {}, inventoryItems = [], signals = [], input = {}, mode = 'best_action' } = {}) => {
+const generateDirectionCandidate = ({ input = {}, snapshot = {} }) => {
+    const topic = text(input.topic || input.primaryKeyword)
+    if (!topic) return null
+    return candidate({
+        action: ACTIONS.NEW,
+        topic,
+        sourceKey: `direction:${topic}`,
+        evidence: [{ source: 'operator_brief', type: 'schedule_direction', topic }, {
+            source: 'google_intelligence', type: 'daily_gate', snapshotId: String(snapshot.googleIntelSnapshotId || '')
+        }],
+        factors: {
+            userDemand: clamp01(input.userDemandScore ?? 0.66),
+            contentGap: clamp01(input.contentGapScore ?? 0.68),
+            business: clamp01(input.businessScore ?? 0.6),
+            evidence: snapshot.googleIntelSnapshotId ? 0.72 : 0.2,
+            userValue: clamp01(input.userValueScore ?? 0.7)
+        },
+        reason: 'The schedule direction proposes this topic as guidance only. It competes with every other candidate and remains subject to the same duplicate-intent, evidence, cannibalization, and readiness controls.'
+    })
+}
+
+// Anti-sameness: compare a proposed topic/category against what was published
+// recently and populate the previously-dormant penalty slots the decision scorer
+// already reads. This is what makes the brain actively avoid "một màu một form".
+const antiSamenessPenalties = ({ topic = '', categoryKey = '', inventoryItems = [] } = {}) => {
+    const items = Array.isArray(inventoryItems) ? inventoryItems : []
+    let maxSimilarity = 0
+    let categoryCount = 0
+    const normalizedCategory = text(categoryKey, 40).toLocaleLowerCase('vi')
+    for (const item of items) {
+        const otherTitle = text(item?.title || item?.blog_title, 200)
+        if (otherTitle) maxSimilarity = Math.max(maxSimilarity, textSimilarity(topic, otherTitle, 4))
+        const otherCategory = text(item?.categoryKey || item?.blog_category_key || item?.category, 40).toLocaleLowerCase('vi')
+        if (normalizedCategory && otherCategory === normalizedCategory) categoryCount += 1
+    }
+    const penalties = {}
+    // Near-duplicate of an existing title → duplicate intent / recent similar publication.
+    if (maxSimilarity >= 0.5) {
+        penalties.duplicateIntent = clamp01(maxSimilarity)
+        penalties.recentSimilarPublication = clamp01((maxSimilarity - 0.4) / 0.6)
+    } else if (maxSimilarity >= 0.3) {
+        penalties.recentSimilarPublication = clamp01((maxSimilarity - 0.25) / 0.75)
+    }
+    // Category already heavily represented in recent output → topic/category exposure.
+    if (categoryCount >= 3) {
+        penalties.excessiveCategoryExposure = clamp01(0.3 + (categoryCount - 3) * 0.15)
+    }
+    if (maxSimilarity >= 0.4 && categoryCount >= 2) {
+        penalties.excessiveTopicExposure = clamp01(0.3 + (categoryCount - 2) * 0.1)
+    }
+    return penalties
+}
+
+// Convert the creative ideation layer's diverse ideas into NEW opportunity
+// candidates. Each competes inside the same deterministic scoring and every
+// downstream gate; ideation only widens the funnel, it bypasses nothing.
+const generateIdeaCandidates = ({ ideas = [], snapshot = {}, inventoryItems = [] } = {}) => {
+    const items = Array.isArray(inventoryItems) ? inventoryItems.map(normalizeInventoryItem) : []
+    return (Array.isArray(ideas) ? ideas : []).slice(0, 40).map((idea) => {
+        const topic = text(idea?.topic)
+        if (!topic) return null
+        const penaltySignals = antiSamenessPenalties({ topic, categoryKey: idea?.categoryKey, inventoryItems: items })
+        return candidate({
+            action: ACTIONS.NEW,
+            topic,
+            sourceKey: `idea:${idea?.ideaId || topic}`,
+            evidence: [
+                {
+                    source: 'blog_ideation',
+                    type: 'creative_idea',
+                    productScope: text(idea?.productScope, 40),
+                    categoryKey: text(idea?.categoryKey, 40),
+                    angle: text(idea?.angle, 400),
+                    topicAxis: text(idea?.topicAxis, 80),
+                    searchIntent: text(idea?.searchIntent, 120),
+                    seasonal: Boolean(idea?.seasonal),
+                    signals: Array.isArray(idea?.sourceSignals) ? idea.sourceSignals.slice(0, 8) : []
+                },
+                ...(Array.isArray(idea?.productIds) && idea.productIds.length
+                    ? [{
+                        source: 'product_catalog',
+                        type: 'sku_topic_opportunity',
+                        productIds: idea.productIds.slice(0, 12).map((item) => text(item, 80)),
+                        evidenceKeys: Array.isArray(idea?.productEvidenceKeys)
+                            ? idea.productEvidenceKeys.slice(0, 20).map((item) => text(item, 160))
+                            : []
+                    }]
+                    : []),
+                ...(Array.isArray(idea?.marketEvidenceIds) && idea.marketEvidenceIds.length
+                    ? [{
+                        source: 'market_research',
+                        type: 'observed_market_signal',
+                        evidenceIds: idea.marketEvidenceIds.slice(0, 12).map((item) => text(item, 160))
+                    }]
+                    : []),
+                { source: 'google_intelligence', type: 'daily_gate', snapshotId: String(snapshot.googleIntelSnapshotId || '') }
+            ],
+            factors: {
+                userDemand: clamp01(idea?.userDemandScore ?? 0.55),
+                contentGap: clamp01(idea?.contentGapScore ?? 0.6),
+                business: clamp01(idea?.businessScore ?? 0.5),
+                freshness: clamp01(idea?.freshnessScore ?? 0.6),
+                productCampaign: clamp01(idea?.productFitScore ?? (idea?.productIds?.length ? 0.65 : 0.3)),
+                evidence: clamp01(
+                    idea?.evidenceScore ??
+                    (snapshot.googleIntelSnapshotId
+                        ? idea?.productIds?.length || idea?.marketEvidenceIds?.length
+                            ? 0.78
+                            : 0.68
+                        : 0.2)
+                ),
+                userValue: clamp01(idea?.userValueScore ?? Math.max(clamp01(idea?.contentGapScore ?? 0.6), clamp01(idea?.userDemandScore ?? 0.55)))
+            },
+            penaltySignals,
+            reason: text(
+                idea?.rationale
+                    ? `Creative ideation proposed this topic: ${idea.rationale}`
+                    : 'Creative ideation proposed this topic to widen daily variety. It competes with every other candidate and remains subject to duplicate-intent, evidence, cannibalization, and readiness controls.',
+                2000
+            )
+        })
+    }).filter(Boolean)
+}
+
+const generateOpportunityCandidates = ({ snapshot = {}, inventoryItems = [], signals = [], input = {}, mode = 'best_action', ideas = [] } = {}) => {
     const items = inventoryItems.map(normalizeInventoryItem)
     const fixed = mode === 'fixed_brief' || (mode === 'maintenance_only' && Object.values(ACTIONS).includes(input.action))
         ? generateFixedBriefCandidate({ input, snapshot, inventoryItems: items })
         : null
+    const direction = mode === 'best_action' ? generateDirectionCandidate({ input, snapshot }) : null
+    // Creative ideation only feeds the open-ended best_action mode; fixed_brief and
+    // maintenance_only are deliberately narrow and must not be widened.
+    const ideaCandidates = mode === 'best_action'
+        ? generateIdeaCandidates({ ideas, snapshot, inventoryItems: items })
+        : []
     let candidates = [
         ...generateSearchCandidates({ snapshot, inventoryItems: items }),
         ...generateInventoryCandidates(items),
         ...generateSignalCandidates({ signals, snapshot }),
-        ...(fixed ? [fixed] : [])
+        ...ideaCandidates,
+        ...(fixed ? [fixed] : []),
+        ...(direction ? [direction] : [])
     ]
     if (mode === 'fixed_brief') candidates = fixed ? [fixed] : []
     if (mode === 'maintenance_only') {
@@ -296,8 +452,11 @@ const generateOpportunityCandidates = ({ snapshot = {}, inventoryItems = [], sig
 }
 
 module.exports = {
+    antiSamenessPenalties,
     candidate,
     factorSet,
+    generateDirectionCandidate,
+    generateIdeaCandidates,
     generateOpportunityCandidates,
     generateInventoryCandidates,
     generateSearchCandidates,

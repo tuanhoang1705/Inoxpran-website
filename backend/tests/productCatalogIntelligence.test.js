@@ -4,7 +4,12 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { buildEnvProductSeedingConfig, normalizeProductSeedingOptions } = require('../src/config/productSeeding.config');
 const { ProductCatalogSnapshot } = require('../src/models/productCatalogSnapshot.model');
-const { ProductCatalogIntelligenceService, buildSafeProduct, hashSafeCatalog } = require('../src/services/productCatalogIntelligence.service');
+const {
+    ProductCatalogIntelligenceService,
+    buildSafeProduct,
+    hashSafeCatalog,
+    publicScalarList
+} = require('../src/services/productCatalogIntelligence.service');
 
 const document = (overrides = {}) => ({
     _id: '507f1f77bcf86cd799439011',
@@ -38,6 +43,31 @@ describe('Product Catalog Intelligence', () => {
         expect(JSON.stringify(safe)).not.toContain('customer@example.com');
         expect(JSON.stringify(safe)).not.toContain('private-shop');
         expect(JSON.stringify(safe)).not.toContain('margin');
+    });
+
+    it('extracts bounded public variation facts without object-string leakage', () => {
+        const safe = buildSafeProduct({
+            document: document({
+                product_variations: [
+                    { color: 'Đỏ', size: '24 cm', price: 499000, margin: 0.8 },
+                    { attributes: { capacity: '5 lít', privateNote: 'do-not-expose' } },
+                    { color: 'Đỏ', size: { nested: 'invalid' } }
+                ]
+            }),
+            inventoryStock: 8
+        });
+
+        expect(safe.verifiedFeatures).toEqual(expect.arrayContaining([
+            'color: Đỏ',
+            'size: 24 cm',
+            'capacity: 5 lít'
+        ]));
+        expect(JSON.stringify(safe.verifiedFeatures)).not.toContain('[object Object]');
+        expect(JSON.stringify(safe.verifiedFeatures)).not.toContain('499000');
+        expect(JSON.stringify(safe.verifiedFeatures)).not.toContain('do-not-expose');
+        expect(safe.verifiedFeatures.length).toBeLessThanOrEqual(30);
+        expect(publicScalarList([{ size: '24 cm', color: 'Đỏ' }]))
+            .toEqual(publicScalarList([{ color: 'Đỏ', size: '24 cm' }]));
     });
 
     it('rejects inactive, incomplete and out-of-stock products by default', () => {

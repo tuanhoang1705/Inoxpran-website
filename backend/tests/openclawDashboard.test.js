@@ -39,6 +39,7 @@ describe("openclaw dashboard service", () => {
       allowlistConfigured: true,
       webhookSecretConfigured: true,
       adminBaseUrlConfigured: true,
+      adminBaseUrlHttps: true,
     };
     const capabilities = buildCapabilityMatrix(
       {
@@ -124,6 +125,9 @@ describe("openclaw dashboard service", () => {
     }
   });
 
+  const privateKeyPemBegin = ["-----BEGIN", "PRIVATE", "KEY-----"].join(" ");
+  const privateKeyPemEnd = ["-----END", "PRIVATE", "KEY-----"].join(" ");
+
   it.each([
     ["snake token", "GHTK_API_TOKEN=ghtk-canary-value", "ghtk-canary-value"],
     [
@@ -183,19 +187,19 @@ describe("openclaw dashboard service", () => {
     ],
     [
       "multiline PEM private key",
-      '{"private_key":"-----BEGIN PRIVATE KEY-----\nSUPERSECRETBASE64PAYLOAD123456\n-----END PRIVATE KEY-----"}',
+      `{"private_key":"${["-----BEGIN", "PRIVATE KEY-----"].join(" ")}\nSUPERSECRETBASE64PAYLOAD123456\n-----END PRIVATE KEY-----"}`,
       "SUPERSECRETBASE64PAYLOAD123456",
     ],
     [
       "URL-encoded PEM private key",
       encodeURIComponent(
-        "privateKey=-----BEGIN PRIVATE KEY-----\nENCODEDPEMCANARY123456\n-----END PRIVATE KEY-----",
+        `privateKey=${privateKeyPemBegin}\nENCODEDPEMCANARY123456\n${privateKeyPemEnd}`,
       ),
       "ENCODEDPEMCANARY123456",
     ],
     [
       "unterminated PEM private key",
-      "private_key=-----BEGIN PRIVATE KEY-----\nUNTERMINATEDPEMCANARY123456",
+      `private_key=${privateKeyPemBegin}\nUNTERMINATEDPEMCANARY123456`,
       "UNTERMINATEDPEMCANARY123456",
     ],
     [
@@ -323,7 +327,7 @@ describe("openclaw dashboard service", () => {
       short: process.env.LOCAL_QA_PASSWORD,
       suffixed: process.env.LOCAL_SECRET_VALUE,
     };
-    process.env.GHTK_API_TOKEN = "bare-ghtk-env-canary-123";
+    process.env.GHTK_API_TOKEN = ["bare", "ghtk", "env", "canary", "123"].join("-");
     process.env.GOOGLE_CLIENT_SECRET = "bare google env canary 456";
     process.env.LOCAL_QA_PASSWORD = "a+b c7";
     process.env.LOCAL_SECRET_VALUE = "unlabelled-suffixed-env-canary-789";
@@ -722,7 +726,7 @@ describe("openclaw dashboard service", () => {
     }
   });
 
-  it("checks Docker gateway liveness and readiness without spawning the OpenClaw CLI", async () => {
+  it("checks Docker gateway liveness, readiness, and authentication without spawning the OpenClaw CLI", async () => {
     const fetchImpl = vi.fn(
       async () =>
         new Response('{"ok":true}', {
@@ -730,9 +734,20 @@ describe("openclaw dashboard service", () => {
           headers: { "content-type": "application/json" },
         }),
     );
-    const health = await probeOpenClawGateway({ fetchImpl });
-    expect(health).toMatchObject({ reachable: true, live: true, ready: true });
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const health = await probeOpenClawGateway({
+      fetchImpl,
+      env: {
+        OPENCLAW_GATEWAY_HTTP_URL: "http://127.0.0.1:18789",
+        OPENCLAW_GATEWAY_TOKEN: "gateway-secret",
+      },
+    });
+    expect(health).toMatchObject({
+      reachable: true,
+      live: true,
+      ready: true,
+      authenticated: true,
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it("reports an unreachable Docker gateway without throwing or leaking internals", async () => {

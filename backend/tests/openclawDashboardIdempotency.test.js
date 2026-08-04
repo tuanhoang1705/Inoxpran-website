@@ -102,7 +102,7 @@ describe('OpenClaw dashboard action idempotency', () => {
             exitCode: 0,
             startedAt: new Date('2026-07-23T01:00:00.000Z'),
             finishedAt: new Date('2026-07-23T01:00:01.000Z'),
-            command: 'GET http://app_openclaw:18789/healthz + /readyz',
+            command: 'GET http://app_openclaw:18789/healthz + /readyz + /v1/models (authenticated)',
             output: 'OpenClaw Docker gateway is running and ready.',
             error: ''
         };
@@ -242,7 +242,7 @@ describe('OpenClaw dashboard action idempotency', () => {
             expect(first.id).toBe(replay.id);
             expect([first.idempotentReplay, replay.idempotentReplay].sort()).toEqual([false, true]);
             await vi.waitFor(() => expect(updateOne).toHaveBeenCalledTimes(1));
-            expect(fetchImpl).toHaveBeenCalledTimes(2);
+            expect(fetchImpl).toHaveBeenCalledTimes(3);
         } finally {
             if (previousMode === undefined) delete process.env.OPENCLAW_DEPLOYMENT_MODE;
             else process.env.OPENCLAW_DEPLOYMENT_MODE = previousMode;

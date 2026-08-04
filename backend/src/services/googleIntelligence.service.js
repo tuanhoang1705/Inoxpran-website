@@ -39,9 +39,15 @@ const OFFICIAL_SOURCE_MAX_BYTES = 2_000_000;
 const GOOGLE_BUILD_BUSY_CODE = 'GOOGLE_INTELLIGENCE_BUILD_BUSY';
 const GOOGLE_BUILD_LEASE_LOST_CODE = 'GOOGLE_INTELLIGENCE_BUILD_LEASE_LOST';
 const GOOGLE_BUILD_FAILED_CODE = 'GOOGLE_INTELLIGENCE_BUILD_FAILED';
+const GOOGLE_SNAPSHOT_UNAVAILABLE_CODE = 'GOOGLE_INTELLIGENCE_SNAPSHOT_UNAVAILABLE';
 const GOOGLE_HISTORICAL_ERROR_CODE = 'GOOGLE_INTELLIGENCE_HISTORICAL_ERROR';
 const safeGoogleStoredError = (value) => safeStoredErrorCode(value, GOOGLE_HISTORICAL_ERROR_CODE);
 const safeGoogleWriteError = (value, fallback) => safeErrorCode({ code: value || fallback }).toUpperCase();
+const googleSnapshotUnavailableError = () => {
+    const error = new BadRequestError('Agentic content blocked: no acceptable Google Intelligence snapshot');
+    error.code = GOOGLE_SNAPSHOT_UNAVAILABLE_CODE;
+    return error;
+};
 const sanitizeSourceHealth = (items) => (Array.isArray(items) ? items : []).map((item) => ({
     ...item,
     url: sanitizeSourceUrlForRead(item?.url),
@@ -1018,7 +1024,7 @@ class GoogleIntelligenceService {
             }
         }
         if (!isSnapshotAcceptable({ snapshot, strictGate: config.strictGate, maxAgeHours: config.maxSnapshotAgeHours, now })) {
-            throw new BadRequestError('Agentic content blocked: no acceptable Google Intelligence snapshot');
+            throw googleSnapshotUnavailableError();
         }
         return mapSnapshot(snapshot);
     }
@@ -1289,6 +1295,7 @@ class GoogleIntelligenceService {
 
 module.exports = {
     DEFAULT_SOURCES,
+    GOOGLE_SNAPSHOT_UNAVAILABLE_CODE,
     GoogleIntelligenceService,
     buildGoogleExecutionKey,
     buildGoogleExecutionSlotKey,
@@ -1299,6 +1306,7 @@ module.exports = {
     createScheduleLeaseOwner,
     extractDocumentDates,
     extractTitle,
+    googleSnapshotUnavailableError,
     mapSnapshot,
     mapSource,
     officialHostAllowed,

@@ -4,9 +4,15 @@ const cors = require('cors');
 const morgan = require('morgan');
 const { default: helmet } = require('helmet');
 const compression = require('compression');
+const fs = require('node:fs');
 const path = require('path');
 const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
+const YAML = require('yaml');
+const { buildCorsOptions, resolveTrustProxy, swaggerEnabled } = require('./config/httpSecurity');
+const runtimeHealth = require('./config/runtimeHealth');
+const { isProductionEnv, parseBooleanEnv } = require('./config/runtimeEnv');
+const { rateLimitCommon, rateLimitStrict } = require('./middleware/rateLimit');
+const { requestContext } = require('./middleware/requestContext');
 const {
   buildSafeErrorPayload,
   buildSafeServerLog,
@@ -36,6 +42,7 @@ const {
 
 const app = express();
 app.disable('x-powered-by');
+app.set('trust proxy', resolveTrustProxy());
 
 const compressionFilter = (req, res) => {
   const accept = String(req.headers.accept || '').toLowerCase();
@@ -57,8 +64,10 @@ const buildNotFoundPayload = (req, message = 'Route not found') => ({
   status: 'error',
   code: 404,
   message: String(message || 'Route not found').slice(0, 500),
+  errorCode: 'ROUTE_NOT_FOUND',
   method: req.method,
-  path: safeRequestPath(req)
+  path: safeRequestPath(req),
+  requestId: req.requestId
 });
 
 const renderNotFoundHtml = (payload) => `<!doctype html>
@@ -146,8 +155,10 @@ const sendNotFound = (req, res, message) => {
 
 // Security & logs
 app.use(helmet());
-app.use(cors());
+app.use(requestContext);
+app.use(cors(buildCorsOptions()));
 app.use(morgan((tokens, req, res) => [
+  req.requestId,
   tokens.method(req, res),
   safeRequestPath(req),
   tokens.status(req, res),
@@ -160,11 +171,30 @@ app.use(morgan((tokens, req, res) => [
 // morgan(dev);
 app.use(compression({ filter: compressionFilter }));
 
+app.get('/health/live', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  return res.status(200).json({ ...runtimeHealth.liveness(), requestId: req.requestId });
+});
 
-//init db
-require("./dbs/init.mongodb")
-const { checkOverload } = require('./helpers/check.connect');
-checkOverload(); 
+app.get('/health/ready', (req, res) => {
+  const result = runtimeHealth.readiness();
+  res.set('Cache-Control', 'no-store');
+  return res.status(result.ready ? 200 : 503).json({
+    ...result.payload,
+    requestId: req.requestId
+  });
+});
+
+app.use(rateLimitCommon);
+app.use([
+  '/v1/api/user/signup',
+  '/v1/api/user/login',
+  '/v1/api/user/verify/resend',
+  '/v1/api/user/forgot-password',
+  '/v1/api/user/reset-password',
+  '/v1/api/admin/signup',
+  '/v1/api/admin/login'
+], rateLimitStrict);
 // Stripe requires RAW body on its webhook route.
 // The route file uses `express.raw` on that specific path,
 // so we must mount /webhooks BEFORE the global JSON parser.
@@ -172,19 +202,23 @@ checkOverload();
 
 // Global JSON parser for the rest of the API. Automation HMAC auth signs this raw body.
 app.use(express.json({
-  limit: '10mb',
+  limit: process.env.JSON_BODY_LIMIT || '10mb',
   verify: (req, res, buf) => {
     req.rawBody = Buffer.isBuffer(buf) ? Buffer.from(buf) : Buffer.alloc(0);
   }
 }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' })); 
-
-// Rate limit (general) for normal API traffic
-// app.use(rateLimitCommon);
+app.use(express.urlencoded({
+  extended: true,
+  limit: process.env.URLENCODED_BODY_LIMIT || '1mb'
+}));
 
 // Swagger docs
-const swaggerDocument = YAML.load(path.join(__dirname, '../docs/swagger.yaml'));
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+if (swaggerEnabled()) {
+  const swaggerDocument = YAML.parse(
+    fs.readFileSync(path.join(__dirname, '../docs/swagger.yaml'), 'utf8')
+  );
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+}
 
 // Simple 404 route for backend
 app.get('/404', (req, res) => sendNotFound(req, res));
@@ -234,7 +268,8 @@ app.use((error, req, res, next) => {
     error,
     statusCode,
     message,
-    includeStack: process.env.NODE_ENV !== 'production'
+    requestId: req.requestId,
+    includeStack: !isProductionEnv() && parseBooleanEnv(process.env.ERROR_INCLUDE_STACK, false)
   });
   if (statusCode >= 500) console.error(JSON.stringify(buildSafeServerLog({ error, req, statusCode })));
   return res.status(statusCode).json(payload)

@@ -2,7 +2,15 @@
 
 const crypto = require("node:crypto");
 const redis = require("redis");
-const { getRedisConfig } = require("../config/redis");
+const {
+  closeRedisClient,
+  connectRedisClientWithDeadline,
+  createRedisErrorReporter,
+  getRedisConfig,
+  redisIsEnabled,
+  redisStartupTimeout,
+  withRedisDeadline,
+} = require("../config/redis");
 const { dispatchLiveSupportPushNotifications } = require("./webPush.service");
 
 const LIVE_SUPPORT_EVENT_CHANNEL =
@@ -16,6 +24,19 @@ let subscriberClient = null;
 let publisherReadyPromise = null;
 let subscriberReadyPromise = null;
 
+const reportClientError = createRedisErrorReporter({
+  event: "live_support_redis_client_error",
+});
+const reportPublishError = createRedisErrorReporter({
+  event: "live_support_redis_publish_unavailable",
+});
+const reportSubscriberError = createRedisErrorReporter({
+  event: "live_support_redis_subscriber_unavailable",
+});
+const reportWebPushError = createRedisErrorReporter({
+  event: "live_support_web_push_error",
+});
+
 const buildEventId = () => {
   if (typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -25,12 +46,7 @@ const buildEventId = () => {
 
 const buildRedisClient = () => {
   const client = redis.createClient(getRedisConfig());
-  client.on("error", (error) => {
-    console.error(
-      "[live-support-events] redis client error",
-      error?.message || error,
-    );
-  });
+  client.on("error", reportClientError);
   return client;
 };
 
@@ -40,12 +56,16 @@ const ensurePublisherClient = async () => {
   }
   if (!publisherReadyPromise) {
     publisherReadyPromise = (async () => {
-      if (!publisherClient.isOpen) {
-        await publisherClient.connect();
-      }
+      await connectRedisClientWithDeadline(publisherClient, {
+        timeoutMs: redisStartupTimeout(),
+        timeoutCode: "LIVE_SUPPORT_REDIS_STARTUP_UNAVAILABLE",
+      });
       return publisherClient;
     })().catch((error) => {
+      const failedClient = publisherClient;
+      publisherClient = null;
       publisherReadyPromise = null;
+      void closeRedisClient(failedClient);
       throw error;
     });
   }
@@ -70,28 +90,28 @@ const deliverEvent = (event) => {
   }
 };
 
+const deliverEventAndNotifications = (event) => {
+  deliverEvent(event);
+  void dispatchLiveSupportPushNotifications(event).catch(reportWebPushError);
+};
+
 const ensureSubscriberClient = async () => {
   if (!subscriberClient) {
     subscriberClient = buildRedisClient();
   }
   if (!subscriberReadyPromise) {
     subscriberReadyPromise = (async () => {
-      if (!subscriberClient.isOpen) {
-        await subscriberClient.connect();
-      }
+      await connectRedisClientWithDeadline(subscriberClient, {
+        timeoutMs: redisStartupTimeout(),
+        timeoutCode: "LIVE_SUPPORT_REDIS_STARTUP_UNAVAILABLE",
+      });
       await subscriberClient.subscribe(
         LIVE_SUPPORT_EVENT_CHANNEL,
         (message) => {
           if (!message) return;
           try {
             const parsed = JSON.parse(message);
-            deliverEvent(parsed);
-            void dispatchLiveSupportPushNotifications(parsed).catch((error) => {
-              console.error(
-                "[live-support-events] web push dispatch failed",
-                error?.message || error,
-              );
-            });
+            deliverEventAndNotifications(parsed);
           } catch (error) {
             console.error(
               "[live-support-events] invalid payload",
@@ -102,7 +122,10 @@ const ensureSubscriberClient = async () => {
       );
       return subscriberClient;
     })().catch((error) => {
+      const failedClient = subscriberClient;
+      subscriberClient = null;
       subscriberReadyPromise = null;
+      void closeRedisClient(failedClient);
       throw error;
     });
   }
@@ -128,14 +151,22 @@ const normalizeEventPayload = (event = {}) => ({
 
 const publishLiveSupportEvent = async (event = {}) => {
   const payload = normalizeEventPayload(event);
+  if (!redisIsEnabled()) {
+    deliverEventAndNotifications(payload);
+    return payload;
+  }
   try {
     const client = await ensurePublisherClient();
-    await client.publish(LIVE_SUPPORT_EVENT_CHANNEL, JSON.stringify(payload));
-  } catch (error) {
-    console.error(
-      "[live-support-events] publish failed",
-      error?.message || error,
+    await withRedisDeadline(
+      client.publish(LIVE_SUPPORT_EVENT_CHANNEL, JSON.stringify(payload)),
+      {
+        timeoutMs: redisStartupTimeout(),
+        code: "LIVE_SUPPORT_REDIS_PUBLISH_TIMEOUT",
+      },
     );
+  } catch (error) {
+    reportPublishError(error);
+    deliverEventAndNotifications(payload);
   }
   return payload;
 };
@@ -156,20 +187,34 @@ const registerLiveSupportListener = ({
     onEvent,
   });
 
-  void ensureSubscriberClient().catch((error) => {
-    console.error(
-      "[live-support-events] subscriber init failed",
-      error?.message || error,
-    );
-  });
+  if (redisIsEnabled()) {
+    void ensureSubscriberClient().catch(reportSubscriberError);
+  }
 
   return () => {
     listeners.delete(listenerId);
+    if (listeners.size === 0 && subscriberClient) {
+      const idleClient = subscriberClient;
+      subscriberClient = null;
+      subscriberReadyPromise = null;
+      void closeRedisClient(idleClient);
+    }
   };
+};
+
+const closeLiveSupportEventClients = async () => {
+  listeners.clear();
+  const clients = [publisherClient, subscriberClient].filter(Boolean);
+  publisherClient = null;
+  subscriberClient = null;
+  publisherReadyPromise = null;
+  subscriberReadyPromise = null;
+  await Promise.allSettled(clients.map(closeRedisClient));
 };
 
 module.exports = {
   LIVE_SUPPORT_EVENT_CHANNEL,
+  closeLiveSupportEventClients,
   publishLiveSupportEvent,
   registerLiveSupportListener,
 };

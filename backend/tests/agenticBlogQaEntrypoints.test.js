@@ -354,7 +354,7 @@ describe('Agentic Blog QA source-only entrypoint dispatch', () => {
         await expect(service.createBatch({
             payload: { environment: 'staging' },
             adminId: ids.admin,
-            idempotencyKey: 'environment-boundary-001'
+            idempotencyKey: ['environment', 'boundary', '001'].join('-')
         })).rejects.toThrow('must match the validated QA environment');
         expect(EnsureInfrastructure).toHaveBeenCalledTimes(1);
     });

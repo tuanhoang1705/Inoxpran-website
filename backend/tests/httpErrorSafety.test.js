@@ -23,7 +23,13 @@ describe('HTTP error disclosure boundary', () => {
         const message = safeClientMessage({ error, statusCode })
         const payload = buildSafeErrorPayload({ error, statusCode, message })
 
-        expect(payload).toEqual({ status: 'error', code: 503, message: 'Internal Server Error' })
+        expect(payload).toEqual({
+            status: 'error',
+            code: 503,
+            message: 'Internal Server Error',
+            errorCode: 'INTERNAL_ERROR',
+            requestId: ''
+        })
         expect(JSON.stringify(payload)).not.toContain('secret')
         expect(JSON.stringify(payload)).not.toContain('password')
     })

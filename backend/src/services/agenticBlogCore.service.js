@@ -44,12 +44,26 @@ const { dateInTimezone } = require('../utils/googleIntelligence.util');
 const { safeErrorCode } = require('../utils/httpError.util');
 const { QaTopicUniquenessService } = require('./qaTopicUniqueness.service');
 const { normalizeSlug, normalizeString } = require('../utils/seoBlogSanitizer');
+const { requireBlogWriterModel } = require('../config/openaiBlog.config');
+const { isProductionEnv } = require('../config/runtimeEnv');
+const { BlogNoveltyIndexService } = require('./contentOperations/blogNoveltyIndex.service');
+const { scoreDraftOriginality } = require('./contentOperations/draftOriginalityScoring.service');
 const {
+  ACCEPTANCE_SCORE,
+  MIN_NOVELTY_SUBTOTAL,
+  RUBRIC_VERSION,
+  resolveRoadmapThresholds
+} = require('./contentOperations/topicRoadmapScoring.service');
+const { OpenClawAgentAdapter } = require('./openclawAgentAdapter.service');
+const {
+    extractHeadings,
+    detectFormulaicDraft,
     normalizeForSimilarity,
     reviewBrandVoice,
     reviewFacts,
     reviewOriginality,
     reviewPeopleFirstAndSpam,
+    structuralFingerprint,
     textSimilarity
 } = require('../utils/agenticBlogCore.util');
 
@@ -103,6 +117,23 @@ const createWorkOrderLeaseLostError = () => {
 const requireOwnedWorkOrderUpdate = updated => {
   if (!updated) throw createWorkOrderLeaseLostError();
   return updated;
+};
+
+const passesTrustedTopicPlanGate = (topicReport = {}) => {
+  // Re-derive the effective policy through the single shared resolver so this
+  // downstream gate cannot silently disagree with the threshold the roadmap
+  // actually scored against.
+  const { acceptanceScore, minimumNoveltySubtotal } = resolveRoadmapThresholds({
+    acceptanceScore: Number(topicReport.acceptanceScore) || ACCEPTANCE_SCORE,
+    minimumNoveltySubtotal:
+      Number(topicReport.minimumNoveltySubtotal) || MIN_NOVELTY_SUBTOTAL
+  });
+  return (
+    topicReport.rubricVersion === RUBRIC_VERSION &&
+    Number(topicReport.totalScore || 0) >= acceptanceScore &&
+    Number(topicReport.noveltySubtotal || 0) >= minimumNoveltySubtotal &&
+    topicReport.hardGatesPassed === true
+  );
 };
 
 const buildSearchConsoleContext = (env = process.env) => {
@@ -160,6 +191,72 @@ const boundTopic = value => {
 };
 
 const LLM_DRAFT_TIMEOUT_MS = Math.min(Math.max(Number(process.env.OPENAI_DRAFT_TIMEOUT_MS || 90_000), 20_000), 240_000);
+
+const roadmapText = (value, max) =>
+  normalizeString(value).replace(/\s+/g, ' ').trim().slice(0, max);
+const roadmapStrings = (values, maxItems, maxLength) =>
+  Array.isArray(values)
+    ? [...new Set(values.map((value) => roadmapText(value, maxLength)).filter(Boolean))].slice(0, maxItems)
+    : [];
+
+const normalizeTrustedRoadmapContext = (value) => {
+  if (!value) return null;
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    const error = new Error('Trusted roadmap context is invalid');
+    error.code = 'TRUSTED_ROADMAP_CONTEXT_INVALID';
+    throw error;
+  }
+  const roadmapId = roadmapText(value.roadmapId, 80);
+  const itemId = roadmapText(value.itemId || value.roadmapItemId, 80);
+  const scheduleId = roadmapText(value.scheduleId, 80);
+  const executionId = roadmapText(value.executionId, 80);
+  const topic = boundTopic(value.topic);
+  if (!roadmapId || !itemId || !scheduleId || !executionId || !topic) {
+    const error = new Error('Trusted roadmap context is incomplete');
+    error.code = 'TRUSTED_ROADMAP_CONTEXT_INVALID';
+    throw error;
+  }
+  return {
+    roadmapId,
+    itemId,
+    scheduleId,
+    executionId,
+    directionRevision: Math.max(1, Number(value.directionRevision) || 1),
+    generation: Math.max(1, Number(value.generation) || 1),
+    topic,
+    angle: roadmapText(value.angle, 1_000),
+    primaryKeyword: roadmapText(value.primaryKeyword || topic, 120),
+    secondaryKeywords: roadmapStrings(value.secondaryKeywords, 12, 80),
+    primaryQuestion: roadmapText(value.primaryQuestion, 500),
+    supportingQuestions: roadmapStrings(value.supportingQuestions, 10, 500),
+    targetAudience: roadmapStrings(value.targetAudience, 10, 200),
+    userProblems: roadmapStrings(value.userProblems, 10, 300),
+    searchIntent: roadmapText(value.searchIntent || 'informational', 300),
+    articleType: roadmapText(value.articleType || 'practical-guide', 100),
+    categoryKey: roadmapText(value.categoryKey || 'guide', 80),
+    managerDirection: roadmapText(value.managerDirection, 500),
+    opportunityScore: Math.min(100, Math.max(0, Number(value.opportunityScore) || 0)),
+    topicScoreReport: value.topicScoreReport && typeof value.topicScoreReport === 'object'
+      ? {
+          totalScore: Math.min(100, Math.max(0, Number(value.topicScoreReport.totalScore) || 0)),
+          noveltySubtotal: Math.min(65, Math.max(0, Number(value.topicScoreReport.noveltySubtotal) || 0)),
+          ...resolveRoadmapThresholds({
+            acceptanceScore: Number(value.topicScoreReport.acceptanceScore) || ACCEPTANCE_SCORE,
+            minimumNoveltySubtotal:
+              Number(value.topicScoreReport.minimumNoveltySubtotal) || MIN_NOVELTY_SUBTOTAL
+          }),
+          rubricVersion: roadmapText(value.topicScoreReport.rubricVersion, 120),
+          corpusVersion: roadmapText(value.topicScoreReport.corpusVersion, 120),
+          corpusHash: roadmapText(value.topicScoreReport.corpusHash, 128),
+          scoreHash: roadmapText(value.topicScoreReport.scoreHash, 128),
+          hardGatesPassed: value.topicScoreReport.hardGatesPassed === true
+        }
+      : null,
+    ideationRunId: roadmapText(value.ideationRunId, 80),
+    productEvidence: Array.isArray(value.productEvidence) ? value.productEvidence.slice(0, 20) : [],
+    marketEvidence: Array.isArray(value.marketEvidence) ? value.marketEvidence.slice(0, 20) : []
+  };
+};
 
 const REVISION_WRITING_ACTIONS = new Set(['update', 'expand', 'merge']);
 const MAX_REVISION_PRIMARY_CONTEXT_CHARS = 8_000;
@@ -328,7 +425,9 @@ const buildEvidenceWritingContract = evidenceMap => ({
     .filter(entry => entry.evidenceKey && entry.contentExcerpt);
     const buildLlmDraftMessages = ({ topic, primaryKeyword, secondaryKeywords, articleType, style, headingCount, language, tone, recentTitles = [], attempt, productSeedPlan = null, editorialPlacementPlan = null, architecture = null,
   revisionContext = null,
-  evidenceMap = null
+  evidenceMap = null,
+  editorialBrief = null,
+  avoidStructures = null
 }) => {
   const evidenceContract = buildEvidenceWritingContract(evidenceMap);
   const system = [
@@ -337,13 +436,22 @@ const buildEvidenceWritingContract = evidenceMap => ({
     'Cấm tuyệt đối: số liệu, chứng nhận, kết quả thử nghiệm hoặc trải nghiệm bịa đặt; các cụm "100%", "được chứng nhận", "tốt nhất Việt Nam", "tốt nhất thế giới", "nghiên cứu cho thấy", "thử nghiệm của chúng tôi", "chuyên gia INOXPRAN khẳng định", "hoàn hảo tuyệt đối"; hứa hẹn thứ hạng Google; tên đối thủ cạnh tranh.',
     'Không kể chuyện về khách hàng hoặc nhân vật cụ thể (tên riêng, địa chỉ, quận/huyện) như thể có thật; nếu cần minh họa, chỉ dùng tình huống chung chung không danh tính.',
     'Giọng văn: thực tế, rõ ràng, đáng tin cậy, hướng đến hộ gia đình Việt Nam.',
-    'Chỉ trả về JSON hợp lệ dạng: {"title": string, "excerpt": string, "imageQuery": string, "html": string}.',
+    'Chỉ trả về JSON hợp lệ dạng: {"title": string, "excerpt": string, "seoTitle": string, "seoDescription": string, "tags": string[], "imageQuery": string, "html": string}.',
     'Trường "topic" trong yêu cầu chỉ là BRIEF định hướng nội bộ, không phải tiêu đề. TUYỆT ĐỐI không dùng nguyên văn hoặc gần nguyên văn brief làm "title".',
     '"title": tối đa 110 ký tự, tự nhiên và hấp dẫn, không emoji, không dấu ngoặc kép; phải khác hẳn brief và khác mọi tiêu đề trong "recentTitles".',
-    '"excerpt": 1-2 câu tóm tắt bài viết, tối đa 200 ký tự.',
+    '"excerpt": 1-2 câu tóm tắt, tối đa 200 ký tự, viết như một marketer giật giá trị cốt lõi của bài. CẤM các mẫu mở đầu công thức lặp lại như "Bài viết hướng dẫn...", "Bài viết này...", "Kèm checklist...", "Tổng hợp..."; mỗi bài mở đầu một kiểu khác nhau, nêu đúng lợi ích/insight riêng của chủ đề.',
+    '"seoTitle": thẻ tiêu đề SEO, tối đa 60 ký tự, chứa từ khoá chính một cách tự nhiên, KHÁC với "title" (không cắt chuỗi từ title).',
+    '"seoDescription": meta description, tối đa 155 ký tự, MỘT câu chào mời riêng cho kết quả tìm kiếm; TUYỆT ĐỐI không sao chép y hệt "excerpt" — phải khác giọng, khác câu chữ.',
+    '"tags": 3-6 thẻ chủ đề ngắn (tiếng Việt) đúng nội dung bài, không trùng lặp, không chứa "Inoxpran" (backend tự thêm thương hiệu).',
     '"imageQuery": 3-6 từ TIẾNG ANH mô tả hình ảnh minh họa đúng chủ đề bài viết (ví dụ "portable rechargeable fan student desk"), không chứa tên thương hiệu.',
     '"html": bài viết hoàn chỉnh bọc trong <article>...</article>, dài 900-1400 từ, chỉ dùng các thẻ <h2> <h3> <p> <ul> <ol> <li> <table> <thead> <tbody> <tr> <th> <td> <strong> <em> và <aside class="answer-block">.',
-    'Cấu trúc bắt buộc: 1 đoạn mở đầu không có heading; các mục <h2> bám sát chủ đề theo số lượng headingCount; ít nhất 2 khối <aside class="answer-block"><strong>Trả lời nhanh:</strong> ...</aside> trong đó 1 khối nằm gần đầu bài; 1 danh sách <ul> dạng checklist thực hành; 1 mục <h2>Câu hỏi thường gặp</h2> chứa 2-3 câu hỏi <h3> kèm trả lời; 1 đoạn kết ngắn gọn.',
+    'TỰ THIẾT KẾ BỐ CỤC phù hợp nhất với chủ đề này — không lặp lại một khuôn cố định. Trước khi viết, hãy tự chọn một logic biên tập riêng cho bài này (ví dụ: đối chiếu tiêu chí, chẩn đoán lỗi, giải thích cơ chế, tháo gỡ lầm tưởng, hướng dẫn thao tác, nhật ký quyết định, câu hỏi nối tiếp, hay một bố cục mới phù hợp hơn). Các bài khác nhau PHẢI có cấu trúc, nhịp và thứ tự thông tin khác nhau; không chỉ đổi tên heading trên cùng một khung.',
+    'CẤM mở bài hoặc H2 đầu tiên bằng các công thức chung như "Chọn kịch bản...", "Kịch bản gia đình...", "Chọn tiêu chí theo kịch bản...", "Bài viết này..." hoặc "Hướng dẫn chọn..." nếu chủ đề không thật sự yêu cầu một quyết định theo kịch bản. Nếu dùng tình huống, phải tạo tình huống cụ thể gắn với vấn đề của chủ đề, không dùng mẫu "gia đình ít người" mặc định.',
+    'Không mặc định dùng cùng số lượng FAQ, cùng số lượng answer-block, cùng kiểu checklist, hoặc cùng vị trí bảng. FAQ và answer-block là công cụ tùy chọn: chỉ dùng khi chúng làm câu trả lời rõ hơn, và số lượng phải do nhu cầu nội dung quyết định.',
+    'Nếu có "editorialBrief": hãy dùng nó như bản brief của một chuyên gia marketing — trả lời trực tiếp "primaryQuestion" và các "supportingQuestions", viết đúng cho "targetAudience", chạm vào "userProblems", khai thác "contentGap" và bám "searchIntent". Chọn GÓC riêng ("editorialAngle") để bài này khác biệt, không viết chung chung.',
+    'Nếu có "avoidStructures": TUYỆT ĐỐI tránh lặp lại các kiểu mở bài và bộ heading được liệt kê ở đó; hãy cố ý chọn cấu trúc và nhịp khác với những bài gần đây.',
+    'Ràng buộc tối thiểu (không phải khuôn mẫu): mở đầu bằng 1 đoạn không heading; ít nhất 3 mục <h2> bám sát chủ đề; nội dung đủ sâu, dễ đọc, có giá trị thực; kết lại tự nhiên.',
+    'Công cụ TÙY CHỌN, chỉ dùng khi thực sự phù hợp với chủ đề, không bắt buộc và không đặt cố định một chỗ: khối <aside class="answer-block"><strong>Trả lời nhanh:</strong> ...</aside> cho câu hỏi cần trả lời ngay; danh sách <ul>/<ol> khi có bước hoặc tiêu chí; <table> khi cần so sánh; mục <h2>Câu hỏi thường gặp</h2> với vài <h3> khi có câu hỏi thường gặp thật sự. Chọn công cụ theo nhu cầu của bài, không dùng máy móc cho mọi bài.',
     'Không dùng <img>, không chèn link, không inline style, không markdown.',
     'OUTPUT CONTRACT: the JSON must also include "materialClaims": [{"evidenceKey": string, "contentExcerpt": string, "qualificationApplied": boolean}]. The excerpt must occur verbatim in html. Use an empty array only when html contains no material factual claim.',
     'Never invent or silently omit a material claim from materialClaims. Editorial advice without a factual assertion does not need an evidence entry.',
@@ -399,9 +507,38 @@ const buildEvidenceWritingContract = evidenceMap => ({
           rule: 'This is a locked backend contract. Write independent editorial sections only. Never invent a placement, placementId, product claim, ranking position, product image or CTA.'
         }
       : null,
+    editorialBrief: editorialBrief || null,
+    avoidStructures:
+      avoidStructures &&
+      (avoidStructures.openingModes?.length || avoidStructures.headingSets?.length)
+        ? {
+            rule: 'Đây là mở-bài và bộ cấu trúc của các bài GẦN ĐÂY. TRÁNH lặp lại các kiểu mở đầu và bộ heading này — hãy chọn bố cục, nhịp và góc tiếp cận khác.',
+            recentOpeningModes: avoidStructures.openingModes || [],
+            recentOpeningExamples: avoidStructures.openingSnippets || [],
+            recentHeadingSets: avoidStructures.headingSets || [],
+            recentFaqCounts: avoidStructures.faqCounts || []
+          }
+        : null,
     contentArchitecture: architecture
       ? {
-          headings: architecture.headings,
+          // Suggested only. The writer may reshape, reorder, rename, add or drop
+          // sections to fit THIS topic; it is a starting point, not a template.
+          // The product-placement contract below remains authoritative regardless
+          // of the final section shape and is applied separately by the backend.
+          // Hardcoded style-bank headings are NEVER forwarded: only a real
+          // brief-derived outline is advisory, so the weak-model copy-the-bank
+          // failure mode is removed. Without a brief outline the writer designs
+          // its own structure guided by editorialBrief + avoidStructures.
+          ...(architecture.outlineFromBrief &&
+          Array.isArray(architecture.headings) &&
+          architecture.headings.length
+            ? {
+                suggestedHeadings: architecture.headings.map(
+                  (item) => item.heading
+                ),
+                headingsAreAdvisory: true
+              }
+            : {}),
           productPlacementContract: architecture.productPlacement
         }
       : null,
@@ -435,11 +572,15 @@ const generateLlmDraft = async ({
   editorialPlacementPlan = null,
   architecture = null,
   revisionContext = null,
-  evidenceMap = null
+  evidenceMap = null,
+  editorialBrief = null,
+  avoidStructures = null
 }) => {
-  const apiKey = normalizeString(process.env.OPENAI_API_KEY);
-  if (!apiKey || typeof fetchImpl !== 'function') return null;
-  const model = normalizeString(process.env.OPENAI_CHAT_MODEL) || 'gpt-4o-mini';
+  const useOpenClawWriter = normalizeString(process.env.OPENCLAW_TOPIC_AGENTIC_WRITER_ENABLED).toLowerCase() !== 'false';
+  const parsedTemperature = Number(process.env.OPENAI_WRITER_TEMPERATURE);
+  const writerTemperature = Number.isFinite(parsedTemperature)
+    ? Math.min(Math.max(parsedTemperature, 0), 2)
+    : 0.9;
   const messages = buildLlmDraftMessages({
     topic,
     primaryKeyword,
@@ -455,8 +596,52 @@ const generateLlmDraft = async ({
     editorialPlacementPlan,
     architecture,
     revisionContext,
-    evidenceMap
+    evidenceMap,
+    editorialBrief,
+    avoidStructures
   });
+  if (useOpenClawWriter) {
+    const adapter = new OpenClawAgentAdapter({ fetchImpl });
+    const result = await adapter.run({
+      agentId: 'content-writer',
+      purpose: 'roadmap-draft-writing',
+      sessionKey: `${topic}:${primaryKeyword}:${attempt}`,
+      input: {
+        messages,
+        outputContract: {
+          required: ['html', 'title', 'excerpt', 'seoTitle', 'seoDescription', 'tags', 'imageQuery'],
+          semanticHtml: true,
+          noBodyH1: true
+        }
+      },
+      instructions: 'Write the complete draft from the supplied evidence-bound brief. Return the draft fields only; never score or publish it.',
+      maxOutputTokens: 16000
+    });
+    const parsed = result.output;
+    if (!parsed || !normalizeString(parsed.html)) throw new Error('openclaw_invalid_draft_response');
+    const html = sanitizeLlmHtml(parsed.html);
+    const words = normalizeForSimilarity(html).split(' ').filter(Boolean).length;
+    if (words < 350) throw new Error(`openclaw_draft_too_short_${words}_words`);
+    return {
+      html,
+      title: normalizeString(parsed.title).replace(/["“”]/g, '').slice(0, 110),
+      excerpt: normalizeString(parsed.excerpt).slice(0, 220),
+      seoTitle: normalizeString(parsed.seoTitle).replace(/["“”]/g, '').slice(0, 60),
+      seoDescription: normalizeString(parsed.seoDescription).slice(0, 155),
+      tags: Array.isArray(parsed.tags) ? [...new Set(parsed.tags.map(normalizeString).filter(Boolean))].slice(0, 6) : [],
+      imageQuery: normalizeString(parsed.imageQuery).replace(/["“”]/g, '').slice(0, 90),
+      materialClaims: normalizeWriterMaterialClaims(parsed.materialClaims),
+      materialClaimsManifestProvided: Array.isArray(parsed.materialClaims),
+      model: result.audit.resolvedModel,
+      agentAudit: result.audit,
+      wordCount: words
+    };
+  }
+  // Direct provider fallback is available only when strict OpenClaw writer mode is
+  // explicitly disabled (for isolated legacy/QA compatibility).
+  const apiKey = normalizeString(process.env.OPENAI_API_KEY);
+  if (!apiKey || typeof fetchImpl !== 'function') return null;
+  const model = requireBlogWriterModel(process.env);
   const requestOnce = async (body, signal) =>
     fetchImpl('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -470,15 +655,23 @@ const generateLlmDraft = async ({
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    let response = await requestOnce(
-      { model, messages, response_format: { type: 'json_object' } },
-      controller.signal
-    );
+    const baseBody = { model, messages, response_format: { type: 'json_object' } };
+    if (writerTemperature !== 1) baseBody.temperature = writerTemperature;
+    let response = await requestOnce(baseBody, controller.signal);
+    // Some models reject an explicit temperature and/or response_format. Retry
+    // once, dropping whichever field the 400 complained about, so a stronger
+    // writer model still runs instead of falling back to the template path.
     if (response.status === 400) {
       const errorText = await response.text().catch(() => '');
-      if (!/response_format/i.test(errorText))
+      const rejectsTemperature = /temperature/i.test(errorText);
+      const rejectsFormat = /response_format/i.test(errorText);
+      if (!rejectsTemperature && !rejectsFormat)
         throw new Error(`openai_http_400:${errorText.slice(0, 180)}`);
-      response = await requestOnce({ model, messages }, controller.signal);
+      const retryBody = { model, messages };
+      if (!rejectsFormat) retryBody.response_format = { type: 'json_object' };
+      if (!rejectsTemperature && writerTemperature !== 1)
+        retryBody.temperature = writerTemperature;
+      response = await requestOnce(retryBody, controller.signal);
     }
     if (!response.ok) {
       const errorText = await response.text().catch(() => '');
@@ -497,10 +690,30 @@ const generateLlmDraft = async ({
       .split(' ')
       .filter(Boolean).length;
     if (words < 350) throw new Error(`openai_draft_too_short_${words}_words`);
+    const cleanMeta = (value) =>
+      normalizeString(value)
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\u0000-\u001f\u007f]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    const seoTitle = cleanMeta(parsed.seoTitle).replace(/["“”]/g, '').slice(0, 60);
+    const seoDescription = cleanMeta(parsed.seoDescription).slice(0, 155);
+    const tags = Array.isArray(parsed.tags)
+      ? [
+          ...new Set(
+            parsed.tags
+              .map((tag) => cleanMeta(tag).slice(0, 40))
+              .filter(Boolean)
+          )
+        ].slice(0, 6)
+      : [];
     return {
       html,
       title: normalizeString(parsed.title).replace(/["“”]/g, '').slice(0, 110),
       excerpt: normalizeString(parsed.excerpt).slice(0, 220),
+      seoTitle,
+      seoDescription,
+      tags,
       imageQuery: normalizeString(parsed.imageQuery)
         .replace(/["“”]/g, '')
         .slice(0, 90),
@@ -692,8 +905,16 @@ const buildArchitecture = ({
   editorialPlacementPlan = null,
   plannedOutline = []
 }) => {
-  const headings = Array.isArray(plannedOutline) && plannedOutline.length
+  const briefOutline = Array.isArray(plannedOutline)
     ? plannedOutline.map(item => String(item || '').trim()).filter(Boolean).slice(0, 8)
+    : [];
+  // Only a real brief-derived outline is advisory to the LLM. When absent we
+  // still synthesize headings from the style bank so the deterministic template
+  // fallback (buildDraft) and structural fingerprint keep working — but those
+  // hardcoded headings are NOT forwarded to the LLM prompt (see outlineFromBrief).
+  const outlineFromBrief = briefOutline.length > 0;
+  const headings = outlineFromBrief
+    ? briefOutline
     : headingSetForStyle({ styleFamily: style.styleFamily, topic });
   const placementSequence = editorialPlacementPlan?.placementSequence || [];
   const minimumSections = Number(
@@ -710,6 +931,9 @@ const buildArchitecture = ({
         ? 'Deliver independent context, criteria and practical guidance before any product.'
         : 'Continue the independent answer and apply planned context only when explicitly allowed.',
     evidenceKey: `evidence-${index + 1}`,
+    // Answer-blocks are an optional tool the writer chooses per topic (see the
+    // system prompt). We only pre-mark them for the deterministic template
+    // fallback; the LLM path receives no forced answer-block positions.
     answerBlock: index === 0 || index === 3,
     productPlacementAllowed: placementSequence.some(
       item => Number(item.afterMinimumSection) === index + 1
@@ -733,6 +957,7 @@ const buildArchitecture = ({
         'Answer the primary household problem without a generic definition.'
     },
     headings: sectionContracts,
+    outlineFromBrief,
     evidenceMap: (researchBundle.sourceAttributions || []).slice(0, 6),
     imagePlan: {
       mode: style.visualPlanMode,
@@ -1248,9 +1473,30 @@ const selected =
     categoryKey = 'guide',
     secondaryKeywords = [],
     rankingEvidence = null,
-    contentOperations = {}
+    contentOperations = {},
+    trustedRoadmapContext = null
   }) {
-    const operationsConfig = getContentOperationsConfig();
+    const roadmapContext = normalizeTrustedRoadmapContext(trustedRoadmapContext);
+    const selectedTopic = roadmapContext?.topic || topic;
+    const selectedPrimaryKeyword = roadmapContext?.primaryKeyword || primaryKeyword;
+    const selectedSecondaryKeywords = roadmapContext
+      ? roadmapContext.secondaryKeywords
+      : secondaryKeywords;
+    const selectedArticleType = roadmapContext?.articleType || articleType;
+    const selectedCategoryKey = roadmapContext?.categoryKey || categoryKey;
+    const baseOperationsConfig = getContentOperationsConfig();
+    // Smart simple schedules must not silently collapse to their raw direction
+    // when the global Content Operations scheduler is disabled. Enabling here is
+    // scoped to this already-claimed roadmap item only; advanced/QA paths retain
+    // the global feature gate and every downstream safety gate still runs.
+    const operationsConfig = roadmapContext
+      ? { ...baseOperationsConfig, enabled: true }
+      : baseOperationsConfig;
+    topic = selectedTopic;
+    primaryKeyword = selectedPrimaryKeyword;
+    secondaryKeywords = selectedSecondaryKeywords;
+    articleType = selectedArticleType;
+    categoryKey = selectedCategoryKey;
     const qaProvenance = normalizeTrustedQaProvenance(contentOperations.qaContext ?? null);
     const qaContext = qaProvenance
       ? { ...contentOperations.qaContext, ...qaProvenance }
@@ -1264,14 +1510,15 @@ const selected =
           trigger: 'pipeline',
           adminId: contentOperations.adminId || null,
           ...(qaContext ? { trustedQaContext: qaContext } : {}),
+          trustedRoadmapContext: roadmapContext,
           input: {
             ...planningContentOperations,
-            topic,
-            primaryKeyword,
-            secondaryKeywords,
-            articleType,
+            topic: selectedTopic,
+            primaryKeyword: selectedPrimaryKeyword,
+            secondaryKeywords: selectedSecondaryKeywords,
+            articleType: selectedArticleType,
             language,
-            categoryKey,
+            categoryKey: selectedCategoryKey,
             productSeeding,
             productPlacement,
             rankingEvidence,
@@ -1288,6 +1535,30 @@ const selected =
     let contentWorkOrder = contentPlanning?.workOrder || null;
     const unifiedBrief = contentPlanning?.brief || null;
     const plannedTopic = unifiedBrief?.topic || contentPlanning?.topic || topic;
+    if (contentPlanning?.blocked) {
+      const selected = contentPlanning.selectedOpportunity || {};
+      return {
+        snapshot,
+        contentPlanning,
+        contentOperationsSnapshot: contentPlanning.contentOperationsSnapshot,
+        contentWorkOrder,
+        unifiedBrief,
+        productSeedPlan: null,
+        editorialPlacementPlan: null,
+        opportunity: {
+          decision: 'skip',
+          reason:
+            selected.decisionReason ||
+            contentPlanning.blockCode ||
+            'CONTENT_OPERATIONS_BLOCKED',
+          targets: []},
+        primaryKeyword,
+        effectiveTopic: plannedTopic,
+        blocked: true,
+        blockReason: contentPlanning.blockCode || 'CONTENT_OPERATIONS_BLOCKED',
+        skipped: false
+      };
+    }
     if (contentPlanning?.skipped) {
       const selected = contentPlanning.selectedOpportunity || {};
       return {
@@ -1518,9 +1789,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
     const effectiveTopic =
       editorialPlacementPlan.effectiveTopic || plannedTopic;
     const existing = await blog
-      .find({})
+      .find({ isQaTest: { $ne: true } })
       .sort({ updatedAt: -1 })
-      .limit(100)
       .select(
         '_id blog_title blog_slug blog_excerpt blog_content blog_image blog_category_key blog_tags blog_author_name blog_seo_title blog_seo_description isDraft isPublished updatedAt createdAt structuralFingerprint canonicalUrl'
       )
@@ -1724,15 +1994,26 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             'Need practical care instructions'
           ],
       contentGap:
-        researchBundle.researchCoverage === 'low'
-          ? 'External research coverage is low; use conservative internal guidance and require editorial verification.'
-          : 'Combine verified guidance with a Vietnamese household decision framework.',
-      primaryQuestion: `Làm thế nào để đánh giá ${effectiveTopic} theo nhu cầu thực tế?`,
-      supportingQuestions: [
-        `${effectiveTopic} phù hợp loại bếp nào?`,
-        'Cần kiểm tra vật liệu và cấu tạo ra sao?',
-        'Cách sử dụng và bảo quản nào thực tế?'
-      ],
+        Array.isArray(unifiedBrief?.contentGap) && unifiedBrief.contentGap.length
+          ? unifiedBrief.contentGap.join('; ')
+          : researchBundle.researchCoverage === 'low'
+            ? 'External research coverage is low; use conservative internal guidance and require editorial verification.'
+            : 'Combine verified guidance with a Vietnamese household decision framework.',
+      primaryQuestion:
+        normalizeString(unifiedBrief?.primaryQuestion) ||
+        roadmapContext?.primaryQuestion ||
+        `Làm thế nào để đánh giá ${effectiveTopic} theo nhu cầu thực tế?`,
+      supportingQuestions:
+        Array.isArray(unifiedBrief?.supportingQuestions) &&
+        unifiedBrief.supportingQuestions.length
+          ? unifiedBrief.supportingQuestions.slice(0, 10)
+          : roadmapContext?.supportingQuestions?.length
+            ? roadmapContext.supportingQuestions
+            : [
+                `${effectiveTopic} phù hợp loại bếp nào?`,
+                'Cần kiểm tra vật liệu và cấu tạo ra sao?',
+                'Cách sử dụng và bảo quản nào thực tế?'
+              ],
       articleType: chosenArticleType,
       editorialStyleProfileId: style._id,
       researchBundleId: researchBundle._id,
@@ -1800,6 +2081,7 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       architecture,
       primaryKeyword,
       effectiveTopic,
+      roadmapContext,
       blocked: false,
       skipped: false
     };
@@ -1991,16 +2273,34 @@ const claimed = await ContentWorkOrderService.claimForProduction({
     schedule,
     executionKey,
     executionId,
-    now = new Date()
+    now = new Date(),
+    trustedRoadmapContext = null
   }) {
     const config = schedule.agentConfig || {};
-        const topic = boundTopic(
-      config.topic ||
+    const roadmapContext = normalizeTrustedRoadmapContext(trustedRoadmapContext);
+    if (roadmapContext) {
+      const scheduleId = String(schedule?._id || schedule?.id || '');
+      if (
+        schedule?.isQaTest === true ||
+        config.simpleContract !== true ||
+        roadmapContext.scheduleId !== scheduleId ||
+        roadmapContext.executionId !== String(executionId || '')
+      ) {
+        const error = new Error('Roadmap selection does not belong to this execution');
+        error.code = 'TRUSTED_ROADMAP_CONTEXT_INVALID';
+        throw error;
+      }
+    }
+    const topic = boundTopic(
+      roadmapContext?.topic ||
+        config.topic ||
         config.primaryKeyword ||
         schedule.name ||
         'đồ gia dụng inox cho gia đình'
     );
-        const primaryKeyword = normalizeString(config.primaryKeyword || topic);
+    const primaryKeyword = normalizeString(
+      roadmapContext?.primaryKeyword || config.primaryKeyword || topic
+    );
         const qaReservationResult = await qaTopicUniquenessService.reserveBeforeWriter({
       schedule,
       executionId,
@@ -2016,10 +2316,10 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       normalizedTopicKey: schedule.normalizedTopicKey,
       qaTopicReservationId: String(qaReservationResult?.reservation?._id || schedule.qaTopicReservationId || '')
     } : null;
-        const context = await AgenticBlogCoreService.prepareContext({
+    const context = await AgenticBlogCoreService.prepareContext({
       topic,
       primaryKeyword,
-      articleType: config.articleType,
+      articleType: roadmapContext?.articleType || config.articleType,
       now,
       sourceUrls: Array.isArray(config.researchSources)
         ? config.researchSources
@@ -2027,20 +2327,40 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       productSeeding: config.productSeeding || {},
       productPlacement: config.productPlacement || {},
       language: config.language || 'vi',
-      categoryKey: config.categoryKey || 'guide',
-      secondaryKeywords: Array.isArray(config.secondaryKeywords)
-        ? config.secondaryKeywords
-        : [],
+      categoryKey: roadmapContext?.categoryKey || config.categoryKey || 'guide',
+      secondaryKeywords: roadmapContext
+        ? roadmapContext.secondaryKeywords
+        : Array.isArray(config.secondaryKeywords)
+          ? config.secondaryKeywords
+          : [],
       rankingEvidence: config.rankingEvidence || null,
+      trustedRoadmapContext: roadmapContext,
       contentOperations: {
-        mode: schedule.mode || 'fixed_brief',
-        action: config.contentAction || config.action,
+        mode: roadmapContext ? 'fixed_brief' : schedule.mode || 'fixed_brief',
+        action: roadmapContext ? 'new' : config.contentAction || config.action,
         workOrderId: config.workOrderId || config.selectedWorkOrderId,
         draftOnly: schedule.draftOnly !== false,
         primaryBusinessGoal: config.primaryBusinessGoal,
-        targetAudience: config.audience ? [config.audience] : undefined,
-        primarySearchIntent: config.searchIntent,
-        userProblems: config.userProblem ? [config.userProblem] : undefined,
+        targetAudience: roadmapContext?.targetAudience?.length
+          ? roadmapContext.targetAudience
+          : config.audience
+            ? [config.audience]
+            : undefined,
+        primarySearchIntent: roadmapContext?.searchIntent || config.searchIntent,
+        userProblems: roadmapContext?.userProblems?.length
+          ? roadmapContext.userProblems
+          : config.userProblem
+            ? [config.userProblem]
+            : undefined,
+        customerQuestions: roadmapContext
+          ? [
+              roadmapContext.primaryQuestion,
+              ...roadmapContext.supportingQuestions
+            ].filter(Boolean)
+          : undefined,
+        primaryQuestion: roadmapContext?.primaryQuestion,
+        supportingQuestions: roadmapContext?.supportingQuestions,
+        editorialAngle: roadmapContext?.angle,
         mainEntity: config.mainEntity,
         topicCore: config.topicCore,
         contentRole: config.contentRole,
@@ -2086,7 +2406,7 @@ const claimed = await ContentWorkOrderService.claimForProduction({
     }
     if (context.blocked)
       return {
-        skipped: true,
+        skipped: false,
         blocked: true,
         reason: context.blockReason,
         context
@@ -2181,14 +2501,62 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       ...(primaryTarget ? [String(primaryTarget._id)] : []),
       ...mergeSources.map(item => String(item._id))
     ]);
+        // Full-corpus originality is authoritative. Do not truncate to a recent
+        // subset: an older article can still create lexical or semantic duplication.
         const comparisonCorpus = await blog.find(buildOriginalityCorpusFilter({
             targetIds,
             qaContext
-        })).sort({ updatedAt: -1 }).limit(50).select('_id blog_title blog_content structuralFingerprint').lean();
+        })).sort({ updatedAt: -1 }).select('_id blog_title blog_content structuralFingerprint').lean();
         const recentTitles = [
             ...context.opportunity.targets.map(item => item.blog_title),
             ...comparisonCorpus.map(item => item.blog_title)
-        ].filter(Boolean).slice(0, 10);
+        ].filter(Boolean).slice(0, 100);
+        // Strategy brief → writer. These fields already exist on the strategy but
+        // were never forwarded to the LLM; they are the "marketing expert" material
+        // that lets the writer pick a topic-specific angle instead of a fixed form.
+        const editorialBrief = {
+            primaryQuestion: normalizeString(context.strategy?.primaryQuestion),
+            supportingQuestions: Array.isArray(context.strategy?.supportingQuestions)
+                ? context.strategy.supportingQuestions.map(normalizeString).filter(Boolean).slice(0, 6)
+                : [],
+            targetAudience: normalizeString(context.strategy?.targetAudience),
+            userProblems: Array.isArray(context.strategy?.userProblems)
+                ? context.strategy.userProblems.map(normalizeString).filter(Boolean).slice(0, 6)
+                : [],
+            contentGap: normalizeString(context.strategy?.contentGap),
+            searchIntent: normalizeString(context.strategy?.searchIntent?.primary),
+            editorialAngle: normalizeString(context.unifiedBrief?.editorialAngle || context.unifiedBrief?.angle),
+            differentiationRule:
+                'Mỗi bài phải chọn GÓC riêng, cấu trúc riêng, ví dụ/nhịp riêng — không lặp bố cục/giọng bài trước.'
+        };
+        // Anti-sameness feedback: turn the post-hoc structural fingerprint into a
+        // pre-generation instruction. Show the writer the opening modes + heading
+        // sets of the most recent articles so it can deliberately diverge.
+        const recentStructures = comparisonCorpus
+            .slice(0, 5)
+            .map(item => {
+                const fingerprint = item.structuralFingerprint || structuralFingerprint(item.blog_content || '');
+                const headingSet = extractHeadings(item.blog_content || '')
+                    .filter(heading => heading.level === 2)
+                    .map(heading => normalizeString(heading.text))
+                    .filter(Boolean)
+                    .slice(0, 6);
+                const openingSnippet = normalizeString(
+                    (item.blog_content || '').replace(/<[^>]+>/g, ' ')
+                ).slice(0, 140);
+                return {
+                    openingMode: normalizeString(fingerprint?.openingMode),
+                    headingSet,
+                    openingSnippet,
+                    faqCount: Number(fingerprint?.faqCount || 0)
+                };
+            });
+        const avoidStructures = {
+            openingModes: [...new Set(recentStructures.map(item => item.openingMode).filter(Boolean))].slice(0, 5),
+            headingSets: recentStructures.map(item => item.headingSet).filter(set => set.length).slice(0, 5),
+            openingSnippets: recentStructures.map(item => item.openingSnippet).filter(Boolean).slice(0, 5),
+            faqCounts: recentStructures.map(item => item.faqCount).filter(count => count > 0).slice(0, 5)
+        };
         const maxOriginalityAttempts = 3;
         let contentHtml = '';
         let originality = null;
@@ -2202,7 +2570,11 @@ const claimed = await ContentWorkOrderService.claimForProduction({
                 generated = await generateLlmDraft({
                     topic: context.effectiveTopic || topic,
                     primaryKeyword,
-                    secondaryKeywords: Array.isArray(config.secondaryKeywords) ? config.secondaryKeywords.slice(0, 8) : [],
+                    secondaryKeywords: roadmapContext
+                      ? roadmapContext.secondaryKeywords
+                      : Array.isArray(config.secondaryKeywords)
+                        ? config.secondaryKeywords.slice(0, 8)
+                        : [],
                     articleType: context.strategy.articleType,
                     style: context.style,
                     headingCount: Math.min(Math.max((context.architecture.headings || []).length, 4), 6),
@@ -2214,7 +2586,9 @@ const claimed = await ContentWorkOrderService.claimForProduction({
                     editorialPlacementPlan: context.editorialPlacementPlan,
                     architecture: context.architecture,
           revisionContext,
-          evidenceMap: context.evidenceMap
+          evidenceMap: context.evidenceMap,
+          editorialBrief,
+          avoidStructures
         });
             } catch (error) {
                 llmGenerationError = safeErrorCode({ code: error?.code || 'LLM_GENERATION_FAILED' });
@@ -2234,6 +2608,55 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       }
       contentHtml = applyEditorialProductPlacementPlanToHtml({ html: contentHtml, productSeedPlan: context.productSeedPlan, placementPlan: context.editorialPlacementPlan });
             originality = reviewOriginality({ title: llmDraft?.title || topic, contentHtml, existing: comparisonCorpus });
+            if (!qaContext && context.trustedRoadmapContext?.topicScoreReport) {
+                try {
+                    const draftComparison = await new BlogNoveltyIndexService().compareDraft({
+                        title: llmDraft?.title || topic,
+                        contentHtml,
+                        searchIntent: context.trustedRoadmapContext.searchIntent,
+                        excludeSourceIds: [...targetIds]
+                    });
+                    const draftScore = scoreDraftOriginality({ comparison: draftComparison });
+                    originality = {
+                        ...originality,
+                        passed: originality.passed && draftScore.eligible,
+                        risk: draftScore.eligible && originality.passed ? originality.risk : 'high',
+                        reasons: [...(originality.reasons || []), ...(draftScore.reasonCodes || [])],
+                        authoritativeDraftScore: draftScore
+                    };
+                } catch (error) {
+                    originality = {
+                        ...originality,
+                        passed: false,
+                        risk: 'high',
+                        reasons: [...(originality.reasons || []), String(error?.code || 'draft_full_corpus_score_unavailable')]
+                    };
+                }
+            }
+            // For roadmap-backed production runs, the selected plan already carries
+            // a full-corpus 82-point contract. Preserve that authority through the
+            // draft gate; an LLM reviewer cannot self-assert a pass.
+            if (context.trustedRoadmapContext?.topicScoreReport) {
+                const topicReport = context.trustedRoadmapContext.topicScoreReport;
+                const activeTopicGate = passesTrustedTopicPlanGate(topicReport);
+                if (!activeTopicGate) {
+                    originality = {
+                        ...originality,
+                        passed: false,
+                        risk: 'high',
+                        reasons: [...(originality.reasons || []), 'topic_plan_authoritative_gate_failed']
+                    };
+                }
+            }
+            const formulaic = detectFormulaicDraft(contentHtml);
+            if (formulaic.matched) {
+                originality = {
+                    ...originality,
+                    passed: false,
+                    risk: 'high',
+                    reasons: [...(originality.reasons || []), ...formulaic.reasons]
+                };
+            }
             if (originality.passed) break;
         }
     if (revisionContext && !llmDraft?.html) {
@@ -2249,10 +2672,17 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         const productReviews = reviewProductLayer({ html: contentHtml, plan: context.productSeedPlan });
         const editorialPlacementReview = reviewEditorialProductPlacement({ html: contentHtml, title: llmDraft?.title || context.effectiveTopic || topic, productSeedPlan: context.productSeedPlan, placementPlan: context.editorialPlacementPlan });
         const wordCount = normalizeForSimilarity(contentHtml).split(' ').filter(Boolean).length;
+        // Structure is now writer-designed per topic, so quality is judged on the
+        // ACTUAL rendered article (real <h2> coverage + enough depth), not on a
+        // fixed planned-heading count or a mandatory answer-block. The ≥3 <h2>
+        // floor mirrors the insufficient_topic_coverage spam gate; answer-blocks
+        // are an optional tool and no longer gate publication.
+        const renderedH2Count = (contentHtml.match(/<h2\b/gi) || []).length;
         const seoAeoGeo = {
-            passed: (context.architecture.headings || []).length >= 4 && /answer-block/.test(contentHtml),
-            seoScore: Math.min(96, 82 + Math.min(8, (context.architecture.headings || []).length * 2) + (context.researchBundle.researchCoverage === 'high' ? 4 : 0)),
+            passed: renderedH2Count >= 3 && wordCount >= 700,
+            seoScore: Math.min(96, 82 + Math.min(8, renderedH2Count * 2) + (context.researchBundle.researchCoverage === 'high' ? 4 : 0)),
             answerBlocks: (contentHtml.match(/class="answer-block"/g) || []).length,
+            renderedH2Count,
             structuredDataCandidate: context.strategy.structuredDataCandidate,
             generativeSearchReady: factuality.passed && brandVoice.passed,
             promisesInclusion: false
@@ -2280,15 +2710,23 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         const slug = target?.blog_slug || normalizeSlug(`${llmDraft?.title || context.effectiveTopic || topic}-${date}-${sha256(executionKey).slice(0, 6)}`);
         const excerpt = (llmDraft?.excerpt || `Hướng dẫn thực tế về ${context.effectiveTopic || topic} cho gia đình Việt: tiêu chí lựa chọn, cách sử dụng và lưu ý an toàn.`).slice(0, 240);
         const payload = {
-            mode: qaContext ? 'draft' :
+            mode: qaContext || isProductionEnv() ? 'draft' :
         schedule.draftOnly === false &&
         Boolean(schedule.autoPublish) && !highRisk ? 'publish' : 'draft',
-            source: 'openclaw-daily-seo', primaryKeyword, secondaryKeywords: config.secondaryKeywords || [],
+            source: 'openclaw-daily-seo', primaryKeyword,
+            secondaryKeywords: roadmapContext
+              ? roadmapContext.secondaryKeywords
+              : config.secondaryKeywords || [],
             ...(qaContext || {}),
             title, slug, excerpt, contentHtml,
             imageSearchQuery: llmDraft?.imageQuery || '',
-            seoTitle: title.slice(0, 60), seoDescription: excerpt.slice(0, 155),
-            categoryKey: config.categoryKey || 'guide', tags: [primaryKeyword, 'Inoxpran', context.strategy.articleType].filter(Boolean),
+            seoTitle: (llmDraft?.seoTitle || title).slice(0, 60),
+            seoDescription: (llmDraft?.seoDescription || excerpt).slice(0, 155),
+            categoryKey: roadmapContext?.categoryKey || config.categoryKey || 'guide',
+            tags:
+                llmDraft?.tags?.length
+                    ? [...new Set([...llmDraft.tags, 'Inoxpran'])].slice(0, 8)
+                    : [primaryKeyword, 'Inoxpran', context.strategy.articleType].filter(Boolean),
       authorName:
         process.env.SEO_AGENT_DEFAULT_AUTHOR || 'Inoxpran Editorial Team',
       imageUrl: process.env.SEO_AGENT_DEFAULT_BLOG_IMAGE || '/og-image.png',
@@ -2351,6 +2789,16 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             agenticReviews: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview, editorialProductPlacement: editorialPlacementReview },
             metadata: {
                 provider: 'openclaw', executionKey, pipelineVersion: 'agentic-blog-core-v2',
+                ...(roadmapContext
+                  ? {
+                      topicRoadmapId: roadmapContext.roadmapId,
+                      topicRoadmapItemId: roadmapContext.itemId,
+                      topicRoadmapGeneration: roadmapContext.generation,
+                      topicDirectionRevision: roadmapContext.directionRevision,
+                      managerDirection: roadmapContext.managerDirection,
+                      selectedEditorialAngle: roadmapContext.angle
+                    }
+                  : {}),
                 ...(qaContext || {}),
                 ...(qaContext ? { plannedOutline: context.architecture.headings.map(item => item.heading) } : {}),
                 googleIntelSnapshotId: context.snapshot.id || String(context.snapshot._id || ''),
@@ -2477,5 +2925,6 @@ module.exports = {
     decideTopicAction,
     inferAbstractPattern,
   normalizeWriterMaterialClaims,
+  passesTrustedTopicPlanGate,
   synthesizePatterns
 };

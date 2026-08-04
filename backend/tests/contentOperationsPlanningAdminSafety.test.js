@@ -858,4 +858,91 @@ describe('Content Operations planning-only safety', () => {
         expect(RunModel.create).not.toHaveBeenCalled();
         expect(RunModel.updateOne).not.toHaveBeenCalled();
     });
+
+    it('marks a missing mandatory source as blocked and never creates production artifacts', async () => {
+        const googleId = objectId('21');
+        const snapshotId = objectId('22');
+        const inventoryId = objectId('23');
+        const skipDecision = {
+            candidateId: 'safe-skip',
+            decisionType: ACTIONS.SKIP,
+            recommendedAction: ACTIONS.SKIP,
+            topic: '',
+            totalScore: 0,
+            targetBlogIds: [],
+            decisionReason: 'No candidate was generated.'
+        };
+        const service = new ContentOperationsPlanningService({
+            config: getContentOperationsConfig({
+                CONTENT_OPERATIONS_ENABLED: 'true',
+                CONTENT_INVENTORY_ENABLED: 'true'
+            }),
+            GoogleService: {
+                ensureGoogleIntelligenceSnapshotForDate: vi.fn(async () => ({
+                    _id: googleId,
+                    id: googleId,
+                    status: 'completed_no_change'
+                }))
+            },
+            IntelligenceService: {
+                ensureContentOperationsSnapshotForDate: vi.fn(async () => ({
+                    snapshot: {
+                        _id: snapshotId,
+                        id: snapshotId,
+                        contentInventorySnapshotId: inventoryId,
+                        status: 'completed',
+                        warnings: [],
+                        sourceHealth: [],
+                        sourceFreshness: {}
+                    }
+                }))
+            },
+            DecisionService: {
+                persistCandidates: vi.fn(async () => ({
+                    selected: skipDecision,
+                    rankedCandidates: [skipDecision],
+                    persisted: [{ ...skipDecision, _id: objectId('24'), status: 'selected' }]
+                }))
+            },
+            WorkOrderService: {
+                createFromDecision: vi.fn(),
+                attachArtifact: vi.fn()
+            },
+            BriefService: { create: vi.fn() },
+            SignalService: { listSignals: vi.fn(async () => []) },
+            InventoryItemModel: { find: vi.fn(() => ({ sort() { return this; }, limit() { return this; }, lean: async () => [] })) },
+            RunModel: {
+                create: vi.fn(async () => ({ _id: objectId('25') })),
+                updateOne: vi.fn(async () => ({ matchedCount: 1, modifiedCount: 1 }))
+            },
+            now: () => new Date('2026-07-20T00:00:00.000Z')
+        });
+
+        const result = await service.plan({
+            trigger: 'pipeline',
+            input: { mode: 'best_action', sourceRequirements: ['google_search_console'] }
+        });
+
+        expect(result).toMatchObject({
+            blocked: true,
+            skipped: false,
+            blockCode: 'CONTENT_OPERATIONS_REQUIRED_SOURCE_UNAVAILABLE',
+            missingRequiredSources: ['google_search_console'],
+            contentWorkOrderId: '',
+            unifiedContentBriefId: ''
+        });
+        expect(service.WorkOrderService.createFromDecision).not.toHaveBeenCalled();
+        expect(service.BriefService.create).not.toHaveBeenCalled();
+        expect(service.WorkOrderService.attachArtifact).not.toHaveBeenCalled();
+        expect(service.RunModel.updateOne).toHaveBeenCalledWith(
+            expect.objectContaining({ _id: objectId('25'), status: 'running' }),
+            expect.objectContaining({
+                $set: expect.objectContaining({
+                    status: 'blocked',
+                    contentWorkOrderId: null,
+                    unifiedContentBriefId: null
+                })
+            })
+        );
+    });
 });

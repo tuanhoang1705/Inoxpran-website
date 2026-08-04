@@ -1,9 +1,10 @@
 'use strict';
 
-require('dotenv').config();
-
 const mongoose = require('mongoose');
 const { product } = require('../src/models/product.model');
+const { loadRuntimeEnv } = require('../src/config/runtimeEnv');
+
+loadRuntimeEnv();
 
 const roundToOneDecimal = (value) => Math.round(value * 10) / 10;
 
@@ -42,7 +43,8 @@ const migrateProductRatings = async ({ dryRun = false } = {}) => {
     }
 
     await mongoose.connect(connectString, {
-        autoIndex: true,
+        autoIndex: false,
+        autoCreate: false,
         maxPoolSize: 10
     });
 

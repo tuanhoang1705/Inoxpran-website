@@ -65,28 +65,40 @@ const safeClientMessage = ({ error, statusCode, isFileSizeError = false, isJwtEr
     return boundedText(error?.message, 'Request failed', 500)
 }
 
-const buildSafeErrorPayload = ({ error, statusCode, message, includeStack = false }) => {
+const buildSafeErrorPayload = ({ error, statusCode, message, requestId = '', includeStack = false }) => {
+    const candidateErrorCode = safeErrorCode(error)
+    const errorCode = statusCode >= 500
+        ? 'INTERNAL_ERROR'
+        : candidateErrorCode === 'Error'
+            ? 'REQUEST_FAILED'
+            : candidateErrorCode
+    const normalizedRequestId = boundedText(requestId, '', 128)
     const payload = {
         status: 'error',
         code: statusCode,
-        message: boundedText(message, statusCode >= 500 ? 'Internal Server Error' : 'Request failed', 500)
+        message: boundedText(message, statusCode >= 500 ? 'Internal Server Error' : 'Request failed', 500),
+        errorCode,
+        requestId: normalizedRequestId
     }
     const field = boundedText(error?.field, '', 120)
-    const errorCode = safeErrorCode(error)
-    if (statusCode < 500 && errorCode && errorCode !== 'Error') payload.errorCode = errorCode
     if (statusCode < 500 && field) payload.field = field
     if (includeStack && error?.stack) payload.stack = boundedText(error.stack, '', 4000)
     return payload
 }
 
-const buildSafeServerLog = ({ error, req, statusCode }) => ({
-    event: 'http_request_failed',
-    statusCode,
-    method: boundedText(req?.method, 'UNKNOWN', 16),
-    path: safeRequestPath(req),
-    errorCode: safeErrorCode(error),
-    errorName: boundedText(error?.name, 'Error', 80)
-})
+const buildSafeServerLog = ({ error, req, statusCode }) => {
+    const entry = {
+        event: 'http_request_failed',
+        statusCode,
+        method: boundedText(req?.method, 'UNKNOWN', 16),
+        path: safeRequestPath(req),
+        errorCode: safeErrorCode(error),
+        errorName: boundedText(error?.name, 'Error', 80)
+    }
+    const requestId = boundedText(req?.requestId, '', 128)
+    if (requestId) entry.requestId = requestId
+    return entry
+}
 
 const escapeHtml = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')

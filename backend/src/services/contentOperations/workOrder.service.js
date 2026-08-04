@@ -373,6 +373,7 @@ class ContentWorkOrderService {
     executionId,
     workOrderId,
     claimToken,
+    expectedLeaseOwner = "",
     status,
     updates = {},
     completedAt = new Date(),
@@ -393,6 +394,9 @@ class ContentWorkOrderService {
         contentWorkOrderId: workOrderId,
         status: { $in: allowedFromStatuses },
         "metadata.contentWorkOrderClaimToken": String(claimToken),
+        ...(String(expectedLeaseOwner || "").trim()
+          ? { "metadata.leaseOwner": String(expectedLeaseOwner).trim() }
+          : {}),
       },
       {
         $set: {
@@ -409,6 +413,7 @@ class ContentWorkOrderService {
 
   static async transitionExecutionUnclaimed({
     executionId,
+    expectedLeaseOwner = "",
     status,
     updates = {},
     completedAt = new Date(),
@@ -427,6 +432,9 @@ class ContentWorkOrderService {
       {
         _id: executionId,
         status: { $in: allowedFromStatuses },
+        ...(String(expectedLeaseOwner || "").trim()
+          ? { "metadata.leaseOwner": String(expectedLeaseOwner).trim() }
+          : {}),
         ...unclaimedExecutionFilter(),
       },
       {

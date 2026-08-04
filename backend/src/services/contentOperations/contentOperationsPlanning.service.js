@@ -5,6 +5,9 @@ const {
   ACTIONS,
   getContentOperationsConfig,
 } = require("../../config/contentOperations.config");
+const {
+  normalizeOpportunityScore,
+} = require("./topicRoadmapScoring.service");
 const { safeErrorCode } = require("../../utils/httpError.util");
 const {
   hasQaProvenanceMarkers,
@@ -40,6 +43,7 @@ const { UnifiedContentBriefService } = require("./unifiedBrief.service");
 const {
   generateOpportunityCandidates,
 } = require("./opportunityCandidate.service");
+const { generateBlogIdeas } = require("./blogIdeation.service");
 
 const MODES = new Set(["best_action", "fixed_brief", "maintenance_only"]);
 const MAINTENANCE_ACTIONS = new Set([
@@ -106,6 +110,153 @@ const cleanStrings = (values, max = 20) =>
         ),
       ].slice(0, max)
     : [];
+
+// This marker cannot arrive through JSON. Only plan({ trustedRoadmapContext })
+// can attach it after validating a server-claimed roadmap item, so public/admin
+// request payloads cannot opt themselves into selected-topic precedence.
+const TRUSTED_ROADMAP_SELECTION = Symbol("trusted-roadmap-selection");
+const ROADMAP_INPUT_KEYS = new Set([
+  "selectionSource",
+  "selectedTopic",
+  "managerDirection",
+  "roadmapItemId",
+  "roadmapId",
+  "__trustedRoadmapSelection",
+]);
+
+const textBound = (value, max) => String(value || "")
+  .replace(new RegExp("[\\u0000-\\u001f\\u007f]", "g"), "")
+  .replace(/\s+/g, " ")
+  .trim()
+  .slice(0, max);
+
+const normalizeTrustedRoadmapContext = (value) => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const roadmapId = textBound(value.roadmapId, 80);
+  const itemId = textBound(value.itemId || value.roadmapItemId, 80);
+  const scheduleId = textBound(value.scheduleId, 80);
+  const executionId = textBound(value.executionId, 80);
+  const topic = textBound(value.topic, 300);
+  if (!roadmapId || !itemId || !scheduleId || !executionId || !topic) {
+    const error = new Error("Trusted roadmap context is incomplete");
+    error.code = "TRUSTED_ROADMAP_CONTEXT_INVALID";
+    error.status = 409;
+    throw error;
+  }
+  const primaryQuestion = textBound(value.primaryQuestion, 500);
+  const supportingQuestions = cleanStrings(value.supportingQuestions, 10).map((item) =>
+    textBound(item, 500),
+  );
+  const productEvidence = Array.isArray(value.productEvidence)
+    ? value.productEvidence.slice(0, 20)
+    : [];
+  const marketEvidence = Array.isArray(value.marketEvidence)
+    ? value.marketEvidence.slice(0, 20)
+    : [];
+  return {
+    roadmapId,
+    itemId,
+    scheduleId,
+    executionId,
+    directionRevision: Math.max(1, Number(value.directionRevision) || 1),
+    generation: Math.max(1, Number(value.generation) || 1),
+    topic,
+    angle: textBound(value.angle, 1000),
+    primaryKeyword: textBound(value.primaryKeyword || topic, 120),
+    secondaryKeywords: cleanStrings(value.secondaryKeywords, 12).map((item) =>
+      textBound(item, 80),
+    ),
+    primaryQuestion,
+    supportingQuestions,
+    targetAudience: cleanStrings(value.targetAudience, 10).map((item) =>
+      textBound(item, 200),
+    ),
+    userProblems: cleanStrings(value.userProblems, 10).map((item) =>
+      textBound(item, 300),
+    ),
+    searchIntent: textBound(value.searchIntent || "informational", 300),
+    articleType: textBound(value.articleType || "practical-guide", 100),
+    categoryKey: textBound(value.categoryKey || "guide", 80),
+    managerDirection: textBound(value.managerDirection, 500),
+    opportunityScore: normalizeOpportunityScore(value.opportunityScore),
+    topicScoreReport:
+      value.topicScoreReport && typeof value.topicScoreReport === "object"
+        ? {
+            totalScore: Math.min(100, Math.max(0, Number(value.topicScoreReport.totalScore) || 0)),
+            noveltySubtotal: Math.min(65, Math.max(0, Number(value.topicScoreReport.noveltySubtotal) || 0)),
+            acceptanceScore: Math.min(100, Math.max(82, Number(value.topicScoreReport.acceptanceScore) || 82)),
+            minimumNoveltySubtotal: Math.min(65, Math.max(48, Number(value.topicScoreReport.minimumNoveltySubtotal) || 48)),
+            rubricVersion: textBound(value.topicScoreReport.rubricVersion, 120),
+            corpusVersion: textBound(value.topicScoreReport.corpusVersion, 120),
+            hardGatesPassed: value.topicScoreReport.hardGatesPassed === true,
+          }
+        : null,
+    productEvidence,
+    marketEvidence,
+  };
+};
+
+const applyTrustedRoadmapSelection = (input, context) => {
+  if (!context) return input;
+  const customerQuestions = [
+    context.primaryQuestion,
+    ...context.supportingQuestions,
+  ].filter(Boolean);
+  const productEvidence = context.productEvidence.map((item) => ({
+    source: "product_catalog",
+    sourceType: "product_catalog",
+    type: "roadmap_product_opportunity",
+    claim: `Verified catalog evidence is available for ${textBound(item?.name || item?.productId, 200)}.`,
+    internalReferenceId: textBound(item?.productId, 80),
+    evidenceHash: textBound(item?.catalogEvidenceHash, 128),
+    classification: "verified",
+    confidence: 1,
+    allowedUsage:
+      "Use only as a product/topic planning reference. Reload and verify current catalog facts before writing any product claim.",
+  }));
+  const marketEvidence = context.marketEvidence.map((item) => ({
+    source: textBound(item?.sourceType || "market_research", 80),
+    sourceType: textBound(item?.sourceType || "market_research", 80),
+    type: "roadmap_market_signal",
+    claim: textBound(item?.snippet || item?.title, 500),
+    sourceUrl: textBound(item?.canonicalUrl, 2_000),
+    internalReferenceId: textBound(item?.sourceId, 160),
+    checkedAt: item?.fetchedAt || item?.observedAt || null,
+    classification: "unknown",
+    confidence: Math.min(1, Math.max(0, Number(item?.confidence) || 0)),
+    allowedUsage:
+      "Use as attributed qualitative market context only; never infer numerical demand or a product performance claim.",
+    requiredQualification:
+      "Attribute the source and preserve uncertainty unless a separate verified fact supports the statement.",
+  })).filter((item) => item.claim);
+  return {
+    ...input,
+    mode: "fixed_brief",
+    action: ACTIONS.NEW,
+    topic: context.topic,
+    primaryKeyword: context.primaryKeyword,
+    secondaryKeywords: context.secondaryKeywords,
+    categoryKey: context.categoryKey,
+    articleType: context.articleType,
+    primarySearchIntent: context.searchIntent,
+    targetAudience: context.targetAudience,
+    userProblems: context.userProblems,
+    customerQuestions,
+    primaryQuestion: context.primaryQuestion,
+    supportingQuestions: context.supportingQuestions,
+    editorialAngle: context.angle,
+    requiredEvidence: [...marketEvidence, ...productEvidence],
+    userDemandScore: context.opportunityScore || undefined,
+    contentGapScore: context.opportunityScore || undefined,
+    userValueScore: context.opportunityScore || undefined,
+    managerDirection: context.managerDirection,
+    selectedTopic: context.topic,
+    roadmapItemId: context.itemId,
+    roadmapId: context.roadmapId,
+    __trustedRoadmapSelection: true,
+    [TRUSTED_ROADMAP_SELECTION]: true,
+  };
+};
 
 const explicitOwnerUpdateFailed = (result) =>
   Number.isFinite(result?.matchedCount)
@@ -229,7 +380,16 @@ const workOrderInputFor = ({
   adminId = null,
 }) => {
   const action = String(decision.recommendedAction || decision.decisionType);
-  const topic = String(input.topic || decision.topic || "").trim();
+  // A roadmap selection is a trusted backend artifact that has already been
+  // researched, ranked and atomically claimed. In that narrow path the selected
+  // candidate must win over the manager's raw direction. All legacy/fixed/
+  // maintenance callers keep the previous input.topic-first semantics.
+  const roadmapSelection = input[TRUSTED_ROADMAP_SELECTION] === true;
+  const topic = String(
+    roadmapSelection
+      ? input.selectedTopic || decision.topic || ""
+      : input.topic || decision.topic || "",
+  ).trim();
   const searchIntent = String(
     input.primarySearchIntent ||
       (MAINTENANCE_ACTIONS.has(action)
@@ -302,6 +462,14 @@ const workOrderInputFor = ({
     metadata: {
       planningMode: input.mode || "best_action",
       draftOnly: input.draftOnly !== false,
+      ...(roadmapSelection
+        ? {
+            selectionSource: "roadmap",
+            roadmapId: input.roadmapId,
+            roadmapItemId: input.roadmapItemId,
+            managerDirection: input.managerDirection,
+          }
+        : {}),
       ...(input.qaContext || {}),
     },
     ...(input.qaContext || {}),
@@ -451,12 +619,14 @@ class ContentOperationsPlanningService {
     WorkOrderModel = ContentWorkOrder,
     BriefModel = UnifiedContentBrief,
     RunModel = ContentOperationsRun,
+    ideationService = generateBlogIdeas,
     now = () => new Date(),
   } = {}) {
     this.config = config;
     this.GoogleService = GoogleService;
     this.IntelligenceService = IntelligenceService;
     this.DecisionService = DecisionService;
+    this.ideationService = ideationService;
     this.WorkOrderService = WorkOrderService;
     this.BriefService = BriefService;
     this.signalService =
@@ -480,6 +650,37 @@ class ContentOperationsPlanningService {
     if (typeof query.lean === "function") query = query.lean();
     const items = await query;
     return Array.isArray(items) ? items : [];
+  }
+
+  // Run the creative ideation layer for best_action mode only. Ideas widen the
+  // candidate funnel; they never bypass a gate. Failure is non-fatal — the older
+  // deterministic candidate generators still run, so a bad ideation call only
+  // means fewer fresh ideas that day, not a broken pipeline.
+  async runIdeation({ snapshot, inventoryItems, mode, input = {} }) {
+    if (
+      mode !== "best_action" ||
+      typeof this.ideationService !== "function" ||
+      this.config.ideation?.enabled === false
+    ) {
+      return { ideas: [], source: "disabled", model: null };
+    }
+    try {
+      const result = await this.ideationService({
+        snapshot,
+        inventoryItems,
+        direction: String(input.topic || input.primaryKeyword || input.direction || ""),
+        now: this.now(),
+        timezone: this.config.timezone,
+        maxIdeas: this.config.ideation?.maxIdeasPerRun || 12,
+      });
+      return {
+        ideas: Array.isArray(result?.ideas) ? result.ideas : [],
+        source: result?.source || "unknown",
+        model: result?.model || null,
+      };
+    } catch (_error) {
+      return { ideas: [], source: "failed", model: null };
+    }
   }
 
   async persistRunTerminal({
@@ -766,6 +967,9 @@ class ContentOperationsPlanningService {
       const health = sourceMap.get(String(source));
       return !health || !["available", "partial"].includes(health.status);
     });
+    const ideation = missingRequiredSources.length
+      ? { ideas: [], source: "skipped", model: null }
+      : await this.runIdeation({ snapshot, inventoryItems, mode, input });
     const candidates = missingRequiredSources.length
       ? []
       : generateOpportunityCandidates({
@@ -774,6 +978,7 @@ class ContentOperationsPlanningService {
           signals,
           input,
           mode,
+          ideas: ideation.ideas,
         });
     const decisionConfig = {
       ...this.config,
@@ -791,8 +996,13 @@ class ContentOperationsPlanningService {
       selectedObject.recommendedAction === ACTIONS.SKIP ||
       selectedObject.decisionType === ACTIONS.SKIP;
     const skipDisallowed = selectedActionIsSkip && input.allowSkip === false;
-    const skipped = selectedActionIsSkip;
     const blocked = skipDisallowed || missingRequiredSources.length > 0;
+    const blockCode = missingRequiredSources.length > 0
+      ? "CONTENT_OPERATIONS_REQUIRED_SOURCE_UNAVAILABLE"
+      : skipDisallowed
+        ? "CONTENT_OPERATIONS_SKIP_DISALLOWED"
+        : "";
+    const skipped = !blocked && selectedActionIsSkip;
     const selectedDecision = skipped
       ? ACTIONS.SKIP
       : selectedObject.recommendedAction || selectedObject.decisionType;
@@ -820,10 +1030,16 @@ class ContentOperationsPlanningService {
       opportunityScore: selectedObject.totalScore,
       selectedOpportunity: selectedObject,
       candidates: decisionResult.rankedCandidates,
+      ideation: {
+        source: ideation.source,
+        model: ideation.model,
+        ideaCount: ideation.ideas.length,
+      },
       workOrder: null,
       brief: null,
       skipped,
       blocked,
+      blockCode,
       missingRequiredSources,
       warnings,
       sourceHealth: snapshot.sourceHealth || [],
@@ -850,6 +1066,7 @@ class ContentOperationsPlanningService {
     executionKey: requestedExecutionKey = "",
     lease = null,
     trustedQaContext = null,
+    trustedRoadmapContext = null,
   } = {}) {
     if (Object.prototype.hasOwnProperty.call(input, "qaContext")) {
       const error = new Error("QA provenance cannot be supplied through planning input");
@@ -857,6 +1074,17 @@ class ContentOperationsPlanningService {
       error.status = 400;
       throw error;
     }
+    const injectedRoadmapKey = Object.keys(input || {}).find((key) =>
+      ROADMAP_INPUT_KEYS.has(key),
+    );
+    if (injectedRoadmapKey) {
+      const error = new Error("Roadmap selection cannot be supplied through planning input");
+      error.code = "ROADMAP_SELECTION_INPUT_FORBIDDEN";
+      error.status = 400;
+      throw error;
+    }
+    const roadmapContext = normalizeTrustedRoadmapContext(trustedRoadmapContext);
+    input = applyTrustedRoadmapSelection(input, roadmapContext);
     const qaProvenance = normalizeTrustedQaProvenance(trustedQaContext);
     if (qaProvenance) {
       input = {
@@ -1064,6 +1292,7 @@ class ContentOperationsPlanningService {
           workOrder: asObject(existingWorkOrder),
           brief: existingWorkOrderRunnable ? asObject(existingBrief) : null,
           skipped: !existingWorkOrderRunnable,
+          blocked: false,
           warnings: [
             ...(snapshot.warnings || []),
             ...(!existingWorkOrderRunnable
@@ -1109,6 +1338,9 @@ class ContentOperationsPlanningService {
         const health = sourceMap.get(String(source));
         return !health || !["available", "partial"].includes(health.status);
       });
+      const ideation = missingRequiredSources.length
+        ? { ideas: [], source: "skipped", model: null }
+        : await this.runIdeation({ snapshot, inventoryItems, mode, input });
       const candidates = missingRequiredSources.length
         ? []
         : generateOpportunityCandidates({
@@ -1117,6 +1349,7 @@ class ContentOperationsPlanningService {
             signals,
             input,
             mode,
+            ideas: ideation.ideas,
           });
       const decisionConfig = {
         ...this.config,
@@ -1147,10 +1380,16 @@ class ContentOperationsPlanningService {
         selectedObject.recommendedAction === ACTIONS.SKIP ||
         selectedObject.decisionType === ACTIONS.SKIP;
       const skipDisallowed = selectedActionIsSkip && input.allowSkip === false;
+      const blocked = skipDisallowed || missingRequiredSources.length > 0;
+      const blockCode = missingRequiredSources.length > 0
+        ? "CONTENT_OPERATIONS_REQUIRED_SOURCE_UNAVAILABLE"
+        : skipDisallowed
+          ? "CONTENT_OPERATIONS_SKIP_DISALLOWED"
+          : "";
       if (
         leaseGuard &&
         selectedObject.status !== "dismissed" &&
-        !skipDisallowed
+        !blocked
       ) {
         await leaseGuard.checkpoint("before_content_work_order");
       }
@@ -1163,7 +1402,7 @@ class ContentOperationsPlanningService {
       if (planningRunId)
         proposedWorkOrderInput.metadata.planningRunId = String(planningRunId);
       const workOrder =
-        selectedObject.status === "dismissed" || skipDisallowed
+        selectedObject.status === "dismissed" || blocked
           ? null
           : await this.WorkOrderService.createFromDecision({
               decision: selectedObject,
@@ -1173,7 +1412,7 @@ class ContentOperationsPlanningService {
         await leaseGuard.checkpoint("after_content_work_order");
       let brief = null;
       const workOrderRunnable = isWorkOrderRunnable(workOrder, { now });
-      if (!selectedActionIsSkip && workOrderRunnable) {
+      if (!blocked && !selectedActionIsSkip && workOrderRunnable) {
         if (leaseGuard)
           await leaseGuard.checkpoint("before_unified_content_brief");
         brief = await this.BriefService.create({
@@ -1197,11 +1436,11 @@ class ContentOperationsPlanningService {
         });
         if (leaseGuard) await leaseGuard.checkpoint("after_brief_attachment");
       }
-      const skipped =
+      const skipped = !blocked && (
         selectedActionIsSkip ||
         !workOrderRunnable ||
-        selectedObject.status === "dismissed";
-      const blocked = skipDisallowed || missingRequiredSources.length > 0;
+        selectedObject.status === "dismissed"
+      );
       const selectedDecision = skipped
         ? ACTIONS.SKIP
         : selectedObject.recommendedAction || selectedObject.decisionType;
@@ -1234,7 +1473,7 @@ class ContentOperationsPlanningService {
             },
             {
               step: "unified_content_brief",
-              status: skipped ? "not_applicable" : "completed",
+              status: blocked || skipped ? "not_applicable" : "completed",
             },
             { step: "downstream_production", status: "not_started" },
           ],
@@ -1274,6 +1513,7 @@ class ContentOperationsPlanningService {
         brief: brief ? asObject(brief) : null,
         skipped,
         blocked,
+        blockCode,
         missingRequiredSources,
         warnings: [
           ...(snapshot.warnings || []),
@@ -1343,10 +1583,12 @@ class ContentOperationsPlanningService {
 
 module.exports = {
   ContentOperationsPlanningService,
+  applyTrustedRoadmapSelection,
   briefInputFor,
   createPlanningRunLeaseGuard,
   defaultBusinessGoal,
   defaultSuccessMetrics,
+  normalizeTrustedRoadmapContext,
   planningRunLeaseLostError,
   workOrderInputFor,
 };

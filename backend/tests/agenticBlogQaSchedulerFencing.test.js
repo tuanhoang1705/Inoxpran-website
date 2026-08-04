@@ -103,6 +103,7 @@ describe('QA scheduler ownership and publisher fencing', () => {
             {
                 $set: {
                     status: 'committing',
+                    currentStage: 'commit',
                     'metadata.commitClaimedAt': new Date('2026-07-22T05:00:00.000Z')
                 }
             },

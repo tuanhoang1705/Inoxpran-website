@@ -66,6 +66,24 @@ const parseBoolean = (value, fallback = false) => {
   return fallback;
 };
 
+const isProductionPublishLocked = (controlKey, env = process.env) =>
+  controlKey === "auto_publish" &&
+  String(env.NODE_ENV || "").trim().toLowerCase() === "production";
+
+const isProductionTelegramModeLocked = (controlKey, env = process.env) =>
+  controlKey === "telegram_approval" &&
+  String(env.NODE_ENV || "").trim().toLowerCase() === "production" &&
+  String(env.TELEGRAM_MODE || "webhook").trim().toLowerCase() !== "webhook";
+
+const isPolicyLocked = (controlKey, env = process.env) =>
+  isProductionPublishLocked(controlKey, env) ||
+  isProductionTelegramModeLocked(controlKey, env);
+
+const existingEnableBlocked = (preconditions = []) =>
+  preconditions.some(
+    (check) => check.key !== "no_active_runs" && check.pass !== true,
+  );
+
 const acknowledgementFor = (controlKey, enabled) =>
   `ACKNOWLEDGE ${controlKey.toUpperCase()} ${enabled ? "ENABLE" : "DISABLE"}`;
 
@@ -196,6 +214,14 @@ class OpenClawRuntimeControlService {
           pass: seoAgentEnabled,
         },
         {
+          key: "seo_agent_configured",
+          pass: definitions.seoAgent?.configured === true,
+        },
+        {
+          key: "blog_pipeline_configured",
+          pass: definitions.blogCron?.configured === true,
+        },
+        {
           key: "enabled_schedule_exists",
           pass: facts.enabledScheduleCount > 0,
           value: facts.enabledScheduleCount,
@@ -207,6 +233,10 @@ class OpenClawRuntimeControlService {
         },
       ],
       auto_publish: [
+        {
+          key: "production_draft_only_policy",
+          pass: !isProductionPublishLocked(controlKey, env),
+        },
         {
           key: "seo_agent_enabled",
           pass: seoAgentEnabled,
@@ -224,12 +254,20 @@ class OpenClawRuntimeControlService {
           pass: imagePipelineEnabled,
         },
         {
+          key: "image_pipeline_configured",
+          pass: definitions.imagePipeline?.configured === true,
+        },
+        {
           key: "no_active_runs",
           pass: noActiveRuns,
           value: facts.activeRunCount,
         },
       ],
       telegram_approval: [
+        {
+          key: "production_webhook_policy",
+          pass: !isProductionTelegramModeLocked(controlKey, env),
+        },
         {
           key: "telegram_configured",
           pass: definitions.telegram?.configured === true,
@@ -270,15 +308,18 @@ class OpenClawRuntimeControlService {
     const documents = await this._documents();
     const facts = await this._runtimeFacts();
     const env = this.envProvider();
-    const currentValues = Object.fromEntries(
+    const configuredValues = Object.fromEntries(
       CONTROL_KEYS.map((controlKey) => {
         const document = documents.get(controlKey);
         const definition = this.definition(controlKey);
+        const configuredEnabled = document
+          ? document.enabled === true
+          : parseBoolean(env[definition.envKey], false);
         return [
           controlKey,
-          document
-            ? document.enabled === true
-            : parseBoolean(env[definition.envKey], false),
+          isPolicyLocked(controlKey, env)
+            ? false
+            : configuredEnabled,
         ];
       }),
     );
@@ -286,12 +327,14 @@ class OpenClawRuntimeControlService {
       controls: CONTROL_KEYS.map((controlKey) => {
         const definition = this.definition(controlKey);
         const document = documents.get(controlKey) || null;
-        const enabled = currentValues[controlKey] === true;
         const preconditions = this._preconditions(
           controlKey,
           facts,
-          currentValues,
+          configuredValues,
         );
+        const enabled =
+          configuredValues[controlKey] === true &&
+          !existingEnableBlocked(preconditions);
         return {
           controlKey,
           envKey: definition.envKey,
@@ -299,6 +342,7 @@ class OpenClawRuntimeControlService {
           enabled,
           revision: Number(document?.revision || 0),
           source: document ? "runtime_override" : "environment_default",
+          policyLocked: isPolicyLocked(controlKey, env),
           readyToEnable: preconditions.every((check) => check.pass === true),
           preconditions,
           acknowledgement: acknowledgementFor(controlKey, !enabled),
@@ -346,9 +390,15 @@ class OpenClawRuntimeControlService {
 
   _apply(controlKey, enabled) {
     const definition = this.definition(controlKey);
-    this.applyEnvironment(definition.envKey, enabled);
+    const effectiveEnabled = isProductionPublishLocked(
+      controlKey,
+      this.envProvider(),
+    ) || isProductionTelegramModeLocked(controlKey, this.envProvider())
+      ? false
+      : enabled;
+    this.applyEnvironment(definition.envKey, effectiveEnabled);
     if (controlKey === "telegram_approval") {
-      if (enabled) this.telegramRuntime.start();
+      if (effectiveEnabled) this.telegramRuntime.start();
       else this.telegramRuntime.stop();
     }
   }
@@ -386,6 +436,14 @@ class OpenClawRuntimeControlService {
     }
     if (acknowledgement !== acknowledgementFor(controlKey, enabled)) {
       throw new BadRequestError("Runtime control acknowledgement is invalid");
+    }
+    if (
+      enabled &&
+      isProductionPublishLocked(controlKey, this.envProvider())
+    ) {
+      throw new BadRequestError(
+        "Auto publish is locked off by the production draft-only policy",
+      );
     }
 
     const requestHash = crypto
@@ -492,9 +550,31 @@ class OpenClawRuntimeControlService {
   async hydrate({ waitForConnection = true, timeoutMs = 15_000 } = {}) {
     if (waitForConnection) await waitForDatabase({ timeoutMs });
     const documents = await this._documents();
+    const facts = await this._runtimeFacts();
+    const env = this.envProvider();
+    const configuredValues = Object.fromEntries(
+      CONTROL_KEYS.map((controlKey) => {
+        const document = documents.get(controlKey);
+        const definition = this.definition(controlKey);
+        return [
+          controlKey,
+          document
+            ? document.enabled === true
+            : parseBoolean(env[definition.envKey], false),
+        ];
+      }),
+    );
     for (const controlKey of CONTROL_KEYS) {
       const document = documents.get(controlKey);
-      if (document) this._apply(controlKey, document.enabled === true);
+      if (!document) continue;
+      const preconditions = this._preconditions(
+        controlKey,
+        facts,
+        configuredValues,
+      );
+      const enabled =
+        document.enabled === true && !existingEnableBlocked(preconditions);
+      this._apply(controlKey, enabled);
     }
     return { applied: documents.size };
   }
@@ -513,6 +593,10 @@ module.exports = {
   IDEMPOTENCY_KEY,
   OpenClawRuntimeControlService,
   acknowledgementFor,
+  existingEnableBlocked,
+  isPolicyLocked,
+  isProductionPublishLocked,
+  isProductionTelegramModeLocked,
   openClawRuntimeControlService,
   parseBoolean,
   waitForDatabase,
