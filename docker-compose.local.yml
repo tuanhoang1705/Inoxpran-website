@@ -6,16 +6,50 @@ services:
     restart: unless-stopped
     ports:
       - "${LOCAL_REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   backend:
     build: ./backend
     env_file:
       - ./.env
-    environment:
-      NODE_ENV: production
+    environment: &local-backend-environment
+      NODE_ENV: development
       HOST: 0.0.0.0
       PORT: 3056
+      OPENCLAW_EMBEDDED_WORKER: "false"
+      OPENCLAW_WORKER_HEALTH_PORT: 3057
+      OPENCLAW_WORKER_DRAIN_TIMEOUT_MS: ${OPENCLAW_WORKER_DRAIN_TIMEOUT_MS:-15000}
+      OPENCLAW_BLOG_RETRY_MAX_ATTEMPTS: ${OPENCLAW_BLOG_RETRY_MAX_ATTEMPTS:-3}
+      OPENCLAW_BLOG_RETRY_BASE_MS: ${OPENCLAW_BLOG_RETRY_BASE_MS:-30000}
+      OPENCLAW_BLOG_RETRY_MAX_MS: ${OPENCLAW_BLOG_RETRY_MAX_MS:-900000}
+      OPENCLAW_AGENT_TRANSPORT_MAX_ATTEMPTS_PER_PHASE: ${OPENCLAW_AGENT_TRANSPORT_MAX_ATTEMPTS_PER_PHASE:-3}
+      OPENCLAW_AGENT_RETRY_BASE_MS: ${OPENCLAW_AGENT_RETRY_BASE_MS:-500}
       MONGODB_URI: ${MONGODB_URI}
+      PUBLIC_API_KEY: ${PUBLIC_API_KEY:-}
+      USER_API_KEY: ${USER_API_KEY:-}
+      ADMIN_BFF_API_KEY: ${ADMIN_BFF_API_KEY:-}
+      OPENCLAW_INTERNAL_API_KEY: ${OPENCLAW_INTERNAL_API_KEY:-}
+      OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL: ${OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL:-}
+      OPENCLAW_MARKET_SEARCH_PROVIDER: ${OPENCLAW_MARKET_SEARCH_PROVIDER:-disabled}
+      OPENCLAW_MARKET_SEARCH_MAX_QUERIES: ${OPENCLAW_MARKET_SEARCH_MAX_QUERIES:-6}
+      OPENCLAW_MARKET_SEARCH_RESULTS_PER_QUERY: ${OPENCLAW_MARKET_SEARCH_RESULTS_PER_QUERY:-5}
+      OPENCLAW_MARKET_SEARCH_TIMEOUT_MS: ${OPENCLAW_MARKET_SEARCH_TIMEOUT_MS:-30000}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      API_KEY: ""
+      REDIS_URL: ""
+      REDIS_ENABLED: "true"
+      REDIS_REQUIRED: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_USERNAME: ""
+      REDIS_PASSWORD: ""
+      REDIS_TLS: "false"
+      REDIS_TLS_CA_FILE: ""
+      REDIS_TLS_SERVERNAME: ""
       APP_BASE_URL: http://localhost:4173
       PUBLIC_SITE_URL: http://localhost:4173
       PUBLIC_WEB_BASE: http://localhost:4173
@@ -23,30 +57,87 @@ services:
     ports:
       - "${LOCAL_BACKEND_PORT:-3056}:3056"
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
 
-  n8n:
-    image: n8nio/n8n:2.12.2
+  openclaw-worker:
+    build: ./backend
+    command: ["npm", "run", "worker"]
     env_file:
       - ./.env
+    environment: *local-backend-environment
+    restart: unless-stopped
+    init: true
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3057/health/ready').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  n8n:
+    profiles:
+      - automation
+    image: ${N8N_IMAGE:-invalid.invalid/inoxpran/n8n-disabled@sha256:0000000000000000000000000000000000000000000000000000000000000000}
+    user: node
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - >-
+        test -n "$${N8N_DATA_HOST_PATH}" ||
+        { echo 'N8N_DATA_HOST_PATH is required for the automation profile' >&2; exit 1; };
+        test "$${#N8N_ENCRYPTION_KEY}" -ge 32 ||
+        { echo 'N8N_ENCRYPTION_KEY is missing or too short' >&2; exit 1; };
+        exec /docker-entrypoint.sh n8n
     environment:
       NODE_ENV: production
       N8N_PORT: 5678
       N8N_HOST: ${N8N_HOST:-localhost}
       N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-this-in-env}
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
-      NODE_FUNCTION_ALLOW_BUILTIN: ${NODE_FUNCTION_ALLOW_BUILTIN:-http,https,url}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
+      N8N_DATA_HOST_PATH: ${N8N_DATA_HOST_PATH:-}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      NODE_FUNCTION_ALLOW_BUILTIN: ""
+      NODE_FUNCTION_ALLOW_EXTERNAL: ""
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Asia/Ho_Chi_Minh}
       BACKEND_API_BASE_URL: http://backend:3056/v1/api
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678/}
       PUBLIC_WEB_BASE: http://localhost:4173
     volumes:
-      - ./deploy/n8n/data:/home/node/.n8n
+      - "${N8N_DATA_HOST_PATH:-./deploy/n8n/disabled-data}:/home/node/.n8n"
       - ./deploy/n8n/workflows:/workflows:ro
     restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+      - /home/node/.cache:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:5678/healthz'').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     ports:
       - "${LOCAL_N8N_PORT:-5678}:5678"
+    depends_on:
+      backend:
+        condition: service_healthy
   frontend:
     build: ./frontend
     env_file:
@@ -56,7 +147,10 @@ services:
       HOST: 0.0.0.0
       PORT: 4173
       API_BASE_URL: http://backend:3056/v1/api
-      API_KEY: ${API_KEY}
+      PUBLIC_API_KEY: ${PUBLIC_API_KEY:-}
+      USER_API_KEY: ${USER_API_KEY:-}
+      ADMIN_BFF_API_KEY: ${ADMIN_BFF_API_KEY:-}
+      API_KEY: ""
       BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-50M}
       PUBLIC_SITE_URL: http://localhost:4173
       APP_BASE_URL: http://localhost:4173

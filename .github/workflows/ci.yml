@@ -1,0 +1,313 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SEO_AGENT_AUTO_PUBLISH: "false"
+  INOXPRAN_SEO_AGENT_AUTO_PUBLISH: "false"
+  AGENTIC_BLOG_QA_ALLOW_PUBLIC_PUBLISH: "false"
+  OPENCLAW_BLOG_AUTO_PUBLISH: "false"
+  CONTENT_LEARNING_AUTO_APPLY: "false"
+  OPENCLAW_UPDATE_ENABLED: "false"
+  OPENCLAW_NO_AUTO_UPDATE: "1"
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      mongodb:
+        image: mongo:7.0.16-jammy@sha256:f5fadd0cb9634c8f6290ab0092fdaab2a9a835738df6b5f8a296f73f93939796
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval \"quit(db.adminCommand('ping').ok ? 0 : 1)\""
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --no-audit --fund=false
+      - run: npm run check:syntax
+      - run: npm audit --audit-level=high
+      - run: npm test
+      - name: MongoDB integration gate
+        env:
+          MONGODB_INTEGRATION_URI: mongodb://127.0.0.1:27017/inoxpran_integration?directConnection=true
+        run: npm run test:integration:mongodb
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --fund=false
+      - run: npm run lint
+      - if: always()
+        run: npm test
+      - if: always()
+        run: npm run build
+      - if: always()
+        run: npm audit --audit-level=high
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24.18.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --fund=false
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:e2e
+      - run: npm run test:e2e:real
+
+  secret-and-workflow-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24.18.0
+      - name: Enforce read-only CI safety contract
+        run: node .github/scripts/validate-ci-safety.mjs
+      - name: Test read-only release-evidence contract
+        run: node --test deploy/scripts/validate-release-evidence.test.mjs
+      - name: Test manual-only OpenClaw update policy
+        run: node --test deploy/openclaw/updater/update-policy.test.mjs
+      - name: Download checksum-pinned Gitleaks
+        shell: bash
+        run: |
+          archive="$RUNNER_TEMP/gitleaks.tar.gz"
+          curl --fail --location --silent --show-error \
+            --output "$archive" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  '"$archive" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" gitleaks
+      - name: Validate metadata-only secret tooling
+        run: >-
+          node --test
+          .github/scripts/secret-remediation-contract.test.mjs
+          .github/scripts/secret-scan-metadata.test.mjs
+          .github/scripts/validate-secret-rotation-proof.test.mjs
+      - name: Scan current source without disclosing findings
+        if: always()
+        run: >-
+          node .github/scripts/secret-scan-metadata.mjs
+          --gitleaks "$RUNNER_TEMP/gitleaks"
+          --scope current
+          --fail-on-findings
+      - name: Scan full history without disclosing findings
+        if: always()
+        run: >-
+          node .github/scripts/secret-scan-metadata.mjs
+          --gitleaks "$RUNNER_TEMP/gitleaks"
+          --scope history
+          --fail-on-findings
+      - name: Reject tracked literal API keys
+        if: always()
+        shell: bash
+        run: |
+          if git grep --quiet -E 'x-api-key:[[:space:]]+[A-Fa-f0-9]{64,}' -- '*.http' '*.env' '*.example'; then
+             echo 'Tracked literal API key detected.' >&2
+             exit 1
+           fi
+
+  container-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      MONGODB_URI: mongodb://mongodb.invalid/inoxpran_ci
+      APP_BASE_URL: https://inoxpran.example
+      API_BASE_URL: http://backend:3056/v1/api
+      PUBLIC_SITE_URL: https://inoxpran.example
+      ADMIN_BASE_URL: https://admin.inoxpran.example
+      CORS_ORIGIN: https://inoxpran.example,https://admin.inoxpran.example
+      JWT_SECRET: ci-jwt-secret-not-used-outside-validation-00000000000000000000
+      PUBLIC_API_KEY: ci-public-key-not-used-outside-validation-0000000000000000
+      USER_API_KEY: ci-user-key-not-used-outside-validation-000000000000000000
+      ADMIN_BFF_API_KEY: ci-admin-bff-key-not-used-outside-validation-0000000000000
+      OPENCLAW_INTERNAL_API_KEY: ci-openclaw-key-not-used-outside-validation-000000000000
+      REDIS_PASSWORD: ci-redis-password-not-used-outside-validation
+      REDIS_TLS_CERT_DIR: /tmp/inoxpran-ci-redis-tls
+      OPENCLAW_DATA_HOST_PATH: /tmp/inoxpran-ci-openclaw-data
+      OPENCLAW_WORKSPACES_HOST_PATH: /tmp/inoxpran-ci-openclaw-workspaces
+      N8N_ENCRYPTION_KEY: ci-n8n-encryption-key-not-used-outside-validation-000000000000
+      N8N_HOST: n8n.inoxpran.example
+      N8N_PROTOCOL: https
+      N8N_WEBHOOK_URL: https://n8n.inoxpran.example/
+      N8N_DATA_HOST_PATH: /tmp/inoxpran-ci-n8n-data
+      OPENCLAW_GATEWAY_TOKEN: ci-openclaw-token-not-used-outside-validation
+      OPENAI_API_KEY: ci-openai-key-not-used-outside-validation
+      OPENAI_WRITER_MODEL: ci-writer-model
+      OPENAI_IDEATION_MODEL: ci-ideation-model
+      OPENCLAW_TOPIC_ALLOWED_RESOLVED_MODELS: ci-writer-model,ci-ideation-model
+      OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL: ci-writer-model
+      OPENCLAW_MARKET_SEARCH_PROVIDER: disabled
+      SEO_AGENT_API_KEY: ci-seo-key-not-used-outside-validation
+      SEO_AGENT_HMAC_SECRET: ci-seo-hmac-not-used-outside-validation
+      CONTENT_OPERATIONS_AUDIT_HMAC_SECRET: ci-content-audit-hmac-not-used-outside-validation-000000000000
+      NODE_RUNTIME_IMAGE: node:24.18.0-alpine3.23@sha256:595398b0081eacda8e1c4c5b97b76cd1020e4d58a8ebcb4843b9bca1e79e7436
+      REDIS_IMAGE: ${{ vars.REDIS_IMAGE }}
+      NGINX_IMAGE: ${{ vars.NGINX_IMAGE }}
+      CERTBOT_IMAGE: ${{ vars.CERTBOT_IMAGE }}
+      N8N_IMAGE: ${{ vars.N8N_IMAGE }}
+      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24.18.0
+      - name: Reject mutable, missing, or placeholder image references
+        run: node .github/scripts/validate-container-contracts.mjs
+      - name: Validate Compose without publishing
+        shell: bash
+        run: |
+          # docker-compose.local.yml intentionally reads the single local .env,
+          # which is ignored and absent in a clean CI checkout. Seed only this
+          # ephemeral validation copy; no service is started by `config`.
+          cp .env.example .env
+          docker compose -f docker-compose.local.yml --env-file .env.example config --quiet
+          docker compose -f docker-compose.local.yml --env-file .env.example --profile automation config --quiet
+          docker compose --env-file .env.example config --quiet
+          docker compose --env-file .env.example config --format json > "$RUNNER_TEMP/compose.json"
+          node .github/scripts/validate-container-contracts.mjs --compose-json "$RUNNER_TEMP/compose.json"
+          if [[ -n "$N8N_IMAGE" ]]; then
+            docker compose --env-file .env.example --profile automation config --quiet
+            docker compose --env-file .env.example --profile automation config --format json > "$RUNNER_TEMP/compose-automation.json"
+            node .github/scripts/validate-container-contracts.mjs --compose-json "$RUNNER_TEMP/compose-automation.json" --require-n8n
+          else
+            echo "n8n automation profile: expected_disabled (N8N_IMAGE is not configured)"
+          fi
+
+  application-container-scans:
+    needs: container-contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NODE_RUNTIME_IMAGE: node:24.18.0-alpine3.23@sha256:595398b0081eacda8e1c4c5b97b76cd1020e4d58a8ebcb4843b9bca1e79e7436
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Build backend image without pushing
+        run: docker build --pull --build-arg "NODE_RUNTIME_IMAGE=$NODE_RUNTIME_IMAGE" --tag inoxpran/backend:ci ./backend
+      - name: Build frontend image without pushing
+        run: docker build --pull --build-arg "NODE_RUNTIME_IMAGE=$NODE_RUNTIME_IMAGE" --tag inoxpran/frontend:ci ./frontend
+      - name: Scan backend image
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: inoxpran/backend:ci
+          fail-build: true
+          severity-cutoff: high
+      - name: Scan frontend image
+        if: always()
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: inoxpran/frontend:ci
+          fail-build: true
+          severity-cutoff: high
+
+  third-party-container-scans:
+    needs: container-contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      REDIS_IMAGE: ${{ vars.REDIS_IMAGE }}
+      NGINX_IMAGE: ${{ vars.NGINX_IMAGE }}
+      CERTBOT_IMAGE: ${{ vars.CERTBOT_IMAGE }}
+      N8N_IMAGE: ${{ vars.N8N_IMAGE }}
+      OPENCLAW_IMAGE: ${{ vars.OPENCLAW_IMAGE }}
+    steps:
+      - name: Pull exact reviewed third-party image digests
+        shell: bash
+        run: |
+          docker pull "$REDIS_IMAGE"
+          docker pull "$NGINX_IMAGE"
+          docker pull "$CERTBOT_IMAGE"
+          docker pull "$OPENCLAW_IMAGE"
+          if [[ -n "$N8N_IMAGE" ]]; then
+            docker pull "$N8N_IMAGE"
+          else
+            echo "n8n image scan: expected_disabled (N8N_IMAGE is not configured)"
+          fi
+      - name: Scan Redis image
+        if: always()
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: ${{ env.REDIS_IMAGE }}
+          fail-build: true
+          severity-cutoff: high
+      - name: Scan nginx and relay base image
+        if: always()
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: ${{ env.NGINX_IMAGE }}
+          fail-build: true
+          severity-cutoff: high
+      - name: Scan Certbot image
+        if: always()
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: ${{ env.CERTBOT_IMAGE }}
+          fail-build: true
+          severity-cutoff: high
+      - name: Scan n8n image
+        if: ${{ always() && env.N8N_IMAGE != '' }}
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: ${{ env.N8N_IMAGE }}
+          fail-build: true
+          severity-cutoff: high
+      - name: Scan OpenClaw image
+        if: always()
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+        with:
+          image: ${{ env.OPENCLAW_IMAGE }}
+          fail-build: true
+          severity-cutoff: high

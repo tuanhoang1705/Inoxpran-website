@@ -43,4 +43,5 @@ output/playwright/
 .claude/
 *.log
 .local-secret-backups/
+.deploy/
 

@@ -39,6 +39,15 @@
     },
   },
   agents: {
+    // The backend independently requires this exact canonical provider model in
+    // its allowlist and verifies the provider_model returned per response. Keep
+    // fallbacks empty so the gateway cannot silently select another model.
+    defaults: {
+      model: {
+        primary: "${OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL}",
+        fallbacks: [],
+      },
+    },
     list: [
       {
         id: "seo-orchestrator",

@@ -1,26 +1,101 @@
 ﻿services:
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:?Set REDIS_IMAGE to a reviewed immutable digest}
     container_name: app_redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD through the deployment secret store}
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        exec redis-server --appendonly yes --port 0 --tls-port 6379
+        --tls-cert-file /run/secrets/redis/server.crt
+        --tls-key-file /run/secrets/redis/server.key
+        --tls-ca-cert-file /run/secrets/redis/ca.crt
+        --tls-auth-clients no --requirepass "$$REDIS_PASSWORD"
+    volumes:
+      - redis_data:/data
+      - ${REDIS_TLS_CERT_DIR:?Set REDIS_TLS_CERT_DIR to the host directory containing ca.crt, server.crt and server.key}:/run/secrets/redis:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli --tls --cacert /run/secrets/redis/ca.crt -h redis ping | grep -q PONG',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
     networks:
       - appnet
 
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      args:
+        NODE_RUNTIME_IMAGE: ${NODE_RUNTIME_IMAGE:?Set NODE_RUNTIME_IMAGE to a reviewed immutable digest}
+    image: inoxpran/backend:${APP_RELEASE:-local}
     container_name: app_backend
-    env_file:
-      - ./.env
-    environment:
+    environment: &backend-environment
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3056
-      MONGODB_URI: ${MONGODB_URI}
-      APP_BASE_URL: ${APP_BASE_URL}
+      OPENCLAW_EMBEDDED_WORKER: "false"
+      OPENCLAW_WORKER_HEALTH_PORT: 3057
+      OPENCLAW_WORKER_DRAIN_TIMEOUT_MS: ${OPENCLAW_WORKER_DRAIN_TIMEOUT_MS:-15000}
+      OPENCLAW_BLOG_RETRY_MAX_ATTEMPTS: ${OPENCLAW_BLOG_RETRY_MAX_ATTEMPTS:-3}
+      OPENCLAW_BLOG_RETRY_BASE_MS: ${OPENCLAW_BLOG_RETRY_BASE_MS:-30000}
+      OPENCLAW_BLOG_RETRY_MAX_MS: ${OPENCLAW_BLOG_RETRY_MAX_MS:-900000}
+      OPENCLAW_AGENT_TRANSPORT_MAX_ATTEMPTS_PER_PHASE: ${OPENCLAW_AGENT_TRANSPORT_MAX_ATTEMPTS_PER_PHASE:-3}
+      OPENCLAW_AGENT_RETRY_BASE_MS: ${OPENCLAW_AGENT_RETRY_BASE_MS:-500}
+      MONGODB_URI: ${MONGODB_URI:?Set MONGODB_URI through the deployment secret store}
+      APP_BASE_URL: ${APP_BASE_URL:?Set APP_BASE_URL}
+      API_BASE_URL: ${API_BASE_URL:?Set API_BASE_URL}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:?Set PUBLIC_SITE_URL}
+      ADMIN_BASE_URL: ${ADMIN_BASE_URL:?Set ADMIN_BASE_URL}
+      PUBLIC_API_KEY: ${PUBLIC_API_KEY:?Set PUBLIC_API_KEY through the deployment secret store}
+      USER_API_KEY: ${USER_API_KEY:?Set USER_API_KEY through the deployment secret store}
+      ADMIN_BFF_API_KEY: ${ADMIN_BFF_API_KEY:?Set ADMIN_BFF_API_KEY through the deployment secret store}
+      OPENCLAW_INTERNAL_API_KEY: ${OPENCLAW_INTERNAL_API_KEY:?Set OPENCLAW_INTERNAL_API_KEY through the deployment secret store}
+      OPENCLAW_NO_AUTO_UPDATE: "1"
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Set OPENCLAW_GATEWAY_TOKEN through the deployment secret store}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY through the deployment secret store}
+      SEO_AGENT_API_KEY: ${SEO_AGENT_API_KEY:?Set SEO_AGENT_API_KEY through the deployment secret store}
+      SEO_AGENT_HMAC_SECRET: ${SEO_AGENT_HMAC_SECRET:?Set SEO_AGENT_HMAC_SECRET through the deployment secret store}
+      CONTENT_OPERATIONS_AUDIT_HMAC_SECRET: ${CONTENT_OPERATIONS_AUDIT_HMAC_SECRET:?Set CONTENT_OPERATIONS_AUDIT_HMAC_SECRET through the deployment secret store}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_ENABLED: "true"
+      REDIS_REQUIRED: "true"
+      REDIS_TLS: "true"
+      REDIS_TLS_CA_FILE: /run/secrets/redis-ca.crt
+      REDIS_TLS_SERVERNAME: redis
+      CORS_ORIGIN: ${CORS_ORIGIN:?Set CORS_ORIGIN to the exact comma-separated browser origin allowlist}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET through the deployment secret store}
+      TRUST_PROXY_HOPS: "1"
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
+      MONGOOSE_AUTO_INDEX: "false"
       SEO_AGENT_ENABLED: ${SEO_AGENT_ENABLED:-false}
-      SEO_AGENT_AUTO_PUBLISH: ${SEO_AGENT_AUTO_PUBLISH:-false}
+      SEO_AGENT_AUTO_PUBLISH: "false"
+      INOXPRAN_SEO_AGENT_AUTO_PUBLISH: "false"
       OPENCLAW_BLOG_CRON_ENABLED: ${OPENCLAW_BLOG_CRON_ENABLED:-false}
       OPENCLAW_BLOG_CRON_POLL_MS: ${OPENCLAW_BLOG_CRON_POLL_MS:-30000}
+      OPENCLAW_TOPIC_ROADMAP_ENABLED: ${OPENCLAW_TOPIC_ROADMAP_ENABLED:-true}
+      OPENAI_WRITER_MODEL: ${OPENAI_WRITER_MODEL:?Set the reviewed writer model identifier}
+      OPENAI_IDEATION_MODEL: ${OPENAI_IDEATION_MODEL:?Set the reviewed ideation model identifier}
+      OPENCLAW_TOPIC_ALLOWED_RESOLVED_MODELS: ${OPENCLAW_TOPIC_ALLOWED_RESOLVED_MODELS:?Set the reviewed comma-separated resolved-model allowlist}
+      OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL: ${OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL:?Set the canonical model pinned in the OpenClaw gateway}
+      OPENCLAW_MARKET_SEARCH_PROVIDER: ${OPENCLAW_MARKET_SEARCH_PROVIDER:-disabled}
+      OPENCLAW_MARKET_SEARCH_MAX_QUERIES: ${OPENCLAW_MARKET_SEARCH_MAX_QUERIES:-6}
+      OPENCLAW_MARKET_SEARCH_RESULTS_PER_QUERY: ${OPENCLAW_MARKET_SEARCH_RESULTS_PER_QUERY:-5}
+      OPENCLAW_MARKET_SEARCH_TIMEOUT_MS: ${OPENCLAW_MARKET_SEARCH_TIMEOUT_MS:-30000}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
       OPENCLAW_CAPABILITY_HEALTH_ENABLED: ${OPENCLAW_CAPABILITY_HEALTH_ENABLED:-true}
       OPENCLAW_CAPABILITY_HEALTH_CACHE_SECONDS: ${OPENCLAW_CAPABILITY_HEALTH_CACHE_SECONDS:-30}
       OPENCLAW_CAPABILITY_HEALTH_TIMEOUT_MS: ${OPENCLAW_CAPABILITY_HEALTH_TIMEOUT_MS:-10000}
@@ -31,7 +106,8 @@
       AGENTIC_BLOG_QA_REQUIRED_SCORE: ${AGENTIC_BLOG_QA_REQUIRED_SCORE:-81}
       AGENTIC_BLOG_QA_MAX_ITERATIONS: ${AGENTIC_BLOG_QA_MAX_ITERATIONS:-3}
       AGENTIC_BLOG_QA_REQUIRE_ALL_CASES_PASS: ${AGENTIC_BLOG_QA_REQUIRE_ALL_CASES_PASS:-true}
-      AGENTIC_BLOG_QA_ALLOW_PUBLIC_PUBLISH: ${AGENTIC_BLOG_QA_ALLOW_PUBLIC_PUBLISH:-false}
+      AGENTIC_BLOG_QA_ALLOW_PUBLIC_PUBLISH: "false"
+      OPENCLAW_BLOG_AUTO_PUBLISH: "false"
       AGENTIC_BLOG_QA_TELEGRAM_ENABLED: ${AGENTIC_BLOG_QA_TELEGRAM_ENABLED:-false}
       AGENTIC_BLOG_QA_PAID_IMAGES_ENABLED: ${AGENTIC_BLOG_QA_PAID_IMAGES_ENABLED:-false}
       AGENTIC_BLOG_QA_BLIND_REVIEW_ENABLED: ${AGENTIC_BLOG_QA_BLIND_REVIEW_ENABLED:-true}
@@ -57,7 +133,7 @@
       CONTENT_INVENTORY_SNAPSHOT_TTL_HOURS: ${CONTENT_INVENTORY_SNAPSHOT_TTL_HOURS:-24}
       CONTENT_INVENTORY_STALE_DAYS: ${CONTENT_INVENTORY_STALE_DAYS:-180}
       CONTENT_INVENTORY_REVIEW_DAYS: ${CONTENT_INVENTORY_REVIEW_DAYS:-90}
-      CONTENT_SIGNALS_ENABLED: ${CONTENT_SIGNALS_ENABLED:-true}
+      CONTENT_SIGNALS_ENABLED: ${CONTENT_SIGNALS_ENABLED:-false}
       CONTENT_SIGNAL_DEFAULT_TTL_DAYS: ${CONTENT_SIGNAL_DEFAULT_TTL_DAYS:-90}
       CONTENT_SIGNAL_MAX_LENGTH: ${CONTENT_SIGNAL_MAX_LENGTH:-2000}
       CONTENT_PERFORMANCE_MONITORING_ENABLED: ${CONTENT_PERFORMANCE_MONITORING_ENABLED:-false}
@@ -65,7 +141,7 @@
       CONTENT_LEARNING_ENABLED: ${CONTENT_LEARNING_ENABLED:-false}
       CONTENT_LEARNING_MIN_AGE_DAYS: ${CONTENT_LEARNING_MIN_AGE_DAYS:-14}
       CONTENT_LEARNING_MIN_IMPRESSIONS: ${CONTENT_LEARNING_MIN_IMPRESSIONS:-100}
-      CONTENT_LEARNING_AUTO_APPLY: ${CONTENT_LEARNING_AUTO_APPLY:-false}
+      CONTENT_LEARNING_AUTO_APPLY: "false"
       SEARCH_CONSOLE_ENABLED: ${SEARCH_CONSOLE_ENABLED:-false}
       SEARCH_CONSOLE_PROPERTY: ${SEARCH_CONSOLE_PROPERTY:-}
       SEARCH_CONSOLE_LOOKBACK_DAYS: ${SEARCH_CONSOLE_LOOKBACK_DAYS:-90}
@@ -78,6 +154,15 @@
       CONTENT_PUBLISH_READINESS_ENABLED: ${CONTENT_PUBLISH_READINESS_ENABLED:-true}
       CONTENT_POST_PUBLISH_VERIFY_ENABLED: ${CONTENT_POST_PUBLISH_VERIFY_ENABLED:-true}
       OPENCLAW_IMAGE_PIPELINE_ENABLED: ${OPENCLAW_IMAGE_PIPELINE_ENABLED:-false}
+      OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH: ${OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH:-true}
+      IMAGE_SEARCH_PROVIDER: ${IMAGE_SEARCH_PROVIDER:-disabled}
+      IMAGE_SEARCH_API_KEY: ${IMAGE_SEARCH_API_KEY:-}
+      BING_IMAGE_SEARCH_ENDPOINT: ${BING_IMAGE_SEARCH_ENDPOINT:-}
+      AI_IMAGE_PROVIDER: ${AI_IMAGE_PROVIDER:-disabled}
+      AI_IMAGE_API_KEY: ${AI_IMAGE_API_KEY:-}
+      AI_IMAGE_MODEL: ${AI_IMAGE_MODEL:-gpt-image-2}
+      AI_IMAGE_QUALITY: ${AI_IMAGE_QUALITY:-medium}
+      AI_IMAGE_REPLICATE_MODEL: ${AI_IMAGE_REPLICATE_MODEL:-}
       CONTENT_ACTION_WEIGHT_USER_DEMAND: ${CONTENT_ACTION_WEIGHT_USER_DEMAND:-0.20}
       CONTENT_ACTION_WEIGHT_CONTENT_GAP: ${CONTENT_ACTION_WEIGHT_CONTENT_GAP:-0.15}
       CONTENT_ACTION_WEIGHT_PERFORMANCE: ${CONTENT_ACTION_WEIGHT_PERFORMANCE:-0.15}
@@ -90,8 +175,7 @@
       GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
       OPENCLAW_DEPLOYMENT_MODE: docker
       OPENCLAW_GATEWAY_HTTP_URL: http://app_openclaw:18789
-      OPENCLAW_UPDATE_ENABLED: ${OPENCLAW_UPDATE_ENABLED:-false}
-      OPENCLAW_UPDATE_RUNTIME_DIR: /openclaw-update-runtime
+      OPENCLAW_UPDATE_ENABLED: "false"
       OPENCLAW_ASSET_ROOT: /openclaw-assets
       OPENCLAW_DASHBOARD_URL: ${OPENCLAW_DASHBOARD_URL:-https://admin.inoxpran.com/openclaw-dashboard/}
       TELEGRAM_API_BASE: ${TELEGRAM_API_BASE:-http://telegram-relay:8081}
@@ -101,61 +185,161 @@
       TELEGRAM_ALLOWED_CHAT_IDS: ${TELEGRAM_ALLOWED_CHAT_IDS:-}
       TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      TELEGRAM_MODE: ${TELEGRAM_MODE:-webhook}
+      TELEGRAM_POLL_INTERVAL_MS: ${TELEGRAM_POLL_INTERVAL_MS:-1500}
+      TELEGRAM_IMAGE_TIMEOUT_MS: ${TELEGRAM_IMAGE_TIMEOUT_MS:-8000}
+      TELEGRAM_IMAGE_MAX_BYTES: ${TELEGRAM_IMAGE_MAX_BYTES:-5242880}
       TELEGRAM_APPROVAL_TTL_HOURS: ${TELEGRAM_APPROVAL_TTL_HOURS:-72}
-    volumes:
+      SMTP_SERVICE: ${SMTP_SERVICE:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_FROM_NAME: ${SMTP_FROM_NAME:-}
+      GHTK_BASE_URL: ${GHTK_BASE_URL:-https://services.giaohangtietkiem.vn}
+      GHTK_API_TOKEN: ${GHTK_API_TOKEN:-}
+      GHTK_CLIENT_SOURCE: ${GHTK_CLIENT_SOURCE:-}
+      GHTK_PICK_ADDRESS_ID: ${GHTK_PICK_ADDRESS_ID:-}
+      GHTK_PICK_ADDRESS: ${GHTK_PICK_ADDRESS:-}
+      GHTK_PICK_PROVINCE: ${GHTK_PICK_PROVINCE:-}
+      GHTK_PICK_DISTRICT: ${GHTK_PICK_DISTRICT:-}
+      GHTK_PICK_WARD: ${GHTK_PICK_WARD:-}
+      GHTK_PICK_STREET: ${GHTK_PICK_STREET:-}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_SUBJECT: ${WEB_PUSH_SUBJECT:-}
+      WEB_PUSH_MAX_SUBSCRIPTIONS_PER_ADMIN: ${WEB_PUSH_MAX_SUBSCRIPTIONS_PER_ADMIN:-6}
+      WEB_PUSH_TTL_SECONDS: ${WEB_PUSH_TTL_SECONDS:-180}
+    volumes: &backend-volumes
       - ./deploy/openclaw/agents:/openclaw-assets/agents:ro
       - ./deploy/openclaw/skills:/openclaw-assets/skills:ro
       - ./deploy/openclaw/prompts:/openclaw-assets/prompts:ro
       - ./deploy/openclaw/openclaw.json5:/openclaw-assets/openclaw.json5:ro
       - ./deploy/openclaw/SKILL_INSTALL_REPORT.md:/openclaw-assets/SKILL_INSTALL_REPORT.md:ro
-      - ./deploy/openclaw/update-runtime:/openclaw-update-runtime
       - ${GOOGLE_APPLICATION_CREDENTIALS_HOST_PATH:-./backend/credentials/file.json}:/run/secrets/firebase-service-account.json:ro
+      - ${REDIS_TLS_CERT_DIR:?Set REDIS_TLS_CERT_DIR}/ca.crt:/run/secrets/redis-ca.crt:ro
     restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /home/node/.cache:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3056/health/ready').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - appnet
+    depends_on:
+      redis:
+        condition: service_healthy
 
   telegram-relay:
-    image: nginx:alpine
+    image: ${NGINX_IMAGE:?Set NGINX_IMAGE to a reviewed immutable digest}
     container_name: app_telegram_relay
     volumes:
       - ./deploy/telegram-relay/relay.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:rw,noexec,nosuid,size=32m
+      - /var/run:rw,noexec,nosuid,size=8m
+      - /tmp:rw,noexec,nosuid,size=8m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8081/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - appnet
 
   n8n:
-    image: n8nio/n8n:2.12.2
+    profiles:
+      - automation
+    # The disabled-profile fallback is deliberately nonexistent. It keeps
+    # default Compose validation usable while making a direct automation start
+    # fail closed unless operators provide a reviewed immutable N8N_IMAGE.
+    image: ${N8N_IMAGE:-invalid.invalid/inoxpran/n8n-disabled@sha256:0000000000000000000000000000000000000000000000000000000000000000}
     container_name: app_n8n
-    env_file:
-      - ./.env
+    user: node
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - >-
+        test -n "$${N8N_DATA_HOST_PATH}" ||
+        { echo 'N8N_DATA_HOST_PATH is required for the automation profile' >&2; exit 1; };
+        test "$${#N8N_ENCRYPTION_KEY}" -ge 32 ||
+        { echo 'N8N_ENCRYPTION_KEY is missing or too short' >&2; exit 1; };
+        exec /docker-entrypoint.sh n8n
     environment:
       NODE_ENV: production
       N8N_PORT: 5678
       N8N_HOST: ${N8N_HOST:-localhost}
       N8N_PROTOCOL: ${N8N_PROTOCOL:-http}
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-}
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-change-this-in-env}
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: ${N8N_BLOCK_ENV_ACCESS_IN_NODE:-false}
-      NODE_FUNCTION_ALLOW_BUILTIN: ${NODE_FUNCTION_ALLOW_BUILTIN:-http,https,url}
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-}
+      N8N_DATA_HOST_PATH: ${N8N_DATA_HOST_PATH:-}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      NODE_FUNCTION_ALLOW_BUILTIN: ""
+      NODE_FUNCTION_ALLOW_EXTERNAL: ""
       GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Asia/Ho_Chi_Minh}
       BACKEND_API_BASE_URL: ${BACKEND_API_BASE_URL:-http://backend:3056/v1/api}
     volumes:
-      - ./deploy/n8n/data:/home/node/.n8n
+      - "${N8N_DATA_HOST_PATH:-./deploy/n8n/disabled-data}:/home/node/.n8n"
       - ./deploy/n8n/workflows:/workflows:ro
     restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+      - /home/node/.cache:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:5678/healthz'').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     networks:
       - appnet
+    depends_on:
+      backend:
+        condition: service_healthy
 
   openclaw:
     # TODO: Verify the official OpenClaw deployment image on the VPS. Replace this if the
     # OpenClaw docs specify a different image.
-    image: openclaw/openclaw:latest
+    image: ${OPENCLAW_IMAGE:?Set OPENCLAW_IMAGE to a reviewed immutable digest}
     container_name: app_openclaw
     command:
       - openclaw
       - gateway
       - run
-      - --allow-unconfigured
       - --auth
       - token
       - --bind
@@ -169,24 +353,33 @@
       TZ: Asia/Ho_Chi_Minh
       OPENCLAW_STATE_DIR: /data
       OPENCLAW_CONFIG_PATH: /data/openclaw.json5
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:?Set OPENCLAW_GATEWAY_TOKEN through the deployment secret store}
       OPENCLAW_NO_AUTO_UPDATE: "1"
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL: ${OPENCLAW_TOPIC_EXPECTED_RESOLVED_MODEL:?Set the canonical model pinned in the OpenClaw gateway}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY through the deployment secret store}
       INOXPRAN_BACKEND_API_BASE: http://backend:3056/v1/api
       INOXPRAN_PUBLIC_SITE_URL: https://inoxpran.com
-      INOXPRAN_SEO_AGENT_AUTO_PUBLISH: ${SEO_AGENT_AUTO_PUBLISH:-false}
+      INOXPRAN_SEO_AGENT_AUTO_PUBLISH: "false"
       INOXPRAN_SEO_AGENT_API_KEY: ${SEO_AGENT_API_KEY:-}
       INOXPRAN_SEO_AGENT_HMAC_SECRET: ${SEO_AGENT_HMAC_SECRET:-}
-      API_KEY: ${API_KEY}
+      OPENCLAW_INTERNAL_API_KEY: ${OPENCLAW_INTERNAL_API_KEY:?Set OPENCLAW_INTERNAL_API_KEY through the deployment secret store}
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
     volumes:
       - ./deploy/openclaw/openclaw.json5:/data/openclaw.json5:ro
-      - ./deploy/openclaw/data:/data
-      - ./deploy/openclaw/workspaces:/workspaces
-      - ./deploy/openclaw/workspaces/senior-blog-acceptance-auditor:/workspaces/senior-blog-acceptance-auditor:ro
+      - "${OPENCLAW_DATA_HOST_PATH:-./deploy/openclaw/data}:/data"
+      - "${OPENCLAW_WORKSPACES_HOST_PATH:-./deploy/openclaw/workspaces}:/workspaces"
+      - "${OPENCLAW_WORKSPACES_HOST_PATH:-./deploy/openclaw/workspaces}/senior-blog-acceptance-auditor:/workspaces/senior-blog-acceptance-auditor:ro"
       - ./deploy/openclaw/skills:/workspaces/shared-skills:ro
       - ./deploy/openclaw/prompts:/workspaces/prompts:ro
     restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     healthcheck:
       test:
         - CMD-SHELL
@@ -198,61 +391,96 @@
     networks:
       - appnet
     depends_on:
-      - backend
-      - redis
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  openclaw-updater:
-    profiles:
-      - vps
-    build: ./deploy/openclaw/updater
-    image: inoxpran/openclaw-updater:local
-    container_name: app_openclaw_updater
-    user: "1000:1000"
-    group_add:
-      - "${DOCKER_GID:-991}"
-    environment:
-      OPENCLAW_PROJECT_ROOT: ${OPENCLAW_HOST_PROJECT_PATH:-/workspace}
-      OPENCLAW_UPDATE_RUNTIME_DIR: ${OPENCLAW_HOST_PROJECT_PATH:-/workspace}/deploy/openclaw/update-runtime
-      OPENCLAW_UPDATE_BACKUP_DIR: ${OPENCLAW_HOST_PROJECT_PATH:-/workspace}/deploy/openclaw/update-backups
-      OPENCLAW_UPDATE_IMAGE: openclaw/openclaw:latest
-      OPENCLAW_UPDATE_POLL_MS: 2000
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - ${OPENCLAW_HOST_PROJECT_PATH:-.}:${OPENCLAW_HOST_PROJECT_PATH:-/workspace}:ro
-      - ./deploy/openclaw/update-runtime:${OPENCLAW_HOST_PROJECT_PATH:-/workspace}/deploy/openclaw/update-runtime:rw
-      - ./deploy/openclaw/update-backups:${OPENCLAW_HOST_PROJECT_PATH:-/workspace}/deploy/openclaw/update-backups:rw
-    network_mode: none
+  openclaw-worker:
+    image: inoxpran/backend:${APP_RELEASE:-local}
+    container_name: app_openclaw_worker
+    command: ["npm", "run", "worker"]
+    environment: *backend-environment
+    volumes: *backend-volumes
+    restart: unless-stopped
+    init: true
     read_only: true
     tmpfs:
-      - /tmp:rw,noexec,nosuid,size=64m
-    cap_drop:
-      - ALL
+      - /tmp:rw,noexec,nosuid,size=256m
+      - /home/node/.cache:rw,noexec,nosuid,size=64m
     security_opt:
       - no-new-privileges:true
-    restart: unless-stopped
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3057/health/ready').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - appnet
     depends_on:
-      - openclaw
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      openclaw:
+        condition: service_healthy
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NODE_RUNTIME_IMAGE: ${NODE_RUNTIME_IMAGE:?Set NODE_RUNTIME_IMAGE to a reviewed immutable digest}
+    image: inoxpran/frontend:${APP_RELEASE:-local}
     container_name: app_frontend
-    env_file:
-      - ./.env
+    user: node
     environment:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 4173
-      API_BASE_URL: ${API_BASE_URL:-http://backend:3056/v1/api}
-      API_KEY: ${API_KEY}
+      API_BASE_URL: ${API_BASE_URL:?Set API_BASE_URL}
+      PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:?Set PUBLIC_SITE_URL}
+      ADMIN_BASE_URL: ${ADMIN_BASE_URL:?Set ADMIN_BASE_URL}
+      PUBLIC_API_KEY: ${PUBLIC_API_KEY:?Set PUBLIC_API_KEY through the deployment secret store}
+      USER_API_KEY: ${USER_API_KEY:?Set USER_API_KEY through the deployment secret store}
+      ADMIN_BFF_API_KEY: ${ADMIN_BFF_API_KEY:?Set ADMIN_BFF_API_KEY through the deployment secret store}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY through the deployment secret store}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}
       BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-50M}
     restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=128m
+      - /home/node/.cache:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:4173/healthz').then((response)=>process.exit(response.ok?0:1)).catch(()=>process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - appnet
     depends_on:
-      - redis
+      backend:
+        condition: service_healthy
 
   nginx:
-    image: nginx:alpine
+    image: ${NGINX_IMAGE:?Set NGINX_IMAGE to a reviewed immutable digest}
     container_name: app_nginx
     ports:
       - "80:80"
@@ -260,18 +488,28 @@
     volumes:
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./deploy/nginx/auth:/etc/nginx/auth:ro
-      - ./deploy/nginx/ssl:/etc/letsencrypt
-      - ./deploy/nginx/www:/var/www/certbot
+      - ./deploy/nginx/ssl:/etc/letsencrypt:ro
+      - ./deploy/nginx/www:/var/www/certbot:ro
     depends_on:
-      - frontend
-      - backend
-      - openclaw
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      openclaw:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t -q"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
     networks:
       - appnet
 
   certbot:
-    image: certbot/certbot
+    image: ${CERTBOT_IMAGE:?Set CERTBOT_IMAGE to a reviewed immutable digest}
     container_name: app_certbot
     volumes:
       - ./deploy/nginx/ssl:/etc/letsencrypt
@@ -285,3 +523,6 @@
 networks:
   appnet:
     driver: bridge
+
+volumes:
+  redis_data:

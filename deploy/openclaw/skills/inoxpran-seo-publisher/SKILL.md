@@ -11,7 +11,8 @@ Rules:
 - Must not log into the admin UI.
 - Must not use a browser to publish.
 - Must create HMAC SHA256 with `INOXPRAN_SEO_AGENT_HMAC_SECRET` over the raw JSON request body.
-- Must send headers `x-api-key`, `x-seo-agent-key`, `x-openclaw-signature`, and `x-openclaw-timestamp`.
+- Must send `OPENCLAW_INTERNAL_API_KEY` as the `x-api-key` header, plus
+  `x-seo-agent-key`, `x-openclaw-signature`, and `x-openclaw-timestamp`.
 - Default to draft mode unless the reviewer passes and auto publish is explicitly enabled.
 - If publish fails, retry at most 2 times and report the error clearly.
 - Call `prepare` before any writer runs. Preserve all returned artifact IDs and send them to `publish`.

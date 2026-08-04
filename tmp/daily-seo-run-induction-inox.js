@@ -1,20 +1,275 @@
-const fs=require('fs'),path=require('path'),crypto=require('crypto');
-const root=process.cwd();
-const runId=`daily-seo-${new Date().toISOString().slice(0,10)}-${Date.now()}`;
-const outDir=path.join(root,'deploy','openclaw','workspaces','seo-orchestrator','runs',runId); fs.mkdirSync(outDir,{recursive:true});
-function envs(){const e={...process.env}; for(const rel of ['.env','backend/.env','frontend/.env']){const p=path.join(root,rel); if(!fs.existsSync(p)) continue; for(const line of fs.readFileSync(p,'utf8').split(/\r?\n/)){const m=line.match(/^\s*([^#=\s]+)\s*=\s*(.*)\s*$/); if(m) e[m[1]]=m[2].replace(/^['"]|['"]$/g,'');}} return e;} const env=envs();
-const sourceNotes=[
- {type:'existing_blog_api',note:'Blog public hiện có: thiết bị gia dụng thông minh 2026 và top 10 bộ nồi inox 2026; draft hôm nay đã có chủ đề chảo inox bị dính và vệ sinh nồi inox, nên chọn chủ đề nồi inox cho bếp từ để tránh trùng.'},
- {type:'product_knowledge_base',note:'Nguồn nội bộ: bếp từ INP6101 chỉ tích hợp với nồi có đáy từ; nồi INP1001 inox 304 đáy 3 lớp ghi tương thích điện/gas/bếp từ; nồi INP3005 có phiên bản đáy phẳng cho bếp điện/từ.'},
- {type:'serp_scan_duckduckgo_lite',note:'SERP tiếng Việt cho nồi inox dùng bếp từ tập trung vào nam châm, ký hiệu induction, đáy nhiễm từ và phân biệt inox 304/430.'},
- {type:'claim_safety',note:'Cần tránh nói mọi nồi inox 304 đều dùng được bếp từ; bài nhấn mạnh kiểm tra đáy từ và thông tin từng sản phẩm.'}
+const fs = require("fs"),
+  path = require("path"),
+  crypto = require("crypto");
+const root = process.cwd();
+const runId = `daily-seo-${new Date().toISOString().slice(0, 10)}-${Date.now()}`;
+const outDir = path.join(
+  root,
+  "deploy",
+  "openclaw",
+  "workspaces",
+  "seo-orchestrator",
+  "runs",
+  runId,
+);
+fs.mkdirSync(outDir, { recursive: true });
+function envs() {
+  const e = { ...process.env };
+  for (const rel of [".env", "backend/.env", "frontend/.env"]) {
+    const p = path.join(root, rel);
+    if (!fs.existsSync(p)) continue;
+    for (const line of fs.readFileSync(p, "utf8").split(/\r?\n/)) {
+      const m = line.match(/^\s*([^#=\s]+)\s*=\s*(.*)\s*$/);
+      if (m) e[m[1]] = m[2].replace(/^['"]|['"]$/g, "");
+    }
+  }
+  return e;
+}
+const env = envs();
+const sourceNotes = [
+  {
+    type: "existing_blog_api",
+    note: "Blog public hiện có: thiết bị gia dụng thông minh 2026 và top 10 bộ nồi inox 2026; draft hôm nay đã có chủ đề chảo inox bị dính và vệ sinh nồi inox, nên chọn chủ đề nồi inox cho bếp từ để tránh trùng.",
+  },
+  {
+    type: "product_knowledge_base",
+    note: "Nguồn nội bộ: bếp từ INP6101 chỉ tích hợp với nồi có đáy từ; nồi INP1001 inox 304 đáy 3 lớp ghi tương thích điện/gas/bếp từ; nồi INP3005 có phiên bản đáy phẳng cho bếp điện/từ.",
+  },
+  {
+    type: "serp_scan_duckduckgo_lite",
+    note: "SERP tiếng Việt cho nồi inox dùng bếp từ tập trung vào nam châm, ký hiệu induction, đáy nhiễm từ và phân biệt inox 304/430.",
+  },
+  {
+    type: "claim_safety",
+    note: "Cần tránh nói mọi nồi inox 304 đều dùng được bếp từ; bài nhấn mạnh kiểm tra đáy từ và thông tin từng sản phẩm.",
+  },
 ];
-const positioning={generatedAt:new Date().toISOString(),language:'vi',audiencePains:['Gia đình đổi từ bếp gas sang bếp từ không biết bộ nồi inox cũ có dùng được không.','Người mua nghe inox 304 tốt nhưng bối rối vì bếp từ cần đáy có từ tính.','Lo sợ mua nhầm nồi không nhận bếp, nóng chậm hoặc báo lỗi.','Muốn checklist mua nồi thực tế, dễ kiểm tra tại cửa hàng hoặc khi nhận hàng online.'],competitorAngles:[{competitorType:'retailer_education',angle:'Giải thích bếp từ cần nồi có đáy nhiễm từ, thử bằng nam châm.'},{competitorType:'cookware_brand',angle:'So sánh inox 304/430 và cấu trúc đáy nhiều lớp.'},{competitorType:'electronics_retailer',angle:'Liệt kê chất liệu dùng được với bếp từ và lưu ý tiết kiệm điện.'}],positioningOpportunities:['Định vị Inoxpran là nguồn hướng dẫn chọn đúng nồi theo loại bếp, không đơn giản hóa quá mức.','Tạo checklist 5 bước: nam châm, ký hiệu induction, đáy phẳng, kích thước vùng nấu, hướng dẫn sản phẩm.','Liên kết tự nhiên tới shop và FAQ, hỗ trợ chuyển đổi cho khách đang mua bếp/nồi.','Giữ claim thận trọng: inox 304 tốt cho đồ bếp nhưng khả năng dùng bếp từ phụ thuộc cấu trúc đáy.'],sourceNotes};
-const research={generatedAt:new Date().toISOString(),existingTopicsChecked:['5-thiet-bi-gia-dung-thong-minh-huu-ich-nhat-2026-bi-quyet-bep-khoe-cung-inoxpran','top-10-bo-noi-inox-tot-nhat-2026-nghe-thuat-quan-ly-nhiet-va-suc-khoe','draft: vi-sao-chao-inox-bi-dinh-c…phuc','draft: cach-ve-sinh-noi-inox-bi-o-vang'],candidates:[{topic:'Nồi inox 304 có dùng được bếp từ không? Cách nhận biết trước khi mua',primaryKeyword:'nồi inox 304 có dùng được bếp từ không',secondaryKeywords:['nồi inox dùng cho bếp từ','cách nhận biết nồi dùng được bếp từ','đáy từ inox 304','nồi inox 304 và 430'],serpIntent:'Informational/commercial investigation: người đọc muốn biết nồi nào dùng được cho bếp từ và cách kiểm tra nhanh.',contentGaps:['Nhiều bài kết luận quá nhanh về inox 304/430; cần giải thích thân nồi và đáy từ có thể khác nhau.','Thiếu checklist nhận hàng online và lỗi thường gặp khi bếp không nhận nồi.'],internalLinkSuggestions:['/shop','/faq','/blog']},{topic:'Cách chọn bộ nồi inox 304 cho gia đình 3-5 người',primaryKeyword:'cách chọn nồi inox 304',secondaryKeywords:['bộ nồi inox cho gia đình','dung tích nồi inox','mua nồi inox 304'],serpIntent:'Buying guide theo nhu cầu gia đình.',contentGaps:['Cần bảng dung tích theo món Việt và số người.'],internalLinkSuggestions:['/shop','/blog']},{topic:'Inox 304 và inox 201 khác nhau thế nào khi mua nồi chảo?',primaryKeyword:'inox 304 và inox 201',secondaryKeywords:['so sánh inox 304 201','nồi inox 304','chảo inox 201'],serpIntent:'Comparison/education trước mua.',contentGaps:['Dễ sa vào thông số vật liệu; cần diễn giải dễ hiểu cho người mua gia dụng.'],internalLinkSuggestions:['/shop','/faq']}],sourceNotes};
-const topicIdeas={generatedAt:new Date().toISOString(),scoringCriteria:{evergreen:30,duplicateAvoidance:25,searchIntentClarity:20,brandFit:15,conversionSupport:10},ideas:[{topic:research.candidates[0].topic,score:93,rationale:'Evergreen, khác hai draft trước, intent mua hàng rõ và có claim-safety tốt nếu viết cẩn thận.'},{topic:research.candidates[1].topic,score:88,rationale:'Hữu ích cho mua hàng nhưng cạnh tranh rộng và dễ gần bài top bộ nồi inox.'},{topic:research.candidates[2].topic,score:86,rationale:'Evergreen tốt nhưng cần nguồn vật liệu sâu hơn để tránh claim thiếu chắc chắn.'}],selected:{topic:research.candidates[0].topic,primaryKeyword:research.candidates[0].primaryKeyword,score:93}};
-const visualPlan={cover:{slot:'cover',heading:'Bài hướng dẫn chọn nồi inox cho bếp từ',purpose:'Giúp người đọc nhận ra chủ đề ngay: nồi inox, bếp từ, nam châm kiểm tra đáy.',composition:'Nồi inox đáy phẳng đặt cạnh bếp từ, một nam châm nhỏ ở đáy nồi, ánh sáng bếp gia đình Việt.',status:'needs_review'},inline:[{slot:'inline-1',linkedHeading:'Cách kiểm tra nồi inox có dùng được bếp từ không',purpose:'Minh họa thao tác thử nam châm và ký hiệu induction.',status:'needs_review'},{slot:'inline-2',linkedHeading:'Checklist chọn nồi inox cho bếp từ',purpose:'Minh họa đáy phẳng, kích thước vùng nấu và nhãn sản phẩm.',status:'needs_review'},{slot:'inline-3',linkedHeading:'Lỗi thường gặp khi bếp từ không nhận nồi',purpose:'Minh họa nồi lệch vùng nấu hoặc đáy quá nhỏ.',status:'needs_review'}],imageResearch:{licensedSearchQueries:['induction compatible stainless steel cookware magnet test kitchen','stainless steel pot induction hob flat bottom close up','Vietnamese home kitchen stainless pot induction stove'],rejectedSources:['Ảnh có watermark/logo đối thủ','Ảnh marketplace không rõ giấy phép','Ảnh AI hoặc stock không có quyền sử dụng rõ ràng'],attributionPolicy:'Chỉ dùng ảnh có license rõ hoặc ảnh tự tạo/tự sở hữu; AI-generated giữ trạng thái needs_review.'}};
-const seoBrief={generatedAt:new Date().toISOString(),articleType:'evergreen_buying_guide',title:'Nồi inox 304 có dùng được bếp từ không? Cách nhận biết đúng',slug:'noi-inox-304-co-dung-duoc-bep-tu-khong',excerpt:'Không phải cứ inox 304 là dùng được bếp từ. Xem cách kiểm tra đáy từ, ký hiệu induction và checklist chọn nồi inox phù hợp cho gia đình.',seoTitle:'Nồi inox 304 có dùng được bếp từ không?',seoDescription:'Giải đáp nồi inox 304 có dùng được bếp từ không, cách thử nam châm, kiểm tra đáy từ, ký hiệu induction và mẹo chọn nồi inox phù hợp.',categoryKey:'guide',tags:['nồi inox 304','bếp từ','đáy từ','mẹo mua sắm','gia dụng bếp'],primaryKeyword:research.candidates[0].primaryKeyword,secondaryKeywords:research.candidates[0].secondaryKeywords,outline:['Bếp từ cần nồi như thế nào','Inox 304 có tự bắt từ không','Cách nhận biết nồi inox dùng được bếp từ','Checklist chọn nồi inox cho bếp từ','Lỗi thường gặp khi bếp từ không nhận nồi','Gợi ý chọn theo gia đình Việt','FAQ'],faq:[{question:'Nồi inox 304 có dùng được bếp từ không?',answer:'Có thể dùng nếu đáy nồi có lớp bắt từ hoặc được nhà sản xuất ghi tương thích bếp từ; không nên mặc định mọi nồi inox 304 đều dùng được.'},{question:'Thử nam châm có đủ chắc chắn không?',answer:'Nam châm là cách kiểm tra nhanh. Bạn vẫn nên xem thêm ký hiệu induction, hướng dẫn sản phẩm và độ phẳng của đáy nồi.'},{question:'Vì sao bếp từ báo lỗi dù nồi là inox?',answer:'Có thể đáy không bắt từ, đáy quá nhỏ, đặt lệch vùng nấu, đáy cong hoặc bếp yêu cầu kích thước tối thiểu.'}],internalLinks:[{label:'Xem sản phẩm gia dụng Inoxpran',url:'/shop'},{label:'Câu hỏi thường gặp',url:'/faq'},{label:'Blog hướng dẫn nhà bếp',url:'/blog'}],claimConstraints:['Không khẳng định mọi nồi inox 304 đều dùng được bếp từ.','Không so sánh chất lượng inox 304/430/201 vượt ngoài nguồn đã kiểm tra.','Chỉ nhắc sản phẩm Inoxpran theo knowledge base: INP6101 cần nồi đáy từ; INP1001 ghi tương thích bếp từ; INP3005 có phiên bản đáy phẳng cho bếp điện/từ.','Không đưa claim tiết kiệm điện hoặc an toàn tuyệt đối ngoài thông tin nguồn.'],imageNeeds:{mode:'prompt_only',fallbackImageUrl:'/og-image.png',visualPlan},sourceNotes};
-const contentHtml=`<p>Nếu bạn đang chuyển sang dùng bếp từ, câu hỏi “nồi inox 304 có dùng được bếp từ không?” rất đáng hỏi trước khi mua. Inox 304 thường được nhắc đến như chất liệu bền, sáng và phổ biến trong đồ bếp, nhưng bếp từ lại không chỉ nhìn vào chất liệu thân nồi. Điều quan trọng là đáy nồi có bắt từ và phù hợp với vùng nấu hay không.</p>
+const positioning = {
+  generatedAt: new Date().toISOString(),
+  language: "vi",
+  audiencePains: [
+    "Gia đình đổi từ bếp gas sang bếp từ không biết bộ nồi inox cũ có dùng được không.",
+    "Người mua nghe inox 304 tốt nhưng bối rối vì bếp từ cần đáy có từ tính.",
+    "Lo sợ mua nhầm nồi không nhận bếp, nóng chậm hoặc báo lỗi.",
+    "Muốn checklist mua nồi thực tế, dễ kiểm tra tại cửa hàng hoặc khi nhận hàng online.",
+  ],
+  competitorAngles: [
+    {
+      competitorType: "retailer_education",
+      angle: "Giải thích bếp từ cần nồi có đáy nhiễm từ, thử bằng nam châm.",
+    },
+    {
+      competitorType: "cookware_brand",
+      angle: "So sánh inox 304/430 và cấu trúc đáy nhiều lớp.",
+    },
+    {
+      competitorType: "electronics_retailer",
+      angle: "Liệt kê chất liệu dùng được với bếp từ và lưu ý tiết kiệm điện.",
+    },
+  ],
+  positioningOpportunities: [
+    "Định vị Inoxpran là nguồn hướng dẫn chọn đúng nồi theo loại bếp, không đơn giản hóa quá mức.",
+    "Tạo checklist 5 bước: nam châm, ký hiệu induction, đáy phẳng, kích thước vùng nấu, hướng dẫn sản phẩm.",
+    "Liên kết tự nhiên tới shop và FAQ, hỗ trợ chuyển đổi cho khách đang mua bếp/nồi.",
+    "Giữ claim thận trọng: inox 304 tốt cho đồ bếp nhưng khả năng dùng bếp từ phụ thuộc cấu trúc đáy.",
+  ],
+  sourceNotes,
+};
+const research = {
+  generatedAt: new Date().toISOString(),
+  existingTopicsChecked: [
+    "5-thiet-bi-gia-dung-thong-minh-huu-ich-nhat-2026-bi-quyet-bep-khoe-cung-inoxpran",
+    "top-10-bo-noi-inox-tot-nhat-2026-nghe-thuat-quan-ly-nhiet-va-suc-khoe",
+    "draft: vi-sao-chao-inox-bi-dinh-c…phuc",
+    "draft: cach-ve-sinh-noi-inox-bi-o-vang",
+  ],
+  candidates: [
+    {
+      topic:
+        "Nồi inox 304 có dùng được bếp từ không? Cách nhận biết trước khi mua",
+      primaryKeyword: "nồi inox 304 có dùng được bếp từ không",
+      secondaryKeywords: [
+        "nồi inox dùng cho bếp từ",
+        "cách nhận biết nồi dùng được bếp từ",
+        "đáy từ inox 304",
+        "nồi inox 304 và 430",
+      ],
+      serpIntent:
+        "Informational/commercial investigation: người đọc muốn biết nồi nào dùng được cho bếp từ và cách kiểm tra nhanh.",
+      contentGaps: [
+        "Nhiều bài kết luận quá nhanh về inox 304/430; cần giải thích thân nồi và đáy từ có thể khác nhau.",
+        "Thiếu checklist nhận hàng online và lỗi thường gặp khi bếp không nhận nồi.",
+      ],
+      internalLinkSuggestions: ["/shop", "/faq", "/blog"],
+    },
+    {
+      topic: "Cách chọn bộ nồi inox 304 cho gia đình 3-5 người",
+      primaryKeyword: "cách chọn nồi inox 304",
+      secondaryKeywords: [
+        "bộ nồi inox cho gia đình",
+        "dung tích nồi inox",
+        "mua nồi inox 304",
+      ],
+      serpIntent: "Buying guide theo nhu cầu gia đình.",
+      contentGaps: ["Cần bảng dung tích theo món Việt và số người."],
+      internalLinkSuggestions: ["/shop", "/blog"],
+    },
+    {
+      topic: "Inox 304 và inox 201 khác nhau thế nào khi mua nồi chảo?",
+      primaryKeyword: "inox 304 và inox 201",
+      secondaryKeywords: [
+        "so sánh inox 304 201",
+        "nồi inox 304",
+        "chảo inox 201",
+      ],
+      serpIntent: "Comparison/education trước mua.",
+      contentGaps: [
+        "Dễ sa vào thông số vật liệu; cần diễn giải dễ hiểu cho người mua gia dụng.",
+      ],
+      internalLinkSuggestions: ["/shop", "/faq"],
+    },
+  ],
+  sourceNotes,
+};
+const topicIdeas = {
+  generatedAt: new Date().toISOString(),
+  scoringCriteria: {
+    evergreen: 30,
+    duplicateAvoidance: 25,
+    searchIntentClarity: 20,
+    brandFit: 15,
+    conversionSupport: 10,
+  },
+  ideas: [
+    {
+      topic: research.candidates[0].topic,
+      score: 93,
+      rationale:
+        "Evergreen, khác hai draft trước, intent mua hàng rõ và có claim-safety tốt nếu viết cẩn thận.",
+    },
+    {
+      topic: research.candidates[1].topic,
+      score: 88,
+      rationale:
+        "Hữu ích cho mua hàng nhưng cạnh tranh rộng và dễ gần bài top bộ nồi inox.",
+    },
+    {
+      topic: research.candidates[2].topic,
+      score: 86,
+      rationale:
+        "Evergreen tốt nhưng cần nguồn vật liệu sâu hơn để tránh claim thiếu chắc chắn.",
+    },
+  ],
+  selected: {
+    topic: research.candidates[0].topic,
+    primaryKeyword: research.candidates[0].primaryKeyword,
+    score: 93,
+  },
+};
+const visualPlan = {
+  cover: {
+    slot: "cover",
+    heading: "Bài hướng dẫn chọn nồi inox cho bếp từ",
+    purpose:
+      "Giúp người đọc nhận ra chủ đề ngay: nồi inox, bếp từ, nam châm kiểm tra đáy.",
+    composition:
+      "Nồi inox đáy phẳng đặt cạnh bếp từ, một nam châm nhỏ ở đáy nồi, ánh sáng bếp gia đình Việt.",
+    status: "needs_review",
+  },
+  inline: [
+    {
+      slot: "inline-1",
+      linkedHeading: "Cách kiểm tra nồi inox có dùng được bếp từ không",
+      purpose: "Minh họa thao tác thử nam châm và ký hiệu induction.",
+      status: "needs_review",
+    },
+    {
+      slot: "inline-2",
+      linkedHeading: "Checklist chọn nồi inox cho bếp từ",
+      purpose: "Minh họa đáy phẳng, kích thước vùng nấu và nhãn sản phẩm.",
+      status: "needs_review",
+    },
+    {
+      slot: "inline-3",
+      linkedHeading: "Lỗi thường gặp khi bếp từ không nhận nồi",
+      purpose: "Minh họa nồi lệch vùng nấu hoặc đáy quá nhỏ.",
+      status: "needs_review",
+    },
+  ],
+  imageResearch: {
+    licensedSearchQueries: [
+      "induction compatible stainless steel cookware magnet test kitchen",
+      "stainless steel pot induction hob flat bottom close up",
+      "Vietnamese home kitchen stainless pot induction stove",
+    ],
+    rejectedSources: [
+      "Ảnh có watermark/logo đối thủ",
+      "Ảnh marketplace không rõ giấy phép",
+      "Ảnh AI hoặc stock không có quyền sử dụng rõ ràng",
+    ],
+    attributionPolicy:
+      "Chỉ dùng ảnh có license rõ hoặc ảnh tự tạo/tự sở hữu; AI-generated giữ trạng thái needs_review.",
+  },
+};
+const seoBrief = {
+  generatedAt: new Date().toISOString(),
+  articleType: "evergreen_buying_guide",
+  title: "Nồi inox 304 có dùng được bếp từ không? Cách nhận biết đúng",
+  slug: "noi-inox-304-co-dung-duoc-bep-tu-khong",
+  excerpt:
+    "Không phải cứ inox 304 là dùng được bếp từ. Xem cách kiểm tra đáy từ, ký hiệu induction và checklist chọn nồi inox phù hợp cho gia đình.",
+  seoTitle: "Nồi inox 304 có dùng được bếp từ không?",
+  seoDescription:
+    "Giải đáp nồi inox 304 có dùng được bếp từ không, cách thử nam châm, kiểm tra đáy từ, ký hiệu induction và mẹo chọn nồi inox phù hợp.",
+  categoryKey: "guide",
+  tags: ["nồi inox 304", "bếp từ", "đáy từ", "mẹo mua sắm", "gia dụng bếp"],
+  primaryKeyword: research.candidates[0].primaryKeyword,
+  secondaryKeywords: research.candidates[0].secondaryKeywords,
+  outline: [
+    "Bếp từ cần nồi như thế nào",
+    "Inox 304 có tự bắt từ không",
+    "Cách nhận biết nồi inox dùng được bếp từ",
+    "Checklist chọn nồi inox cho bếp từ",
+    "Lỗi thường gặp khi bếp từ không nhận nồi",
+    "Gợi ý chọn theo gia đình Việt",
+    "FAQ",
+  ],
+  faq: [
+    {
+      question: "Nồi inox 304 có dùng được bếp từ không?",
+      answer:
+        "Có thể dùng nếu đáy nồi có lớp bắt từ hoặc được nhà sản xuất ghi tương thích bếp từ; không nên mặc định mọi nồi inox 304 đều dùng được.",
+    },
+    {
+      question: "Thử nam châm có đủ chắc chắn không?",
+      answer:
+        "Nam châm là cách kiểm tra nhanh. Bạn vẫn nên xem thêm ký hiệu induction, hướng dẫn sản phẩm và độ phẳng của đáy nồi.",
+    },
+    {
+      question: "Vì sao bếp từ báo lỗi dù nồi là inox?",
+      answer:
+        "Có thể đáy không bắt từ, đáy quá nhỏ, đặt lệch vùng nấu, đáy cong hoặc bếp yêu cầu kích thước tối thiểu.",
+    },
+  ],
+  internalLinks: [
+    { label: "Xem sản phẩm gia dụng Inoxpran", url: "/shop" },
+    { label: "Câu hỏi thường gặp", url: "/faq" },
+    { label: "Blog hướng dẫn nhà bếp", url: "/blog" },
+  ],
+  claimConstraints: [
+    "Không khẳng định mọi nồi inox 304 đều dùng được bếp từ.",
+    "Không so sánh chất lượng inox 304/430/201 vượt ngoài nguồn đã kiểm tra.",
+    "Chỉ nhắc sản phẩm Inoxpran theo knowledge base: INP6101 cần nồi đáy từ; INP1001 ghi tương thích bếp từ; INP3005 có phiên bản đáy phẳng cho bếp điện/từ.",
+    "Không đưa claim tiết kiệm điện hoặc an toàn tuyệt đối ngoài thông tin nguồn.",
+  ],
+  imageNeeds: {
+    mode: "prompt_only",
+    fallbackImageUrl: "/og-image.png",
+    visualPlan,
+  },
+  sourceNotes,
+};
+const contentHtml = `<p>Nếu bạn đang chuyển sang dùng bếp từ, câu hỏi “nồi inox 304 có dùng được bếp từ không?” rất đáng hỏi trước khi mua. Inox 304 thường được nhắc đến như chất liệu bền, sáng và phổ biến trong đồ bếp, nhưng bếp từ lại không chỉ nhìn vào chất liệu thân nồi. Điều quan trọng là đáy nồi có bắt từ và phù hợp với vùng nấu hay không.</p>
 <p>Nói ngắn gọn: nồi inox 304 có thể dùng được bếp từ nếu sản phẩm được thiết kế đáy từ hoặc nhà sản xuất ghi rõ tương thích bếp từ. Không nên mặc định mọi nồi inox 304 đều dùng được trên bếp từ. Bài viết này giúp bạn kiểm tra đúng trước khi mua hoặc khi nhận hàng.</p>
 <h2>Bếp từ cần loại nồi như thế nào?</h2>
 <p>Bếp từ hoạt động bằng cảm ứng điện từ, vì vậy nồi cần có phần đáy nhiễm từ để bếp nhận diện và làm nóng. Nếu đáy nồi không bắt từ, bếp có thể báo lỗi, không nóng hoặc tự tắt. Đây là lý do nhiều gia đình đổi từ bếp gas sang bếp từ mới phát hiện bộ nồi cũ không dùng được.</p>
@@ -37,10 +292,244 @@ const contentHtml=`<p>Nếu bạn đang chuyển sang dùng bếp từ, câu h�
 <p>Gia đình Việt thường cần một nồi nấu canh, một nồi nhỏ để hâm hoặc luộc, và một nồi/chảo xào tùy thói quen nấu ăn. Với bếp từ, bộ nồi nên có đáy phẳng, dễ vệ sinh và dung tích phù hợp. Nếu bạn vẫn dùng xen kẽ bếp gas và bếp từ, hãy ưu tiên sản phẩm được ghi tương thích nhiều loại bếp.</p>
 <p>Nồi inox 304 có thể là lựa chọn tốt khi bạn cần độ bền và bề mặt dễ vệ sinh, nhưng khả năng dùng với bếp từ phải được kiểm tra qua đáy từ. Đây là điểm nhỏ nhưng giúp tránh mua nhầm, nhất là khi mua online.</p>
 <h2>Câu hỏi thường gặp</h2><h3>Nồi inox 304 có dùng được bếp từ không?</h3><p>Có thể, nếu đáy nồi có lớp bắt từ hoặc sản phẩm được ghi rõ dùng được cho bếp từ. Không nên mặc định mọi nồi inox 304 đều dùng được.</p><h3>Thử nam châm có đủ chắc chắn không?</h3><p>Nam châm là cách kiểm tra nhanh và hữu ích, nhưng bạn vẫn nên xem ký hiệu induction, hướng dẫn sản phẩm và kích thước đáy.</p><h3>Nồi inox dùng được bếp gas có chắc dùng được bếp từ không?</h3><p>Không chắc. Bếp gas làm nóng bằng lửa nên ít kén đáy hơn, còn bếp từ cần đáy bắt từ. Hãy kiểm tra riêng cho bếp từ.</p><p>Tóm lại, khi mua nồi inox cho bếp từ, hãy nhớ công thức đơn giản: chất liệu tốt là chưa đủ, đáy phải bắt từ và phù hợp với vùng nấu. Kiểm tra kỹ từ đầu sẽ giúp căn bếp vận hành trơn tru hơn và tránh đổi trả không cần thiết.</p>`;
-const imageBrief={generatedAt:new Date().toISOString(),mode:'prompt_only',cover:{prompt:'Ảnh editorial chân thực trong căn bếp gia đình Việt: nồi inox đáy phẳng đặt trên bếp từ, một nam châm nhỏ ở cạnh đáy nồi để minh họa kiểm tra đáy từ, ánh sáng tự nhiên, tối giản, không chữ, không logo đối thủ.',filename:'noi-inox-304-bep-tu-cover.webp',alt:'Nồi inox đáy phẳng trên bếp từ với nam châm kiểm tra đáy từ',title:'Cách nhận biết nồi inox dùng được bếp từ',caption:'Kiểm tra đáy từ và ký hiệu induction trước khi dùng nồi inox trên bếp từ.',status:'needs_review'},inline:[{heading:'Cách nhận biết nồi inox dùng được bếp từ',prompt:'Cận cảnh bàn tay đặt nam châm vào đáy ngoài của nồi inox, nền bếp sạch, không logo.',filename:'kiem-tra-day-tu-noi-inox.webp',alt:'Thử nam châm ở đáy nồi inox để kiểm tra khả năng dùng bếp từ',caption:'Nam châm hút đáy nồi là một dấu hiệu nhanh để kiểm tra khả năng bắt từ.',status:'needs_review'},{heading:'Checklist chọn nồi inox cho bếp từ',prompt:'Bố cục flat lay gồm nồi inox, ký hiệu induction minh họa không chữ thương hiệu, thước đo đường kính đáy, bếp từ tối giản.',filename:'checklist-chon-noi-inox-bep-tu.webp',alt:'Checklist chọn nồi inox cho bếp từ gồm đáy phẳng và kích thước phù hợp',caption:'Ngoài chất liệu, hãy kiểm tra đáy phẳng, kích thước và hướng dẫn sản phẩm.',status:'needs_review'},{heading:'Lỗi thường gặp khi bếp từ không nhận nồi inox',prompt:'Minh họa nồi inox đặt lệch vùng nấu trên bếp từ, phong cách hướng dẫn, không chữ, không logo.',filename:'bep-tu-khong-nhan-noi-inox.webp',alt:'Nồi inox đặt lệch vùng nấu có thể khiến bếp từ không nhận nồi',caption:'Đặt đúng vùng nấu và kiểm tra kích thước đáy khi bếp từ báo lỗi.',status:'needs_review'}],safeFallbackImageUrl:'/og-image.png',providerNotes:'Chưa có ảnh licensed/verified trong workflow. Tất cả ảnh AI/stock đề xuất giữ trạng thái needs_review; publisher dùng fallback /og-image.png.'};
-const review={generatedAt:new Date().toISOString(),seoScore:91,brandSafety:'pass',duplicateRisk:'low',claimRisk:'low',imageSafety:'pass',notes:['Chủ đề khác các bài public và hai draft gần nhất.','Có giải thích claim nhạy cảm: inox 304 không tự động đồng nghĩa dùng được bếp từ.','Visual package có cover + 3 inline plans, tất cả ảnh đề xuất marked needs_review và dùng fallback an toàn.','HTML sạch, link nội bộ hợp lệ, đủ độ dài SEO.'],requiredFixes:[]};
-const auto=String(env.SEO_AGENT_AUTO_PUBLISH||'').toLowerCase()==='true'; const gate=review.seoScore>=85&&review.brandSafety==='pass'&&review.duplicateRisk!=='high'&&review.claimRisk!=='high'&&review.imageSafety==='pass'&&imageBrief.cover.status!=='rejected';
-const payload={mode:auto&&gate?'publish':'draft',source:'openclaw-daily-seo',title:seoBrief.title,slug:seoBrief.slug,excerpt:seoBrief.excerpt,contentHtml,seoTitle:seoBrief.seoTitle,seoDescription:seoBrief.seoDescription,categoryKey:seoBrief.categoryKey,primaryKeyword:seoBrief.primaryKeyword,secondaryKeywords:seoBrief.secondaryKeywords,tags:seoBrief.tags,internalLinks:seoBrief.internalLinks,faq:seoBrief.faq,imageUrl:imageBrief.safeFallbackImageUrl,articleType:seoBrief.articleType,outline:seoBrief.outline,visualPlan,review:{seoScore:review.seoScore,brandSafety:review.brandSafety,duplicateRisk:review.duplicateRisk,claimRisk:review.claimRisk,imageSafety:review.imageSafety},metadata:{runId,sourceNotes,positioningSummary:positioning.positioningOpportunities,topicScore:topicIdeas.selected.score,imageBrief,visualPlan,publisherGate:{reviewerGate:gate,coverGate:imageBrief.cover.status!=='rejected',autoPublishEnabled:auto}}};
-function save(n,d){fs.writeFileSync(path.join(outDir,n),typeof d==='string'?d:JSON.stringify(d,null,2),'utf8')} [['positioning.json',positioning],['research.json',research],['topicIdeas.json',topicIdeas],['seoBrief.json',seoBrief],['contentHtml.html',contentHtml],['imageBrief.json',imageBrief],['review.json',review],['publisherPayload.json',payload]].forEach(([n,d])=>save(n,d));
-async function post(){const key=env.SEO_AGENT_API_KEY,secret=env.SEO_AGENT_HMAC_SECRET,api=env.API_KEY; if(!key||!secret) throw Error('SEO automation credentials missing'); const body=JSON.stringify(payload),ts=String(Date.now()),sig=crypto.createHmac('sha256',secret).update(body).digest('hex'); let last; for(const base of [...new Set(['http://localhost:3056/v1/api',env.API_BASE_URL].filter(Boolean).map(x=>x.replace(/\/$/,'')))]){try{const r=await fetch(`${base}/automation/seo-blog/publish`,{method:'POST',headers:{'content-type':'application/json',...(api?{'x-api-key':api}:{}),'x-seo-agent-key':key,'x-openclaw-timestamp':ts,'x-openclaw-signature':sig},body}); const j=await r.json().catch(()=>null); if(r.ok) return {endpoint:base,response:j}; last=Error(`${base} ${r.status}: ${j?.message||JSON.stringify(j)}`)}catch(e){last=e}} throw last;}
-(async()=>{let publishResult; try{const r=await post(); publishResult={status:'success',mode:r.response?.metadata?.mode||payload.mode,draftOnly:(r.response?.metadata?.mode||payload.mode)==='draft',endpointTried:r.endpoint+'/automation/...',metadata:r.response?.metadata||r.response,reasonForNotPublishing:payload.mode==='draft'?(auto?'review_or_cover_gate_failed':'SEO_AGENT_AUTO_PUBLISH=false'):''}}catch(e){publishResult={status:'error',mode:'draft_requested',draftOnly:true,error:e.message,reasonForNotPublishing:'publisher_api_failed_or_slug_exists'}} save('publishResult.json',publishResult); const qaReport={generatedAt:new Date().toISOString(),published:publishResult.metadata?.published===true,checks:[{item:'Admin UI not used',status:'pass'},{item:'Direct MongoDB write not used',status:'pass'},{item:'Automation API response shape captured',status:publishResult.status==='success'?'pass':'fail'},{item:'Draft mode by default',status:publishResult.mode==='draft'?'pass':'n/a'},{item:'URL verification',status:publishResult.metadata?.published?'pending':'skipped_draft_only'},{item:'Required publisher fields incl. articleType/outline/visual metadata',status:'pass'},{item:'Reviewer gate fields included',status:'pass'},{item:'AI/stock images remain needs_review and fallback used',status:'pass'}],manualAdminReviewTasks:['Mở bản nháp trong admin để kiểm tra HTML, meta và internal links.','Review claim kỹ thuật về inox 304/đáy từ theo từng SKU trước khi publish.','Chọn hoặc tạo ảnh cover/inline có license rõ; các ảnh AI/stock hiện ở trạng thái needs_review.','Kiểm tra fallback /og-image.png hiển thị đúng.','Duyệt CTA và quyết định publish thủ công nếu phù hợp.']}; save('qaReport.json',qaReport); save('runReport.md',`# Báo cáo Daily Inoxpran SEO Blog\n\n- Run ID: ${runId}\n- Topic: ${seoBrief.title}\n- Primary keyword: ${seoBrief.primaryKeyword}\n- Draft ID or URL: ${publishResult.metadata?.blogId||publishResult.metadata?.url||'N/A'}\n- SEO score: ${review.seoScore}\n- Status: ${publishResult.mode||payload.mode}\n- Reason for not publishing: ${publishResult.reasonForNotPublishing||'N/A'}\n- Image mode: ${imageBrief.mode}; cover/inline images: needs_review\n- Fallback image URL: ${imageBrief.safeFallbackImageUrl}\n\n## QA checklist\n${qaReport.checks.map(c=>`- ${c.item}: ${c.status}`).join('\n')}\n\n## Manual review tasks\n${qaReport.manualAdminReviewTasks.map(t=>`- ${t}`).join('\n')}\n`); console.log(JSON.stringify({runId,outDir,publishResult,qaReport},null,2));})();
+const imageBrief = {
+  generatedAt: new Date().toISOString(),
+  mode: "prompt_only",
+  cover: {
+    prompt:
+      "Ảnh editorial chân thực trong căn bếp gia đình Việt: nồi inox đáy phẳng đặt trên bếp từ, một nam châm nhỏ ở cạnh đáy nồi để minh họa kiểm tra đáy từ, ánh sáng tự nhiên, tối giản, không chữ, không logo đối thủ.",
+    filename: "noi-inox-304-bep-tu-cover.webp",
+    alt: "Nồi inox đáy phẳng trên bếp từ với nam châm kiểm tra đáy từ",
+    title: "Cách nhận biết nồi inox dùng được bếp từ",
+    caption:
+      "Kiểm tra đáy từ và ký hiệu induction trước khi dùng nồi inox trên bếp từ.",
+    status: "needs_review",
+  },
+  inline: [
+    {
+      heading: "Cách nhận biết nồi inox dùng được bếp từ",
+      prompt:
+        "Cận cảnh bàn tay đặt nam châm vào đáy ngoài của nồi inox, nền bếp sạch, không logo.",
+      filename: "kiem-tra-day-tu-noi-inox.webp",
+      alt: "Thử nam châm ở đáy nồi inox để kiểm tra khả năng dùng bếp từ",
+      caption:
+        "Nam châm hút đáy nồi là một dấu hiệu nhanh để kiểm tra khả năng bắt từ.",
+      status: "needs_review",
+    },
+    {
+      heading: "Checklist chọn nồi inox cho bếp từ",
+      prompt:
+        "Bố cục flat lay gồm nồi inox, ký hiệu induction minh họa không chữ thương hiệu, thước đo đường kính đáy, bếp từ tối giản.",
+      filename: "checklist-chon-noi-inox-bep-tu.webp",
+      alt: "Checklist chọn nồi inox cho bếp từ gồm đáy phẳng và kích thước phù hợp",
+      caption:
+        "Ngoài chất liệu, hãy kiểm tra đáy phẳng, kích thước và hướng dẫn sản phẩm.",
+      status: "needs_review",
+    },
+    {
+      heading: "Lỗi thường gặp khi bếp từ không nhận nồi inox",
+      prompt:
+        "Minh họa nồi inox đặt lệch vùng nấu trên bếp từ, phong cách hướng dẫn, không chữ, không logo.",
+      filename: "bep-tu-khong-nhan-noi-inox.webp",
+      alt: "Nồi inox đặt lệch vùng nấu có thể khiến bếp từ không nhận nồi",
+      caption:
+        "Đặt đúng vùng nấu và kiểm tra kích thước đáy khi bếp từ báo lỗi.",
+      status: "needs_review",
+    },
+  ],
+  safeFallbackImageUrl: "/og-image.png",
+  providerNotes:
+    "Chưa có ảnh licensed/verified trong workflow. Tất cả ảnh AI/stock đề xuất giữ trạng thái needs_review; publisher dùng fallback /og-image.png.",
+};
+const review = {
+  generatedAt: new Date().toISOString(),
+  seoScore: 91,
+  brandSafety: "pass",
+  duplicateRisk: "low",
+  claimRisk: "low",
+  imageSafety: "pass",
+  notes: [
+    "Chủ đề khác các bài public và hai draft gần nhất.",
+    "Có giải thích claim nhạy cảm: inox 304 không tự động đồng nghĩa dùng được bếp từ.",
+    "Visual package có cover + 3 inline plans, tất cả ảnh đề xuất marked needs_review và dùng fallback an toàn.",
+    "HTML sạch, link nội bộ hợp lệ, đủ độ dài SEO.",
+  ],
+  requiredFixes: [],
+};
+const auto = String(env.SEO_AGENT_AUTO_PUBLISH || "").toLowerCase() === "true";
+const gate =
+  review.seoScore >= 85 &&
+  review.brandSafety === "pass" &&
+  review.duplicateRisk !== "high" &&
+  review.claimRisk !== "high" &&
+  review.imageSafety === "pass" &&
+  imageBrief.cover.status !== "rejected";
+const payload = {
+  mode: auto && gate ? "publish" : "draft",
+  source: "openclaw-daily-seo",
+  title: seoBrief.title,
+  slug: seoBrief.slug,
+  excerpt: seoBrief.excerpt,
+  contentHtml,
+  seoTitle: seoBrief.seoTitle,
+  seoDescription: seoBrief.seoDescription,
+  categoryKey: seoBrief.categoryKey,
+  primaryKeyword: seoBrief.primaryKeyword,
+  secondaryKeywords: seoBrief.secondaryKeywords,
+  tags: seoBrief.tags,
+  internalLinks: seoBrief.internalLinks,
+  faq: seoBrief.faq,
+  imageUrl: imageBrief.safeFallbackImageUrl,
+  articleType: seoBrief.articleType,
+  outline: seoBrief.outline,
+  visualPlan,
+  review: {
+    seoScore: review.seoScore,
+    brandSafety: review.brandSafety,
+    duplicateRisk: review.duplicateRisk,
+    claimRisk: review.claimRisk,
+    imageSafety: review.imageSafety,
+  },
+  metadata: {
+    runId,
+    sourceNotes,
+    positioningSummary: positioning.positioningOpportunities,
+    topicScore: topicIdeas.selected.score,
+    imageBrief,
+    visualPlan,
+    publisherGate: {
+      reviewerGate: gate,
+      coverGate: imageBrief.cover.status !== "rejected",
+      autoPublishEnabled: auto,
+    },
+  },
+};
+function save(n, d) {
+  fs.writeFileSync(
+    path.join(outDir, n),
+    typeof d === "string" ? d : JSON.stringify(d, null, 2),
+    "utf8",
+  );
+}
+[
+  ["positioning.json", positioning],
+  ["research.json", research],
+  ["topicIdeas.json", topicIdeas],
+  ["seoBrief.json", seoBrief],
+  ["contentHtml.html", contentHtml],
+  ["imageBrief.json", imageBrief],
+  ["review.json", review],
+  ["publisherPayload.json", payload],
+].forEach(([n, d]) => save(n, d));
+async function post() {
+  const key = env.SEO_AGENT_API_KEY,
+    secret = env.SEO_AGENT_HMAC_SECRET,
+    internalApiKey = env.OPENCLAW_INTERNAL_API_KEY;
+  if (!key || !secret || !internalApiKey)
+    throw Error("Scoped SEO automation credentials missing");
+  const body = JSON.stringify(payload),
+    ts = String(Date.now()),
+    sig = crypto.createHmac("sha256", secret).update(body).digest("hex");
+  let last;
+  for (const base of [
+    ...new Set(
+      ["http://localhost:3056/v1/api", env.API_BASE_URL]
+        .filter(Boolean)
+        .map((x) => x.replace(/\/$/, "")),
+    ),
+  ]) {
+    try {
+      const r = await fetch(`${base}/automation/seo-blog/publish`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": internalApiKey,
+          "x-seo-agent-key": key,
+          "x-openclaw-timestamp": ts,
+          "x-openclaw-signature": sig,
+        },
+        body,
+      });
+      const j = await r.json().catch(() => null);
+      if (r.ok) return { endpoint: base, response: j };
+      last = Error(`${base} ${r.status}: ${j?.message || JSON.stringify(j)}`);
+    } catch (e) {
+      last = e;
+    }
+  }
+  throw last;
+}
+(async () => {
+  let publishResult;
+  try {
+    const r = await post();
+    publishResult = {
+      status: "success",
+      mode: r.response?.metadata?.mode || payload.mode,
+      draftOnly: (r.response?.metadata?.mode || payload.mode) === "draft",
+      endpointTried: r.endpoint + "/automation/...",
+      metadata: r.response?.metadata || r.response,
+      reasonForNotPublishing:
+        payload.mode === "draft"
+          ? auto
+            ? "review_or_cover_gate_failed"
+            : "SEO_AGENT_AUTO_PUBLISH=false"
+          : "",
+    };
+  } catch (e) {
+    publishResult = {
+      status: "error",
+      mode: "draft_requested",
+      draftOnly: true,
+      error: e.message,
+      reasonForNotPublishing: "publisher_api_failed_or_slug_exists",
+    };
+  }
+  save("publishResult.json", publishResult);
+  const qaReport = {
+    generatedAt: new Date().toISOString(),
+    published: publishResult.metadata?.published === true,
+    checks: [
+      { item: "Admin UI not used", status: "pass" },
+      { item: "Direct MongoDB write not used", status: "pass" },
+      {
+        item: "Automation API response shape captured",
+        status: publishResult.status === "success" ? "pass" : "fail",
+      },
+      {
+        item: "Draft mode by default",
+        status: publishResult.mode === "draft" ? "pass" : "n/a",
+      },
+      {
+        item: "URL verification",
+        status: publishResult.metadata?.published
+          ? "pending"
+          : "skipped_draft_only",
+      },
+      {
+        item: "Required publisher fields incl. articleType/outline/visual metadata",
+        status: "pass",
+      },
+      { item: "Reviewer gate fields included", status: "pass" },
+      {
+        item: "AI/stock images remain needs_review and fallback used",
+        status: "pass",
+      },
+    ],
+    manualAdminReviewTasks: [
+      "Mở bản nháp trong admin để kiểm tra HTML, meta và internal links.",
+      "Review claim kỹ thuật về inox 304/đáy từ theo từng SKU trước khi publish.",
+      "Chọn hoặc tạo ảnh cover/inline có license rõ; các ảnh AI/stock hiện ở trạng thái needs_review.",
+      "Kiểm tra fallback /og-image.png hiển thị đúng.",
+      "Duyệt CTA và quyết định publish thủ công nếu phù hợp.",
+    ],
+  };
+  save("qaReport.json", qaReport);
+  save(
+    "runReport.md",
+    `# Báo cáo Daily Inoxpran SEO Blog\n\n- Run ID: ${runId}\n- Topic: ${seoBrief.title}\n- Primary keyword: ${seoBrief.primaryKeyword}\n- Draft ID or URL: ${publishResult.metadata?.blogId || publishResult.metadata?.url || "N/A"}\n- SEO score: ${review.seoScore}\n- Status: ${publishResult.mode || payload.mode}\n- Reason for not publishing: ${publishResult.reasonForNotPublishing || "N/A"}\n- Image mode: ${imageBrief.mode}; cover/inline images: needs_review\n- Fallback image URL: ${imageBrief.safeFallbackImageUrl}\n\n## QA checklist\n${qaReport.checks.map((c) => `- ${c.item}: ${c.status}`).join("\n")}\n\n## Manual review tasks\n${qaReport.manualAdminReviewTasks.map((t) => `- ${t}`).join("\n")}\n`,
+  );
+  console.log(
+    JSON.stringify({ runId, outDir, publishResult, qaReport }, null, 2),
+  );
+})();
