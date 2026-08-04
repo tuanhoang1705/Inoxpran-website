@@ -17,10 +17,10 @@ const parsePayload = async (response) => {
 const isFileLike = (value) =>
 	Boolean(
 		value &&
-			typeof value === 'object' &&
-			typeof value.size === 'number' &&
-			typeof value.type === 'string' &&
-			typeof value.arrayBuffer === 'function'
+		typeof value === 'object' &&
+		typeof value.size === 'number' &&
+		typeof value.type === 'string' &&
+		typeof value.arrayBuffer === 'function'
 	);
 
 const failWithToast = (status, message) =>

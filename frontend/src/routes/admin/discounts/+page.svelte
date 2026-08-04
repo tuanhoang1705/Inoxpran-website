@@ -4,8 +4,8 @@
 	import { t } from '$lib/i18n/admin/index.js';
 	let { data, form } = $props();
 
-	const discounts = form?.discounts || data?.discounts || [];
-	const loadError = data?.apiError;
+	const discounts = $derived(form?.discounts || data?.discounts || []);
+	const loadError = $derived(data?.apiError);
 	let appliesTo = $state('all');
 	let customerAppliesTo = $state('all');
 
@@ -246,7 +246,7 @@
 						</thead>
 						<tbody>
 							{#if discounts.length}
-								{#each discounts as discount}
+								{#each discounts as discount, __eachIndex1 (discount?._id ?? discount?.id ?? __eachIndex1)}
 									<tr>
 										<td>{discount.discount_name || '--'}</td>
 										<td>

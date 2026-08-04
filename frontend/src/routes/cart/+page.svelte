@@ -1,4 +1,6 @@
 <script>
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -35,11 +37,7 @@
 		const count = selectedItems.reduce((sum, item) => sum + item.quantity, 0);
 		return { subtotal, count, total: subtotal };
 	});
-	const selectedIdsValue = $derived.by(() =>
-		Array.from(selectedIds)
-			.map(String)
-			.join(',')
-	);
+	const selectedIdsValue = $derived.by(() => Array.from(selectedIds).map(String).join(','));
 	const allSelected = $derived.by(
 		() => displayItems.length > 0 && selectedItems.length === displayItems.length
 	);
@@ -54,7 +52,7 @@
 
 	const setProductMutationPending = (productId, pending) => {
 		if (!productId) return;
-		const next = new Set(pendingMutationProductIds);
+		const next = new SvelteSet(pendingMutationProductIds);
 		if (pending) {
 			next.add(productId);
 		} else {
@@ -65,14 +63,14 @@
 
 	const queueProductMutationForm = (productId, formElement) => {
 		if (!productId || !formElement) return;
-		const next = new Map(queuedMutationFormsByProductId);
+		const next = new SvelteMap(queuedMutationFormsByProductId);
 		next.set(productId, formElement);
 		queuedMutationFormsByProductId = next;
 	};
 
 	const consumeQueuedMutationForm = (productId) => {
 		if (!productId) return null;
-		const next = new Map(queuedMutationFormsByProductId);
+		const next = new SvelteMap(queuedMutationFormsByProductId);
 		const queuedForm = next.get(productId) ?? null;
 		next.delete(productId);
 		queuedMutationFormsByProductId = next;
@@ -89,7 +87,7 @@
 	};
 
 	const toggleSelectItem = (productId, checked) => {
-		const next = new Set(selectedIds);
+		const next = new SvelteSet(selectedIds);
 		if (checked) {
 			next.add(String(productId));
 		} else {
@@ -100,7 +98,7 @@
 
 	$effect(() => {
 		const ids = displayItems.map((item) => getCartLineId(item));
-		const next = new Set(selectedIds);
+		const next = new SvelteSet(selectedIds);
 		let changed = false;
 		for (const id of Array.from(next)) {
 			if (!ids.includes(id)) {
@@ -189,8 +187,8 @@
 			return;
 		}
 		const match = findDiscountOption(normalized);
-		selectedDiscount =
-			match || pendingDiscount || { discount_code: normalized, discount_applies_to: 'all' };
+		selectedDiscount = match ||
+			pendingDiscount || { discount_code: normalized, discount_applies_to: 'all' };
 		discountCodeInput = normalized;
 		showVoucherModal = false;
 	};
@@ -315,7 +313,6 @@
 
 <section class="cart-shell padding-large">
 	<div class="container">
-		
 		{#if form?.error}
 			<div class="alert alert-danger" role="alert">{form.error}</div>
 		{/if}
@@ -334,8 +331,8 @@
 					</p>
 				</div>
 				<div class="cart-empty-actions">
-					<a class="btn btn-dark" href="/shop">{$t('cart.emptyCta')}</a>
-					<a class="btn btn-outline-dark" href="/login">{$t('cart.loginCta')}</a>
+					<a class="btn btn-dark" href={resolve('/shop')}>{$t('cart.emptyCta')}</a>
+					<a class="btn btn-outline-dark" href={resolve('/login')}>{$t('cart.loginCta')}</a>
 				</div>
 			</div>
 		{:else if !authRequired && items.length === 0}
@@ -344,7 +341,7 @@
 					<h3>{$t('cart.emptyTitle')}</h3>
 					<p>{$t('cart.emptyDesc')}</p>
 				</div>
-				<a class="btn btn-dark" href="/shop">{$t('cart.emptyCta')}</a>
+				<a class="btn btn-dark" href={resolve('/shop')}>{$t('cart.emptyCta')}</a>
 			</div>
 		{:else}
 			<div class="cart-grid">
@@ -360,7 +357,7 @@
 						</label>
 					</div>
 					<div class="cart-list">
-						{#each displayItems as item}
+						{#each displayItems as item, __eachIndex1 (item?._id ?? item?.id ?? __eachIndex1)}
 							{@const lineTotal = item.price * item.quantity}
 							{@const lineId = getCartLineId(item)}
 							{@const isItemMutating = pendingMutationProductIds.has(String(item.productId))}
@@ -373,13 +370,13 @@
 									/>
 									<span>{$t('cart.selectItem')}</span>
 								</label>
-								<a class="cart-thumb" href={item.href} aria-label={item.name}>
+								<a class="cart-thumb" href={resolve(item.href)} aria-label={item.name}>
 									<img src={item.image} alt={item.name} width="120" height="120" loading="lazy" />
 									<span>{$t('cart.viewItem')}</span>
 								</a>
 								<div class="cart-details">
 									<div class="cart-title-row">
-										<a href={item.href}>{item.name}</a>
+										<a href={resolve(item.href)}>{item.name}</a>
 										<span class="cart-line-total">{formatPrice(lineTotal)}</span>
 									</div>
 									<div class="cart-price-row">
@@ -441,42 +438,42 @@
 												use:enhance={handleAutoUpdate}
 											>
 												<input type="hidden" name="productId" value={item.productId} />
-													<input type="hidden" name="shopId" value={item.shopId} />
-													<label class="qty-label">
-														<span>{$t('cart.quantityLabel')}</span>
-														<div class="qty-control">
-															<button
-																type="button"
-																class="qty-btn"
-																aria-label={$t('product.decreaseQuantity')}
-																onclick={(event) => adjustQuantity(event, -1)}
-																disabled={isItemMutating}
-															>
-																-
-															</button>
-															<input
-																type="number"
-																name="quantity"
-																min="1"
-																step="1"
-																inputmode="numeric"
-																value={item.quantity}
-																class="form-control qty-input"
-																disabled={isItemMutating}
-																onchange={handleManualQuantityChange}
-															/>
-															<button
-																type="button"
-																class="qty-btn"
-																aria-label={$t('product.increaseQuantity')}
-																onclick={(event) => adjustQuantity(event, 1)}
-																disabled={isItemMutating}
-															>
-																+
-															</button>
-														</div>
-													</label>
-												</form>
+												<input type="hidden" name="shopId" value={item.shopId} />
+												<label class="qty-label">
+													<span>{$t('cart.quantityLabel')}</span>
+													<div class="qty-control">
+														<button
+															type="button"
+															class="qty-btn"
+															aria-label={$t('product.decreaseQuantity')}
+															onclick={(event) => adjustQuantity(event, -1)}
+															disabled={isItemMutating}
+														>
+															-
+														</button>
+														<input
+															type="number"
+															name="quantity"
+															min="1"
+															step="1"
+															inputmode="numeric"
+															value={item.quantity}
+															class="form-control qty-input"
+															disabled={isItemMutating}
+															onchange={handleManualQuantityChange}
+														/>
+														<button
+															type="button"
+															class="qty-btn"
+															aria-label={$t('product.increaseQuantity')}
+															onclick={(event) => adjustQuantity(event, 1)}
+															disabled={isItemMutating}
+														>
+															+
+														</button>
+													</div>
+												</label>
+											</form>
 											<form method="POST" action="?/removeItem" use:enhance={handleAutoUpdate}>
 												<input type="hidden" name="productId" value={item.productId} />
 												<button
@@ -546,7 +543,7 @@
 								<a
 									class="btn btn-dark w-100"
 									class:disabled={!selectedItems.length}
-									href="/checkout?guest=1"
+									href={resolve('/checkout?guest=1')}
 									aria-disabled={!selectedItems.length}
 								>
 									{$locale === 'en' ? 'Request COD checkout' : 'Đặt COD nhanh'}
@@ -568,7 +565,7 @@
 									</button>
 								</form>
 							{/if}
-							<a class="btn btn-outline-dark w-100" href="/shop">
+							<a class="btn btn-outline-dark w-100" href={resolve('/shop')}>
 								{$t('cart.continueShopping')}
 							</a>
 						</div>
@@ -585,9 +582,7 @@
 					<div class="voucher-modal" role="document">
 						<div class="voucher-modal-head">
 							<h4>Chọn Voucher</h4>
-							<button type="button" class="voucher-close" onclick={closeVoucherModal}>
-								×
-							</button>
+							<button type="button" class="voucher-close" onclick={closeVoucherModal}> × </button>
 						</div>
 						<div class="voucher-input-row">
 							<label class="voucher-input-label" for="cart-voucher-input">Mã Voucher</label>
@@ -610,7 +605,7 @@
 						</div>
 						<div class="voucher-list">
 							{#if discountOptions.length}
-								{#each discountOptions as option}
+								{#each discountOptions as option, __eachIndex2 (option?._id ?? option?.id ?? __eachIndex2)}
 									<button
 										type="button"
 										class="voucher-card"
@@ -631,9 +626,7 @@
 													: 'Áp dụng cho toàn bộ sản phẩm'}
 											</div>
 											{#if option.discount_customer_applies_to === 'specific'}
-												<div class="voucher-desc warning">
-													Chỉ dành cho khách hàng được chọn
-												</div>
+												<div class="voucher-desc warning">Chỉ dành cho khách hàng được chọn</div>
 											{/if}
 										</div>
 										<div class="voucher-select">
@@ -686,58 +679,14 @@
 	.cart-shell p,
 	.cart-shell a,
 	.cart-shell label,
-	.cart-shell input,
-	.cart-shell select,
-	.cart-shell textarea {
+	.cart-shell input {
 		font-size: var(--ui-text-size);
 	}
 
 	.cart-shell .btn,
-	.cart-shell .form-control,
-	.cart-shell .form-select {
+	.cart-shell .form-control {
 		font-size: var(--ui-text-size);
 		min-height: var(--ui-control-height);
-	}
-
-	.cart-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: flex-end;
-		gap: 12px;
-		margin-bottom: 16px;
-	}
-
-	.cart-header-sub {
-		display: flex;
-		gap: 8px;
-		margin-bottom: 20px;
-		flex-wrap: wrap;
-	}
-
-	.cart-pill {
-		padding: 6px 12px;
-		border-radius: 999px;
-		border: 1px solid rgba(25, 25, 25, 0.1);
-		background: rgba(20, 20, 20, 0.05);
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: #1b1b1b;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-	}
-
-	.cart-lede {
-		max-width: 580px;
-		color: #5b5b5b;
-		margin-top: 4px;
-	}
-
-	.cart-meta {
-		text-align: right;
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		font-weight: 600;
 	}
 
 	.cart-empty-actions {
@@ -1067,7 +1016,6 @@
 		padding: 28px;
 		background: linear-gradient(180deg, #1f1f1f 0%, #121212 100%);
 	}
-
 
 	.summary-row {
 		display: flex;
@@ -1453,8 +1401,6 @@
 		z-index: 0;
 	}
 
-
-
 	.cart-empty {
 		padding: 32px;
 		display: flex;
@@ -1472,15 +1418,6 @@
 
 		.cart-summary {
 			position: static;
-		}
-
-		.cart-header {
-			flex-direction: column;
-			align-items: flex-start;
-		}
-
-		.cart-meta {
-			text-align: left;
 		}
 	}
 

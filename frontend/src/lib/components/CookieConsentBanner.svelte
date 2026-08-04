@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { locale } from '$lib/i18n/index.js';
 	import {
@@ -13,12 +14,10 @@
 	let analyticsEnabled = $state(true);
 
 	const shouldShow = $derived.by(
-		() => Boolean($cookieConsent?.hydrated) && ($cookieConsent?.analytics == null)
+		() => Boolean($cookieConsent?.hydrated) && $cookieConsent?.analytics == null
 	);
 
-	const title = $derived(
-		$locale === 'en' ? 'Cookie preferences' : 'Tùy chọn cookie'
-	);
+	const title = $derived($locale === 'en' ? 'Cookie preferences' : 'Tùy chọn cookie');
 	const description = $derived(
 		$locale === 'en'
 			? 'We use essential cookies for login/cart and optional analytics cookies to understand behavior such as page views, clicks, scroll depth, and time on site.'
@@ -67,12 +66,16 @@
 				<p class="cookie-banner__eyebrow">INOXPRAN</p>
 				<h2 class="cookie-banner__title">{title}</h2>
 				<p class="cookie-banner__desc">{description}</p>
-				<a class="cookie-banner__policy" href="/policies">{policyText}</a>
+				<a class="cookie-banner__policy" href={resolve('/policies')}>{policyText}</a>
 			</div>
 
 			<div class="cookie-banner__actions">
 				<div class="cookie-banner__buttons">
-					<button type="button" class="cookie-btn cookie-btn--ghost" onclick={rejectOptionalCookies}>
+					<button
+						type="button"
+						class="cookie-btn cookie-btn--ghost"
+						onclick={rejectOptionalCookies}
+					>
 						{rejectText}
 					</button>
 					<button type="button" class="cookie-btn cookie-btn--primary" onclick={acceptAllCookies}>

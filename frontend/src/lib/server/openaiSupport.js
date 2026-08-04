@@ -1,7 +1,4 @@
-import { env } from '$env/dynamic/private';
-import fs from 'node:fs';
-import path from 'node:path';
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, PUBLIC_API_KEY_HEADER, readServerEnvValue } from '$lib/server/api.js';
 
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const DEFAULT_OPENAI_MODEL = 'gpt-5.4-nano';
@@ -16,32 +13,7 @@ let knowledgeCache = {
 	documents: []
 };
 
-const readEnvFileValue = (key) => {
-	const candidates = [
-		path.resolve(process.cwd(), '.env'),
-		path.resolve(process.cwd(), '..', '.env')
-	];
-
-	try {
-		for (const envPath of candidates) {
-			if (!fs.existsSync(envPath)) continue;
-			const content = fs.readFileSync(envPath, 'utf8');
-			for (const line of content.split(/\r?\n/)) {
-				const trimmed = line.trim();
-				if (!trimmed || trimmed.startsWith('#')) continue;
-				const [rawKey, ...rest] = trimmed.split('=');
-				if (rawKey !== key) continue;
-				return rest.join('=').trim().replace(/^['"]|['"]$/g, '').trim();
-			}
-		}
-	} catch {
-		return '';
-	}
-
-	return '';
-};
-
-const readPrivateEnv = (key) => String(env[key] || readEnvFileValue(key) || '').trim();
+const readPrivateEnv = (key) => readServerEnvValue(key);
 
 const KNOWLEDGE_CATEGORY_LABELS = {
 	vi: {
@@ -95,7 +67,7 @@ const categoryLabel = (value, locale = 'vi') =>
 
 const buildKnowledgeHeaders = () => {
 	const headers = {};
-	if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+	if (PUBLIC_API_KEY_HEADER) headers['x-api-key'] = PUBLIC_API_KEY_HEADER;
 	return headers;
 };
 
@@ -189,10 +161,9 @@ const buildKnowledgeContextBlock = ({ documents, locale = 'vi' }) => {
 	let totalChars = 0;
 	for (const document of documents) {
 		const snippet = clipText(document.content, MAX_DOCUMENT_SNIPPET_CHARS);
-		const block = [
-			`[${categoryLabel(document.category, locale)}] ${document.title}`,
-			snippet
-		].join('\n');
+		const block = [`[${categoryLabel(document.category, locale)}] ${document.title}`, snippet].join(
+			'\n'
+		);
 		if (totalChars + block.length > MAX_CONTEXT_CHARS) break;
 		chunks.push(block);
 		totalChars += block.length;
@@ -214,7 +185,7 @@ const sanitizeHistory = (history) =>
 const cleanupOutputText = (text) => {
 	return String(text || '')
 		.replace(/\*\*/g, '')
-		.replace(/[\*_`]/g, '')
+		.replace(/[*_`]/g, '')
 		.replace(/\[([^\]]*)\]\(([^)]*)\)/g, '$1')
 		.replace(/#+\s+/g, '')
 		.replace(/^[-•]\s+/gm, '')
@@ -223,7 +194,7 @@ const cleanupOutputText = (text) => {
 		.trim();
 };
 
-const buildSystemPrompt = ({ locale = 'vi', sourcePath, knowledgeContext }) => {
+const buildSystemPrompt = ({ locale = 'vi', knowledgeContext }) => {
 	if (locale === 'en') {
 		return [
 			'You are Inoxpran customer support.',
@@ -234,7 +205,9 @@ const buildSystemPrompt = ({ locale = 'vi', sourcePath, knowledgeContext }) => {
 			'Keep answers concise: 1-3 sentences maximum.',
 			'Use plain text only. No formatting marks or special characters.',
 			knowledgeContext ? `Reference material:\n${knowledgeContext}` : ''
-		].filter(Boolean).join('\n\n');
+		]
+			.filter(Boolean)
+			.join('\n\n');
 	}
 
 	return [
@@ -247,7 +220,9 @@ const buildSystemPrompt = ({ locale = 'vi', sourcePath, knowledgeContext }) => {
 		'Nếu câu hỏi không liên quan đến Inoxpran, nói vui vẻ: "Cảm ơn bạn, nhưng mình chỉ biết về Inoxpran thôi."',
 		'Nếu cần thêm thông tin từ khách để trả lời tốt hơn, hỏi tự nhiên chứ không hỏi "xin phép".',
 		knowledgeContext ? `Thông tin sản phẩm và chính sách:\n${knowledgeContext}` : ''
-	].filter(Boolean).join('\n\n');
+	]
+		.filter(Boolean)
+		.join('\n\n');
 };
 
 const extractAssistantReply = (payload) => {

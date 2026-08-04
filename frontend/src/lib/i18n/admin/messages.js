@@ -589,7 +589,7 @@ export const messages = {
 				title: 'Trung tâm vận hành nội dung',
 				description:
 					'Chọn hành động tốt nhất từ dữ liệu, điều phối work order, theo dõi hiệu quả và học từ từng bài viết.',
-				dailyDraft: 'Daily Draft',
+				dailyDraft: 'Lên lịch Blog',
 				viewNavigation: 'Điều hướng vận hành nội dung',
 				views: {
 					today: 'Hôm nay',
@@ -743,14 +743,17 @@ export const messages = {
 					notChecked: 'Chưa kiểm tra',
 					checkFailed: 'Không thể kiểm tra trạng thái hệ thống.',
 					checksDisabled:
-						'Probe runtime đang tắt theo cấu hình; dữ liệu bên dưới chỉ để tham khảo.',
+						'Giám sát năng lực đang tắt theo cấu hình. Năng lực đã bật và đủ cấu hình sẽ ở trạng thái chờ kiểm tra, không phải lỗi runtime.',
 					empty: 'Chưa có dữ liệu kiểm tra năng lực.',
 					emptyHint: 'Dùng “Kiểm tra tất cả” để chạy probe read-only có giới hạn.',
 					legend: {
 						label: 'Ý nghĩa màu trạng thái',
-						good: 'Xanh: runtime đã được xác minh hoặc năng lực đang tắt đúng thiết kế.',
-						warn: 'Vàng: dữ liệu còn thiếu/cũ hoặc cần kiểm tra thủ công; không đồng nghĩa hệ thống ngừng hoạt động.',
-						danger: 'Đỏ: lỗi thực tế, thiếu cấu hình hoặc runtime không khả dụng.'
+						good: 'Xanh: năng lực đã được probe hoặc artifact runtime gần đây xác minh là khỏe mạnh.',
+						warn: 'Vàng: runtime hoặc dữ liệu thực sự suy giảm và cần xử lý.',
+						danger:
+							'Đỏ: lỗi chặn, runtime không khả dụng hoặc cấu hình bắt buộc thiếu/không hợp lệ.',
+						muted:
+							'Trung tính: chờ kiểm tra, cần xác minh thủ công, tắt theo thiết kế hoặc không áp dụng.'
 					},
 					features: {
 						seo_agent: 'Automation API',
@@ -810,9 +813,16 @@ export const messages = {
 						content_operations_disabled: 'Vận hành nội dung đang tắt.',
 						content_learning_auto_apply_disabled: 'Tự động áp dụng kết quả học đang tắt.',
 						latest_pipeline_failed: 'Lần chạy pipeline gần nhất thất bại.',
+						image_approval_required:
+							'Pipeline đã tạo ảnh; một số ảnh đang chờ quản trị viên duyệt trước khi sử dụng.',
+						image_manual_review_required:
+							'Một số ảnh cần được duyệt thủ công; đây không phải lỗi pipeline.',
 						external_provider_not_probed:
-							'Nhà cung cấp bên ngoài đã được cấu hình nhưng chưa được gọi trong health-check an toàn.',
-						external_delivery_not_probed: 'Chưa probe kênh phân phối bên ngoài.',
+							'Nhà cung cấp bên ngoài đã cấu hình nhưng chưa được probe; cần xác minh thủ công trước khi xem là sẵn sàng.',
+						external_delivery_not_probed:
+							'Kênh phân phối bên ngoài đã cấu hình nhưng health-check không gửi thử; cần xác minh thủ công.',
+						legacy_analytics_configuration_fallback:
+							'Đang dùng khóa analytics cũ để tương thích. Hãy chuyển sang CONTENT_ANALYTICS_ENABLED.',
 						gateway_not_ready: 'OpenClaw Gateway chưa sẵn sàng.',
 						adapter_configuration_verified: 'Cấu hình adapter đã được xác minh.',
 						probe_not_registered: 'Chưa đăng ký probe cho năng lực này.',
@@ -856,6 +866,16 @@ export const messages = {
 						dueTaskCount: 'Tác vụ đến hạn',
 						persistedScheduleEnabled: 'Lịch đã lưu',
 						workerActive: 'Worker hoạt động',
+						workerState: 'Trạng thái worker',
+						workerStates: {
+							processing: 'Đang xử lý một lượt chạy',
+							ready_idle: 'Sẵn sàng · đang chờ công việc',
+							ready: 'Sẵn sàng · chưa xác minh trạng thái tick',
+							scheduler_disabled: 'Không chạy · scheduler đang tắt',
+							heartbeat_missing: 'Không khả dụng · thiếu heartbeat',
+							heartbeat_stale: 'Không khả dụng · heartbeat đã cũ',
+							unknown: 'Chưa xác minh'
+						},
 						schedulerActive: 'Scheduler hoạt động',
 						activeRuns: 'Đang chạy',
 						provider: 'Nhà cung cấp',
@@ -2296,7 +2316,7 @@ export const messages = {
 				title: 'Content operations control room',
 				description:
 					'Choose the best action from evidence, coordinate work orders, measure outcomes, and learn from every article.',
-				dailyDraft: 'Daily Draft',
+				dailyDraft: 'Blog scheduling',
 				viewNavigation: 'Content operations navigation',
 				views: {
 					today: 'Today',
@@ -2450,14 +2470,16 @@ export const messages = {
 					notChecked: 'Not checked',
 					checkFailed: 'Unable to check system capabilities.',
 					checksDisabled:
-						'Runtime probes are disabled by configuration; the data below is informational.',
+						'Capability monitoring is disabled by configuration. Enabled, configured capabilities remain pending verification rather than being reported as runtime failures.',
 					empty: 'No capability check data is available.',
 					emptyHint: 'Use “Check all” to run bounded read-only probes.',
 					legend: {
 						label: 'Status color meaning',
-						good: 'Green: runtime verified, or the capability is disabled as designed.',
-						warn: 'Amber: evidence is missing/stale or manual verification is required; this does not mean an outage.',
-						danger: 'Red: a real failure, missing configuration, or unavailable runtime.'
+						good: 'Green: a probe or recent runtime artifact verified the capability as healthy.',
+						warn: 'Amber: runtime or data is actually degraded and requires action.',
+						danger:
+							'Red: a blocking failure, unavailable runtime, or missing/invalid required configuration.',
+						muted: 'Neutral: pending check, manual review, expected off, or not applicable.'
 					},
 					features: {
 						seo_agent: 'Automation API',
@@ -2517,9 +2539,16 @@ export const messages = {
 						content_operations_disabled: 'Content Operations is disabled.',
 						content_learning_auto_apply_disabled: 'Content-learning auto-apply is disabled.',
 						latest_pipeline_failed: 'The latest pipeline run failed.',
+						image_approval_required:
+							'The pipeline generated images; some are waiting for administrator approval before use.',
+						image_manual_review_required:
+							'Some images require manual approval; this is not a pipeline failure.',
 						external_provider_not_probed:
-							'The external provider is configured but intentionally not called by the safe health check.',
-						external_delivery_not_probed: 'External delivery has not been probed.',
+							'The external provider is configured but has not been probed; verify it manually before treating it as ready.',
+						external_delivery_not_probed:
+							'External delivery is configured, but the health check does not send a test; manual verification is required.',
+						legacy_analytics_configuration_fallback:
+							'The legacy analytics key is active for compatibility. Migrate to CONTENT_ANALYTICS_ENABLED.',
 						gateway_not_ready: 'The OpenClaw Gateway is not ready.',
 						adapter_configuration_verified: 'The adapter configuration was verified.',
 						probe_not_registered: 'No probe is registered for this capability.',
@@ -2563,6 +2592,16 @@ export const messages = {
 						dueTaskCount: 'Due tasks',
 						persistedScheduleEnabled: 'Persisted schedule',
 						workerActive: 'Worker active',
+						workerState: 'Worker state',
+						workerStates: {
+							processing: 'Processing a run',
+							ready_idle: 'Ready · waiting for work',
+							ready: 'Ready · tick state not verified',
+							scheduler_disabled: 'Not running · scheduler is off',
+							heartbeat_missing: 'Unavailable · heartbeat missing',
+							heartbeat_stale: 'Unavailable · heartbeat stale',
+							unknown: 'Not verified'
+						},
 						schedulerActive: 'Scheduler active',
 						activeRuns: 'Active runs',
 						provider: 'Provider',

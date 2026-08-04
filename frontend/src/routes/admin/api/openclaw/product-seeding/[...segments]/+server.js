@@ -1,22 +1,50 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import {
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
+import {
+	matchesOpenClawProxyPath,
+	normalizeOpenClawProxyPath
+} from '$lib/server/openclawProxyPath.js';
+
+const ID = '[A-Za-z0-9_-]{1,128}';
+const ALLOWED = Object.freeze({
+	GET: [/^config$/, /^plans$/, new RegExp(`^plans/${ID}$`), /^exposures$/],
+	POST: [/^preview$/],
+	PATCH: [/^config$/]
+});
 
 const forward = async ({ request, cookies, fetch, url, params, method }) => {
-	const segments = String(params.segments || '').replace(/^\/+|\/+$/g, '');
+	const requestId = createOpenClawRequestId();
+	const segments = normalizeOpenClawProxyPath(params.segments);
+	if (
+		segments === null ||
+		!matchesOpenClawProxyPath({ method, path: segments, contracts: ALLOWED })
+	) {
+		return openClawProxyClientError({
+			status: 404,
+			error: 'Unsupported product seeding request',
+			requestId
+		});
+	}
 	const options = { method, headers: {} };
 	if (['POST', 'PATCH'].includes(method)) {
 		options.headers['content-type'] = 'application/json';
 		options.body = JSON.stringify(await request.json().catch(() => ({})));
 	}
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: `/admin/openclaw/product-seeding/${segments}${url.search || ''}`,
-		options
+		options,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Product seeding request failed',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) return json({ error: payload?.message || 'Product seeding request failed' }, { status: response.status });
-	return json(payload?.metadata || {});
 };
 
 export const GET = (event) => forward({ ...event, method: 'GET' });

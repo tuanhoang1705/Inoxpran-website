@@ -1,22 +1,46 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import {
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
+import {
+	matchesOpenClawProxyPath,
+	normalizeOpenClawProxyPath
+} from '$lib/server/openclawProxyPath.js';
+
+const ID = '[A-Za-z0-9_-]{1,128}';
+const ALLOWED = Object.freeze({
+	POST: [/^generate-today$/],
+	PATCH: [new RegExp(`^${ID}$`)]
+});
 
 const proxy = async ({ request, cookies, fetch, params, method }) => {
-	const suffix = String(params.segments || '').replace(/^\/+/, '');
+	const requestId = createOpenClawRequestId();
+	const suffix = normalizeOpenClawProxyPath(params.segments);
+	if (suffix === null || !matchesOpenClawProxyPath({ method, path: suffix, contracts: ALLOWED })) {
+		return openClawProxyClientError({
+			status: 404,
+			error: 'Unsupported editorial style request',
+			requestId
+		});
+	}
 	const options = { method };
 	if (method !== 'GET') {
 		options.headers = { 'content-type': 'application/json' };
 		options.body = JSON.stringify(await request.json().catch(() => ({})));
 	}
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: `/admin/openclaw/editorial-styles${suffix ? `/${suffix}` : ''}`,
-		options
+		options,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Editorial style request failed',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) return json({ error: payload?.message || 'Editorial style request failed' }, { status: response.status });
-	return json(payload?.metadata || {});
 };
 
 export const GET = (event) => proxy({ ...event, method: 'GET' });

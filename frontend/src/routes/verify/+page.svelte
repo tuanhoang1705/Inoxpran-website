@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { t } from '$lib/i18n/index.js';
 
 	export let data;
@@ -15,9 +16,9 @@
 			<p class="text-black-50 mb-4">{data.message}</p>
 
 			{#if data.status === 'success'}
-				<a class="btn btn-dark" href="/login">{$t('auth.login')}</a>
+				<a class="btn btn-dark" href={resolve('/login')}>{$t('auth.login')}</a>
 			{:else}
-				<a class="btn btn-outline-dark" href="/register">{$t('auth.registerAgain')}</a>
+				<a class="btn btn-outline-dark" href={resolve('/register')}>{$t('auth.registerAgain')}</a>
 			{/if}
 		</div>
 	</div>

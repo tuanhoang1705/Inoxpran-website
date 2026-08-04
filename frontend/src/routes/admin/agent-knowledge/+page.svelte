@@ -4,7 +4,9 @@
 	let { data, form } = $props();
 
 	const documents = $derived(
-		Array.isArray(data?.agentKnowledgeSettings?.documents) ? data.agentKnowledgeSettings.documents : []
+		Array.isArray(data?.agentKnowledgeSettings?.documents)
+			? data.agentKnowledgeSettings.documents
+			: []
 	);
 	const categoryOptions = $derived(
 		Array.isArray(data?.knowledgeCategoryOptions) ? data.knowledgeCategoryOptions : []
@@ -67,7 +69,9 @@
 
 			<form method="POST" action="?/saveDocument" enctype="multipart/form-data" class="row g-3">
 				<div class="col-lg-5">
-					<label class="form-label" for="knowledgeTitle">{isEn ? 'Document title' : 'Tên tài liệu'}</label>
+					<label class="form-label" for="knowledgeTitle"
+						>{isEn ? 'Document title' : 'Tên tài liệu'}</label
+					>
 					<input
 						id="knowledgeTitle"
 						name="knowledgeTitle"
@@ -76,9 +80,11 @@
 					/>
 				</div>
 				<div class="col-lg-4">
-					<label class="form-label" for="knowledgeCategory">{isEn ? 'Category' : 'Nhóm tài liệu'}</label>
+					<label class="form-label" for="knowledgeCategory"
+						>{isEn ? 'Category' : 'Nhóm tài liệu'}</label
+					>
 					<select id="knowledgeCategory" name="knowledgeCategory" class="form-select">
-						{#each categoryOptions as option}
+						{#each categoryOptions as option (option.value)}
 							<option value={option.value}>{option.label}</option>
 						{/each}
 					</select>
@@ -94,13 +100,17 @@
 					/>
 				</div>
 				<div class="col-12">
-					<label class="form-label" for="knowledgeContent">{isEn ? 'Or paste normalized content' : 'Hoặc dán nội dung đã chuẩn hóa'}</label>
+					<label class="form-label" for="knowledgeContent"
+						>{isEn ? 'Or paste normalized content' : 'Hoặc dán nội dung đã chuẩn hóa'}</label
+					>
 					<textarea
 						id="knowledgeContent"
 						name="knowledgeContent"
 						rows="12"
 						class="form-control"
-						placeholder={isEn ? 'Paste plain text, markdown notes, FAQ content, or structured policy details here.' : 'Dán plain text, ghi chú markdown, FAQ, thông tin sản phẩm hoặc chính sách đã chuẩn hóa ở đây.'}
+						placeholder={isEn
+							? 'Paste plain text, markdown notes, FAQ content, or structured policy details here.'
+							: 'Dán plain text, ghi chú markdown, FAQ, thông tin sản phẩm hoặc chính sách đã chuẩn hóa ở đây.'}
 					></textarea>
 					<div class="form-text">
 						{isEn
@@ -109,9 +119,13 @@
 					</div>
 				</div>
 				<div class="col-12 d-flex flex-wrap gap-2 align-items-center">
-					<button class="btn btn-dark" type="submit">{isEn ? 'Save knowledge document' : 'Lưu tài liệu tri thức'}</button>
+					<button class="btn btn-dark" type="submit"
+						>{isEn ? 'Save knowledge document' : 'Lưu tài liệu tri thức'}</button
+					>
 					<span class="small text-secondary">
-						{isEn ? 'Max upload size: 5MB. The stored text will be clipped safely if it exceeds the runtime limit.' : 'Giới hạn file 5MB. Nội dung sau khi chuẩn hóa sẽ được cắt an toàn nếu vượt giới hạn knowledge store.'}
+						{isEn
+							? 'Max upload size: 5MB. The stored text will be clipped safely if it exceeds the runtime limit.'
+							: 'Giới hạn file 5MB. Nội dung sau khi chuẩn hóa sẽ được cắt an toàn nếu vượt giới hạn knowledge store.'}
 					</span>
 				</div>
 			</form>
@@ -124,9 +138,13 @@
 		<section class="agent-knowledge-page__panel border rounded-4 bg-white p-4">
 			<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
 				<div>
-					<h2 class="h5 mb-1">{isEn ? 'Current knowledge documents' : 'Danh sách tài liệu hiện tại'}</h2>
+					<h2 class="h5 mb-1">
+						{isEn ? 'Current knowledge documents' : 'Danh sách tài liệu hiện tại'}
+					</h2>
 					<p class="text-secondary mb-0">
-						{isEn ? 'These documents are injected into the ChatGPT support prompt as runtime knowledge.' : 'Các tài liệu này được đưa vào prompt hỗ trợ ChatGPT như runtime knowledge.'}
+						{isEn
+							? 'These documents are injected into the ChatGPT support prompt as runtime knowledge.'
+							: 'Các tài liệu này được đưa vào prompt hỗ trợ ChatGPT như runtime knowledge.'}
 					</p>
 				</div>
 				<span class="badge text-bg-light border">{documents.length}</span>
@@ -134,13 +152,15 @@
 
 			{#if documents.length}
 				<div class="agent-knowledge-page__documents">
-					{#each documents as document}
+					{#each documents as document (document._id ?? document.id)}
 						<article class="agent-knowledge-doc border rounded-4 p-3">
 							<div class="agent-knowledge-doc__header">
 								<div>
 									<h3 class="h6 mb-1 text-break">{document.title}</h3>
 									<div class="agent-knowledge-doc__meta">
-										<span class="badge rounded-pill text-bg-light border">{getCategoryLabel(document.category)}</span>
+										<span class="badge rounded-pill text-bg-light border"
+											>{getCategoryLabel(document.category)}</span
+										>
 										{#if document.sourceName}
 											<span>{document.sourceName}</span>
 										{/if}
@@ -149,7 +169,9 @@
 								</div>
 								<form method="POST" action="?/deleteDocument">
 									<input type="hidden" name="documentId" value={document.id} />
-									<button class="btn btn-sm btn-outline-danger" type="submit">{isEn ? 'Delete' : 'Xóa'}</button>
+									<button class="btn btn-sm btn-outline-danger" type="submit"
+										>{isEn ? 'Delete' : 'Xóa'}</button
+									>
 								</form>
 							</div>
 

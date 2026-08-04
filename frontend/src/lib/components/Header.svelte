@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
@@ -56,10 +57,6 @@
 		mobileMenuOpen = false;
 	};
 
-	const closeMobileSearch = () => {
-		mobileSearchOpen = false;
-	};
-
 	const resetMobileTransientUi = () => {
 		mobileMenuOpen = false;
 		mobileSearchOpen = false;
@@ -113,7 +110,9 @@
 	};
 
 	const fallbackPromoText = $derived(
-		$locale === 'en' ? 'Welcome gift for first-time customers -' : 'Quà chào mừng cho đơn đầu tiên -'
+		$locale === 'en'
+			? 'Welcome gift for first-time customers -'
+			: 'Quà chào mừng cho đơn đầu tiên -'
 	);
 	const fallbackPromoCta = $derived($locale === 'en' ? 'Get offer' : 'Nhận ưu đãi');
 	const siteMarketingCampaign = $derived(page.data?.siteMarketingCampaign ?? null);
@@ -211,7 +210,7 @@
 		resetMobileTransientUi();
 
 		if (basePath === '/shop') {
-			void goto(nextHref);
+			void goto(resolve(nextHref));
 			return;
 		}
 
@@ -236,7 +235,7 @@
 		const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
 		if (nextPath === currentPath) return;
 		resetMobileTransientUi();
-		await goto(nextPath);
+		await goto(resolve(nextPath));
 	};
 
 	const handleProductSearchSubmit = (event) => {
@@ -259,15 +258,14 @@
 			return;
 		}
 
-		void goto(nextPath);
+		void goto(resolve(nextPath));
 	};
 
 	const navItems = $derived([
 		{ label: $t('nav.home'), href: localizeInternalHref('/') },
 		{ label: $t('nav.about'), href: localizeInternalHref('/about') },
 		{ label: $t('nav.products'), href: localizeInternalHref('/shop') },
-		{ label: $t('nav.blog'), href: localizeInternalHref('/blog') },
-		{ label: 'Cảm Hứng Inoxpran', href: 'https://www.facebook.com/inoxpranvietnam' }
+		{ label: $t('nav.blog'), href: localizeInternalHref('/blog') }
 	]);
 
 	const categories = $derived([
@@ -379,12 +377,11 @@
 
 				<div class="col-md-3 border-start top-info-col top-info-col-promo">
 					<p class="fs-6 my-2 text-center">
-						{promoText}{' '}
+						{promoText}
 						<a
 							class="text-decoration-underline"
-							href={localizeInternalHref('/shop')}
-							onclick={openLeadCapture}
-							>{promoCta}</a
+							href={resolve(localizeInternalHref('/shop'))}
+							onclick={openLeadCapture}>{promoCta}</a
 						>
 					</p>
 				</div>
@@ -395,7 +392,7 @@
 				<div class="col-md-3 border-start top-info-col top-info-col-language">
 					<div class="d-flex justify-content-center py-1">
 						<div class="language-switch top" role="group" aria-label={$t('language.label')}>
-							{#each languageOptions as option}
+							{#each languageOptions as option, __eachIndex5 (option?._id ?? option?.id ?? __eachIndex5)}
 								<button
 									type="button"
 									class:active={$locale === option.code}
@@ -460,7 +457,7 @@
 		<div class="container">
 			<a
 				class="navbar-brand me-3 me-xl-4"
-				href={localizeInternalHref('/')}
+				href={resolve(localizeInternalHref('/'))}
 				aria-label={$t('header.logoLabel')}
 				onclick={handleLogoClick}
 			>
@@ -476,17 +473,22 @@
 			</a>
 			<div class="flex-grow-1 d-flex justify-content-center">
 				<ul id="navbar" class="navbar-nav text-uppercase">
-					{#each navItems as item}
+					{#each navItems as item, __eachIndex1 (item?._id ?? item?.id ?? __eachIndex1)}
 						<li class="nav-item">
 							<a
 								class="nav-link {isActive(item.href) ? 'active' : ''}"
-								href={item.href}
+								href={resolve(item.href)}
 								onclick={(event) => handlePrimaryNavigationClick(event, item.href)}
 							>
 								{item.label}
 							</a>
 						</li>
 					{/each}
+					<li class="nav-item">
+						<a class="nav-link" href="https://www.facebook.com/inoxpranvietnam">
+							Cảm Hứng Inoxpran
+						</a>
+					</li>
 				</ul>
 			</div>
 
@@ -521,7 +523,7 @@
 						<li class="pe-3">
 							<div class="account-menu">
 								<a
-									href={localizeInternalHref('/account')}
+									href={resolve(localizeInternalHref('/account'))}
 									class="account-pill"
 									aria-label={$t('header.account')}
 								>
@@ -542,14 +544,14 @@
 									</span>
 								</a>
 								<div class="account-popover" role="menu" aria-label={$t('header.account')}>
-									<a href={localizeInternalHref('/account')} role="menuitem">
+									<a href={resolve(localizeInternalHref('/account'))} role="menuitem">
 										{$t('header.accountMine')}
 									</a>
-									<a href={localizeInternalHref('/account/purchase')} role="menuitem">
+									<a href={resolve(localizeInternalHref('/account/purchase'))} role="menuitem">
 										{$t('header.purchase')}
 									</a>
 									<a
-										href={localizeInternalHref('/logout')}
+										href={resolve(localizeInternalHref('/logout'))}
 										role="menuitem"
 										class="account-logout"
 										onclick={handleLogoutClick}
@@ -561,7 +563,7 @@
 						</li>
 					{:else}
 						<li class="pe-3">
-							<a href={localizeInternalHref('/login')} aria-label={$t('auth.login')}>
+							<a href={resolve(localizeInternalHref('/login'))} aria-label={$t('auth.login')}>
 								<svg class="user">
 									<use xlink:href="#user"></use>
 								</svg>
@@ -570,7 +572,7 @@
 					{/if}
 					<li class="cart-dropdown">
 						<a
-							href={localizeInternalHref('/cart')}
+							href={resolve(localizeInternalHref('/cart'))}
 							class="cart-toggle"
 							bind:this={cartIconEl}
 							aria-label={$t('header.cart')}
@@ -594,7 +596,7 @@
 		<div class="mobile-top-bar">
 			<div class="mobile-logo">
 				<a
-					href={localizeInternalHref('/')}
+					href={resolve(localizeInternalHref('/'))}
 					aria-label={$t('header.logoLabel')}
 					onclick={(event) => {
 						closeMobileMenu();
@@ -627,7 +629,7 @@
 				</button>
 
 				<a
-					href={localizeInternalHref('/cart')}
+					href={resolve(localizeInternalHref('/cart'))}
 					class="mobile-action-btn cart-btn"
 					bind:this={cartIconMobileEl}
 					aria-label={$t('header.cart')}
@@ -729,10 +731,10 @@
 				<div class="mobile-nav-section">
 					<h4 class="mobile-section-title">{$t('mobileMenu.mainNav')}</h4>
 					<ul class="mobile-nav-list">
-						{#each navItems as item}
+						{#each navItems as item, __eachIndex2 (item?._id ?? item?.id ?? __eachIndex2)}
 							<li>
 								<a
-									href={item.href}
+									href={resolve(item.href)}
 									class={isActive(item.href) ? 'active' : ''}
 									onclick={(event) => handlePrimaryNavigationClick(event, item.href)}
 								>
@@ -740,6 +742,9 @@
 								</a>
 							</li>
 						{/each}
+						<li>
+							<a href="https://www.facebook.com/inoxpranvietnam">Cảm Hứng Inoxpran</a>
+						</li>
 					</ul>
 				</div>
 
@@ -747,10 +752,10 @@
 				<div class="mobile-nav-section">
 					<h4 class="mobile-section-title">{$t('mobileMenu.products')}</h4>
 					<ul class="mobile-categories">
-						{#each categories as cat}
+						{#each categories as cat, __eachIndex3 (cat?._id ?? cat?.id ?? __eachIndex3)}
 							<li>
 								<a
-									href={cat.href}
+									href={resolve(cat.href)}
 									onclick={(event) => handlePrimaryNavigationClick(event, cat.href)}
 								>
 									{cat.label}
@@ -767,7 +772,7 @@
 						{#if user}
 							<li>
 								<a
-									href={localizeInternalHref('/account')}
+									href={resolve(localizeInternalHref('/account'))}
 									class="mobile-account-card"
 									onclick={(event) =>
 										handlePrimaryNavigationClick(event, localizeInternalHref('/account'))}
@@ -791,12 +796,9 @@
 							</li>
 							<li>
 								<a
-									href={localizeInternalHref('/account/purchase')}
+									href={resolve(localizeInternalHref('/account/purchase'))}
 									onclick={(event) =>
-										handlePrimaryNavigationClick(
-											event,
-											localizeInternalHref('/account/purchase')
-										)}
+										handlePrimaryNavigationClick(event, localizeInternalHref('/account/purchase'))}
 								>
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M3 7h18"></path>
@@ -809,7 +811,7 @@
 						{:else}
 							<li>
 								<a
-									href={localizeInternalHref('/login')}
+									href={resolve(localizeInternalHref('/login'))}
 									onclick={(event) =>
 										handlePrimaryNavigationClick(event, localizeInternalHref('/login'))}
 								>
@@ -824,12 +826,9 @@
 						{#if !user}
 							<li>
 								<a
-									href={localizeInternalHref('/account/purchase')}
+									href={resolve(localizeInternalHref('/account/purchase'))}
 									onclick={(event) =>
-										handlePrimaryNavigationClick(
-											event,
-											localizeInternalHref('/account/purchase')
-										)}
+										handlePrimaryNavigationClick(event, localizeInternalHref('/account/purchase'))}
 								>
 									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
 										<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"
@@ -847,7 +846,7 @@
 				<div class="mobile-nav-section">
 					<h4 class="mobile-section-title">{$t('language.label')}</h4>
 					<div class="language-switch mobile">
-						{#each languageOptions as option}
+						{#each languageOptions as option, __eachIndex4 (option?._id ?? option?.id ?? __eachIndex4)}
 							<button
 								type="button"
 								class:active={$locale === option.code}
@@ -912,7 +911,7 @@
 						<p>
 							<strong>{$t('footer.email')}:</strong>
 							<a href="mailto:info%40inoxpran.com">
-								{@html '<!--email_off-->'}info@inoxpran.com{@html '<!--/email_off-->'}
+								<!--email_off-->info@inoxpran.com<!--/email_off-->
 							</a>
 						</p>
 					</div>
@@ -933,7 +932,7 @@
 				{#if user}
 					<div class="mobile-menu-footer">
 						<a
-							href={localizeInternalHref('/logout')}
+							href={resolve(localizeInternalHref('/logout'))}
 							class="mobile-logout-btn"
 							onclick={handleMobileLogoutClick}
 						>

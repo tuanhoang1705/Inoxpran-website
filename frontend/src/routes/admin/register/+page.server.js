@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit';
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { ADMIN_BFF_API_KEY_HEADER, API_BASE } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/admin/server.js';
 
 const PENDING_COOKIE = 'pending_admin_email';
@@ -22,7 +22,7 @@ export const actions = {
 		const headers = {
 			'content-type': 'application/json'
 		};
-		if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+		if (ADMIN_BFF_API_KEY_HEADER) headers['x-api-key'] = ADMIN_BFF_API_KEY_HEADER;
 
 		const response = await fetch(`${API_BASE}/admin/signup`, {
 			method: 'POST',

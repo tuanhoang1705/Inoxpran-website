@@ -43,21 +43,29 @@ export const load = async ({ cookies, fetch, params, url }) => {
 	}
 
 	const payload = await parsePayload(roomResponse);
-	const consultantsPayload = consultantsResponse.ok ? await parsePayload(consultantsResponse) : null;
+	const consultantsPayload = consultantsResponse.ok
+		? await parsePayload(consultantsResponse)
+		: null;
 	const roomListPayload = roomListResponse.ok ? await parsePayload(roomListResponse) : null;
-	const roomList = Array.isArray(roomListPayload?.metadata?.items) ? roomListPayload.metadata.items : [];
+	const roomList = Array.isArray(roomListPayload?.metadata?.items)
+		? roomListPayload.metadata.items
+		: [];
 	const currentRoom = payload?.metadata || null;
-	if (currentRoom?.session?.sessionId && !roomList.some((item) => item?.sessionId === currentRoom.session.sessionId)) {
+	if (
+		currentRoom?.session?.sessionId &&
+		!roomList.some((item) => item?.sessionId === currentRoom.session.sessionId)
+	) {
 		roomList.unshift({
 			...(currentRoom.session || {}),
 			sessionId: currentRoom.session.sessionId,
-			latestMessage: Array.isArray(currentRoom.messages) && currentRoom.messages.length
-				? {
-					role: currentRoom.messages[currentRoom.messages.length - 1]?.role,
-					text: currentRoom.messages[currentRoom.messages.length - 1]?.text,
-					createdAt: currentRoom.messages[currentRoom.messages.length - 1]?.createdAt
-				}
-				: null,
+			latestMessage:
+				Array.isArray(currentRoom.messages) && currentRoom.messages.length
+					? {
+							role: currentRoom.messages[currentRoom.messages.length - 1]?.role,
+							text: currentRoom.messages[currentRoom.messages.length - 1]?.text,
+							createdAt: currentRoom.messages[currentRoom.messages.length - 1]?.createdAt
+						}
+					: null,
 			latestLead: currentRoom.latestLead || null,
 			unreadCount: Number(currentRoom.summary?.unreadCount || 0),
 			sla: currentRoom.sla || null
@@ -103,7 +111,10 @@ const updateRoom = async ({ cookies, fetch, params, request, payload, returnToOv
 	const returnTo = returnToOverride
 		? sanitizeReturnTo(returnToOverride)
 		: sanitizeReturnTo((await request.formData()).get('returnTo'));
-	throw redirect(303, `/admin/chat-rooms/${params.sessionId}?returnTo=${encodeURIComponent(returnTo)}`);
+	throw redirect(
+		303,
+		`/admin/chat-rooms/${params.sessionId}?returnTo=${encodeURIComponent(returnTo)}`
+	);
 };
 
 export const actions = {

@@ -17,7 +17,9 @@ const generateVisitorId = () =>
 	`guest_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 
 const normalizeMessage = (message = {}) => {
-	const role = new Set(['user', 'agent', 'consultant', 'system']).has(String(message?.role || '').trim())
+	const role = new Set(['user', 'agent', 'consultant', 'system']).has(
+		String(message?.role || '').trim()
+	)
 		? String(message.role).trim()
 		: 'system';
 	const text = String(message?.text || '').trim();

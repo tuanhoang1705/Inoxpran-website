@@ -1,23 +1,28 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
-import { sanitizeOpenClawClientPayload } from '$lib/server/openclawClientPayload.js';
+import {
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
 
 export const GET = async ({ params, url, cookies, fetch }) => {
+	const requestId = createOpenClawRequestId();
 	if ([...url.searchParams.keys()].length) {
-		return json({ error: 'OpenClaw run query parameters are not supported' }, { status: 400 });
+		return openClawProxyClientError({
+			status: 400,
+			error: 'OpenClaw run query parameters are not supported',
+			requestId
+		});
 	}
 	const runId = encodeURIComponent(params.runId || '');
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
-		path: `/admin/openclaw/runs/${runId}`
+		path: `/admin/openclaw/runs/${runId}`,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Unable to load OpenClaw run',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json(
-			{ error: payload?.message || 'Unable to load OpenClaw run' },
-			{ status: response.status }
-		);
-	}
-	return json(sanitizeOpenClawClientPayload(payload?.metadata || {}));
 };

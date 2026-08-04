@@ -74,7 +74,9 @@ export const actions = {
 			let message = t('account.errors.profileUpdateFailed');
 			const payloadError = await readJson(response);
 			if (payloadError?.message) {
-				message = t('account.errors.profileUpdateFailedWithReason', { reason: payloadError.message });
+				message = t('account.errors.profileUpdateFailedWithReason', {
+					reason: payloadError.message
+				});
 			}
 			return fail(response.status, { section: 'profile', error: message });
 		}
@@ -115,7 +117,9 @@ export const actions = {
 			let message = t('account.errors.avatarUpdateFailed');
 			const payloadError = await readJson(response);
 			if (payloadError?.message) {
-				message = t('account.errors.avatarUpdateFailedWithReason', { reason: payloadError.message });
+				message = t('account.errors.avatarUpdateFailedWithReason', {
+					reason: payloadError.message
+				});
 			}
 			return fail(response.status, { section: 'avatar', error: message });
 		}
@@ -166,7 +170,9 @@ export const actions = {
 			let message = t('account.errors.passwordUpdateFailed');
 			const payloadError = await readJson(response);
 			if (payloadError?.message) {
-				message = t('account.errors.passwordUpdateFailedWithReason', { reason: payloadError.message });
+				message = t('account.errors.passwordUpdateFailedWithReason', {
+					reason: payloadError.message
+				});
 			}
 			return fail(response.status, { section: 'password', error: message });
 		}

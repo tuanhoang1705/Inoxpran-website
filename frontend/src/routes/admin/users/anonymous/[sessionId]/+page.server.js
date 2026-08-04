@@ -15,7 +15,9 @@ export const load = async ({ cookies, fetch, params }) => {
 	const headers = buildAdminHeaders(session);
 	const t = getTranslator(cookies);
 
-	const response = await fetch(`${API_BASE}/admin/anonymous-visitors/${params.sessionId}`, { headers });
+	const response = await fetch(`${API_BASE}/admin/anonymous-visitors/${params.sessionId}`, {
+		headers
+	});
 	if (!response.ok) {
 		return {
 			visitor: null,

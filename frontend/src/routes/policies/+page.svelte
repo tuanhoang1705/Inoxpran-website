@@ -1,6 +1,7 @@
 <script>
 	import { page } from '$app/stores';
 	import { env } from '$env/dynamic/public';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { locale } from '$lib/i18n/index.js';
 	import { SITE_CONTACT } from '$lib/config/siteContact.js';
 	import { getPolicyPath } from '$lib/content/policies.js';
@@ -17,20 +18,11 @@
 		if (text.length <= limit) return text;
 		return `${text.slice(0, limit - 3).trim()}...`;
 	};
-	const escapeJsonLd = (value) =>
-		String(value || '')
-			.replace(/</g, '\u003c')
-			.replace(/>/g, '\u003e')
-			.replace(/&/g, '\u0026')
-			.replace(/\u2028/g, '\u2028')
-			.replace(/\u2029/g, '\u2029');
-
 	const POLICY_CONTENT = {
 		vi: {
 			title: 'Chính sách mua hàng, vận chuyển và đổi trả',
 			heading: 'Chính sách khách hàng',
-			lede:
-				'Inoxpran áp dụng chính sách minh bạch, dễ kiểm tra và xử lý nhanh cho sản phẩm gia dụng. Nội dung dưới đây được xây dựng theo thông lệ phổ biến của các website gia dụng lớn, đồng thời điều chỉnh cho phù hợp với vận hành thực tế của Inoxpran.',
+			lede: 'Inoxpran áp dụng chính sách minh bạch, dễ kiểm tra và xử lý nhanh cho sản phẩm gia dụng. Nội dung dưới đây được xây dựng theo thông lệ phổ biến của các website gia dụng lớn, đồng thời điều chỉnh cho phù hợp với vận hành thực tế của Inoxpran.',
 			updatedLabel: 'Cập nhật lần cuối',
 			updatedAt: '11/03/2026',
 			summary: [
@@ -42,7 +34,8 @@
 				{
 					label: 'Đổi trả vì lỗi kỹ thuật',
 					value: '7 ngày',
-					description: 'Áp dụng với lỗi do nhà sản xuất hoặc lỗi phát sinh ngay khi sử dụng đúng hướng dẫn.'
+					description:
+						'Áp dụng với lỗi do nhà sản xuất hoặc lỗi phát sinh ngay khi sử dụng đúng hướng dẫn.'
 				},
 				{
 					label: 'Hoàn tiền',
@@ -180,8 +173,7 @@
 		en: {
 			title: 'Store policies, shipping and returns',
 			heading: 'Customer policies',
-			lede:
-				'Inoxpran follows a clear, verifiable and fast-response policy for cookware and home appliances. The policy below is aligned with common practices used by major home-appliance ecommerce stores and adapted to Inoxpran operations.',
+			lede: 'Inoxpran follows a clear, verifiable and fast-response policy for cookware and home appliances. The policy below is aligned with common practices used by major home-appliance ecommerce stores and adapted to Inoxpran operations.',
 			updatedLabel: 'Last updated',
 			updatedAt: 'March 11, 2026',
 			summary: [
@@ -332,10 +324,10 @@
 
 	$: currentLocale = $locale === 'en' ? 'en' : 'vi';
 	$: content = POLICY_CONTENT[currentLocale];
-	$: siteUrl = normalizeSiteUrl(env.PUBLIC_SITE_URL);
+	const siteUrl = normalizeSiteUrl(env.PUBLIC_SITE_URL);
 	$: seoTitle = `${content.title} | Inoxpran`;
 	$: seoDescription = truncateMeta(content.lede);
-	$: ogImageUrl = `${siteUrl}/og-image.png`;
+	const ogImageUrl = `${siteUrl}/og-image.png`;
 	$: ogImageAlt = `${content.title} | Inoxpran`;
 	$: canonicalUrl = `${siteUrl}${$page.url?.pathname || '/policies'}`;
 	$: policyBreadcrumbId = `${canonicalUrl}#breadcrumb`;
@@ -424,10 +416,11 @@
 	<meta name="twitter:description" content={seoDescription} />
 	<meta name="twitter:image" content={ogImageUrl} />
 	<meta name="twitter:image:alt" content={ogImageAlt} />
-	{@html '<script type="application/ld+json">' + escapeJsonLd(policyBreadcrumbJsonLd) + '</script>'}
-	{@html '<script type="application/ld+json">' + escapeJsonLd(policyCollectionJsonLd) + '</script>'}
-	{@html '<script type="application/ld+json">' + escapeJsonLd(policyWebPageJsonLd) + '</script>'}
 </svelte:head>
+
+<JsonLd value={policyBreadcrumbJsonLd} />
+<JsonLd value={policyCollectionJsonLd} />
+<JsonLd value={policyWebPageJsonLd} />
 
 <section class="policy-shell padding-large">
 	<div class="container policy-layout">
@@ -445,7 +438,7 @@
 			</div>
 
 			<div class="policy-summary-grid">
-				{#each content.summary as item}
+				{#each content.summary as item, __eachIndex1 (item?._id ?? item?.id ?? __eachIndex1)}
 					<article class="policy-summary-card">
 						<span>{item.label}</span>
 						<strong>{item.value}</strong>
@@ -459,25 +452,25 @@
 			<aside class="policy-nav-card">
 				<h2>{currentLocale === 'en' ? 'On this page' : 'Mục lục'}</h2>
 				<nav aria-label={currentLocale === 'en' ? 'Policy navigation' : 'Điều hướng chính sách'}>
-					{#each content.nav as item}
+					{#each content.nav as item, __eachIndex3 (item?._id ?? item?.id ?? __eachIndex3)}
 						<a href={`#${item.id}`}>{item.label}</a>
 					{/each}
 				</nav>
 			</aside>
 
 			<div class="policy-sections">
-				{#each content.sections as section}
+				{#each content.sections as section, __eachIndex2 (section?._id ?? section?.id ?? __eachIndex2)}
 					<article id={section.id} class="policy-section-card">
 						<p class="policy-section-kicker">{section.kicker}</p>
 						<h2>{section.title}</h2>
 						<p class="policy-section-desc">{section.description}</p>
 
 						<div class="policy-group-stack">
-							{#each section.groups as group}
+							{#each section.groups as group, __eachIndex4 (group?._id ?? group?.id ?? __eachIndex4)}
 								<section class="policy-group">
 									<h3>{group.title}</h3>
 									<ul>
-										{#each group.items as item}
+										{#each group.items as item, __eachIndex5 (item?._id ?? item?.id ?? __eachIndex5)}
 											<li>{item}</li>
 										{/each}
 									</ul>

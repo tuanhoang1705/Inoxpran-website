@@ -1,4 +1,6 @@
 <script>
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
@@ -45,7 +47,9 @@
 	};
 
 	const truncate = (value, limit = 220) => {
-		const text = String(value || '').replace(/\s+/g, ' ').trim();
+		const text = String(value || '')
+			.replace(/\s+/g, ' ')
+			.trim();
 		if (text.length <= limit) return text;
 		return `${text.slice(0, limit).trim()}...`;
 	};
@@ -57,7 +61,7 @@
 	};
 
 	const buildPageHref = (page) => {
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (filters?.q) params.set('q', filters.q);
 		if (filters?.status && filters.status !== 'all') params.set('status', filters.status);
 		params.set('page', String(page));
@@ -103,7 +107,9 @@
 
 			<div class="create-grid">
 				<div class="filter-field create-grid-full">
-					<label for="review-product-lookup">{$t('admin.productReviews.create.productLookup')}</label>
+					<label for="review-product-lookup"
+						>{$t('admin.productReviews.create.productLookup')}</label
+					>
 					<input
 						id="review-product-lookup"
 						name="productLookup"
@@ -113,7 +119,7 @@
 						placeholder={$t('admin.productReviews.create.productLookupPlaceholder')}
 					/>
 					<datalist id="review-product-targets">
-						{#each targets as target}
+						{#each targets as target, __eachIndex2 (target?._id ?? target?.id ?? __eachIndex2)}
 							<option value={target.lookup}>
 								{target.productName} ({target.productSlug || target.id})
 							</option>
@@ -145,11 +151,7 @@
 
 				<div class="filter-field">
 					<label for="review-rating-input">{$t('admin.productReviews.create.rating')}</label>
-					<select
-						id="review-rating-input"
-						name="rating"
-						class="form-select"
-					>
+					<select id="review-rating-input" name="rating" class="form-select">
 						<option value="5" selected={(manualDraft.rating || '5') === '5'}>5/5</option>
 						<option value="4" selected={manualDraft.rating === '4'}>4/5</option>
 						<option value="3" selected={manualDraft.rating === '3'}>3/5</option>
@@ -160,11 +162,7 @@
 
 				<div class="filter-field">
 					<label for="review-status-input">{$t('admin.productReviews.create.status')}</label>
-					<select
-						id="review-status-input"
-						name="status"
-						class="form-select"
-					>
+					<select id="review-status-input" name="status" class="form-select">
 						<option value="approved" selected={(manualDraft.status || 'approved') === 'approved'}>
 							{$t('admin.productReviews.status.approved')}
 						</option>
@@ -193,7 +191,8 @@
 						rows="5"
 						class="form-control"
 						placeholder={$t('admin.productReviews.create.contentPlaceholder')}
-					>{manualDraft.content || ''}</textarea>
+						>{manualDraft.content || ''}</textarea
+					>
 				</div>
 
 				<div class="filter-field">
@@ -219,7 +218,9 @@
 			</div>
 
 			<div class="filter-actions">
-				<button class="btn btn-dark" type="submit">{$t('admin.productReviews.create.submit')}</button>
+				<button class="btn btn-dark" type="submit"
+					>{$t('admin.productReviews.create.submit')}</button
+				>
 			</div>
 		</form>
 
@@ -238,13 +239,20 @@
 							</div>
 							<div class="target-metrics">
 								<span>
-									{$t('admin.productReviews.targets.aggregateCount')}: <strong>{target.aggregateCount}</strong>
+									{$t('admin.productReviews.targets.aggregateCount')}:
+									<strong>{target.aggregateCount}</strong>
 								</span>
 								<span>
-									{$t('admin.productReviews.targets.approvedReviewCount')}: <strong>{target.approvedReviewCount}</strong>
+									{$t('admin.productReviews.targets.approvedReviewCount')}:
+									<strong>{target.approvedReviewCount}</strong>
 								</span>
 							</div>
-							<a class="btn btn-outline-dark btn-sm" href={buildProductHref(target)} target="_blank" rel="noreferrer">
+							<a
+								class="btn btn-outline-dark btn-sm"
+								href={resolve(buildProductHref(target))}
+								target="_blank"
+								rel="noreferrer"
+							>
 								{$t('admin.productReviews.targets.openProduct')}
 							</a>
 						</article>
@@ -272,7 +280,7 @@
 		<div class="filter-field">
 			<label for="review-status">{$t('admin.productReviews.filters.status')}</label>
 			<select id="review-status" name="status" class="form-select">
-				{#each statusOptions as option}
+				{#each statusOptions as option, __eachIndex1 (option?._id ?? option?.id ?? __eachIndex1)}
 					<option value={option.value} selected={option.value === filters.status}>
 						{option.label}
 					</option>
@@ -281,7 +289,9 @@
 		</div>
 		<div class="filter-actions">
 			<button class="btn btn-dark" type="submit">{$t('admin.productReviews.filters.apply')}</button>
-			<a class="btn btn-outline-dark" href="/admin/reviews">{$t('admin.productReviews.filters.reset')}</a>
+			<a class="btn btn-outline-dark" href={resolve('/admin/reviews')}
+				>{$t('admin.productReviews.filters.reset')}</a
+			>
 		</div>
 	</form>
 
@@ -315,9 +325,7 @@
 							<span>{$t('admin.productReviews.fields.rating')}</span>
 							<strong>{review.rating}/5</strong>
 							<small>
-								{review.verifiedPurchase
-									? $t('admin.productReviews.fields.verified')
-									: '--'}
+								{review.verifiedPurchase ? $t('admin.productReviews.fields.verified') : '--'}
 							</small>
 						</div>
 						<div>
@@ -336,8 +344,12 @@
 					{#if review.images?.length}
 						<div class="review-gallery">
 							{#each review.images as image, index (`${review.id}-${image.path || image.url || index}`)}
+								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- Review media can be an outbound HTTP(S) URL and must not pass through SvelteKit route resolution. -->
 								<a href={image.url} target="_blank" rel="noreferrer">
-									<img src={image.url} alt={review.title || review.authorName || review.productName} />
+									<img
+										src={image.url}
+										alt={review.title || review.authorName || review.productName}
+									/>
 								</a>
 							{/each}
 						</div>
@@ -346,11 +358,7 @@
 					<div class="review-actions">
 						<form method="post" action="?/approve">
 							<input type="hidden" name="reviewId" value={review.id} />
-							<button
-								class="btn btn-success"
-								type="submit"
-								disabled={review.status === 'approved'}
-							>
+							<button class="btn btn-success" type="submit" disabled={review.status === 'approved'}>
 								{$t('admin.productReviews.actions.approve')}
 							</button>
 						</form>
@@ -380,15 +388,20 @@
 		<nav class="pagination">
 			<a
 				class={`page-link ${pagination.page <= 1 ? 'disabled' : ''}`}
-				href={pagination.page <= 1 ? '#' : buildPageHref(pagination.page - 1)}
+				href={pagination.page <= 1 ? '#' : resolve(buildPageHref(pagination.page - 1))}
 				aria-disabled={pagination.page <= 1}
 			>
 				{$t('admin.productReviews.pagination.prev')}
 			</a>
-			<span>{$t('admin.productReviews.pagination.page', { page: pagination.page, total: totalPages })}</span>
+			<span
+				>{$t('admin.productReviews.pagination.page', {
+					page: pagination.page,
+					total: totalPages
+				})}</span
+			>
 			<a
 				class={`page-link ${pagination.page >= totalPages ? 'disabled' : ''}`}
-				href={pagination.page >= totalPages ? '#' : buildPageHref(pagination.page + 1)}
+				href={pagination.page >= totalPages ? '#' : resolve(buildPageHref(pagination.page + 1))}
 				aria-disabled={pagination.page >= totalPages}
 			>
 				{$t('admin.productReviews.pagination.next')}

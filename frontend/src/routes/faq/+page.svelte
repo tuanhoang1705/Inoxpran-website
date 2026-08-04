@@ -1,6 +1,7 @@
 <script>
 	import { page } from '$app/stores';
 	import { env } from '$env/dynamic/public';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { locale, t } from '$lib/i18n/index.js';
 	import { SITE_CONTACT } from '$lib/config/siteContact.js';
 
@@ -11,14 +12,6 @@
 		if (!raw) return DEFAULT_SITE_URL;
 		return raw.replace(/\/+$/, '');
 	};
-	const escapeJsonLd = (value) =>
-		String(value || '')
-			.replace(/</g, '\u003c')
-			.replace(/>/g, '\u003e')
-			.replace(/&/g, '\u0026')
-			.replace(/\u2028/g, '\u2028')
-			.replace(/\u2029/g, '\u2029');
-
 	const FAQ_ENTRIES = {
 		vi: [
 			{
@@ -164,10 +157,11 @@
 	<meta name="twitter:description" content={$t('faq.lede')} />
 	<meta name="twitter:image" content={ogImageUrl} />
 	<meta name="twitter:image:alt" content={ogImageAlt} />
-	{@html '<script type="application/ld+json">' + escapeJsonLd(faqBreadcrumbJsonLd) + '</script>'}
-	{@html '<script type="application/ld+json">' + escapeJsonLd(faqWebPageJsonLd) + '</script>'}
-	{@html '<script type="application/ld+json">' + escapeJsonLd(faqPageJsonLd) + '</script>'}
 </svelte:head>
+
+<JsonLd value={faqBreadcrumbJsonLd} />
+<JsonLd value={faqWebPageJsonLd} />
+<JsonLd value={faqPageJsonLd} />
 
 <section class="faq-page padding-large">
 	<div class="container faq-page__layout">
@@ -179,7 +173,7 @@
 
 		<div class="faq-page__grid">
 			<div class="faq-page__list">
-				{#each faqEntries as entry, index}
+				{#each faqEntries as entry, index (entry?._id ?? entry?.id ?? index)}
 					<details class="faq-item" id={`faq-q-${index + 1}`} open={index === 0}>
 						<summary>{entry.question}</summary>
 						<p>{entry.answer}</p>
@@ -196,10 +190,12 @@
 				</p>
 				<div class="faq-page__contact-card">
 					<span>Hotline</span>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- Telephone links use the tel protocol and are not SvelteKit routes. -->
 					<a href={supportPhoneHref}>{SITE_CONTACT.phone}</a>
 				</div>
 				<div class="faq-page__contact-card">
 					<span>Email</span>
+					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- Email links use the mailto protocol and are not SvelteKit routes. -->
 					<a href={supportEmailHref}>{SITE_CONTACT.email}</a>
 				</div>
 			</aside>

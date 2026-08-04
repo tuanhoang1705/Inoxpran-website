@@ -17,10 +17,10 @@ const parsePayload = async (response) => {
 const isFileLike = (value) =>
 	Boolean(
 		value &&
-			typeof value === 'object' &&
-			typeof value.size === 'number' &&
-			typeof value.type === 'string' &&
-			typeof value.arrayBuffer === 'function'
+		typeof value === 'object' &&
+		typeof value.size === 'number' &&
+		typeof value.type === 'string' &&
+		typeof value.arrayBuffer === 'function'
 	);
 
 const failWithToast = (status, message) =>
@@ -172,7 +172,9 @@ export const actions = {
 		const session = getAdminSession(cookies);
 		const headers = buildAdminHeaders(session);
 		const form = await request.formData();
-		const decision = String(form.get('decision') || '').trim().toLowerCase();
+		const decision = String(form.get('decision') || '')
+			.trim()
+			.toLowerCase();
 		if (!['complete', 'rejected'].includes(decision)) {
 			return failWithToast(400, 'Quyết định duyệt ảnh không hợp lệ.');
 		}

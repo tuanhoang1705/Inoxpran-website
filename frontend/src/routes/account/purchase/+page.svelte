@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { locale, t } from '$lib/i18n/index.js';
 
 	let { data } = $props();
@@ -8,8 +9,16 @@
 
 	const tabs = $derived.by(() => [
 		{ key: 'all', label: $t('purchase.tabs.all'), href: '/account/purchase' },
-		{ key: 'shipping', label: $t('purchase.tabs.shipping'), href: '/account/purchase?status=shipping' },
-		{ key: 'waiting', label: $t('purchase.tabs.waiting'), href: '/account/purchase?status=waiting' },
+		{
+			key: 'shipping',
+			label: $t('purchase.tabs.shipping'),
+			href: '/account/purchase?status=shipping'
+		},
+		{
+			key: 'waiting',
+			label: $t('purchase.tabs.waiting'),
+			href: '/account/purchase?status=waiting'
+		},
 		{
 			key: 'completed',
 			label: $t('purchase.tabs.completed'),
@@ -82,10 +91,10 @@
 		</div>
 
 		<div class="purchase-tabs" role="tablist">
-			{#each tabs as tab}
+			{#each tabs as tab, __eachIndex1 (tab?._id ?? tab?.id ?? __eachIndex1)}
 				<a
 					class:active={tab.key === activeTab}
-					href={tab.href}
+					href={resolve(tab.href)}
 					role="tab"
 					aria-selected={tab.key === activeTab}
 				>
@@ -104,7 +113,7 @@
 			</div>
 		{:else}
 			<div class="purchase-list">
-				{#each orders as order}
+				{#each orders as order, __eachIndex2 (order?._id ?? order?.id ?? __eachIndex2)}
 					<article class="purchase-card">
 						<div class="purchase-card-head">
 							<div>
@@ -146,8 +155,7 @@
 	.purchase-shell {
 		background:
 			radial-gradient(circle at top left, rgba(241, 247, 255, 0.6), transparent 60%),
-			radial-gradient(circle at top right, rgba(255, 244, 230, 0.5), transparent 55%),
-			#fffdf8;
+			radial-gradient(circle at top right, rgba(255, 244, 230, 0.5), transparent 55%), #fffdf8;
 		min-height: 100vh;
 	}
 
@@ -174,7 +182,9 @@
 		padding-bottom: 10px;
 		border-bottom: 2px solid transparent;
 		font-weight: 600;
-		transition: color 0.2s ease, border-color 0.2s ease;
+		transition:
+			color 0.2s ease,
+			border-color 0.2s ease;
 	}
 
 	.purchase-tabs a.active {

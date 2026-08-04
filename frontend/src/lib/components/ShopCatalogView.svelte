@@ -1,4 +1,6 @@
 <script>
+	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { onMount, tick } from 'svelte';
 	import { page } from '$app/stores';
 	import { beforeNavigate, goto } from '$app/navigation';
@@ -6,6 +8,7 @@
 	import { env } from '$env/dynamic/public';
 	import { isRecentNavigationType } from '$lib/client/navigationState.js';
 	import { loadShopViewState, saveShopViewState } from '$lib/client/shopViewState.js';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { locale, t } from '$lib/i18n/index.js';
 	import { flyToCart } from '$lib/client/flyToCart.js';
 	import { addGuestCartItem } from '$lib/client/guestCart.js';
@@ -95,14 +98,14 @@
 
 	const lockAddId = (id) => {
 		if (!id) return;
-		const next = new Set(lockedAddIds);
+		const next = new SvelteSet(lockedAddIds);
 		next.add(String(id));
 		lockedAddIds = next;
 	};
 
 	const unlockAddId = (id) => {
 		if (!id) return;
-		const next = new Set(lockedAddIds);
+		const next = new SvelteSet(lockedAddIds);
 		next.delete(String(id));
 		lockedAddIds = next;
 	};
@@ -128,7 +131,7 @@
 		hideTooltips();
 		const loginHref = resolveLoginRedirectHref();
 		if (typeof window === 'undefined') {
-			void goto(loginHref);
+			void goto(resolve(loginHref));
 			return;
 		}
 		window.location.assign(loginHref);
@@ -217,15 +220,6 @@
 	const priceOptionCount = $derived.by(
 		() => Object.values(priceCountMap).filter((count) => count > 0).length
 	);
-	const hasFilters = $derived(
-		Boolean(
-			filters.q ||
-			filters.tag ||
-			filters.category ||
-			Number.isFinite(filters.minPrice) ||
-			Number.isFinite(filters.maxPrice)
-		)
-	);
 	const isLoadingProducts = $derived(Boolean(pageData?.pending));
 
 	const stripHtml = (value) => {
@@ -275,7 +269,7 @@
 	const getProductItemKey = (imageValue) => {
 		const raw = String(imageValue || '').trim();
 		if (!raw) return '';
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -331,11 +325,11 @@
 	};
 
 	const normalizeFilterQueryParams = (params) => {
-		const next = new URLSearchParams(params);
+		const next = new SvelteURLSearchParams(params);
 		if (next.get('page') === '1') {
 			next.delete('page');
 		}
-		const ordered = new URLSearchParams();
+		const ordered = new SvelteURLSearchParams();
 		Array.from(next.entries())
 			.sort(([keyA], [keyB]) => keyA.localeCompare(keyB))
 			.forEach(([key, value]) => {
@@ -345,7 +339,7 @@
 	};
 
 	const buildHref = (updates) => {
-		const params = new URLSearchParams($page.url.searchParams);
+		const params = new SvelteURLSearchParams($page.url.searchParams);
 		const hasCategoryUpdate = Object.prototype.hasOwnProperty.call(updates, 'category');
 		const nextCategory = hasCategoryUpdate ? updates.category : undefined;
 		const filterResetKeys = ['q', 'tag', 'category', 'minPrice', 'maxPrice', 'sort'];
@@ -399,7 +393,7 @@
 
 	const handleSortChange = async (event) => {
 		const value = event.currentTarget.value;
-		await goto(buildHref({ sort: value || null, page: 1 }), { noScroll: true });
+		await goto(resolve(buildHref({ sort: value || null, page: 1 })), { noScroll: true });
 		await scrollToTop();
 	};
 
@@ -612,7 +606,7 @@
 	});
 
 	const createAddToCartEnhance = (product) => {
-		return ({ form, submitter, cancel }) => {
+		return ({ form, cancel }) => {
 			cartToast.hide();
 
 			const productId = product?._id;
@@ -684,7 +678,7 @@
 
 	const loadMoreProducts = async () => {
 		if (!hasNextPage) return;
-		await goto(buildHref({ limit: visibleLimit + SHOP_LOAD_MORE_STEP, page: 1 }), {
+		await goto(resolve(buildHref({ limit: visibleLimit + SHOP_LOAD_MORE_STEP, page: 1 })), {
 			noScroll: true,
 			keepFocus: true
 		});
@@ -824,8 +818,6 @@
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={seoDescription} />
 	<meta name="twitter:image" content={ogImageUrl} />
-	{@html '<script type="application/ld+json">' + shopBreadcrumbJsonLd + '</script>'}
-	{@html '<script type="application/ld+json">' + collectionPageJsonLd + '</script>'}
 	{#if lcpProductAvifSrcSet && lcpProductAvifHref}
 		<link
 			rel="preload"
@@ -848,6 +840,9 @@
 		/>
 	{/if}
 </svelte:head>
+
+<JsonLd value={shopBreadcrumbJsonLd} />
+<JsonLd value={collectionPageJsonLd} />
 
 <section class="shop-top">
 	<div class="container">
@@ -901,7 +896,7 @@
 								onchange={handleSortChange}
 								value={activeSort}
 							>
-								{#each sortOptions as option}
+								{#each sortOptions as option, __eachIndex6 (option?._id ?? option?.id ?? __eachIndex6)}
 									<option value={option.value}>{option.label}</option>
 								{/each}
 							</select>
@@ -921,10 +916,10 @@
 									</p>
 								</div>
 								<div class="smart-chip-row">
-									{#each categories as category, chipIndex}
+									{#each categories as category, chipIndex (category?._id ?? category?.id ?? chipIndex)}
 										{@const categoryCount = categoryCountMap[category.value] ?? 0}
 										<a
-											href={buildHref({ category: category.value, page: 1 })}
+											href={resolve(buildHref({ category: category.value, page: 1 }))}
 											rel="nofollow"
 											class={`smart-chip ${category.value === activeCategory ? 'is-active' : ''}`}
 											style={`--chip-index:${chipIndex}`}
@@ -942,10 +937,10 @@
 									<span class="smart-group-badge">{tagOptionCount}</span>
 								</p>
 								<div class="smart-chip-row">
-									{#each tags as tag, chipIndex}
+									{#each tags as tag, chipIndex (tag?._id ?? tag?.id ?? chipIndex)}
 										{@const tagCount = tagCountMap[tag.value] ?? 0}
 										<a
-											href={buildHref({ tag: tag.value, q: null, page: 1 })}
+											href={resolve(buildHref({ tag: tag.value, q: null, page: 1 }))}
 											rel="nofollow"
 											class={`smart-chip ${tag.value === activeTag ? 'is-active' : ''}`}
 											style={`--chip-index:${chipIndex}`}
@@ -963,10 +958,12 @@
 									<span class="smart-group-badge">{priceOptionCount}</span>
 								</p>
 								<div class="smart-chip-row">
-									{#each priceFilters as price, chipIndex}
+									{#each priceFilters as price, chipIndex (price?._id ?? price?.id ?? chipIndex)}
 										{@const priceCount = priceCountMap[priceFilterKey(price)] ?? 0}
 										<a
-											href={buildHref({ minPrice: price.min, maxPrice: price.max, page: 1 })}
+											href={resolve(
+												buildHref({ minPrice: price.min, maxPrice: price.max, page: 1 })
+											)}
 											rel="nofollow"
 											class={`smart-chip ${isActivePrice(price, activeMinPrice, activeMaxPrice) ? 'is-active' : ''}`}
 											style={`--chip-index:${chipIndex}`}
@@ -984,7 +981,7 @@
 								{#if activeCategory}
 									<a
 										class="active-filter-chip"
-										href={buildHref({ category: null, page: 1 })}
+										href={resolve(buildHref({ category: null, page: 1 }))}
 										rel="nofollow"
 									>
 										{activeCategoryLabel} ×
@@ -993,7 +990,7 @@
 								{#if activeTag}
 									<a
 										class="active-filter-chip"
-										href={buildHref({ tag: null, q: null, page: 1 })}
+										href={resolve(buildHref({ tag: null, q: null, page: 1 }))}
 										rel="nofollow"
 									>
 										{tags.find((tag) => tag.value === activeTag)?.label ?? activeTag} ×
@@ -1002,7 +999,7 @@
 								{#if filters.q}
 									<a
 										class="active-filter-chip"
-										href={buildHref({ q: null, page: 1 })}
+										href={resolve(buildHref({ q: null, page: 1 }))}
 										rel="nofollow"
 									>
 										"{filters.q}" ×
@@ -1011,7 +1008,7 @@
 								{#if activePriceLabel}
 									<a
 										class="active-filter-chip"
-										href={buildHref({ minPrice: null, maxPrice: null, page: 1 })}
+										href={resolve(buildHref({ minPrice: null, maxPrice: null, page: 1 }))}
 										rel="nofollow"
 									>
 										{activePriceLabel} ×
@@ -1020,7 +1017,7 @@
 								{#if activeSort}
 									<a
 										class="active-filter-chip"
-										href={buildHref({ sort: null, page: 1 })}
+										href={resolve(buildHref({ sort: null, page: 1 }))}
 										rel="nofollow"
 									>
 										{activeSortLabel} ×
@@ -1028,15 +1025,17 @@
 								{/if}
 								<a
 									class="active-filter-clear"
-									href={buildHref({
-										q: null,
-										tag: null,
-										category: null,
-										minPrice: null,
-										maxPrice: null,
-										sort: null,
-										page: 1
-									})}
+									href={resolve(
+										buildHref({
+											q: null,
+											tag: null,
+											category: null,
+											minPrice: null,
+											maxPrice: null,
+											sort: null,
+											page: 1
+										})
+									)}
 									rel="nofollow"
 								>
 									{$t('shop.clearFilters')}
@@ -1072,7 +1071,7 @@
 				{#if products.length === 0}
 					{#if isLoadingProducts}
 						<div class="row product-content product-store">
-							{#each Array(8) as _, i}
+							{#each Array(8) as _, i (_?._id ?? _?.id ?? i)}
 								<div class="col-xxl-3 col-lg-3 col-md-6 mb-4">
 									<div class="card product-card position-relative p-4 border rounded-3">
 										<div class="product-thumb skeleton skeleton-thumb"></div>
@@ -1095,14 +1094,16 @@
 							<p class="mb-2">{$t('shop.noResults')}</p>
 							<a
 								class="btn btn-outline-dark"
-								href={buildHref({
-									q: null,
-									tag: null,
-									category: null,
-									minPrice: null,
-									maxPrice: null,
-									page: 1
-								})}
+								href={resolve(
+									buildHref({
+										q: null,
+										tag: null,
+										category: null,
+										minPrice: null,
+										maxPrice: null,
+										page: 1
+									})
+								)}
 								rel="nofollow"
 							>
 								{$t('shop.clearFilters')}
@@ -1111,7 +1112,7 @@
 					{/if}
 				{:else}
 					<div class="row product-content product-store">
-						{#each products as product, index}
+						{#each products as product, index (product?._id ?? product?.id ?? index)}
 							{@const productThumb = normalizeProductThumb(product.product_thumb)}
 							{@const productThumbAvifSrcSet = getProductCardAvifSrcSet(productThumb)}
 							{@const productThumbWebpSrcSet = getProductCardWebpSrcSet(productThumb)}
@@ -1127,7 +1128,7 @@
 									{/if}
 									<a
 										class="product-card-link"
-										href={getProductHref(product)}
+										href={resolve(getProductHref(product))}
 										aria-label={product.product_name}
 										data-track="product_click"
 										data-track-section="shop_catalog"
@@ -1252,10 +1253,10 @@
 							<h3 class="d-flex flex-column mb-0">{$t('shop.sidebarCategoriesTitle')}</h3>
 						</div>
 						<ul class="product-categories mb-0 sidebar-list list-unstyled">
-							{#each categories as category}
+							{#each categories as category, __eachIndex3 (category?._id ?? category?.id ?? __eachIndex3)}
 								<li class="cat-item">
 									<a
-										href={buildHref({ category: category.value, page: 1 })}
+										href={resolve(buildHref({ category: category.value, page: 1 }))}
 										rel="nofollow"
 										class={category.value === activeCategory ? 'active' : ''}
 									>
@@ -1271,10 +1272,10 @@
 							<h3 class="d-flex flex-column mb-0">{$t('shop.sidebarTagsTitle')}</h3>
 						</div>
 						<ul class="product-tags mb-0 sidebar-list list-unstyled">
-							{#each tags as tag}
+							{#each tags as tag, __eachIndex4 (tag?._id ?? tag?.id ?? __eachIndex4)}
 								<li class="tags-item">
 									<a
-										href={buildHref({ tag: tag.value, q: null, page: 1 })}
+										href={resolve(buildHref({ tag: tag.value, q: null, page: 1 }))}
 										rel="nofollow"
 										class={tag.value === activeTag ? 'active' : ''}
 									>
@@ -1290,10 +1291,10 @@
 							<h3 class="d-flex flex-column mb-0">{$t('shop.sidebarPriceTitle')}</h3>
 						</div>
 						<ul class="product-tags mb-0 sidebar-list list-unstyled">
-							{#each priceFilters as price}
+							{#each priceFilters as price, __eachIndex5 (price?._id ?? price?.id ?? __eachIndex5)}
 								<li class="tags-item">
 									<a
-										href={buildHref({ minPrice: price.min, maxPrice: price.max, page: 1 })}
+										href={resolve(buildHref({ minPrice: price.min, maxPrice: price.max, page: 1 }))}
 										rel="nofollow"
 										class={isActivePrice(price, activeMinPrice, activeMaxPrice) ? 'active' : ''}
 									>
@@ -1307,15 +1308,17 @@
 					<div class="pt-4">
 						<a
 							class="btn btn-outline-dark w-100"
-							href={buildHref({
-								q: null,
-								tag: null,
-								category: null,
-								minPrice: null,
-								maxPrice: null,
-								sort: null,
-								page: 1
-							})}
+							href={resolve(
+								buildHref({
+									q: null,
+									tag: null,
+									category: null,
+									minPrice: null,
+									maxPrice: null,
+									sort: null,
+									page: 1
+								})
+							)}
 							rel="nofollow"
 						>
 							{$t('shop.clearFilters')}

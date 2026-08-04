@@ -38,4 +38,3 @@ export const translateAuthApiMessage = ({ message, locale, t }) => {
 
 	return (translators[raw] || identity)(raw);
 };
-

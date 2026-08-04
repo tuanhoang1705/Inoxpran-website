@@ -1,4 +1,6 @@
 <script>
+	import TrustedHtml from '$lib/components/TrustedHtml.svelte';
+
 	export let content = '';
 
 	// Wrap tables in a horizontally scrollable container so wide comparison
@@ -12,7 +14,7 @@
 </script>
 
 <div class="rich-text-display">
-	{@html displayContent}
+	<TrustedHtml html={displayContent} />
 </div>
 
 <style>

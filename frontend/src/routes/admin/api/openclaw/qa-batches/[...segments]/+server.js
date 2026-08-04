@@ -1,9 +1,10 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
 import {
-	sanitizeOpenClawClientPayload,
-	sanitizeOpenClawErrorMessage
-} from '$lib/server/openclawClientPayload.js';
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
 import {
 	safeQaCreateBody,
 	safeQaEmptyActionBody,
@@ -52,33 +53,54 @@ const safeListSearch = (url, path) => {
 };
 
 const proxy = async ({ request, params, cookies, fetch, url, method }) => {
+	const requestId = createOpenClawRequestId();
 	const path = normalizePath(params.segments);
 	if (path === null || !(ALLOWED[method] || []).some((pattern) => pattern.test(path))) {
-		return json({ error: 'Unsupported Agentic Blog QA request' }, { status: 404 });
+		return openClawProxyClientError({
+			status: 404,
+			error: 'Unsupported Agentic Blog QA request',
+			requestId
+		});
 	}
 	const safeSearch = method === 'GET' ? safeListSearch(url, path) : url.search ? null : '';
 	if (safeSearch === null) {
-		return json({ error: 'Unsupported Agentic Blog QA query' }, { status: 400 });
+		return openClawProxyClientError({
+			status: 400,
+			error: 'Unsupported Agentic Blog QA query',
+			requestId
+		});
 	}
 
 	const options = { method };
 	if (method === 'POST') {
 		const rawBody = await request.text().catch(() => '');
 		if (rawBody.length > 16 * 1024) {
-			return json({ error: 'Agentic Blog QA request is too large' }, { status: 413 });
+			return openClawProxyClientError({
+				status: 413,
+				error: 'Agentic Blog QA request is too large',
+				requestId
+			});
 		}
 		let body = {};
 		if (rawBody.trim()) {
 			try {
 				body = JSON.parse(rawBody);
 			} catch {
-				return json({ error: 'Malformed JSON request body' }, { status: 400 });
+				return openClawProxyClientError({
+					status: 400,
+					error: 'Malformed JSON request body',
+					requestId
+				});
 			}
 		}
 		options.headers = { 'content-type': 'application/json' };
 		const idempotencyKey = String(request.headers.get('idempotency-key') || '').trim();
 		if (idempotencyKey && !IDEMPOTENCY_KEY.test(idempotencyKey)) {
-			return json({ error: 'Invalid Idempotency-Key' }, { status: 400 });
+			return openClawProxyClientError({
+				status: 400,
+				error: 'Invalid Idempotency-Key',
+				requestId
+			});
 		}
 		if (idempotencyKey) options.headers['Idempotency-Key'] = idempotencyKey;
 		const isResume = new RegExp(`^${ID}/remediation/${ID}/resume$`).test(path);
@@ -88,31 +110,26 @@ const proxy = async ({ request, params, cookies, fetch, url, method }) => {
 				? safeQaResumeBody(body)
 				: safeQaEmptyActionBody(body);
 		if (!forwardedBody) {
-			return json({ error: 'Invalid Agentic Blog QA request body' }, { status: 400 });
+			return openClawProxyClientError({
+				status: 400,
+				error: 'Invalid Agentic Blog QA request body',
+				requestId
+			});
 		}
 		options.body = JSON.stringify(forwardedBody);
 	}
 
 	const suffix = path ? `/${path}` : '';
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: `/admin/openclaw/qa-batches${suffix}${safeSearch}`,
-		options
+		options,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Agentic Blog QA request failed',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json(
-			{
-				error:
-					response.status >= 500
-						? 'Internal Server Error'
-						: sanitizeOpenClawErrorMessage(payload?.message, 'Agentic Blog QA request failed')
-			},
-			{ status: response.status }
-		);
-	}
-	return json(sanitizeOpenClawClientPayload(payload?.metadata ?? payload ?? {}));
 };
 
 export const GET = (event) => proxy({ ...event, method: 'GET' });

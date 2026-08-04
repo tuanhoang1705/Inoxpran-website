@@ -1,21 +1,12 @@
 <script>
+	import TrustedHtml from '$lib/components/TrustedHtml.svelte';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { t, locale } from '$lib/i18n/admin/index.js';
-	import { Editor } from '@tiptap/core';
-	import StarterKit from '@tiptap/starter-kit';
-	import Image from '@tiptap/extension-image';
-	import Link from '@tiptap/extension-link';
-	import Underline from '@tiptap/extension-underline';
-	import TextAlign from '@tiptap/extension-text-align';
-	import { TextStyle } from '@tiptap/extension-text-style';
-	import Color from '@tiptap/extension-color';
-	import Placeholder from '@tiptap/extension-placeholder';
-	import { Table, TableRow, TableHeader, TableCell } from '@tiptap/extension-table';
-	import { TaskList } from '@tiptap/extension-task-list';
-	import { TaskItem } from '@tiptap/extension-task-item';
-	import Figure from '$lib/editor/figureNode.js';
-	import { normalizeLegacyBlogContent, computeContentStats } from '$lib/editor/blogContentAdapter.js';
+	import {
+		normalizeLegacyBlogContent,
+		computeContentStats
+	} from '$lib/editor/blogContentAdapter.js';
 
 	let {
 		value = '',
@@ -146,7 +137,14 @@
 	const stats = $derived.by(() => {
 		void txCount;
 		if (!ready || !editor) {
-			return { words: 0, characters: 0, readingTime: 1, headings: { total: 0 }, hasH2: false, invalidHierarchy: false };
+			return {
+				words: 0,
+				characters: 0,
+				readingTime: 1,
+				headings: { total: 0 },
+				hasH2: false,
+				invalidHierarchy: false
+			};
 		}
 		return computeContentStats({ text: editor.getText(), html: editor.getHTML() });
 	});
@@ -414,92 +412,132 @@
 	};
 
 	onMount(() => {
-		editor = new Editor({
-			element: editorElement,
-			content: normalizeLegacyBlogContent(value || ''),
-			extensions: [
-				StarterKit.configure({
-					heading: { levels: [2, 3, 4, 5, 6] }
-				}),
-				Underline,
-				TextStyle,
-				Color,
-				Link.configure({ openOnClick: false, autolink: true }),
-				Image.extend({
-					addAttributes() {
-						return {
-							...this.parent?.(),
-							width: {
-								default: null,
-								parseHTML: (element) => element.getAttribute('width'),
-								renderHTML: (attributes) =>
-									attributes.width ? { width: attributes.width } : {}
-							},
-							height: {
-								default: null,
-								parseHTML: (element) => element.getAttribute('height'),
-								renderHTML: (attributes) =>
-									attributes.height ? { height: attributes.height } : {}
-							},
-							imageId: {
-								default: null,
-								parseHTML: (element) => element.getAttribute('data-image-id'),
-								renderHTML: (attributes) =>
-									attributes.imageId ? { 'data-image-id': attributes.imageId } : {}
-							},
-							sourceType: {
-								default: null,
-								parseHTML: (element) => element.getAttribute('data-source-type'),
-								renderHTML: (attributes) =>
-									attributes.sourceType ? { 'data-source-type': attributes.sourceType } : {}
-							},
-							reviewStatus: {
-								default: null,
-								parseHTML: (element) => element.getAttribute('data-review-status'),
-								renderHTML: (attributes) =>
-									attributes.reviewStatus
-										? { 'data-review-status': attributes.reviewStatus }
-										: {}
-							}
-						};
-					}
-				}).configure({ inline: false }),
-				Figure,
-				TextAlign.configure({ types: ['heading', 'paragraph'] }),
-				Placeholder.configure({ placeholder: editorPlaceholder }),
-				Table.configure({ resizable: true, allowTableNodeSelection: true }),
-				TableRow,
-				TableHeader,
-				TableCell,
-				TaskList,
-				TaskItem.configure({ nested: true })
-			],
-			onUpdate: () => {
-				txCount += 1;
-				if (isUpdatingFromProp) return;
-				emitChange();
-			},
-			onSelectionUpdate: () => {
-				txCount += 1;
-			}
-		});
+		let cancelled = false;
 
-		const dom = editor.view.dom;
-		dom.addEventListener('drop', handleDrop);
-		dom.addEventListener('paste', handlePaste);
-		dom.addEventListener('pointerover', handleEditorPointerOver);
-		dom.addEventListener('click', handleEditorClick);
-		dom.addEventListener('pointerleave', scheduleHideReviewToolbar);
-		detachEditorHandlers = () => {
-			dom.removeEventListener('drop', handleDrop);
-			dom.removeEventListener('paste', handlePaste);
-			dom.removeEventListener('pointerover', handleEditorPointerOver);
-			dom.removeEventListener('click', handleEditorClick);
-			dom.removeEventListener('pointerleave', scheduleHideReviewToolbar);
+		void import('$lib/editor/tiptapRuntime.js')
+			.then(({ loadTiptapRuntime }) => loadTiptapRuntime())
+			.then(
+				({
+					Color,
+					Editor,
+					Figure,
+					Image,
+					Link,
+					Placeholder,
+					StarterKit,
+					Table,
+					TableCell,
+					TableHeader,
+					TableRow,
+					TaskItem,
+					TaskList,
+					TextAlign,
+					TextStyle,
+					Underline
+				}) => {
+					if (cancelled || !editorElement) return;
+
+					editor = new Editor({
+						element: editorElement,
+						content: normalizeLegacyBlogContent(value || ''),
+						extensions: [
+							StarterKit.configure({
+								heading: { levels: [2, 3, 4, 5, 6] }
+							}),
+							Underline,
+							TextStyle,
+							Color,
+							Link.configure({ openOnClick: false, autolink: true }),
+							Image.extend({
+								addAttributes() {
+									return {
+										...this.parent?.(),
+										width: {
+											default: null,
+											parseHTML: (element) => element.getAttribute('width'),
+											renderHTML: (attributes) =>
+												attributes.width ? { width: attributes.width } : {}
+										},
+										height: {
+											default: null,
+											parseHTML: (element) => element.getAttribute('height'),
+											renderHTML: (attributes) =>
+												attributes.height ? { height: attributes.height } : {}
+										},
+										imageId: {
+											default: null,
+											parseHTML: (element) => element.getAttribute('data-image-id'),
+											renderHTML: (attributes) =>
+												attributes.imageId ? { 'data-image-id': attributes.imageId } : {}
+										},
+										sourceType: {
+											default: null,
+											parseHTML: (element) => element.getAttribute('data-source-type'),
+											renderHTML: (attributes) =>
+												attributes.sourceType ? { 'data-source-type': attributes.sourceType } : {}
+										},
+										reviewStatus: {
+											default: null,
+											parseHTML: (element) => element.getAttribute('data-review-status'),
+											renderHTML: (attributes) =>
+												attributes.reviewStatus
+													? { 'data-review-status': attributes.reviewStatus }
+													: {}
+										}
+									};
+								}
+							}).configure({ inline: false }),
+							Figure,
+							TextAlign.configure({ types: ['heading', 'paragraph'] }),
+							Placeholder.configure({ placeholder: editorPlaceholder }),
+							Table.configure({ resizable: true, allowTableNodeSelection: true }),
+							TableRow,
+							TableHeader,
+							TableCell,
+							TaskList,
+							TaskItem.configure({ nested: true })
+						],
+						onUpdate: () => {
+							txCount += 1;
+							if (isUpdatingFromProp) return;
+							emitChange();
+						},
+						onSelectionUpdate: () => {
+							txCount += 1;
+						}
+					});
+
+					const dom = editor.view.dom;
+					dom.addEventListener('drop', handleDrop);
+					dom.addEventListener('paste', handlePaste);
+					dom.addEventListener('pointerover', handleEditorPointerOver);
+					dom.addEventListener('click', handleEditorClick);
+					dom.addEventListener('pointerleave', scheduleHideReviewToolbar);
+					detachEditorHandlers = () => {
+						dom.removeEventListener('drop', handleDrop);
+						dom.removeEventListener('paste', handlePaste);
+						dom.removeEventListener('pointerover', handleEditorPointerOver);
+						dom.removeEventListener('click', handleEditorClick);
+						dom.removeEventListener('pointerleave', scheduleHideReviewToolbar);
+					};
+
+					ready = true;
+					txCount += 1;
+				}
+			)
+			.catch(() => {
+				if (cancelled) return;
+				pushToast({
+					tone: 'error',
+					message: isEn
+						? 'The editor could not be loaded. Please reload the page.'
+						: 'Không thể tải trình soạn thảo. Vui lòng tải lại trang.'
+				});
+			});
+
+		return () => {
+			cancelled = true;
 		};
-
-		ready = true;
-		txCount += 1;
 	});
 
 	onDestroy(() => {
@@ -541,15 +579,15 @@
 				class="toolbar-btn"
 				title={L.undo}
 				disabled={!can((e) => e.can().undo())}
-				onclick={() => editor?.chain().focus().undo().run()}
-			>↺</button>
+				onclick={() => editor?.chain().focus().undo().run()}>↺</button
+			>
 			<button
 				type="button"
 				class="toolbar-btn"
 				title={L.redo}
 				disabled={!can((e) => e.can().redo())}
-				onclick={() => editor?.chain().focus().redo().run()}
-			>↻</button>
+				onclick={() => editor?.chain().focus().redo().run()}>↻</button
+			>
 		</div>
 
 		<div class="toolbar-group">
@@ -564,66 +602,168 @@
 		</div>
 
 		<div class="toolbar-group">
-			<button type="button" class="toolbar-btn" class:is-active={isActive('bold')} title={L.bold}
-				onclick={() => editor?.chain().focus().toggleBold().run()}><b>B</b></button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive('italic')} title={L.italic}
-				onclick={() => editor?.chain().focus().toggleItalic().run()}><i>I</i></button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive('underline')} title={L.underline}
-				onclick={() => editor?.chain().focus().toggleUnderline().run()}><u>U</u></button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive('strike')} title={L.strike}
-				onclick={() => editor?.chain().focus().toggleStrike().run()}><s>S</s></button>
-			<button type="button" class="toolbar-btn mono" class:is-active={isActive('code')} title={L.inlineCode}
-				onclick={() => editor?.chain().focus().toggleCode().run()}>{'</>'}</button>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('bold')}
+				title={L.bold}
+				onclick={() => editor?.chain().focus().toggleBold().run()}><b>B</b></button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('italic')}
+				title={L.italic}
+				onclick={() => editor?.chain().focus().toggleItalic().run()}><i>I</i></button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('underline')}
+				title={L.underline}
+				onclick={() => editor?.chain().focus().toggleUnderline().run()}><u>U</u></button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('strike')}
+				title={L.strike}
+				onclick={() => editor?.chain().focus().toggleStrike().run()}><s>S</s></button
+			>
+			<button
+				type="button"
+				class="toolbar-btn mono"
+				class:is-active={isActive('code')}
+				title={L.inlineCode}
+				onclick={() => editor?.chain().focus().toggleCode().run()}>&lt;/&gt;</button
+			>
 		</div>
 
 		<div class="toolbar-group">
-			<button type="button" class="toolbar-btn" class:is-active={isActive('bulletList')} title={L.bulletList}
-				onclick={() => editor?.chain().focus().toggleBulletList().run()}>•≡</button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive('orderedList')} title={L.orderedList}
-				onclick={() => editor?.chain().focus().toggleOrderedList().run()}>1.</button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive('taskList')} title={L.taskList}
-				onclick={() => editor?.chain().focus().toggleTaskList().run()}>☑</button>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('bulletList')}
+				title={L.bulletList}
+				onclick={() => editor?.chain().focus().toggleBulletList().run()}>•≡</button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('orderedList')}
+				title={L.orderedList}
+				onclick={() => editor?.chain().focus().toggleOrderedList().run()}>1.</button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('taskList')}
+				title={L.taskList}
+				onclick={() => editor?.chain().focus().toggleTaskList().run()}>☑</button
+			>
 		</div>
 
 		<div class="toolbar-group">
-			<button type="button" class="toolbar-btn" class:is-active={isActive({ textAlign: 'left' })} title={L.alignLeft}
-				onclick={() => editor?.chain().focus().setTextAlign('left').run()}>⯇</button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive({ textAlign: 'center' })} title={L.alignCenter}
-				onclick={() => editor?.chain().focus().setTextAlign('center').run()}>≡</button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive({ textAlign: 'right' })} title={L.alignRight}
-				onclick={() => editor?.chain().focus().setTextAlign('right').run()}>⯈</button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive({ textAlign: 'justify' })} title={L.alignJustify}
-				onclick={() => editor?.chain().focus().setTextAlign('justify').run()}>☰</button>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive({ textAlign: 'left' })}
+				title={L.alignLeft}
+				onclick={() => editor?.chain().focus().setTextAlign('left').run()}>⯇</button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive({ textAlign: 'center' })}
+				title={L.alignCenter}
+				onclick={() => editor?.chain().focus().setTextAlign('center').run()}>≡</button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive({ textAlign: 'right' })}
+				title={L.alignRight}
+				onclick={() => editor?.chain().focus().setTextAlign('right').run()}>⯈</button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive({ textAlign: 'justify' })}
+				title={L.alignJustify}
+				onclick={() => editor?.chain().focus().setTextAlign('justify').run()}>☰</button
+			>
 		</div>
 
 		<div class="toolbar-group">
-			<button type="button" class="toolbar-btn" class:is-active={isActive('blockquote')} title={L.blockquote}
-				onclick={() => editor?.chain().focus().toggleBlockquote().run()}>❝</button>
-			<button type="button" class="toolbar-btn" class:is-active={isActive('codeBlock')} title={L.codeBlock}
-				onclick={() => editor?.chain().focus().toggleCodeBlock().run()}>{'{ }'}</button>
-			<button type="button" class="toolbar-btn" title={L.horizontalRule}
-				onclick={() => editor?.chain().focus().setHorizontalRule().run()}>―</button>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('blockquote')}
+				title={L.blockquote}
+				onclick={() => editor?.chain().focus().toggleBlockquote().run()}>❝</button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={isActive('codeBlock')}
+				title={L.codeBlock}
+				onclick={() => editor?.chain().focus().toggleCodeBlock().run()}>{'{ }'}</button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				title={L.horizontalRule}
+				onclick={() => editor?.chain().focus().setHorizontalRule().run()}>―</button
+			>
 		</div>
 
 		<div class="toolbar-group">
 			<button type="button" class="toolbar-btn" title={L.link} onclick={openLinkModal}>🔗</button>
 			<label class="toolbar-btn file-input-btn" title={L.image}>
 				🖼
-				<input type="file" accept="image/*" onchange={handleImageSelect} bind:this={imageInput}
-					disabled={imageUploadStatus === 'uploading'} style="display:none" />
+				<input
+					type="file"
+					accept="image/*"
+					onchange={handleImageSelect}
+					bind:this={imageInput}
+					disabled={imageUploadStatus === 'uploading'}
+					style="display:none"
+				/>
 			</label>
 			<button type="button" class="toolbar-btn" title={L.table} onclick={insertTable}>▦</button>
-			<button type="button" class="toolbar-btn" title={L.imageProps} disabled={!imageSelected} onclick={openImageDialog}>ℹ</button>
+			<button
+				type="button"
+				class="toolbar-btn"
+				title={L.imageProps}
+				disabled={!imageSelected}
+				onclick={openImageDialog}>ℹ</button
+			>
 			{#if showLinkModal}
 				<div class="link-modal">
 					<div class="link-modal-content">
-						<input type="text" placeholder={$t('admin.editor.linkUrlPlaceholder')} bind:value={linkUrl} class="link-input" />
-						<input type="text" placeholder={$t('admin.editor.linkTextPlaceholder')} bind:value={linkText} class="link-input" />
-						<label class="link-checkbox"><input type="checkbox" bind:checked={linkNewTab} /> {L.linkNewTab}</label>
+						<input
+							type="text"
+							placeholder={$t('admin.editor.linkUrlPlaceholder')}
+							bind:value={linkUrl}
+							class="link-input"
+						/>
+						<input
+							type="text"
+							placeholder={$t('admin.editor.linkTextPlaceholder')}
+							bind:value={linkText}
+							class="link-input"
+						/>
+						<label class="link-checkbox"
+							><input type="checkbox" bind:checked={linkNewTab} /> {L.linkNewTab}</label
+						>
 						<div class="link-actions">
-							<button type="button" class="btn-small btn-primary" onclick={insertLink}>{L.add}</button>
+							<button type="button" class="btn-small btn-primary" onclick={insertLink}
+								>{L.add}</button
+							>
 							<button type="button" class="btn-small" onclick={removeLink}>✕ 🔗</button>
-							<button type="button" class="btn-small" onclick={() => (showLinkModal = false)}>{L.cancel}</button>
+							<button type="button" class="btn-small" onclick={() => (showLinkModal = false)}
+								>{L.cancel}</button
+							>
 						</div>
 					</div>
 				</div>
@@ -640,8 +780,12 @@
 							<input type="text" bind:value={imgTitle} class="link-input" />
 						</label>
 						<div class="link-actions">
-							<button type="button" class="btn-small btn-primary" onclick={applyImageDialog}>{L.save}</button>
-							<button type="button" class="btn-small" onclick={() => (showImageDialog = false)}>{L.cancel}</button>
+							<button type="button" class="btn-small btn-primary" onclick={applyImageDialog}
+								>{L.save}</button
+							>
+							<button type="button" class="btn-small" onclick={() => (showImageDialog = false)}
+								>{L.cancel}</button
+							>
 						</div>
 					</div>
 				</div>
@@ -650,20 +794,38 @@
 
 		<div class="toolbar-group">
 			<div class="color-picker-wrapper">
-				<button type="button" class="toolbar-btn color-btn" title={L.color} style="--color: {selectedColor}">A</button>
-				<input type="color" bind:value={selectedColor} class="color-input"
+				<button
+					type="button"
+					class="toolbar-btn color-btn"
+					title={L.color}
+					style="--color: {selectedColor}">A</button
+				>
+				<input
+					type="color"
+					bind:value={selectedColor}
+					class="color-input"
 					oninput={(event) => {
 						selectedColor = event.target.value;
 						editor?.chain().focus().setColor(selectedColor).run();
-					}} />
+					}}
+				/>
 			</div>
-			<button type="button" class="toolbar-btn" title={L.clear}
-				onclick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}>⌫</button>
+			<button
+				type="button"
+				class="toolbar-btn"
+				title={L.clear}
+				onclick={() => editor?.chain().focus().clearNodes().unsetAllMarks().run()}>⌫</button
+			>
 		</div>
 
 		<div class="toolbar-group toolbar-group--view">
-			<button type="button" class="toolbar-btn outline-btn" class:is-active={showOutline} title={L.outline}
-				onclick={() => (showOutline = !showOutline)}>TOC</button>
+			<button
+				type="button"
+				class="toolbar-btn outline-btn"
+				class:is-active={showOutline}
+				title={L.outline}
+				onclick={() => (showOutline = !showOutline)}>TOC</button
+			>
 			{#if showOutline}
 				<div class="outline-panel">
 					<div class="outline-head">{L.outline}</div>
@@ -671,7 +833,9 @@
 						<ul>
 							{#each outline as item (item.index)}
 								<li class={`lvl-${item.level}`}>
-									<button type="button" onclick={() => scrollToHeading(item.index)}>{item.text}</button>
+									<button type="button" onclick={() => scrollToHeading(item.index)}
+										>{item.text}</button
+									>
 								</li>
 							{/each}
 						</ul>
@@ -680,29 +844,60 @@
 					{/if}
 				</div>
 			{/if}
-			<button type="button" class="toolbar-btn" class:is-active={mode === 'preview'}
+			<button
+				type="button"
+				class="toolbar-btn"
+				class:is-active={mode === 'preview'}
 				title={mode === 'preview' ? L.edit : L.preview}
-				onclick={() => (mode = mode === 'preview' ? 'edit' : 'preview')}>👁</button>
-			<button type="button" class="toolbar-btn" title={isFullscreen ? L.exitFullscreen : L.fullscreen}
-				onclick={toggleFullscreen}>⛶</button>
+				onclick={() => (mode = mode === 'preview' ? 'edit' : 'preview')}>👁</button
+			>
+			<button
+				type="button"
+				class="toolbar-btn"
+				title={isFullscreen ? L.exitFullscreen : L.fullscreen}
+				onclick={toggleFullscreen}>⛶</button
+			>
 		</div>
 	</div>
 
 	{#if inTable && mode === 'edit'}
 		<div class="table-toolbar">
-			<button type="button" onclick={() => editor?.chain().focus().addColumnBefore().run()}>{L.addColBefore}</button>
-			<button type="button" onclick={() => editor?.chain().focus().addColumnAfter().run()}>{L.addColAfter}</button>
-			<button type="button" onclick={() => editor?.chain().focus().deleteColumn().run()}>{L.delCol}</button>
-			<button type="button" onclick={() => editor?.chain().focus().addRowBefore().run()}>{L.addRowBefore}</button>
-			<button type="button" onclick={() => editor?.chain().focus().addRowAfter().run()}>{L.addRowAfter}</button>
-			<button type="button" onclick={() => editor?.chain().focus().deleteRow().run()}>{L.delRow}</button>
-			<button type="button" onclick={() => editor?.chain().focus().toggleHeaderRow().run()}>{L.toggleHeader}</button>
-			<button type="button" class="danger" onclick={() => editor?.chain().focus().deleteTable().run()}>{L.delTable}</button>
+			<button type="button" onclick={() => editor?.chain().focus().addColumnBefore().run()}
+				>{L.addColBefore}</button
+			>
+			<button type="button" onclick={() => editor?.chain().focus().addColumnAfter().run()}
+				>{L.addColAfter}</button
+			>
+			<button type="button" onclick={() => editor?.chain().focus().deleteColumn().run()}
+				>{L.delCol}</button
+			>
+			<button type="button" onclick={() => editor?.chain().focus().addRowBefore().run()}
+				>{L.addRowBefore}</button
+			>
+			<button type="button" onclick={() => editor?.chain().focus().addRowAfter().run()}
+				>{L.addRowAfter}</button
+			>
+			<button type="button" onclick={() => editor?.chain().focus().deleteRow().run()}
+				>{L.delRow}</button
+			>
+			<button type="button" onclick={() => editor?.chain().focus().toggleHeaderRow().run()}
+				>{L.toggleHeader}</button
+			>
+			<button
+				type="button"
+				class="danger"
+				onclick={() => editor?.chain().focus().deleteTable().run()}>{L.delTable}</button
+			>
 		</div>
 	{/if}
 
 	{#if imageUploadStatus === 'uploading' || imageUploadStatus === 'error'}
-		<div class="editor-upload-state" class:error={imageUploadStatus === 'error'} role="status" aria-live="polite">
+		<div
+			class="editor-upload-state"
+			class:error={imageUploadStatus === 'error'}
+			role="status"
+			aria-live="polite"
+		>
 			{#if imageUploadStatus === 'uploading'}
 				<span class="editor-upload-spinner" aria-hidden="true"></span>
 				<span>Đang tải ảnh mô tả...</span>
@@ -718,17 +913,32 @@
 	{/if}
 
 	<div class="editor-body">
-		<div bind:this={editorElement} class="editor-content" class:is-hidden={mode === 'preview'}></div>
+		<div
+			bind:this={editorElement}
+			class="editor-content"
+			class:is-hidden={mode === 'preview'}
+		></div>
 		{#if mode === 'preview'}
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-			<div class="editor-preview blog-content">{@html previewHtml}</div>
+			<div class="editor-preview blog-content"><TrustedHtml html={previewHtml} /></div>
 		{/if}
 
 		{#if agenticImageReviewEnabled && reviewToolbar && mode === 'edit'}
-			<div class="agentic-image-toolbar" style={`top:${reviewToolbar.top}px;right:${reviewToolbar.right}px`}
-				onpointerenter={() => clearTimeout(hideReviewTimer)} onpointerleave={scheduleHideReviewToolbar}>
-				<span class={`review-status status-${reviewToolbar.image.reviewStatus || 'pending_review'}`}>
-					{$t(`admin.blogImageReview.status.${reviewToolbar.image.reviewStatus || 'pending_review'}`)}
+			<div
+				class="agentic-image-toolbar"
+				role="toolbar"
+				tabindex="0"
+				aria-label={isEn ? 'Image review actions' : 'Thao tác duyệt ảnh'}
+				style={`top:${reviewToolbar.top}px;right:${reviewToolbar.right}px`}
+				onpointerenter={() => clearTimeout(hideReviewTimer)}
+				onpointerleave={scheduleHideReviewToolbar}
+			>
+				<span
+					class={`review-status status-${reviewToolbar.image.reviewStatus || 'pending_review'}`}
+				>
+					{$t(
+						`admin.blogImageReview.status.${reviewToolbar.image.reviewStatus || 'pending_review'}`
+					)}
 				</span>
 				{#if (reviewToolbar.image.reviewStatus || 'pending_review') === 'pending_review'}
 					<button type="button" class="approve" onclick={() => submitImageReview('approved')}>
@@ -824,10 +1034,18 @@
 		font-weight: 600;
 	}
 
-	.agentic-image-toolbar .status-pending_review { color: #ffd98b; }
-	.agentic-image-toolbar .status-approved { color: #87dfb5; }
-	.agentic-image-toolbar .status-rejected { color: #ffaaa0; }
-	.agentic-image-toolbar .status-replaced { color: #aebfff; }
+	.agentic-image-toolbar .status-pending_review {
+		color: #ffd98b;
+	}
+	.agentic-image-toolbar .status-approved {
+		color: #87dfb5;
+	}
+	.agentic-image-toolbar .status-rejected {
+		color: #ffaaa0;
+	}
+	.agentic-image-toolbar .status-replaced {
+		color: #aebfff;
+	}
 
 	.agentic-image-toolbar button {
 		min-height: 30px;
@@ -839,9 +1057,18 @@
 		cursor: pointer;
 	}
 
-	.agentic-image-toolbar .approve { background: #dff7e9; color: #09613a; }
-	.agentic-image-toolbar .reject { background: #fff0ed; color: #a52d20; }
-	.agentic-image-toolbar .edit { background: #e9efff; color: #294f9e; }
+	.agentic-image-toolbar .approve {
+		background: #dff7e9;
+		color: #09613a;
+	}
+	.agentic-image-toolbar .reject {
+		background: #fff0ed;
+		color: #a52d20;
+	}
+	.agentic-image-toolbar .edit {
+		background: #e9efff;
+		color: #294f9e;
+	}
 
 	.toolbar {
 		position: sticky;
@@ -863,8 +1090,14 @@
 		position: relative;
 	}
 
-	.toolbar-group:last-child { border-right: none; padding-right: 0; }
-	.toolbar-group--view { margin-left: auto; border-right: none; }
+	.toolbar-group:last-child {
+		border-right: none;
+		padding-right: 0;
+	}
+	.toolbar-group--view {
+		margin-left: auto;
+		border-right: none;
+	}
 
 	.toolbar-btn {
 		display: flex;
@@ -883,11 +1116,24 @@
 		line-height: 1;
 	}
 
-	.toolbar-btn.mono { font-family: ui-monospace, monospace; font-size: 12px; }
-	.toolbar-btn:hover { background: rgba(192, 122, 45, 0.1); border-color: #c07a2d; }
+	.toolbar-btn.mono {
+		font-family: ui-monospace, monospace;
+		font-size: 12px;
+	}
+	.toolbar-btn:hover {
+		background: rgba(192, 122, 45, 0.1);
+		border-color: #c07a2d;
+	}
 	.toolbar-btn:active,
-	.toolbar-btn.is-active { background: rgba(192, 122, 45, 0.2); border-color: #8a561f; color: #8a561f; }
-	.toolbar-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+	.toolbar-btn.is-active {
+		background: rgba(192, 122, 45, 0.2);
+		border-color: #8a561f;
+		color: #8a561f;
+	}
+	.toolbar-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
 
 	.heading-select {
 		height: 34px;
@@ -919,8 +1165,13 @@
 		cursor: pointer;
 	}
 
-	.table-toolbar button:hover { border-color: #c07a2d; }
-	.table-toolbar button.danger { color: #b42318; border-color: #f3c6c1; }
+	.table-toolbar button:hover {
+		border-color: #c07a2d;
+	}
+	.table-toolbar button.danger {
+		color: #b42318;
+		border-color: #f3c6c1;
+	}
 
 	.editor-upload-state {
 		display: flex;
@@ -935,7 +1186,11 @@
 		font-weight: 600;
 	}
 
-	.editor-upload-state.error { border-bottom-color: #fecaca; background: #fff1f2; color: #b42318; }
+	.editor-upload-state.error {
+		border-bottom-color: #fecaca;
+		background: #fff1f2;
+		color: #b42318;
+	}
 
 	.editor-upload-spinner {
 		width: 17px;
@@ -959,7 +1214,11 @@
 		font-size: 0.72rem;
 	}
 
-	.editor-upload-actions { display: flex; gap: 6px; margin-left: auto; }
+	.editor-upload-actions {
+		display: flex;
+		gap: 6px;
+		margin-left: auto;
+	}
 	.editor-upload-actions button {
 		border: 1px solid currentColor;
 		border-radius: 6px;
@@ -970,9 +1229,16 @@
 		cursor: pointer;
 	}
 
-	@keyframes editor-upload-spin { to { transform: rotate(360deg); } }
+	@keyframes editor-upload-spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
 
-	.color-btn { position: relative; font-weight: 800; }
+	.color-btn {
+		position: relative;
+		font-weight: 800;
+	}
 	.color-btn::after {
 		content: '';
 		position: absolute;
@@ -985,7 +1251,9 @@
 		border-radius: 2px;
 	}
 
-	.color-picker-wrapper { position: relative; }
+	.color-picker-wrapper {
+		position: relative;
+	}
 	.color-input {
 		position: absolute;
 		top: 0;
@@ -996,7 +1264,9 @@
 		cursor: pointer;
 	}
 
-	.file-input-btn { cursor: pointer; }
+	.file-input-btn {
+		cursor: pointer;
+	}
 
 	.link-modal {
 		position: absolute;
@@ -1011,8 +1281,18 @@
 		min-width: 260px;
 	}
 
-	.link-modal-content { display: flex; flex-direction: column; gap: 8px; }
-	.link-checkbox { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }
+	.link-modal-content {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.link-checkbox {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		color: #555;
+	}
 	.link-input {
 		width: 100%;
 		padding: 8px 12px;
@@ -1028,7 +1308,11 @@
 		box-shadow: 0 0 0 3px rgba(192, 122, 45, 0.1);
 	}
 
-	.link-actions { display: flex; gap: 8px; margin-top: 4px; }
+	.link-actions {
+		display: flex;
+		gap: 8px;
+		margin-top: 4px;
+	}
 	.btn-small {
 		flex: 1;
 		padding: 6px 10px;
@@ -1041,10 +1325,19 @@
 		cursor: pointer;
 	}
 
-	.btn-small:hover { background: #f6f2ea; border-color: #c07a2d; }
-	.btn-small.btn-primary { background: #151515; color: #fff; border-color: #151515; }
+	.btn-small:hover {
+		background: #f6f2ea;
+		border-color: #c07a2d;
+	}
+	.btn-small.btn-primary {
+		background: #151515;
+		color: #fff;
+		border-color: #151515;
+	}
 
-	.editor-body { position: relative; }
+	.editor-body {
+		position: relative;
+	}
 
 	.editor-content {
 		min-height: 300px;
@@ -1057,7 +1350,9 @@
 		max-height: 600px;
 	}
 
-	.editor-content.is-hidden { display: none; }
+	.editor-content.is-hidden {
+		display: none;
+	}
 
 	.editor-preview {
 		min-height: 300px;
@@ -1066,7 +1361,9 @@
 		padding: 20px;
 	}
 
-	.editor-content :global(.ProseMirror) { outline: none; }
+	.editor-content :global(.ProseMirror) {
+		outline: none;
+	}
 	.editor-content :global(.ProseMirror p.is-editor-empty:first-child::before) {
 		content: attr(data-placeholder);
 		color: #6b6b6b;
@@ -1086,7 +1383,9 @@
 	}
 
 	.editor-content :global(figure),
-	.editor-preview :global(figure) { margin: 16px 0; }
+	.editor-preview :global(figure) {
+		margin: 16px 0;
+	}
 	.editor-content :global(figcaption),
 	.editor-preview :global(figcaption) {
 		margin-top: 6px;
@@ -1096,17 +1395,31 @@
 	}
 
 	.editor-content :global(a),
-	.editor-preview :global(a) { color: #0070c0; text-decoration: underline; cursor: pointer; }
+	.editor-preview :global(a) {
+		color: #0070c0;
+		text-decoration: underline;
+		cursor: pointer;
+	}
 
 	.editor-content :global(ul),
 	.editor-content :global(ol),
 	.editor-preview :global(ul),
-	.editor-preview :global(ol) { margin: 8px 0 8px 24px; }
+	.editor-preview :global(ol) {
+		margin: 8px 0 8px 24px;
+	}
 
 	.editor-content :global(ul[data-type='taskList']),
-	.editor-preview :global(ul[data-type='taskList']) { list-style: none; margin-left: 0; padding-left: 0; }
+	.editor-preview :global(ul[data-type='taskList']) {
+		list-style: none;
+		margin-left: 0;
+		padding-left: 0;
+	}
 	.editor-content :global(ul[data-type='taskList'] li),
-	.editor-preview :global(ul[data-type='taskList'] li) { display: flex; gap: 8px; align-items: flex-start; }
+	.editor-preview :global(ul[data-type='taskList'] li) {
+		display: flex;
+		gap: 8px;
+		align-items: flex-start;
+	}
 
 	.editor-content :global(blockquote),
 	.editor-preview :global(blockquote) {
@@ -1128,7 +1441,11 @@
 	}
 
 	.editor-content :global(hr),
-	.editor-preview :global(hr) { border: none; border-top: 1px solid #ddd6ca; margin: 18px 0; }
+	.editor-preview :global(hr) {
+		border: none;
+		border-top: 1px solid #ddd6ca;
+		margin: 18px 0;
+	}
 
 	.editor-content :global(table),
 	.editor-preview :global(table) {
@@ -1148,7 +1465,11 @@
 	}
 
 	.editor-content :global(th),
-	.editor-preview :global(th) { background: #f6f2ea; font-weight: 700; text-align: left; }
+	.editor-preview :global(th) {
+		background: #f6f2ea;
+		font-weight: 700;
+		text-align: left;
+	}
 
 	.editor-stats {
 		display: flex;
@@ -1161,17 +1482,41 @@
 		color: #6b6b6b;
 	}
 
-	.editor-stats .warn { color: #b45309; font-weight: 700; }
+	.editor-stats .warn {
+		color: #b45309;
+		font-weight: 700;
+	}
 
-	.save-status { margin-left: auto; font-weight: 700; }
-	.save-status.save-unsaved { color: #b45309; }
-	.save-status.save-saving { color: #6b6b6b; }
-	.save-status.save-saved { color: #13795b; }
-	.save-status.save-failed { color: #b42318; }
+	.save-status {
+		margin-left: auto;
+		font-weight: 700;
+	}
+	.save-status.save-unsaved {
+		color: #b45309;
+	}
+	.save-status.save-saving {
+		color: #6b6b6b;
+	}
+	.save-status.save-saved {
+		color: #13795b;
+	}
+	.save-status.save-failed {
+		color: #b42318;
+	}
 
-	.outline-btn { font-size: 11px; font-weight: 800; letter-spacing: 0.03em; }
+	.outline-btn {
+		font-size: 11px;
+		font-weight: 800;
+		letter-spacing: 0.03em;
+	}
 
-	.dlg-label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: #555; }
+	.dlg-label {
+		display: grid;
+		gap: 4px;
+		font-size: 12px;
+		font-weight: 600;
+		color: #555;
+	}
 
 	.outline-panel {
 		position: absolute;
@@ -1218,16 +1563,43 @@
 		text-overflow: ellipsis;
 	}
 
-	.outline-panel li button:hover { background: #f6f2ea; }
-	.outline-panel li.lvl-3 button { padding-left: 18px; color: #444; }
-	.outline-panel li.lvl-4 button { padding-left: 30px; color: #666; font-size: 12px; }
-	.outline-empty { padding: 8px 6px; color: #6b6b6b; font-size: 13px; }
+	.outline-panel li button:hover {
+		background: #f6f2ea;
+	}
+	.outline-panel li.lvl-3 button {
+		padding-left: 18px;
+		color: #444;
+	}
+	.outline-panel li.lvl-4 button {
+		padding-left: 30px;
+		color: #666;
+		font-size: 12px;
+	}
+	.outline-empty {
+		padding: 8px 6px;
+		color: #6b6b6b;
+		font-size: 13px;
+	}
 
 	@media (max-width: 768px) {
-		.toolbar { gap: 4px; padding: 8px; }
-		.toolbar-group { padding: 0 4px; }
-		.toolbar-group--view { margin-left: 0; }
-		.toolbar-btn { min-width: 30px; height: 30px; }
-		.editor-content { min-height: 200px; max-height: 400px; font-size: 14px; }
+		.toolbar {
+			gap: 4px;
+			padding: 8px;
+		}
+		.toolbar-group {
+			padding: 0 4px;
+		}
+		.toolbar-group--view {
+			margin-left: 0;
+		}
+		.toolbar-btn {
+			min-width: 30px;
+			height: 30px;
+		}
+		.editor-content {
+			min-height: 200px;
+			max-height: 400px;
+			font-size: 14px;
+		}
 	}
 </style>

@@ -1,7 +1,9 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { env } from '$env/dynamic/public';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { SITE_CONTACT } from '$lib/config/siteContact.js';
 	import { locale, t } from '$lib/i18n/index.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
@@ -29,13 +31,6 @@
 	const canonicalUrl = $derived(`${siteUrl}${$locale === 'en' ? '/en/blog' : '/blog'}`);
 	const ogImageAlt = $derived(blogs[0]?.title || $t('blog.pageTitle'));
 	const ogUrl = $derived(canonicalUrl);
-	const escapeJsonLd = (value) =>
-		String(value || '')
-			.replace(/</g, '\u003c')
-			.replace(/>/g, '\u003e')
-			.replace(/&/g, '\u0026')
-			.replace(/\u2028/g, '\u2028')
-			.replace(/\u2029/g, '\u2029');
 	const resolveBlogPostUrl = (post) => {
 		const slug = String(post?.slug || post?.blog_slug || '').trim();
 		if (!slug) return '';
@@ -169,7 +164,7 @@
 			url.searchParams.delete('q');
 		}
 		visibleCount = BLOG_LOAD_MORE_STEP;
-		goto(`${url.pathname}${url.search}`);
+		goto(resolve(`${url.pathname}${url.search}`));
 	};
 
 	const truncateWords = (value, limit) => {
@@ -193,7 +188,7 @@
 		const fallback = `/images/post-item${(fallbackIndex % 4) + 1}.jpg`;
 		const raw = String(imageValue || '').trim();
 		if (!raw) return fallback;
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -256,7 +251,7 @@
 	const openBlogCard = (post) => {
 		const href = getBlogPostHref(post);
 		if (!href) return;
-		goto(href);
+		goto(resolve(href));
 	};
 
 	const handleBlogCardClick = (event, post) => {
@@ -303,12 +298,13 @@
 	<meta name="twitter:description" content={$t('blog.metaDescription')} />
 	<meta name="twitter:image" content={ogImageUrl} />
 	<meta name="twitter:image:alt" content={ogImageAlt} />
-	{@html '<script type="application/ld+json">' + escapeJsonLd(blogBreadcrumbJsonLd) + '</script>'}
-	{@html '<script type="application/ld+json">' + escapeJsonLd(blogCollectionJsonLd) + '</script>'}
 	{#if lcpBlogListImage}
 		<link rel="preload" as="image" href={lcpBlogListImage} fetchpriority="high" />
 	{/if}
 </svelte:head>
+
+<JsonLd value={blogBreadcrumbJsonLd} />
+<JsonLd value={blogCollectionJsonLd} />
 
 <section class="blog-hero">
 	<div class="container blog-hero-inner">
@@ -351,7 +347,7 @@
 				<div class="category-filter">
 					<h3 class="filter-title">{$t('blog.filterTitle')}</h3>
 					<div class="category-list">
-						{#each categories as category}
+						{#each categories as category, __eachIndex1 (category?._id ?? category?.id ?? __eachIndex1)}
 							<button
 								class="category-btn"
 								class:active={selectedCategory === category.value}
@@ -366,7 +362,7 @@
 
 				<div class="posts-grid">
 					{#if currentBlogs.length}
-						{#each currentBlogs as post, index}
+						{#each currentBlogs as post, index (post?._id ?? post?.id ?? index)}
 							<div
 								class="blog-card"
 								role="link"
@@ -390,10 +386,10 @@
 
 								<div class="blog-card-content">
 									<h3 class="blog-card-title">
-										<a href={getBlogPostHref(post)}>{truncateWords(post.title, 15)}</a>
+										<a href={resolve(getBlogPostHref(post))}>{truncateWords(post.title, 15)}</a>
 									</h3>
 
-									<p class="blog-card-excerpt">{truncateWords(post.excerpt, 100)}</p>
+									<p class="blog-card-excerpt">{truncateWords(post.excerpt, 25)}</p>
 
 									<div class="blog-card-meta">
 										<span class="meta-item">
@@ -434,7 +430,10 @@
 												<p class="author-name">{post.author}</p>
 											</div>
 										</div>
-										<a href={getBlogPostHref(post, '#comments')} class="blog-comments-link">
+										<a
+											href={resolve(getBlogPostHref(post, '#comments'))}
+											class="blog-comments-link"
+										>
 											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
 												<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
 												></path>
@@ -443,7 +442,9 @@
 										</a>
 									</div>
 
-									<a href={getBlogPostHref(post)} class="blog-read-more">{$t('blog.readMore')}</a>
+									<a href={resolve(getBlogPostHref(post))} class="blog-read-more"
+										>{$t('blog.readMore')}</a
+									>
 								</div>
 							</div>
 						{/each}
@@ -472,8 +473,8 @@
 				<div class="sidebar-widget">
 					<h3 class="widget-title">{$t('blog.featuredTitle')}</h3>
 					<div class="featured-posts">
-						{#each featuredPosts as post, index}
-							<a href={getBlogPostHref(post)} class="featured-post">
+						{#each featuredPosts as post, index (post?._id ?? post?.id ?? index)}
+							<a href={resolve(getBlogPostHref(post))} class="featured-post">
 								<div class="featured-image">
 									<img
 										src={normalizeBlogImage(post.image, index)}
@@ -520,7 +521,7 @@
 				<div class="sidebar-widget">
 					<h3 class="widget-title">{$t('blog.tagsTitle')}</h3>
 					<div class="tags-list">
-						{#each popularTags as tag}
+						{#each popularTags as tag, __eachIndex4 (tag?._id ?? tag?.id ?? __eachIndex4)}
 							<span class="tag-btn">{tag}</span>
 						{/each}
 					</div>
@@ -790,7 +791,6 @@
 		display: flex;
 		flex-direction: column;
 		cursor: pointer;
-		min-height: 680px;
 	}
 
 	.blog-card:hover {
@@ -867,7 +867,7 @@
 		font-size: 0.95rem;
 		line-height: 1.6;
 		margin-bottom: 0.75rem;
-		flex: 1;
+		text-shadow: 0 1px 6px rgba(255, 255, 255, 0.9);
 	}
 
 	.blog-card-meta {
@@ -957,10 +957,6 @@
 	}
 
 	@media (max-width: 480px) {
-		.blog-card {
-			min-height: 600px;
-		}
-
 		.blog-card-content {
 			padding: 0.95rem 0.95rem 1.1rem;
 		}

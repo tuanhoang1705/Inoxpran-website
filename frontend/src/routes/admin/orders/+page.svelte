@@ -1,4 +1,5 @@
 ﻿<script>
+	import { SvelteSet } from 'svelte/reactivity';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { resolve } from '$app/paths';
@@ -83,22 +84,50 @@
 	const tabs = $derived.by(() => [
 		{ key: 'all', label: $t('admin.orders.tabs.all'), count: summary.total },
 		{ key: 'waiting', label: $t('admin.orders.tabs.waiting'), count: summary.byTab?.waiting ?? 0 },
-		{ key: 'shipping', label: $t('admin.orders.tabs.shipping'), count: summary.byTab?.shipping ?? 0 },
-		{ key: 'completed', label: $t('admin.orders.tabs.completed'), count: summary.byTab?.completed ?? 0 },
+		{
+			key: 'shipping',
+			label: $t('admin.orders.tabs.shipping'),
+			count: summary.byTab?.shipping ?? 0
+		},
+		{
+			key: 'completed',
+			label: $t('admin.orders.tabs.completed'),
+			count: summary.byTab?.completed ?? 0
+		},
 		{
 			key: 'cancelRequested',
 			label: $t('admin.orders.tabs.cancelRequested'),
 			count: summary.byTab?.cancel_requested ?? 0
 		},
-		{ key: 'cancelled', label: $t('admin.orders.tabs.cancelled'), count: summary.byTab?.cancelled ?? 0 },
-		{ key: 'returned', label: $t('admin.orders.tabs.returned'), count: summary.byTab?.returned ?? 0 }
+		{
+			key: 'cancelled',
+			label: $t('admin.orders.tabs.cancelled'),
+			count: summary.byTab?.cancelled ?? 0
+		},
+		{
+			key: 'returned',
+			label: $t('admin.orders.tabs.returned'),
+			count: summary.byTab?.returned ?? 0
+		}
 	]);
 
 	const metricCards = $derived.by(() => [
 		{ label: $t('admin.orders.metrics.total'), value: summary.total ?? 0, tone: 'metric-total' },
-		{ label: $t('admin.orders.metrics.waiting'), value: summary.byTab?.waiting ?? 0, tone: 'metric-waiting' },
-		{ label: $t('admin.orders.metrics.shipping'), value: summary.byTab?.shipping ?? 0, tone: 'metric-shipping' },
-		{ label: $t('admin.orders.metrics.completed'), value: summary.byTab?.completed ?? 0, tone: 'metric-completed' },
+		{
+			label: $t('admin.orders.metrics.waiting'),
+			value: summary.byTab?.waiting ?? 0,
+			tone: 'metric-waiting'
+		},
+		{
+			label: $t('admin.orders.metrics.shipping'),
+			value: summary.byTab?.shipping ?? 0,
+			tone: 'metric-shipping'
+		},
+		{
+			label: $t('admin.orders.metrics.completed'),
+			value: summary.byTab?.completed ?? 0,
+			tone: 'metric-completed'
+		},
 		{
 			label: $t('admin.orders.metrics.cancelRequested'),
 			value: summary.byTab?.cancel_requested ?? 0,
@@ -209,7 +238,8 @@
 		const nextQuery = typeof overrides.q === 'string' ? overrides.q : String(filters.q || '');
 		const nextPage = Number(overrides.page ?? filters.page ?? 1) || 1;
 		const nextLimit = Number(overrides.limit ?? filters.limit ?? 20) || 20;
-		const nextFrom = typeof overrides.from === 'string' ? overrides.from : String(filters.from || '');
+		const nextFrom =
+			typeof overrides.from === 'string' ? overrides.from : String(filters.from || '');
 		const nextTo = typeof overrides.to === 'string' ? overrides.to : String(filters.to || '');
 		const nextSort = String(overrides.sort ?? filters.sort ?? 'ctime');
 
@@ -230,7 +260,7 @@
 	const toggleOrderSelection = (orderId) => {
 		const id = String(orderId || '').trim();
 		if (!id) return;
-		const next = new Set(selectedOrderIds);
+		const next = new SvelteSet(selectedOrderIds);
 		if (next.has(id)) {
 			next.delete(id);
 		} else {
@@ -240,7 +270,7 @@
 	};
 
 	const toggleSelectAllVisibleOrders = () => {
-		const next = new Set(selectedOrderIds);
+		const next = new SvelteSet(selectedOrderIds);
 		if (allVisibleOrdersSelected) {
 			for (const id of visibleOrderIds) next.delete(id);
 		} else {
@@ -271,7 +301,7 @@
 
 	$effect(() => {
 		const visibleSet = new Set(visibleOrderIds);
-		const next = new Set();
+		const next = new SvelteSet();
 		for (const id of selectedOrderIds) {
 			if (visibleSet.has(id)) next.add(id);
 		}
@@ -339,7 +369,13 @@
 		</div>
 		<div class="field">
 			<label for="admin-order-from">{$t('admin.orders.filters.fromDate')}</label>
-			<input id="admin-order-from" class="form-control" type="date" name="from" value={filters.from} />
+			<input
+				id="admin-order-from"
+				class="form-control"
+				type="date"
+				name="from"
+				value={filters.from}
+			/>
 		</div>
 		<div class="field">
 			<label for="admin-order-to">{$t('admin.orders.filters.toDate')}</label>
@@ -356,7 +392,10 @@
 				<input type="hidden" name="sort" value={filters.sort} />
 			{/if}
 			<button class="btn btn-dark" type="submit">{$t('admin.orders.filters.apply')}</button>
-			<a class="btn btn-outline-dark" href={resolve(buildHref({ tab: activeTab, q: '', from: '', to: '', page: 1 }))}>
+			<a
+				class="btn btn-outline-dark"
+				href={resolve(buildHref({ tab: activeTab, q: '', from: '', to: '', page: 1 }))}
+			>
 				{$t('admin.orders.filters.clear')}
 			</a>
 		</div>
@@ -485,9 +524,13 @@
 
 						<section class="info-box">
 							<div class="info-box__label">{$t('admin.orders.details.paymentStatus')}</div>
-							<div class="info-box__value break-anywhere">{order?.order_payment_status || '--'}</div>
+							<div class="info-box__value break-anywhere">
+								{order?.order_payment_status || '--'}
+							</div>
 							<div class="info-box__label mt-2">{$t('admin.orders.details.shippingStatus')}</div>
-							<div class="info-box__value break-anywhere">{order?.order_shipping_status || '--'}</div>
+							<div class="info-box__value break-anywhere">
+								{order?.order_shipping_status || '--'}
+							</div>
 							<div class="info-box__label mt-2">{$t('admin.orders.details.codStatus')}</div>
 							<div class="info-box__value break-anywhere">{order?.order_cod_status || '--'}</div>
 						</section>
@@ -548,17 +591,24 @@
 		<nav class="pagination-wrap" aria-label={$t('admin.orders.pagination.label')}>
 			<a
 				class={`page-link ${pagination.hasPrev ? '' : 'disabled'}`}
-				href={resolve(buildHref({ page: pagination.hasPrev ? pagination.page - 1 : pagination.page }))}
+				href={resolve(
+					buildHref({ page: pagination.hasPrev ? pagination.page - 1 : pagination.page })
+				)}
 				aria-disabled={!pagination.hasPrev}
 			>
 				{$t('admin.orders.pagination.prev')}
 			</a>
 			<span>
-				{$t('admin.orders.pagination.page', { page: pagination.page, total: pagination.totalPages })}
+				{$t('admin.orders.pagination.page', {
+					page: pagination.page,
+					total: pagination.totalPages
+				})}
 			</span>
 			<a
 				class={`page-link ${pagination.hasNext ? '' : 'disabled'}`}
-				href={resolve(buildHref({ page: pagination.hasNext ? pagination.page + 1 : pagination.page }))}
+				href={resolve(
+					buildHref({ page: pagination.hasNext ? pagination.page + 1 : pagination.page })
+				)}
 				aria-disabled={!pagination.hasNext}
 			>
 				{$t('admin.orders.pagination.next')}

@@ -12,7 +12,9 @@ const normalizeNumber = (value, fallback = 0) => {
 const normalizeQuantity = (value) => Math.max(1, Math.floor(normalizeNumber(value, 1)));
 
 const normalizeLineId = ({ productId, variantColor, variantSize }) =>
-	[productId, variantColor || '', variantSize || ''].map((part) => String(part || '').trim()).join('::');
+	[productId, variantColor || '', variantSize || '']
+		.map((part) => String(part || '').trim())
+		.join('::');
 
 export const normalizeGuestCartItem = (item) => {
 	const productId = String(item?.productId || item?._id || '').trim();

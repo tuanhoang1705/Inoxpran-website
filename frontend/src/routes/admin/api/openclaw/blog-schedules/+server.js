@@ -1,22 +1,27 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import {
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
 
 export const GET = async ({ cookies, fetch, url }) => {
-	const response = await adminApiFetch({
+	const requestId = createOpenClawRequestId();
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
-		path: `/admin/openclaw/blog-schedules${url.search || ''}`
+		path: `/admin/openclaw/blog-schedules${url.search || ''}`,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Unable to load blog schedules',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json({ error: payload?.message || 'Unable to load blog schedules' }, { status: response.status });
-	}
-	return json(payload?.metadata || {});
 };
 
 export const POST = async ({ request, cookies, fetch }) => {
+	const requestId = createOpenClawRequestId();
 	const body = await request.json().catch(() => ({}));
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: '/admin/openclaw/blog-schedules',
@@ -24,11 +29,10 @@ export const POST = async ({ request, cookies, fetch }) => {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify(body)
-		}
+		},
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Unable to create blog schedule',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json({ error: payload?.message || 'Unable to create blog schedule' }, { status: response.status });
-	}
-	return json(payload?.metadata || {});
 };

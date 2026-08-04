@@ -1,10 +1,10 @@
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, USER_API_KEY_HEADER } from '$lib/server/api.js';
 import { getLocaleFromCookies, getTranslator } from '$lib/i18n/server.js';
 import { translateAuthApiMessage } from '$lib/server/authApiMessage.js';
 
 const buildHeaders = () => {
 	const headers = {};
-	if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+	if (USER_API_KEY_HEADER) headers['x-api-key'] = USER_API_KEY_HEADER;
 	return headers;
 };
 
@@ -37,13 +37,15 @@ export const load = async ({ fetch, url, cookies }) => {
 		if (!response.ok) {
 			const rawMessage = await readMessage(response);
 			const message =
-				translateAuthApiMessage({ message: rawMessage, locale, t }) || t('auth.errors.verifyFailed');
+				translateAuthApiMessage({ message: rawMessage, locale, t }) ||
+				t('auth.errors.verifyFailed');
 			return { status: 'error', message };
 		}
 
 		const rawMessage = await readMessage(response);
 		const message =
-			translateAuthApiMessage({ message: rawMessage, locale, t }) || t('auth.success.verifySuccess');
+			translateAuthApiMessage({ message: rawMessage, locale, t }) ||
+			t('auth.success.verifySuccess');
 		return { status: 'success', message };
 	} catch {
 		return { status: 'error', message: t('auth.errors.verifyFailed') };

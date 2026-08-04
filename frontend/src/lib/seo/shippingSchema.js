@@ -38,11 +38,7 @@ export const buildShippingDestinationJsonLd = ({ addressCountry = 'VN' } = {}) =
 	addressCountry
 });
 
-export const buildShippingRateJsonLd = ({
-	weightGram,
-	value,
-	currency = 'VND'
-} = {}) => ({
+export const buildShippingRateJsonLd = ({ weightGram, value, currency = 'VND' } = {}) => ({
 	'@type': 'MonetaryAmount',
 	value: normalizeNonNegativeInteger(value, calculateStructuredShippingRate(weightGram)),
 	currency

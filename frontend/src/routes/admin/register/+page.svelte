@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { onDestroy } from 'svelte';
@@ -7,14 +8,14 @@
 
 	export let form;
 
-	let lastToastKey = '';
+	const toastState = { lastKey: '' };
 	let redirecting = false;
 	let redirectTimer;
 
 	$: if (browser && form?.toast?.message) {
 		const key = form.toast.id || `${form.toast.tone || 'info'}:${form.toast.message}`;
-		if (key !== lastToastKey) {
-			lastToastKey = key;
+		if (key !== toastState.lastKey) {
+			toastState.lastKey = key;
 			pushToast(form.toast);
 		}
 	}
@@ -22,7 +23,7 @@
 	$: if (browser && form?.success && !redirecting) {
 		redirecting = true;
 		redirectTimer = setTimeout(() => {
-			goto('/admin/register/pending');
+			goto(resolve('/admin/register/pending'));
 		}, 1500);
 	}
 
@@ -65,7 +66,8 @@
 					<input class="form-control" id="admin-register-phone" name="phone" type="text" />
 				</div>
 				<div>
-					<label class="form-label" for="admin-register-password">{$t('admin.auth.password')}</label>
+					<label class="form-label" for="admin-register-password">{$t('admin.auth.password')}</label
+					>
 					<input
 						class="form-control"
 						id="admin-register-password"
@@ -85,7 +87,8 @@
 			{/if}
 
 			<p class="text-center mt-3 mb-0">
-				{$t('admin.auth.haveAccount')} <a href="/admin/login">{$t('admin.auth.loginButton')}</a>
+				{$t('admin.auth.haveAccount')}
+				<a href={resolve('/admin/login')}>{$t('admin.auth.loginButton')}</a>
 			</p>
 		</div>
 	</div>

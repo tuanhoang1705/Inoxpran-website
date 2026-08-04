@@ -1,24 +1,61 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import {
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
+import {
+	matchesOpenClawProxyPath,
+	normalizeOpenClawProxyPath
+} from '$lib/server/openclawProxyPath.js';
+
+const ID = '[A-Za-z0-9_-]{1,128}';
+const ALLOWED = Object.freeze({
+	GET: [
+		/^status$/,
+		/^snapshots$/,
+		new RegExp(`^snapshots/${ID}$`),
+		/^sources$/,
+		/^schedule$/,
+		/^executions$/,
+		/^related-blogs$/
+	],
+	POST: [
+		new RegExp(`^snapshots/${ID}/override$`),
+		/^run-now$/,
+		/^sources$/,
+		new RegExp(`^sources/${ID}/run-now$`),
+		/^schedule\/(?:enable|disable)$/
+	],
+	PATCH: [new RegExp(`^sources/${ID}$`), /^schedule$/]
+});
 
 const proxy = async ({ request, cookies, fetch, params, url, method }) => {
-	const suffix = String(params.segments || '').replace(/^\/+/, '');
+	const requestId = createOpenClawRequestId();
+	const suffix = normalizeOpenClawProxyPath(params.segments);
+	if (suffix === null || !matchesOpenClawProxyPath({ method, path: suffix, contracts: ALLOWED })) {
+		return openClawProxyClientError({
+			status: 404,
+			error: 'Unsupported Google Intelligence request',
+			requestId
+		});
+	}
 	const options = { method };
 	if (!['GET', 'HEAD'].includes(method)) {
 		options.headers = { 'content-type': 'application/json' };
 		options.body = JSON.stringify(await request.json().catch(() => ({})));
 	}
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: `/admin/openclaw/google-intelligence/${suffix}${url.search || ''}`,
-		options
+		options,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Google Intelligence request failed',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json({ error: payload?.message || 'Google Intelligence request failed' }, { status: response.status });
-	}
-	return json(payload?.metadata || {});
 };
 
 export const GET = (event) => proxy({ ...event, method: 'GET' });

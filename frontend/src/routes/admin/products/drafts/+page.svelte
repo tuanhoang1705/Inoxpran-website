@@ -1,10 +1,10 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { locale, t } from '$lib/i18n/admin/index.js';
 
 	let { data, form } = $props();
-
 
 	const formatDate = (value) => {
 		if (!value) return '--';
@@ -47,8 +47,12 @@
 			<p class="text-black-50 mb-0">{$t('admin.productsDrafts.lede')}</p>
 		</div>
 		<div class="d-flex gap-2">
-			<a class="btn btn-outline-dark" href="/admin/products">{$t('admin.productsDrafts.backToList')}</a>
-			<a class="btn btn-dark" href="/admin/products/new">{$t('admin.productsDrafts.newDraft')}</a>
+			<a class="btn btn-outline-dark" href={resolve('/admin/products')}
+				>{$t('admin.productsDrafts.backToList')}</a
+			>
+			<a class="btn btn-dark" href={resolve('/admin/products/new')}
+				>{$t('admin.productsDrafts.newDraft')}</a
+			>
 		</div>
 	</div>
 
@@ -71,18 +75,22 @@
 				</thead>
 				<tbody>
 					{#if data?.drafts?.length}
-						{#each data.drafts as product}
+						{#each data.drafts as product, __eachIndex1 (product?._id ?? product?.id ?? __eachIndex1)}
 							<tr>
 								<td>{product.product_name}</td>
 								<td>{product.product_type}</td>
 								<td>{formatDate(product.createdAt)}</td>
 								<td>{getCreatorName(product)}</td>
 								<td>
-									<span class="badge bg-warning text-dark">{$t('admin.productsDrafts.draftStatus')}</span>
+									<span class="badge bg-warning text-dark"
+										>{$t('admin.productsDrafts.draftStatus')}</span
+									>
 								</td>
 								<td class="text-end">
 									<div class="d-inline-flex gap-2">
-										<a class="btn btn-sm btn-outline-dark" href={`/admin/products/${product._id}`}
+										<a
+											class="btn btn-sm btn-outline-dark"
+											href={resolve(`/admin/products/${product._id}`)}
 											>{$t('admin.products.edit')}</a
 										>
 										<form method="post" action="?/publish">

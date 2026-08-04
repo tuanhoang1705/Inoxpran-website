@@ -62,9 +62,7 @@ const parseJsonIdList = (value) => {
 	try {
 		const parsed = JSON.parse(value);
 		if (!Array.isArray(parsed)) return [];
-		return parsed
-			.map((item) => String(item || '').trim())
-			.filter(Boolean);
+		return parsed.map((item) => String(item || '').trim()).filter(Boolean);
 	} catch {
 		return [];
 	}

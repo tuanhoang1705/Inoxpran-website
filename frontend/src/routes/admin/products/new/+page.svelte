@@ -1,4 +1,6 @@
 <script>
+	import { SvelteMap } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { onDestroy, onMount } from 'svelte';
@@ -30,7 +32,7 @@
 	let salePrice = $state('');
 	let ratingAverage = $state('0');
 	let ratingCount = $state('0');
-	let discountPercent = $state(null);
+	let discountPercent = $derived(computeDiscount(originalPrice, salePrice));
 	let imageError = $state('');
 	let galleryError = $state('');
 	let thumbPreviewUrl = $state('');
@@ -54,9 +56,7 @@
 			.filter(Boolean)
 	);
 	let galleryCropStatesPayload = $derived(
-		galleryItems
-			.filter((item) => item?.croppedUrl)
-			.map((item) => item?.cropState || null)
+		galleryItems.filter((item) => item?.croppedUrl).map((item) => item?.cropState || null)
 	);
 	let isCropperOpen = $state(false);
 	let cropMode = $state('');
@@ -92,7 +92,7 @@
 	let thumbUploadedAsset = $state(null);
 	let thumbUploadRequestId = 0;
 	let descriptionUploadStatus = $state('idle');
-	const uploadAssetCache = new Map();
+	const uploadAssetCache = new SvelteMap();
 	let isImageUploadPending = $derived(
 		thumbUploadStatus === 'uploading' ||
 			descriptionUploadStatus === 'uploading' ||
@@ -214,26 +214,38 @@
 	) => {
 		if (!item || !file || !uploadSessionId) return null;
 		const uploadVersion = requestedVersion ?? Number(item?.uploadVersion || 0) + 1;
-		updateGalleryUploadState(item, {
-			uploadStatus: 'uploading',
-			uploadError: '',
-			uploadedAsset: null,
-			uploadVersion
-		}, requestedVersion);
+		updateGalleryUploadState(
+			item,
+			{
+				uploadStatus: 'uploading',
+				uploadError: '',
+				uploadedAsset: null,
+				uploadVersion
+			},
+			requestedVersion
+		);
 		try {
 			const asset = await uploadProductImageCached(file, 'gallery', cacheKey);
-			updateGalleryUploadState(item, {
-				uploadStatus: 'success',
-				uploadError: '',
-				uploadedAsset: asset
-			}, uploadVersion);
+			updateGalleryUploadState(
+				item,
+				{
+					uploadStatus: 'success',
+					uploadError: '',
+					uploadedAsset: asset
+				},
+				uploadVersion
+			);
 			return asset;
 		} catch (error) {
-			updateGalleryUploadState(item, {
-				uploadStatus: 'error',
-				uploadError: error?.message || 'Không thể tải ảnh chi tiết.',
-				uploadedAsset: null
-			}, uploadVersion);
+			updateGalleryUploadState(
+				item,
+				{
+					uploadStatus: 'error',
+					uploadError: error?.message || 'Không thể tải ảnh chi tiết.',
+					uploadedAsset: null
+				},
+				uploadVersion
+			);
 			return null;
 		}
 	};
@@ -283,10 +295,14 @@
 					thumbUploadError = error?.message || 'Không thể xử lý ảnh đại diện.';
 					return;
 				}
-				updateGalleryUploadState(cacheKey, {
-					uploadStatus: 'error',
-					uploadError: error?.message || 'Không thể xử lý ảnh chi tiết.'
-				}, galleryUploadVersion);
+				updateGalleryUploadState(
+					cacheKey,
+					{
+						uploadStatus: 'error',
+						uploadError: error?.message || 'Không thể xử lý ảnh chi tiết.'
+					},
+					galleryUploadVersion
+				);
 			});
 	};
 
@@ -352,9 +368,7 @@
 		const name = normalizeOption(sizeInput);
 		if (!name) return;
 		const price = normalizePrice(sizePriceInput);
-		const existingIndex = sizes.findIndex(
-			(item) => item.name.toLowerCase() === name.toLowerCase()
-		);
+		const existingIndex = sizes.findIndex((item) => item.name.toLowerCase() === name.toLowerCase());
 		if (existingIndex >= 0) {
 			sizes = sizes.map((item, index) =>
 				index === existingIndex ? { ...item, price: price ?? item.price } : item
@@ -394,9 +408,7 @@
 			(item) => `${item.color.toLowerCase()}::${item.size.toLowerCase()}` === key
 		);
 		if (existingIndex >= 0) {
-			combos = combos.map((item, index) =>
-				index === existingIndex ? { ...item, price } : item
-			);
+			combos = combos.map((item, index) => (index === existingIndex ? { ...item, price } : item));
 		} else {
 			combos = [...combos, { color, size, price }];
 		}
@@ -404,9 +416,7 @@
 	};
 
 	const removeCombo = (target) => {
-		combos = combos.filter(
-			(item) => !(item.color === target.color && item.size === target.size)
-		);
+		combos = combos.filter((item) => !(item.color === target.color && item.size === target.size));
 	};
 
 	const updateColorPrice = (name, value) => {
@@ -505,7 +515,7 @@
 		const items = [];
 		for (const file of files) {
 			const previewUrl = URL.createObjectURL(file);
-			let dataUrl = '';
+			let dataUrl;
 			try {
 				dataUrl = await readFileAsDataUrl(file);
 			} catch {
@@ -665,6 +675,22 @@
 		cropFrame?.releasePointerCapture?.(event.pointerId);
 	};
 
+	const handleCropFrameKeydown = (event) => {
+		const step = event.shiftKey ? 20 : 5;
+		const movement = {
+			ArrowLeft: [-step, 0],
+			ArrowRight: [step, 0],
+			ArrowUp: [0, -step],
+			ArrowDown: [0, step]
+		}[event.key];
+		if (!movement) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const clamped = clampCropOffsets(cropOffsetX + movement[0], cropOffsetY + movement[1]);
+		cropOffsetX = clamped.x;
+		cropOffsetY = clamped.y;
+	};
+
 	const applyCrop = () => {
 		if (!cropFrame || !cropImageEl) return;
 		const frameWidth = cropFrame.clientWidth;
@@ -684,10 +710,8 @@
 		const cropWidth = Math.min(imageWidth, frameWidth / scale);
 		const cropHeight = Math.min(imageHeight, frameHeight / scale);
 
-		const outputWidth =
-			cropMode === 'gallery' ? GALLERY_MAX_WIDTH : MAX_IMAGE_WIDTH;
-		const outputHeight =
-			cropMode === 'gallery' ? GALLERY_MAX_HEIGHT : MAX_IMAGE_HEIGHT;
+		const outputWidth = cropMode === 'gallery' ? GALLERY_MAX_WIDTH : MAX_IMAGE_WIDTH;
+		const outputHeight = cropMode === 'gallery' ? GALLERY_MAX_HEIGHT : MAX_IMAGE_HEIGHT;
 		const canvas = document.createElement('canvas');
 		canvas.width = outputWidth;
 		canvas.height = outputHeight;
@@ -903,10 +927,6 @@
 		}
 	});
 
-	$effect(() => {
-		discountPercent = computeDiscount(originalPrice, salePrice);
-	});
-
 	const handleFormSubmit = () => {
 		syncGalleryInputFiles();
 	};
@@ -938,9 +958,7 @@
 			...(thumbUploadedAsset
 				? {
 						product_thumb: thumbUploadedAsset.url,
-						...(thumbUploadedAsset.path
-							? { product_thumb_path: thumbUploadedAsset.path }
-							: {}),
+						...(thumbUploadedAsset.path ? { product_thumb_path: thumbUploadedAsset.path } : {}),
 						...(thumbUploadedAsset.variants
 							? { product_thumb_variants: thumbUploadedAsset.variants }
 							: {}),
@@ -948,9 +966,7 @@
 					}
 				: {}),
 			product_gallery: galleryItems.map((item) =>
-				item?.cropState
-					? { ...item.uploadedAsset, crop_state: item.cropState }
-					: item.uploadedAsset
+				item?.cropState ? { ...item.uploadedAsset, crop_state: item.cropState } : item.uploadedAsset
 			)
 		};
 	};
@@ -999,7 +1015,7 @@
 								'Bản nháp đã được tạo nhưng chưa thể đồng bộ ảnh. Bạn có thể thử lưu lại.'
 						});
 					}
-					await goto(resolveAdminPath(`/admin/products/${productId}`));
+					await goto(resolve(resolveAdminPath(`/admin/products/${productId}`)));
 					return;
 				}
 				if (result?.type === 'failure') {
@@ -1025,7 +1041,7 @@
 </svelte:head>
 
 <section>
-	<a class="btn btn-link mb-3" href="/admin/products">{$t('admin.productsNew.back')}</a>
+	<a class="btn btn-link mb-3" href={resolve('/admin/products')}>{$t('admin.productsNew.back')}</a>
 	<h2 class="mb-4">{$t('admin.productsNew.heading')}</h2>
 
 	<form
@@ -1041,11 +1057,7 @@
 			<input type="hidden" name="product_thumb_name" value={thumbFileName} />
 		{/if}
 		{#if thumbCropState}
-			<input
-				type="hidden"
-				name="product_thumb_crop_state"
-				value={JSON.stringify(thumbCropState)}
-			/>
+			<input type="hidden" name="product_thumb_crop_state" value={JSON.stringify(thumbCropState)} />
 		{/if}
 		{#if galleryCropPayload.length}
 			<input
@@ -1071,7 +1083,7 @@
 		<div class="col-md-6">
 			<label class="form-label" for="product-type">{$t('admin.productsNew.type')}</label>
 			<select class="form-select" id="product-type" name="product_type" required>
-				{#each productTypes as type}
+				{#each productTypes as type, __eachIndex1 (type?._id ?? type?.id ?? __eachIndex1)}
 					<option value={type.value}>{type.label}</option>
 				{/each}
 			</select>
@@ -1104,12 +1116,7 @@
 		</div>
 		<div class="col-md-3">
 			<label class="form-label" for="product-quantity">{$t('admin.productsNew.quantity')}</label>
-			<input
-				class="form-control"
-				id="product-quantity"
-				type="number"
-				name="product_quantity"
-			/>
+			<input class="form-control" id="product-quantity" type="number" name="product_quantity" />
 		</div>
 
 		<div class="col-md-3">
@@ -1161,7 +1168,7 @@
 			</label>
 			<RichTextEditor
 				value={descriptionValue}
-				uploadSessionId={uploadSessionId}
+				{uploadSessionId}
 				uploadEntityType="product"
 				onUploadStateChange={handleDescriptionUploadState}
 				onChange={(content) => {
@@ -1189,77 +1196,74 @@
 					{$t('admin.productsNew.chooseImage')}
 				</button>
 			</div>
-				<div class="thumb-upload-wrapper">
-					<div class="thumb-upload-card">
-						<input
-							class="upload-file-input"
-							id="product-thumb"
-							name="product_thumb"
-							type="file"
-							accept="image/*"
-							onchange={handleThumbChange}
-							bind:this={thumbInput}
-							disabled={thumbUploadStatus === 'uploading'}
-						/>
-						<div class="upload-card-copy">
-							<strong>{$t('admin.productsNew.thumb')}</strong>
-							<span>{$t('admin.productsNew.thumbHint')}</span>
-						</div>
+			<div class="thumb-upload-wrapper">
+				<div class="thumb-upload-card">
+					<input
+						class="upload-file-input"
+						id="product-thumb"
+						name="product_thumb"
+						type="file"
+						accept="image/*"
+						onchange={handleThumbChange}
+						bind:this={thumbInput}
+						disabled={thumbUploadStatus === 'uploading'}
+					/>
+					<div class="upload-card-copy">
+						<strong>{$t('admin.productsNew.thumb')}</strong>
+						<span>{$t('admin.productsNew.thumbHint')}</span>
 					</div>
-					{#if imageError}
-						<div class="text-danger small mt-2">{imageError}</div>
-					{/if}
-					{#if thumbPreviewUrl}
-						<div class="thumb-preview mt-3">
-							<div class="thumb-preview-image">
-								<img
-									src={thumbCroppedUrl || thumbPreviewUrl}
-									alt={$t('admin.productsNew.thumb')}
-								/>
-								<div class="image-upload-status" class:error={thumbUploadStatus === 'error'}>
-									{#if thumbUploadStatus === 'uploading'}
-										<span class="image-status-spinner" aria-hidden="true"></span>
-										<span>Đang tải ảnh...</span>
-									{:else if thumbUploadStatus === 'success'}
-										<span class="image-status-check" aria-hidden="true">✓</span>
-										<span>Đã tải</span>
-									{:else if thumbUploadStatus === 'error'}
-										<span class="image-status-error" aria-hidden="true">!</span>
-										<span>Tải lỗi</span>
-										<button type="button" onclick={retryThumbUpload}>Thử lại</button>
-									{/if}
-								</div>
+				</div>
+				{#if imageError}
+					<div class="text-danger small mt-2">{imageError}</div>
+				{/if}
+				{#if thumbPreviewUrl}
+					<div class="thumb-preview mt-3">
+						<div class="thumb-preview-image">
+							<img src={thumbCroppedUrl || thumbPreviewUrl} alt={$t('admin.productsNew.thumb')} />
+							<div class="image-upload-status" class:error={thumbUploadStatus === 'error'}>
+								{#if thumbUploadStatus === 'uploading'}
+									<span class="image-status-spinner" aria-hidden="true"></span>
+									<span>Đang tải ảnh...</span>
+								{:else if thumbUploadStatus === 'success'}
+									<span class="image-status-check" aria-hidden="true">✓</span>
+									<span>Đã tải</span>
+								{:else if thumbUploadStatus === 'error'}
+									<span class="image-status-error" aria-hidden="true">!</span>
+									<span>Tải lỗi</span>
+									<button type="button" onclick={retryThumbUpload}>Thử lại</button>
+								{/if}
 							</div>
-							{#if thumbUploadStatus === 'error'}
-								<div class="upload-error-detail">{thumbUploadError}</div>
-							{/if}
-							<div class="thumb-actions">
+						</div>
+						{#if thumbUploadStatus === 'error'}
+							<div class="upload-error-detail">{thumbUploadError}</div>
+						{/if}
+						<div class="thumb-actions">
+							<button
+								type="button"
+								class="btn btn-outline-dark btn-sm"
+								onclick={() =>
+									openCropper({
+										mode: 'thumb',
+										sourceUrl: thumbDataUrl || thumbPreviewUrl,
+										fileName: thumbFileName
+									})}
+							>
+								{$t('admin.blogEditor.cropApply')}
+							</button>
+							{#if thumbCroppedUrl}
 								<button
-									type="button"
-									class="btn btn-outline-dark btn-sm"
-									onclick={() =>
-										openCropper({
-											mode: 'thumb',
-											sourceUrl: thumbDataUrl || thumbPreviewUrl,
-											fileName: thumbFileName
-										})}
-								>
-									{$t('admin.blogEditor.cropApply')}
-								</button>
-								{#if thumbCroppedUrl}
-									<button
 									type="button"
 									class="btn btn-outline-secondary btn-sm"
 									onclick={resetThumbCrop}
 								>
-										{$t('common.reset')}
-									</button>
-								{/if}
-							</div>
+									{$t('common.reset')}
+								</button>
+							{/if}
 						</div>
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
+		</div>
 		<div class="col-12">
 			<div class="upload-field-header">
 				<label class="form-label" for="product-gallery">{$t('admin.productsNew.gallery')}</label>
@@ -1274,10 +1278,7 @@
 				</button>
 			</div>
 			<div class="gallery-upload-wrapper">
-				<div
-					class="gallery-drop-zone"
-					class:active={isGalleryDragActive}
-				>
+				<div class="gallery-drop-zone" class:active={isGalleryDragActive}>
 					<input
 						class="gallery-input"
 						id="product-gallery"
@@ -1312,11 +1313,8 @@
 							</h6>
 						</div>
 						<div class="gallery-thumbs">
-							{#each galleryItems as item, index}
-								<div
-									class="gallery-thumb-item"
-									class:upload-error={item.uploadStatus === 'error'}
-								>
+							{#each galleryItems as item, index (item?._id ?? item?.id ?? index)}
+								<div class="gallery-thumb-item" class:upload-error={item.uploadStatus === 'error'}>
 									<img
 										src={item.croppedUrl || item.previewUrl}
 										alt={`${$t('admin.productsNew.gallery')} ${index + 1}`}
@@ -1367,7 +1365,8 @@
 											<span>Đã tải</span>
 										{:else if item.uploadStatus === 'error'}
 											<span class="image-status-error" aria-hidden="true">!</span>
-											<button type="button" onclick={() => retryGalleryUpload(item)}>Thử lại</button>
+											<button type="button" onclick={() => retryGalleryUpload(item)}>Thử lại</button
+											>
 										{/if}
 									</div>
 									{#if item.croppedUrl}
@@ -1435,7 +1434,7 @@
 					</div>
 					{#if colors.length}
 						<div class="variant-list">
-							{#each colors as item}
+							{#each colors as item, __eachIndex6 (item?._id ?? item?.id ?? __eachIndex6)}
 								<div class="variant-pill">
 									<span>{item.name}</span>
 									<input
@@ -1485,7 +1484,7 @@
 					</div>
 					{#if sizes.length}
 						<div class="variant-list">
-							{#each sizes as item}
+							{#each sizes as item, __eachIndex7 (item?._id ?? item?.id ?? __eachIndex7)}
 								<div class="variant-pill">
 									<span>{item.name}</span>
 									<input
@@ -1519,13 +1518,13 @@
 				<div class="variant-row">
 					<select class="form-select" bind:value={comboColor}>
 						<option value="">{$t('admin.productsNew.selectColor')}</option>
-						{#each colors as item}
+						{#each colors as item, __eachIndex2 (item?._id ?? item?.id ?? __eachIndex2)}
 							<option value={item.name}>{item.name}</option>
 						{/each}
 					</select>
 					<select class="form-select" bind:value={comboSize}>
 						<option value="">{$t('admin.productsNew.selectSize')}</option>
-						{#each sizes as item}
+						{#each sizes as item, __eachIndex3 (item?._id ?? item?.id ?? __eachIndex3)}
 							<option value={item.name}>{item.name}</option>
 						{/each}
 					</select>
@@ -1543,12 +1542,12 @@
 				</div>
 				{#if combos.length}
 					<div class="variant-list">
-						{#each combos as item}
-								<div class="variant-pill">
-									<span>{item.color} / {item.size}</span>
-									<span class="text-black-50 small">
+						{#each combos as item, __eachIndex4 (item?._id ?? item?.id ?? __eachIndex4)}
+							<div class="variant-pill">
+								<span>{item.color} / {item.size}</span>
+								<span class="text-black-50 small">
 									{item.price !== undefined && item.price !== null ? `${item.price}` : '--'}
-									</span>
+								</span>
 								<button
 									class="btn btn-link text-danger p-0"
 									type="button"
@@ -1616,9 +1615,12 @@
 						×
 					</button>
 				</div>
-				<div
+				<button
+					type="button"
 					class="cropper-frame"
 					bind:this={cropFrame}
+					aria-label={$t('admin.blogEditor.cropPreviewAlt')}
+					onkeydown={handleCropFrameKeydown}
 					onpointerdown={handleCropPointerDown}
 					onpointermove={handleCropPointerMove}
 					onpointerup={handleCropPointerUp}
@@ -1633,7 +1635,7 @@
 						draggable="false"
 						style={`transform: translate(-50%, -50%) translate(${cropOffsetX}px, ${cropOffsetY}px) scale(${cropBaseScale * cropZoom});`}
 					/>
-				</div>
+				</button>
 				<div class="cropper-controls">
 					<div class="cropper-zoom">
 						<label for="product-crop-zoom">{$t('admin.blogEditor.cropZoom')}</label>
@@ -1775,41 +1777,6 @@
 		gap: 16px;
 	}
 
-	.upload-progress-container {
-		display: grid;
-		gap: 8px;
-	}
-
-	.progress {
-		background-color: #e9ecef;
-		border-radius: 10px;
-		overflow: hidden;
-		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
-	}
-
-	.progress-bar {
-		width: 100%;
-		height: 5px;
-		background-color: #e0e0e0;
-		position: relative;
-		margin-top: 5px;
-	}
-
-	.progress-bar-fill {
-		height: 100%;
-		background-color: #4caf50;
-		transition: width 0.2s ease-in-out;
-	}
-
-	.progress-text {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: #6c757d;
-		display: flex;
-		align-items: center;
-		justify-content: flex-end;
-	}
-
 	.gallery-drop-zone {
 		position: relative;
 		border: 2px dashed rgba(0, 0, 0, 0.15);
@@ -1833,11 +1800,6 @@
 		background: #fff;
 		border-style: solid;
 		transform: scale(1.01);
-	}
-
-	.gallery-drop-zone.uploading {
-		pointer-events: none;
-		opacity: 0.7;
 	}
 
 	.gallery-drop-zone .gallery-input {
@@ -2199,12 +2161,19 @@
 		border-radius: 12px;
 		overflow: hidden;
 		background: #f7f7f7;
+		padding: 0;
+		appearance: none;
 		cursor: grab;
 		touch-action: none;
 	}
 
 	.cropper-frame:active {
 		cursor: grabbing;
+	}
+
+	.cropper-frame:focus-visible {
+		outline: 3px solid #0f766e;
+		outline-offset: 2px;
 	}
 
 	.cropper-image {
@@ -2330,4 +2299,3 @@
 		}
 	}
 </style>
-

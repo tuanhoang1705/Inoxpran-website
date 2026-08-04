@@ -189,7 +189,9 @@ html {
 }
 
 #smooth-content.has-site-header section[id] {
-	scroll-margin-top: calc(var(--site-header-height, var(--site-header-height-fallback, 48px)) + 12px);
+	scroll-margin-top: calc(
+		var(--site-header-height, var(--site-header-height-fallback, 48px)) + 12px
+	);
 }
 
 body.no-smoother #smooth-wrapper {
@@ -203,10 +205,7 @@ body.no-smoother #smooth-content {
 	will-change: auto;
 }
 
-@media (max-width: 768px),
-(hover: none),
-(pointer: coarse) {
-
+@media (max-width: 768px), (hover: none), (pointer: coarse) {
 	/* mobile keeps same overrides (redundant but explicit) */
 	body.no-smoother #smooth-wrapper {
 		overflow-x: hidden !important;
@@ -403,11 +402,11 @@ h6 {
 
 .btn:hover,
 .btn:focus-visible,
-.btn-check:checked+.btn,
+.btn-check:checked + .btn,
 .btn.active,
 .btn.show,
 .btn:first-child:active,
-:not(.btn-check)+.btn:active {
+:not(.btn-check) + .btn:active {
 	color: var(--white-color);
 	background-color: var(--black-color);
 }
@@ -475,7 +474,8 @@ textarea.form-control::placeholder {
 
 .form-select {
 	min-height: var(--ui-control-height);
-	padding: var(--ui-control-padding-y) calc(var(--ui-control-padding-x) * 1.8) var(--ui-control-padding-y) var(--ui-control-padding-x);
+	padding: var(--ui-control-padding-y) calc(var(--ui-control-padding-x) * 1.8)
+		var(--ui-control-padding-y) var(--ui-control-padding-x);
 	font-size: var(--ui-text-size);
 	line-height: 1.3;
 	border-radius: var(--ui-control-radius);
@@ -526,14 +526,14 @@ th {
 	border: none;
 }
 
-.active>.page-link,
+.active > .page-link,
 .page-link.active {
 	color: var(--primary-color);
 	background: none;
 	border: none;
 }
 
-.disabled>.page-link,
+.disabled > .page-link,
 .page-link.disabled {
 	color: var(--gray-color-500);
 	background: none;
@@ -1230,8 +1230,12 @@ th {
 	opacity: 1;
 	visibility: visible;
 	cursor:
-		-webkit-image-set(url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath fill='%23FFF' d='M20 1l-1-1-9 9-9-9-1 1 9 9-9 9 1 1 9-9 9 9 1-1-9-9'/%3E%3C/svg%3E") 1x,
-			url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath fill='%23000' d='M20 1l-1-1-9 9-9-9-1 1 9 9-9 9 1 1 9-9 9 9 1-1-9-9'/%3E%3C/svg%3E") 2x),
+		-webkit-image-set(
+			url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath fill='%23FFF' d='M20 1l-1-1-9 9-9-9-1 1 9 9-9 9 1 1 9-9 9 9 1-1-9-9'/%3E%3C/svg%3E")
+				1x,
+			url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath fill='%23000' d='M20 1l-1-1-9 9-9-9-1 1 9 9-9 9 1 1 9-9 9 9 1-1-9-9'/%3E%3C/svg%3E")
+				2x
+		),
 		pointer;
 	cursor:
 		url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20'%3E%3Cpath fill='%23000' d='M20 1l-1-1-9 9-9-9-1 1 9 9-9 9 1 1 9-9 9 9 1-1-9-9'/%3E%3C/svg%3E"),
@@ -1381,7 +1385,6 @@ th {
 }
 
 @media only screen and (max-width: 991px) {
-
 	.search-popup .cat-list-item,
 	.search-popup-form .form-control {
 		font-size: 1.425em;
@@ -1396,7 +1399,6 @@ th {
 }
 
 @media only screen and (max-width: 575px) {
-
 	.search-popup .cat-list-item,
 	.search-popup-form .form-control {
 		font-size: 1.125em;
@@ -1574,11 +1576,11 @@ th {
 	margin-bottom: 0.5rem;
 }
 
-#header .top-info>.container {
+#header .top-info > .container {
 	min-height: 36px;
 }
 
-#header-nav>.container {
+#header-nav > .container {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -1598,7 +1600,7 @@ th {
 	}
 
 	#header-nav,
-	#header-nav>.container {
+	#header-nav > .container {
 		min-height: var(--header-desktop-min-height);
 	}
 }
@@ -3040,10 +3042,12 @@ section.panel {
 	content: '';
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(135deg,
-			rgba(248, 250, 252, 0.8),
-			rgba(209, 213, 219, 0.7),
-			rgba(15, 23, 42, 0.5));
+	background: linear-gradient(
+		135deg,
+		rgba(248, 250, 252, 0.8),
+		rgba(209, 213, 219, 0.7),
+		rgba(15, 23, 42, 0.5)
+	);
 	mix-blend-mode: multiply;
 	z-index: -1;
 }
@@ -4271,7 +4275,7 @@ footer a {
 		letter-spacing: 0.12em;
 	}
 
-	.navbar .logo>#img-logo {
+	.navbar .logo > #img-logo {
 		margin-left: -24px;
 	}
 
@@ -4747,7 +4751,6 @@ footer a {
 }
 
 @media (max-width: 768px) {
-
 	#best-selling-items .product-slider-button-prev,
 	#best-selling-items .product-slider-button-next {
 		top: 50% !important;
@@ -4931,10 +4934,12 @@ footer a {
 	content: '';
 	position: absolute;
 	inset: 0;
-	background: linear-gradient(120deg,
-			transparent 0%,
-			rgba(255, 255, 255, 0.6) 50%,
-			transparent 100%);
+	background: linear-gradient(
+		120deg,
+		transparent 0%,
+		rgba(255, 255, 255, 0.6) 50%,
+		transparent 100%
+	);
 	transform: translateX(-100%);
 	animation: shimmer 1.2s infinite;
 }
@@ -5031,7 +5036,6 @@ footer a {
 }
 
 @media (max-width: 640px) {
-
 	.shopify-grid .product-store .col-md-6,
 	.shopify-grid .product-store .col-lg-4,
 	.shopify-grid .product-store .col-xxl-3 {
@@ -5219,7 +5223,7 @@ footer a {
 		row-gap: 0.6rem;
 	}
 
-	#company-services .row>[class*='col-'] {
+	#company-services .row > [class*='col-'] {
 		flex: 0 0 50%;
 		max-width: 50%;
 		padding-bottom: 0.5rem !important;
@@ -5320,7 +5324,7 @@ footer a {
 		row-gap: 0.75rem;
 	}
 
-	#categories .row>[class*='col-'] {
+	#categories .row > [class*='col-'] {
 		flex: 0 0 33.333%;
 		max-width: 33.333%;
 	}
@@ -5474,7 +5478,7 @@ footer a {
 		row-gap: 0.75rem;
 	}
 
-	.shopify-grid .product-store>[class*='col-'] {
+	.shopify-grid .product-store > [class*='col-'] {
 		flex: 0 0 50%;
 		max-width: 50%;
 	}
@@ -5574,7 +5578,7 @@ footer a {
 		bottom: 98px;
 	}
 
-	.shopify-grid .product-store>[class*='col-'] {
+	.shopify-grid .product-store > [class*='col-'] {
 		flex: 0 0 50%;
 		max-width: 50%;
 	}
@@ -5586,10 +5590,7 @@ footer a {
 	}
 }
 
-@media (max-width: 992px),
-(hover: none),
-(pointer: coarse) {
-
+@media (max-width: 992px), (hover: none), (pointer: coarse) {
 	.card-concern,
 	.card-concern * {
 		display: none !important;
@@ -5613,20 +5614,26 @@ footer a {
 
 .hero-panel::before {
 	background:
-		radial-gradient(circle at 18% 26%,
+		radial-gradient(
+			circle at 18% 26%,
 			rgba(255, 255, 255, 0.24) 0%,
 			rgba(255, 255, 255, 0.12) 22%,
-			transparent 52%),
-		linear-gradient(90deg,
+			transparent 52%
+		),
+		linear-gradient(
+			90deg,
 			rgba(10, 21, 30, 0.48) 0%,
 			rgba(10, 21, 30, 0.34) 28%,
 			rgba(10, 21, 30, 0.2) 48%,
 			rgba(10, 21, 30, 0.1) 68%,
-			rgba(10, 21, 30, 0.03) 100%),
-		linear-gradient(180deg,
+			rgba(10, 21, 30, 0.03) 100%
+		),
+		linear-gradient(
+			180deg,
 			rgba(255, 255, 255, 0.1) 0%,
 			rgba(10, 21, 30, 0.05) 38%,
-			rgba(10, 21, 30, 0.16) 100%);
+			rgba(10, 21, 30, 0.16) 100%
+		);
 	mix-blend-mode: normal;
 	z-index: 1;
 }
@@ -5706,19 +5713,25 @@ footer a {
 @media (max-width: 768px) {
 	.hero-panel::before {
 		background:
-			radial-gradient(circle at 50% 18%,
+			radial-gradient(
+				circle at 50% 18%,
 				rgba(255, 255, 255, 0.18) 0%,
 				rgba(255, 255, 255, 0.08) 22%,
-				transparent 46%),
-			linear-gradient(180deg,
+				transparent 46%
+			),
+			linear-gradient(
+				180deg,
 				rgba(10, 21, 30, 0.5) 0%,
 				rgba(10, 21, 30, 0.38) 34%,
 				rgba(10, 21, 30, 0.26) 60%,
-				rgba(10, 21, 30, 0.2) 100%),
-			linear-gradient(90deg,
+				rgba(10, 21, 30, 0.2) 100%
+			),
+			linear-gradient(
+				90deg,
 				rgba(10, 21, 30, 0.42) 0%,
 				rgba(10, 21, 30, 0.18) 62%,
-				rgba(10, 21, 30, 0.04) 100%);
+				rgba(10, 21, 30, 0.04) 100%
+			);
 	}
 
 	#hero .hero-stage,
@@ -5791,11 +5804,20 @@ footer a {
 		radial-gradient(66% 56% at 76% 16%, rgba(126, 178, 202, 0.09), transparent 62%),
 		radial-gradient(58% 55% at 14% 86%, rgba(96, 134, 152, 0.05), transparent 60%),
 		/* left-side scrim → keeps the copy column dark & legible */
-		linear-gradient(90deg, rgba(6, 8, 12, 0.9) 0%, rgba(6, 8, 12, 0.55) 44%, rgba(6, 8, 12, 0.3) 100%),
+		linear-gradient(
+				90deg,
+				rgba(6, 8, 12, 0.9) 0%,
+				rgba(6, 8, 12, 0.55) 44%,
+				rgba(6, 8, 12, 0.3) 100%
+			),
 		/* vertical scrim → cinematic mood + strong contrast for the marquee/base */
-		linear-gradient(180deg, rgba(8, 11, 15, 0.58) 0%, rgba(7, 9, 13, 0.68) 52%, rgba(5, 6, 8, 0.92) 100%),
-		/* the photo */
-		url('/images/inox-italy.jpg');
+		linear-gradient(
+				180deg,
+				rgba(8, 11, 15, 0.58) 0%,
+				rgba(7, 9, 13, 0.68) 52%,
+				rgba(5, 6, 8, 0.92) 100%
+			),
+		/* the photo */ url('/images/inox-italy.jpg');
 	background-size: cover;
 	background-position: center 28%;
 	background-repeat: no-repeat;
@@ -5835,12 +5857,14 @@ footer a {
 	height: clamp(5.5rem, 12vw, 10rem);
 	border-radius: 999px;
 	opacity: 0.5;
-	background: linear-gradient(90deg,
-			rgba(185, 224, 234, 0) 0%,
-			rgba(185, 224, 234, 0.08) 22%,
-			rgba(201, 236, 245, 0.28) 50%,
-			rgba(185, 224, 234, 0.08) 78%,
-			rgba(185, 224, 234, 0) 100%);
+	background: linear-gradient(
+		90deg,
+		rgba(185, 224, 234, 0) 0%,
+		rgba(185, 224, 234, 0.08) 22%,
+		rgba(201, 236, 245, 0.28) 50%,
+		rgba(185, 224, 234, 0.08) 78%,
+		rgba(185, 224, 234, 0) 100%
+	);
 	border: 1px solid rgba(170, 212, 224, 0.08);
 	box-shadow:
 		inset 0 0 30px rgba(160, 210, 225, 0.05),
@@ -5856,10 +5880,12 @@ footer a {
 	position: absolute;
 	inset: 12% 8%;
 	border-radius: inherit;
-	background: linear-gradient(90deg,
-			rgba(255, 255, 255, 0) 0%,
-			rgba(255, 255, 255, 0.24) 48%,
-			rgba(255, 255, 255, 0) 100%);
+	background: linear-gradient(
+		90deg,
+		rgba(255, 255, 255, 0) 0%,
+		rgba(255, 255, 255, 0.24) 48%,
+		rgba(255, 255, 255, 0) 100%
+	);
 	opacity: 0.8;
 }
 

@@ -1,5 +1,8 @@
+import { env } from '$env/dynamic/public';
+import { dev } from '$app/environment';
 import { redirect } from '@sveltejs/kit';
-import { API_KEY_HEADER } from '$lib/server/api.js';
+import { USER_API_KEY_HEADER } from '$lib/server/api.js';
+import { buildHostOnlyCookieOptions } from '$lib/server/cookieSecurity.js';
 
 const USER_COOKIE = {
 	accessToken: 'user_access_token',
@@ -14,12 +17,10 @@ const USER_COOKIE = {
 
 const SEVEN_DAYS_SECONDS = 60 * 60 * 24 * 7;
 
-const baseCookieOptions = {
-	path: '/',
-	httpOnly: true,
-	sameSite: 'lax',
-	secure: false
-};
+const baseCookieOptions = buildHostOnlyCookieOptions({
+	siteUrl: env.PUBLIC_SITE_URL,
+	nodeEnv: dev ? 'development' : 'production'
+});
 
 const buildCookieOptions = (remember) =>
 	remember ? { ...baseCookieOptions, maxAge: SEVEN_DAYS_SECONDS } : { ...baseCookieOptions };
@@ -63,7 +64,7 @@ export const getUserSession = (cookies) => {
 
 export const buildUserHeaders = (session) => {
 	const headers = {};
-	if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+	if (USER_API_KEY_HEADER) headers['x-api-key'] = USER_API_KEY_HEADER;
 	if (session?.userId) headers['x-client-id'] = session.userId;
 	if (session?.accessToken) headers['authorization'] = session.accessToken;
 	return headers;

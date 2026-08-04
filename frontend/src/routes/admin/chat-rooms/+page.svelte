@@ -1,13 +1,16 @@
 ﻿<script>
+	import { SvelteDate, SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
 	import { browser } from '$app/environment';
-	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
+	import { onMount, untrack } from 'svelte';
 	import { locale, t } from '$lib/i18n/admin/index.js';
 
 	let { data } = $props();
- 
-	let roomsState = $state(Array.isArray(data?.rooms) ? data.rooms : []);
+
+	const initialData = untrack(() => data);
+	let roomsState = $state(Array.isArray(initialData?.rooms) ? initialData.rooms : []);
 	let paginationState = $state(
-		data?.pagination || {
+		initialData?.pagination || {
 			page: 1,
 			limit: 20,
 			total: 0,
@@ -16,10 +19,14 @@
 			hasNextPage: false
 		}
 	);
-	let statusCountsState = $state(data?.statusCounts || { all: 0, open: 0, handoff: 0, closed: 0 });
-	let filtersState = $state(data?.filters || { status: '', q: '', mine: false, unreadOnly: false });
-	let apiErrorState = $state(data?.apiError || '');
-	let currentAdmin = $state(data?.currentAdmin || null);
+	let statusCountsState = $state(
+		initialData?.statusCounts || { all: 0, open: 0, handoff: 0, closed: 0 }
+	);
+	let filtersState = $state(
+		initialData?.filters || { status: '', q: '', mine: false, unreadOnly: false }
+	);
+	let apiErrorState = $state(initialData?.apiError || '');
+	let currentAdmin = $state(initialData?.currentAdmin || null);
 	let copiedRoomCode = $state('');
 	let nowTs = $state(Date.now());
 	let streamError = $state(false);
@@ -58,13 +65,6 @@
 		room?.latestLead?.phone ||
 		(hasAuthenticatedCustomerAccount(room) ? room?.user?.name : null) ||
 		(room?.handoff?.requestedAt ? guestCustomerLabel : $t('common.customer'));
-
-	const formatDate = (value) => {
-		if (!value) return '--';
-		const date = new Date(value);
-		if (Number.isNaN(date.getTime())) return '--';
-		return date.toLocaleString($locale === 'en' ? 'en-US' : 'vi-VN');
-	};
 
 	const statusLabel = (value) => {
 		const key = String(value || '').toLowerCase();
@@ -108,11 +108,11 @@
 		if (!value) return '--';
 		const date = new Date(value);
 		if (Number.isNaN(date.getTime())) return '--';
-		const target = new Date(date);
+		const target = new SvelteDate(date);
 		target.setHours(0, 0, 0, 0);
-		const today = new Date(nowTs);
+		const today = new SvelteDate(nowTs);
 		today.setHours(0, 0, 0, 0);
-		const yesterday = new Date(today);
+		const yesterday = new SvelteDate(today);
 		yesterday.setDate(yesterday.getDate() - 1);
 		if (target.getTime() === today.getTime()) return $t('common.today');
 		if (target.getTime() === yesterday.getTime()) return $t('common.yesterday');
@@ -132,7 +132,7 @@
 		const groups = [];
 		for (const room of sorted) {
 			const activityAt = roomActivityAt(room);
-			const date = activityAt ? new Date(activityAt) : null;
+			const date = activityAt ? new SvelteDate(activityAt) : null;
 			const key =
 				date && !Number.isNaN(date.getTime())
 					? new Date(date.setHours(0, 0, 0, 0)).toISOString()
@@ -197,7 +197,9 @@
 				String(room?.liveSupport?.adminEmail || '').toLowerCase()
 		);
 	};
-	const isRootAdmin = $derived(Array.isArray(currentAdmin?.roles) && currentAdmin.roles.includes('SUPER_ADMIN'));
+	const isRootAdmin = $derived(
+		Array.isArray(currentAdmin?.roles) && currentAdmin.roles.includes('SUPER_ADMIN')
+	);
 	const roomHandledByOtherAdmin = (room) =>
 		Boolean(room?.liveSupport?.active && !roomOwnedByCurrentAdmin(room));
 	const selectedCount = $derived(
@@ -219,7 +221,7 @@
 			mine: overrides.mine ?? filters.mine,
 			unreadOnly: overrides.unreadOnly ?? filters.unreadOnly
 		};
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (next.status) params.set('status', next.status);
 		if (next.q) params.set('q', next.q);
 		if (next.page && Number(next.page) > 1) params.set('page', String(next.page));
@@ -296,7 +298,7 @@
 
 	const toggleRoomSelection = (roomId, checked) => {
 		selectAllMatching = false;
-		const next = new Set(selectedRoomIds);
+		const next = new SvelteSet(selectedRoomIds);
 		if (checked) next.add(String(roomId));
 		else next.delete(String(roomId));
 		selectedRoomIds = next;
@@ -304,13 +306,17 @@
 
 	const toggleSelectAll = (checked) => {
 		selectAllMatching = checked;
-		selectedRoomIds = checked ? new Set(rooms.map((room) => String(room?.sessionId || ''))) : new Set();
+		selectedRoomIds = checked
+			? new Set(rooms.map((room) => String(room?.sessionId || '')))
+			: new Set();
 	};
 
 	const deleteSelectedRooms = async () => {
 		if (!browser || bulkDeleteBusy || !selectedRoomIds.size || !isRootAdmin) return;
 		const roomIds = [...selectedRoomIds];
-		const confirmed = window.confirm(`Xóa ${roomIds.length} phòng chat đã chọn? Hành động này không thể hoàn tác.`);
+		const confirmed = window.confirm(
+			`Xóa ${roomIds.length} phòng chat đã chọn? Hành động này không thể hoàn tác.`
+		);
 		if (!confirmed) return;
 
 		bulkDeleteBusy = true;
@@ -392,19 +398,28 @@
 	</div>
 
 	<div class="chat-room-list__stats">
-		<a class:active={!filters.status} href={buildHref({ status: '', page: 1 })}>
+		<a class:active={!filters.status} href={resolve(buildHref({ status: '', page: 1 }))}>
 			<span>{$t('admin.chatRooms.filters.all')}</span>
 			<strong>{statusCounts.all}</strong>
 		</a>
-		<a class:active={filters.status === 'open'} href={buildHref({ status: 'open', page: 1 })}>
+		<a
+			class:active={filters.status === 'open'}
+			href={resolve(buildHref({ status: 'open', page: 1 }))}
+		>
 			<span>{$t('admin.chatRooms.status.open')}</span>
 			<strong>{statusCounts.open}</strong>
 		</a>
-		<a class:active={filters.status === 'handoff'} href={buildHref({ status: 'handoff', page: 1 })}>
+		<a
+			class:active={filters.status === 'handoff'}
+			href={resolve(buildHref({ status: 'handoff', page: 1 }))}
+		>
 			<span>{$t('admin.chatRooms.status.handoff')}</span>
 			<strong>{statusCounts.handoff}</strong>
 		</a>
-		<a class:active={filters.status === 'closed'} href={buildHref({ status: 'closed', page: 1 })}>
+		<a
+			class:active={filters.status === 'closed'}
+			href={resolve(buildHref({ status: 'closed', page: 1 }))}
+		>
 			<span>{$t('admin.chatRooms.status.closed')}</span>
 			<strong>{statusCounts.closed}</strong>
 		</a>
@@ -463,12 +478,12 @@
 	</div>
 
 	<div class="chat-room-list__chips">
-		<a class:active={filters.mine} href={buildHref({ mine: !filters.mine, page: 1 })}
+		<a class:active={filters.mine} href={resolve(buildHref({ mine: !filters.mine, page: 1 }))}
 			>{$t('admin.chatRooms.filters.mine')}</a
 		>
 		<a
 			class:active={filters.unreadOnly}
-			href={buildHref({ unreadOnly: !filters.unreadOnly, page: 1 })}
+			href={resolve(buildHref({ unreadOnly: !filters.unreadOnly, page: 1 }))}
 			>{$t('admin.chatRooms.filters.unreadOnly')}</a
 		>
 	</div>
@@ -484,7 +499,9 @@
 			<span>Chọn tất cả phòng đang hiển thị</span>
 		</label>
 		{#if selectAllMatching}
-			<span class="chat-room-list__bulk-note">Đang áp dụng cho toàn bộ danh sách theo bộ lọc hiện tại ({pagination.total} phòng).</span>
+			<span class="chat-room-list__bulk-note"
+				>Đang áp dụng cho toàn bộ danh sách theo bộ lọc hiện tại ({pagination.total} phòng).</span
+			>
 		{/if}
 		<button
 			type="button"
@@ -513,13 +530,14 @@
 										type="checkbox"
 										checked={selectedRoomIds.has(String(room.sessionId))}
 										disabled={!isRootAdmin}
-										onchange={(event) => toggleRoomSelection(room.sessionId, event.currentTarget.checked)}
+										onchange={(event) =>
+											toggleRoomSelection(room.sessionId, event.currentTarget.checked)}
 										aria-label={`Chọn phòng ${roomCode(room.sessionId)}`}
 									/>
 								</div>
 								<a
 									class="chat-room-row__main"
-									href={roomHref(room.sessionId)}
+									href={resolve(roomHref(room.sessionId))}
 									data-sveltekit-preload-data="hover"
 								>
 									<div class="chat-room-row__avatar">
@@ -579,7 +597,7 @@
 									</button>
 									<a
 										class="chat-room-row__open"
-										href={roomHref(room.sessionId)}
+										href={resolve(roomHref(room.sessionId))}
 										data-sveltekit-preload-data="hover"
 									>
 										{$t('admin.chatRooms.table.detail')}
@@ -600,12 +618,12 @@
 			<span>{$t('admin.chatRooms.pagination.page')} {pagination.page}/{pagination.totalPages}</span>
 			<div>
 				{#if pagination.hasPrevPage}
-					<a href={buildHref({ page: (pagination.page || 1) - 1 })}
+					<a href={resolve(buildHref({ page: (pagination.page || 1) - 1 }))}
 						>{$t('admin.chatRooms.pagination.previous')}</a
 					>
 				{/if}
 				{#if pagination.hasNextPage}
-					<a href={buildHref({ page: (pagination.page || 1) + 1 })}
+					<a href={resolve(buildHref({ page: (pagination.page || 1) + 1 }))}
 						>{$t('admin.chatRooms.pagination.next')}</a
 					>
 				{/if}

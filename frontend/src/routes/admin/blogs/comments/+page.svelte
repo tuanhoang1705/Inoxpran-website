@@ -1,4 +1,6 @@
 <script>
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { pushToast } from '$lib/stores/adminToast.js';
@@ -37,7 +39,9 @@
 	};
 
 	const truncate = (value, limit = 120) => {
-		const text = String(value || '').replace(/\s+/g, ' ').trim();
+		const text = String(value || '')
+			.replace(/\s+/g, ' ')
+			.trim();
 		if (text.length <= limit) return text;
 		return `${text.slice(0, limit).trim()}...`;
 	};
@@ -45,7 +49,7 @@
 	const totalPages = $derived(Math.max(1, Math.ceil(pagination.total / pagination.limit)));
 
 	const makePageLink = (page) => {
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (filters?.q) params.set('q', filters.q);
 		if (filters?.status && filters.status !== 'all') params.set('status', filters.status);
 		if (filters?.blogId) params.set('blogId', filters.blogId);
@@ -99,7 +103,7 @@
 		<div class="filter-field">
 			<label for="comments-status">Trạng thái</label>
 			<select id="comments-status" name="status" class="form-select">
-				{#each statusOptions as option}
+				{#each statusOptions as option, __eachIndex1 (option?._id ?? option?.id ?? __eachIndex1)}
 					<option value={option.value} selected={option.value === filters.status}>
 						{option.label}
 					</option>
@@ -118,7 +122,7 @@
 		</div>
 		<div class="filter-actions">
 			<button class="btn btn-dark" type="submit">Lọc</button>
-			<a class="btn btn-outline-dark" href="/admin/blogs/comments">Xóa lọc</a>
+			<a class="btn btn-outline-dark" href={resolve('/admin/blogs/comments')}>Xóa lọc</a>
 		</div>
 	</form>
 
@@ -197,7 +201,7 @@
 		<nav class="pagination">
 			<a
 				class={`page-link ${pagination.page <= 1 ? 'disabled' : ''}`}
-				href={pagination.page <= 1 ? '#' : makePageLink(pagination.page - 1)}
+				href={pagination.page <= 1 ? '#' : resolve(makePageLink(pagination.page - 1))}
 				aria-disabled={pagination.page <= 1}
 			>
 				Trang trước
@@ -205,7 +209,7 @@
 			<span>Trang {pagination.page} / {totalPages}</span>
 			<a
 				class={`page-link ${pagination.page >= totalPages ? 'disabled' : ''}`}
-				href={pagination.page >= totalPages ? '#' : makePageLink(pagination.page + 1)}
+				href={pagination.page >= totalPages ? '#' : resolve(makePageLink(pagination.page + 1))}
 				aria-disabled={pagination.page >= totalPages}
 			>
 				Trang sau

@@ -12,7 +12,7 @@ const readJson = async (response) => {
 };
 
 export const POST = async ({ request, fetch, cookies }) => {
-	let body = null;
+	let body;
 	try {
 		body = await request.json();
 	} catch {

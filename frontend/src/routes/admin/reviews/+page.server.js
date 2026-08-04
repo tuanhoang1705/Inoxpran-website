@@ -74,7 +74,9 @@ export const load = async ({ cookies, fetch, url }) => {
 				items: [],
 				pagination: null,
 				filters,
-				targets: Array.isArray(targetResult?.payload?.metadata) ? targetResult.payload.metadata : [],
+				targets: Array.isArray(targetResult?.payload?.metadata)
+					? targetResult.payload.metadata
+					: [],
 				targetFilters: targetResult?.filters ?? { limit: 24, q: '' },
 				apiError: t('admin.productReviews.errors.load')
 			};
@@ -161,7 +163,12 @@ export const actions = {
 			verifiedPurchase: form.get('verifiedPurchase') ? 'true' : 'false'
 		};
 
-		if (!manualDraft.productLookup || !manualDraft.authorName || !manualDraft.rating || !manualDraft.content) {
+		if (
+			!manualDraft.productLookup ||
+			!manualDraft.authorName ||
+			!manualDraft.rating ||
+			!manualDraft.content
+		) {
 			const message = t('admin.productReviews.errors.createMissingRequired');
 			return fail(400, {
 				createError: message,

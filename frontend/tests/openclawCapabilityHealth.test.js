@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
+	capabilityHealthOverallTone,
 	capabilityTone,
 	findCapability,
 	normalizeCapabilityHealth,
 	sanitizeDashboardUrl,
+	schedulerWorkerReadiness,
 	upsertCapability
 } from '../src/lib/openclaw/capabilityHealth.js';
 import {
@@ -20,7 +22,7 @@ import {
 import { messages } from '../src/lib/i18n/admin/messages.js';
 
 const dashboardLoaderSource = readFileSync(
-	new URL('../src/routes/admin/openclaw/+page.server.js', import.meta.url),
+	new URL('../src/routes/admin/openclaw/blogs/settings/console/+page.server.js', import.meta.url),
 	'utf8'
 );
 const capabilityProxySource = readFileSync(
@@ -34,20 +36,38 @@ const qaProxySource = readFileSync(
 	new URL('../src/routes/admin/api/openclaw/qa-batches/[...segments]/+server.js', import.meta.url),
 	'utf8'
 );
+const openClawProxySource = readFileSync(
+	new URL('../src/lib/server/openclawRoadmapProxy.js', import.meta.url),
+	'utf8'
+);
 const contentOperationsPageSource = readFileSync(
-	new URL('../src/routes/admin/openclaw/content-operations/+page.svelte', import.meta.url),
+	new URL('../src/routes/admin/openclaw/blogs/settings/operations/+page.svelte', import.meta.url),
 	'utf8'
 );
 const contentOperationsLoaderSource = readFileSync(
-	new URL('../src/routes/admin/openclaw/content-operations/+page.server.js', import.meta.url),
+	new URL(
+		'../src/routes/admin/openclaw/blogs/settings/operations/+page.server.js',
+		import.meta.url
+	),
 	'utf8'
 );
 const qaPageSource = readFileSync(
-	new URL('../src/routes/admin/openclaw/content-operations/qa/+page.svelte', import.meta.url),
+	new URL(
+		'../src/routes/admin/openclaw/blogs/settings/operations/qa/+page.svelte',
+		import.meta.url
+	),
 	'utf8'
 );
 const capabilityPanelSource = readFileSync(
 	new URL('../src/lib/components/admin/openclaw/CapabilityHealthPanel.svelte', import.meta.url),
+	'utf8'
+);
+const bosSettingsSource = readFileSync(
+	new URL('../src/routes/admin/openclaw/blogs/settings/+page.svelte', import.meta.url),
+	'utf8'
+);
+const bosConsoleSource = readFileSync(
+	new URL('../src/routes/admin/openclaw/blogs/settings/console/+page.svelte', import.meta.url),
 	'utf8'
 );
 
@@ -68,7 +88,8 @@ test('normalizes the canonical capability contract without treating configuratio
 	});
 
 	assert.equal(findCapability(health, 'seoAgent').status, 'unknown');
-	assert.equal(capabilityTone(findCapability(health, 'seo_agent')), 'warn');
+	assert.equal(findCapability(health, 'seoAgent').latencyMs, null);
+	assert.equal(capabilityTone(findCapability(health, 'seo_agent')), 'muted');
 	assert.equal(health.actions.check, true);
 });
 
@@ -92,6 +113,82 @@ test('distinguishes expected disabled, missing configuration, degraded, and fail
 	assert.equal(findCapability(health, 'b').status, 'missing_config');
 	assert.equal(findCapability(health, 'c').status, 'degraded');
 	assert.equal(findCapability(health, 'd').status, 'failed');
+});
+
+test('maps canonical capability statuses to truthful tones', () => {
+	const cases = [
+		[{ enabled: true, configured: true, checked: true, status: 'healthy' }, 'good'],
+		[{ enabled: false, configured: true, checked: true, status: 'expected_disabled' }, 'muted'],
+		[{ enabled: true, configured: true, checked: true, status: 'manual_review' }, 'muted'],
+		[{ enabled: true, configured: true, checked: false, status: 'pending_check' }, 'muted'],
+		[{ enabled: true, configured: true, checked: true, status: 'degraded' }, 'warn'],
+		[{ enabled: true, configured: false, checked: true, status: 'missing_config' }, 'danger'],
+		[{ enabled: false, configured: false, checked: true, status: 'missing_config' }, 'danger'],
+		[
+			{
+				enabled: false,
+				configured: false,
+				checked: true,
+				status: 'missing_config',
+				reasonCode: 'invalid_boolean_configuration'
+			},
+			'danger'
+		],
+		[{ enabled: true, configured: true, checked: true, status: 'failed' }, 'danger']
+	];
+
+	for (const [capability, tone] of cases) assert.equal(capabilityTone(capability), tone);
+});
+
+test('derives all four BOS overall capability-health tones', () => {
+	const capability = (status, overrides = {}) => ({
+		enabled: true,
+		configured: true,
+		checked: true,
+		status,
+		...overrides
+	});
+	assert.equal(
+		capabilityHealthOverallTone({
+			healthEnabled: true,
+			capabilities: { healthy: capability('healthy'), degraded: capability('degraded') }
+		}),
+		'warn'
+	);
+	assert.equal(
+		capabilityHealthOverallTone({
+			healthEnabled: true,
+			capabilities: {
+				manual: capability('manual_review'),
+				pending: capability('pending_check', { checked: false })
+			}
+		}),
+		'muted'
+	);
+	assert.equal(
+		capabilityHealthOverallTone({
+			healthEnabled: false,
+			capabilities: { pending: capability('pending_check', { checked: false }) }
+		}),
+		'muted'
+	);
+	assert.equal(
+		capabilityHealthOverallTone({
+			healthEnabled: true,
+			capabilities: {
+				verified: capability('healthy'),
+				off: capability('expected_disabled', { enabled: false })
+			}
+		}),
+		'good'
+	);
+	assert.equal(
+		capabilityHealthOverallTone({
+			healthEnabled: true,
+			capabilities: { failed: capability('failed'), degraded: capability('degraded') }
+		}),
+		'danger'
+	);
 });
 
 test('upserts a single retry result without losing other capability results', () => {
@@ -129,6 +226,106 @@ test('preserves canonical unavailable, disabled, and expected-disabled as distin
 	assert.equal(findCapability(health, 'disabled').status, 'disabled');
 	assert.equal(findCapability(health, 'expected').status, 'expected_disabled');
 	assert.equal(capabilityTone(findCapability(health, 'unavailable')), 'danger');
+});
+
+test('treats a fresh scheduler with workerActive false as ready and idle', () => {
+	const state = schedulerWorkerReadiness(
+		{
+			featureKey: 'blog_cron',
+			checked: true,
+			status: 'healthy',
+			runtime: {
+				schedulerActive: true,
+				workerActive: false,
+				lastHeartbeatAt: '2026-08-04T03:30:00.000Z',
+				pollIntervalMs: 30_000
+			}
+		},
+		{ now: new Date('2026-08-04T03:30:45.000Z') }
+	);
+
+	assert.deepEqual(state, {
+		applies: true,
+		state: 'ready_idle',
+		reasonCode: 'waiting_for_work'
+	});
+});
+
+test('requires explicit scheduler and heartbeat evidence before showing worker readiness', () => {
+	const capability = (runtime, checked = true) => ({
+		featureKey: 'blog_cron',
+		checked,
+		status: checked ? 'healthy' : 'pending_check',
+		runtime
+	});
+	const now = new Date('2026-08-04T03:32:00.000Z');
+
+	assert.deepEqual(
+		schedulerWorkerReadiness(capability({ schedulerActive: null, workerActive: false }), {
+			now
+		}),
+		{ applies: true, state: 'unknown', reasonCode: 'scheduler_state_unknown' }
+	);
+	assert.deepEqual(
+		schedulerWorkerReadiness(
+			capability({
+				schedulerActive: true,
+				workerActive: false,
+				lastHeartbeatAt: null
+			}),
+			{ now }
+		),
+		{ applies: true, state: 'unavailable', reasonCode: 'heartbeat_missing' }
+	);
+	assert.deepEqual(
+		schedulerWorkerReadiness(
+			capability({
+				schedulerActive: true,
+				workerActive: false,
+				lastHeartbeatAt: '2026-08-04T03:29:00.000Z',
+				pollIntervalMs: 30_000
+			}),
+			{ now }
+		),
+		{ applies: true, state: 'unavailable', reasonCode: 'heartbeat_stale' }
+	);
+	assert.deepEqual(
+		schedulerWorkerReadiness(
+			capability({
+				schedulerActive: false,
+				workerActive: false,
+				lastHeartbeatAt: '2026-08-04T03:31:50.000Z'
+			}),
+			{ now }
+		),
+		{ applies: true, state: 'unavailable', reasonCode: 'scheduler_disabled' }
+	);
+	assert.equal(
+		schedulerWorkerReadiness(
+			capability(
+				{
+					schedulerActive: true,
+					workerActive: false,
+					lastHeartbeatAt: '2026-08-04T03:31:50.000Z'
+				},
+				false
+			),
+			{ now }
+		).state,
+		'unknown'
+	);
+});
+
+test('does not reinterpret non-scheduler workerActive fields', () => {
+	assert.deepEqual(
+		schedulerWorkerReadiness({
+			featureKey: 'openclaw_gateway',
+			checked: true,
+			status: 'healthy',
+			runtime: { workerActive: false, schedulerActive: false }
+		}),
+		{ applies: false, state: 'not_applicable', reasonCode: '' }
+	);
 });
 
 test('removes gateway tokens, credentials, and sensitive query parameters from dashboard URLs', () => {
@@ -193,23 +390,37 @@ test('QA navigation remains permission-gated but visible when production executi
 	assert.match(contentOperationsPageSource, /\{#if canViewQa\}/);
 });
 
-test('capability panel explains green, amber, and red states in both locales', () => {
-	assert.match(capabilityPanelSource, /capabilities\.legend\.good/);
-	assert.match(capabilityPanelSource, /capabilities\.legend\.warn/);
-	assert.match(capabilityPanelSource, /capabilities\.legend\.danger/);
-	for (const locale of ['vi', 'en']) {
-		assert.match(messages[locale].admin.contentOperations.capabilities.legend.good, /\S/);
-		assert.match(messages[locale].admin.contentOperations.capabilities.legend.warn, /\S/);
-		assert.match(messages[locale].admin.contentOperations.capabilities.legend.danger, /\S/);
+test('capability panel explains verified, degraded, blocking, and neutral states in both locales', () => {
+	for (const tone of ['good', 'warn', 'danger', 'muted']) {
+		assert.match(capabilityPanelSource, new RegExp(`capabilities\\.legend\\.${tone}`));
+		for (const locale of ['vi', 'en']) {
+			assert.match(messages[locale].admin.contentOperations.capabilities.legend[tone], /\S/);
+		}
 	}
+});
+
+test('BOS uses the four-level overall helper and canonical image capabilities', () => {
+	assert.match(bosSettingsSource, /capabilityHealthOverallTone\(capabilityHealth\)/);
+	assert.match(bosSettingsSource, /tone === 'warn'/);
+	assert.match(bosSettingsSource, /tone === 'good'/);
+	assert.match(bosSettingsSource, /Monitoring disabled|Giám sát đang tắt/);
+	assert.match(bosConsoleSource, /resolvedCapability\('image_search', 'imageSearch'\)/);
+	assert.match(bosConsoleSource, /resolvedCapability\('ai_image', 'aiImage'\)/);
+	assert.match(bosConsoleSource, /capabilityTone\(imageSearchCapability\)/);
+	assert.match(bosConsoleSource, /capabilityTone\(aiImageCapability\)/);
+	assert.doesNotMatch(bosConsoleSource, /capabilities\.imageSearch\?\.configured/);
+	assert.doesNotMatch(bosConsoleSource, /capabilities\.aiImage\?\.configured/);
 });
 
 test('new capability and QA proxies keep narrow path allowlists and sanitize responses', () => {
 	for (const source of [capabilityProxySource, qaProxySource]) {
 		assert.match(source, /const ALLOWED = Object\.freeze/);
-		assert.match(source, /sanitizeOpenClawClientPayload/);
-		assert.match(source, /sanitizeOpenClawErrorMessage/);
+		assert.match(source, /proxyOpenClawRequest/);
+		assert.match(source, /openClawProxyClientError/);
+		assert.match(source, /adminFetch: adminApiFetch/);
 	}
+	assert.match(openClawProxySource, /sanitizeOpenClawClientPayload/);
+	assert.match(openClawProxySource, /sanitizeOpenClawErrorMessage/);
 	assert.match(capabilityProxySource, /GET:\s*\[\/\^status\$\/\]/);
 	assert.match(capabilityProxySource, /POST:\s*\[\/\^check\$\//);
 	assert.match(capabilityProxySource, /Unsupported capability health query/);
@@ -303,9 +514,12 @@ test('ships VI and EN labels for every capability status and emitted diagnostic 
 		'content_operations_disabled',
 		'content_learning_auto_apply_disabled',
 		'latest_pipeline_failed',
+		'image_approval_required',
+		'image_manual_review_required',
 		'no_image_pipeline_history',
 		'external_provider_not_probed',
 		'external_delivery_not_probed',
+		'legacy_analytics_configuration_fallback',
 		'telegram_bot_api_not_called_by_health_check',
 		'external_provider_not_called_by_health_check',
 		'gateway_not_ready',

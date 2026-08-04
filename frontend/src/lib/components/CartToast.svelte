@@ -36,9 +36,7 @@
 		</svg>
 	</div>
 	<div class="cart-toast__text">{message}</div>
-	<button class="cart-toast__close" type="button" onclick={onClose} aria-label="Close">
-		x
-	</button>
+	<button class="cart-toast__close" type="button" onclick={onClose} aria-label="Close"> x </button>
 </div>
 
 <style>
@@ -49,7 +47,9 @@
 		z-index: 2147483647;
 		box-sizing: border-box;
 		width: min(360px, calc(100vw - 32px));
-		max-width: calc(100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right)));
+		max-width: calc(
+			100vw - max(12px, env(safe-area-inset-left)) - max(12px, env(safe-area-inset-right))
+		);
 		display: grid;
 		grid-template-columns: 36px minmax(0, 1fr) 36px;
 		gap: 10px;

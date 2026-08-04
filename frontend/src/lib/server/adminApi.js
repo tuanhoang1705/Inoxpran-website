@@ -1,9 +1,5 @@
 import { API_BASE } from '$lib/server/api.js';
-import {
-	buildAdminHeaders,
-	getAdminSession,
-	refreshAdminSession
-} from '$lib/server/adminAuth.js';
+import { buildAdminHeaders, getAdminSession, refreshAdminSession } from '$lib/server/adminAuth.js';
 
 const unauthorizedResponse = () =>
 	new Response(JSON.stringify({ message: 'Session expired. Please login again.' }), {

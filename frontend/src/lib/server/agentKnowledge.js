@@ -1,12 +1,15 @@
 ﻿import { Buffer } from 'node:buffer';
 import { extname } from 'node:path';
 import mammoth from 'mammoth';
-import * as XLSX from 'xlsx';
+import readExcelFile from 'read-excel-file/node';
 import { API_BASE } from '$lib/server/api.js';
 
 export const ALLOWED_KNOWLEDGE_EXTENSIONS = new Set(['.txt', '.md', '.csv', '.docx', '.xlsx']);
 export const MAX_KNOWLEDGE_FILE_SIZE = 5 * 1024 * 1024;
 export const MAX_KNOWLEDGE_CONTENT_LENGTH = 110000;
+const MAX_WORKBOOK_SHEETS = 25;
+const MAX_WORKBOOK_ROWS = 20000;
+const MAX_WORKBOOK_COLUMNS = 200;
 export const DEFAULT_KNOWLEDGE_CATEGORIES = Object.freeze([
 	'product_info',
 	'manual',
@@ -64,7 +67,10 @@ export const normalizeAgentKnowledgeSettings = (payload) => ({
 	updatedAt: payload?.metadata?.updatedAt || null
 });
 
-export const getKnowledgeCategoryOptions = (locale = 'vi', categories = DEFAULT_KNOWLEDGE_CATEGORIES) => {
+export const getKnowledgeCategoryOptions = (
+	locale = 'vi',
+	categories = DEFAULT_KNOWLEDGE_CATEGORIES
+) => {
 	const labels = locale === 'en' ? CATEGORY_LABELS.en : CATEGORY_LABELS.vi;
 	return categories.map((value) => ({
 		value,
@@ -73,7 +79,9 @@ export const getKnowledgeCategoryOptions = (locale = 'vi', categories = DEFAULT_
 };
 
 export const buildKnowledgePreview = (value, maxLength = 220) => {
-	const text = String(value || '').replace(/\s+/g, ' ').trim();
+	const text = String(value || '')
+		.replace(/\s+/g, ' ')
+		.trim();
 	if (!text) return '';
 	return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
 };
@@ -85,7 +93,7 @@ export const fetchAgentKnowledgeSettings = async ({ fetch, headers }) => {
 };
 
 const normalizeWhitespace = (value) =>
-	String(value || '')
+	String(value ?? '')
 		.replace(nbspPattern, ' ')
 		.replace(zeroWidthPattern, '')
 		.replace(/\r\n?/g, '\n')
@@ -128,7 +136,8 @@ const normalizeWorksheetRows = (sheetName, rows) => {
 
 	const headerRow = usefulRows[0] || [];
 	const remainingRows = usefulRows.slice(1);
-	const headerLooksStructured = headerRow.filter((cell) => normalizeCell(cell)).length >= 2 && remainingRows.length > 0;
+	const headerLooksStructured =
+		headerRow.filter((cell) => normalizeCell(cell)).length >= 2 && remainingRows.length > 0;
 	const formattedRows = (headerLooksStructured ? remainingRows : usefulRows)
 		.map((row, index) =>
 			headerLooksStructured
@@ -142,25 +151,97 @@ const normalizeWorksheetRows = (sheetName, rows) => {
 	return [`Sheet: ${sheetName}`, ...formattedRows].join('\n\n');
 };
 
-const extractWorkbookText = (buffer, extension) => {
-	const workbook = XLSX.read(buffer, {
-		type: 'buffer',
-		raw: false,
-		cellText: true,
-		cellDates: true,
-		dateNF: 'yyyy-mm-dd'
-	});
+const detectCsvDelimiter = (text) => {
+	const counts = new Map([
+		[',', 0],
+		[';', 0],
+		['\t', 0]
+	]);
+	let quoted = false;
+	for (let index = 0; index < text.length; index += 1) {
+		const character = text[index];
+		if (character === '"') {
+			if (quoted && text[index + 1] === '"') index += 1;
+			else quoted = !quoted;
+			continue;
+		}
+		if (!quoted && (character === '\n' || character === '\r')) break;
+		if (!quoted && counts.has(character)) counts.set(character, counts.get(character) + 1);
+	}
+	return [...counts.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || ',';
+};
 
-	const sections = workbook.SheetNames
-		.map((sheetName) => {
-			const sheet = workbook.Sheets[sheetName];
-			const rows = XLSX.utils.sheet_to_json(sheet, {
-				header: 1,
-				blankrows: false,
-				defval: ''
-			});
-			return normalizeWorksheetRows(sheetName, rows);
-		})
+const parseCsvRows = (buffer) => {
+	const text = buffer.toString('utf8').replace(/^\uFEFF/, '');
+	const delimiter = detectCsvDelimiter(text);
+	const rows = [];
+	let row = [];
+	let cell = '';
+	let quoted = false;
+
+	for (let index = 0; index < text.length; index += 1) {
+		const character = text[index];
+		if (character === '"') {
+			if (quoted && text[index + 1] === '"') {
+				cell += '"';
+				index += 1;
+			} else {
+				quoted = !quoted;
+			}
+		} else if (!quoted && character === delimiter) {
+			row.push(cell);
+			cell = '';
+		} else if (!quoted && (character === '\n' || character === '\r')) {
+			row.push(cell);
+			rows.push(row);
+			row = [];
+			cell = '';
+			if (character === '\r' && text[index + 1] === '\n') index += 1;
+		} else {
+			cell += character;
+		}
+	}
+	if (quoted) throw new Error('CSV chứa trường trích dẫn chưa được đóng.');
+	if (cell || row.length) {
+		row.push(cell);
+		rows.push(row);
+	}
+	return rows;
+};
+
+const assertWorkbookBounds = (sheets) => {
+	if (sheets.length > MAX_WORKBOOK_SHEETS) {
+		throw new Error(`File bảng tính vượt quá ${MAX_WORKBOOK_SHEETS} sheet.`);
+	}
+	let rowCount = 0;
+	for (const { data = [] } of sheets) {
+		rowCount += data.length;
+		if (rowCount > MAX_WORKBOOK_ROWS || data.some((row) => row.length > MAX_WORKBOOK_COLUMNS)) {
+			throw new Error('File bảng tính quá lớn để xử lý an toàn.');
+		}
+	}
+};
+
+const extractWorkbookText = async (buffer, extension) => {
+	let sheets;
+	try {
+		sheets =
+			extension === '.csv'
+				? [{ sheet: 'CSV', data: parseCsvRows(buffer) }]
+				: await readExcelFile(buffer);
+	} catch (error) {
+		if (String(error?.message || '').startsWith('CSV chứa')) throw error;
+		throw new Error(
+			extension === '.csv'
+				? 'Không đọc được nội dung CSV. Vui lòng kiểm tra định dạng file.'
+				: 'Không đọc được nội dung Excel. Vui lòng kiểm tra file .xlsx.',
+			{ cause: error }
+		);
+	}
+	assertWorkbookBounds(sheets);
+
+	const sections = sheets
+		.map(({ sheet, data }) => normalizeWorksheetRows(sheet || 'Sheet', data || []))
 		.filter(Boolean);
 
 	if (!sections.length) {
@@ -224,4 +305,5 @@ export const readUploadedKnowledgeFile = async (value) => {
 	};
 };
 
-export const normalizeKnowledgeTextInput = (value) => clipKnowledgeContent(normalizeWhitespace(value));
+export const normalizeKnowledgeTextInput = (value) =>
+	clipKnowledgeContent(normalizeWhitespace(value));

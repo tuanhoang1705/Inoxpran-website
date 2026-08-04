@@ -40,7 +40,9 @@ export const POST = async ({ request, fetch, cookies }) => {
 				{ headers: noStore }
 			);
 		}
-	} catch {}
+	} catch {
+		// The sanitized gateway failure response below is returned for transport and parse failures.
+	}
 
 	return json(
 		{

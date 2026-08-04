@@ -1,10 +1,10 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { t } from '$lib/i18n/admin/index.js';
 
 	let { data, form } = $props();
-
 
 	onMount(() => {
 		if (form?.toast) {
@@ -33,17 +33,21 @@
 
 			<div class="card border-0 bg-light p-3 mb-4">
 				<div class="small text-black-50">
-					<strong>{$t('admin.pending.statusLabel')}:</strong> {$t('admin.pending.statusValue')}
+					<strong>{$t('admin.pending.statusLabel')}:</strong>
+					{$t('admin.pending.statusValue')}
 				</div>
 				{#if data?.pendingEmail}
 					<div class="small text-black-50 mt-2">
-						<strong>{$t('admin.pending.emailLabel')}:</strong> {data.pendingEmail}
+						<strong>{$t('admin.pending.emailLabel')}:</strong>
+						{data.pendingEmail}
 					</div>
 				{/if}
 				<div class="small text-black-50 mt-2">{$t('admin.pending.notify')}</div>
 			</div>
 
-			<a href="/admin/login" class="btn btn-dark w-100 mb-2">{$t('admin.pending.backToLogin')}</a>
+			<a href={resolve('/admin/login')} class="btn btn-dark w-100 mb-2"
+				>{$t('admin.pending.backToLogin')}</a
+			>
 			<p class="text-center text-black-50 small mb-0">{$t('admin.pending.loginHint')}</p>
 		</div>
 	</div>

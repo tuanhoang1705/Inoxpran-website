@@ -105,8 +105,6 @@ export const load = async ({ cookies, fetch, params }) => {
 
 export const actions = {
 	update: async ({ request, cookies, fetch, params }) => {
-		const session = getAdminSession(cookies);
-		const headers = buildAdminHeaders(session);
 		const form = await request.formData();
 		const t = getTranslator(cookies);
 
@@ -161,7 +159,10 @@ export const actions = {
 			}
 		});
 		if (!response.ok) {
-			const message = await resolveErrorMessage(response, t('admin.productEditor.errors.updateFailed'));
+			const message = await resolveErrorMessage(
+				response,
+				t('admin.productEditor.errors.updateFailed')
+			);
 			return fail(response.status, { error: message, toast: { tone: 'error', message } });
 		}
 
@@ -183,7 +184,10 @@ export const actions = {
 		});
 
 		if (!response.ok) {
-			const message = await resolveErrorMessage(response, t('admin.productEditor.errors.publishFailed'));
+			const message = await resolveErrorMessage(
+				response,
+				t('admin.productEditor.errors.publishFailed')
+			);
 			return fail(response.status, { error: message, toast: { tone: 'error', message } });
 		}
 
@@ -204,7 +208,10 @@ export const actions = {
 		});
 
 		if (!response.ok) {
-			const message = await resolveErrorMessage(response, t('admin.productEditor.errors.unpublishFailed'));
+			const message = await resolveErrorMessage(
+				response,
+				t('admin.productEditor.errors.unpublishFailed')
+			);
 			return fail(response.status, { error: message, toast: { tone: 'error', message } });
 		}
 
@@ -225,7 +232,10 @@ export const actions = {
 		});
 
 		if (!response.ok) {
-			const message = await resolveErrorMessage(response, t('admin.productEditor.errors.deleteFailed'));
+			const message = await resolveErrorMessage(
+				response,
+				t('admin.productEditor.errors.deleteFailed')
+			);
 			return fail(response.status, { error: message, toast: { tone: 'error', message } });
 		}
 
@@ -236,4 +246,3 @@ export const actions = {
 		throw redirect(303, '/admin/products');
 	}
 };
-

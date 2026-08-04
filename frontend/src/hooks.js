@@ -14,7 +14,8 @@ const ADMIN_STATIC_PATHS = new Set([
 ]);
 const ADMIN_STATIC_PREFIXES = ['/_app/', '/icons/', '/images/', '/vendor/'];
 
-const shouldStripEnglishPrefix = (pathname) => pathname === EN_PREFIX || pathname.startsWith('/en/');
+const shouldStripEnglishPrefix = (pathname) =>
+	pathname === EN_PREFIX || pathname.startsWith('/en/');
 const shouldRouteAdminSubdomain = (url, pathname) => {
 	if (url?.hostname !== ADMIN_SUBDOMAIN) return false;
 	if (pathname === '/admin' || pathname.startsWith('/admin/')) return false;

@@ -1,5 +1,5 @@
 import { getLocaleFromCookies, translate } from '$lib/i18n/server.js';
-import { API_BASE, API_BASE_CANDIDATES, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, API_BASE_CANDIDATES, PUBLIC_API_KEY_HEADER } from '$lib/server/api.js';
 import { createAsyncTtlCache } from '$lib/server/asyncTtlCache.js';
 import {
 	buildUserHeaders,
@@ -170,8 +170,8 @@ const cloneSiteSettings = (settings) => ({
 
 const fetchSiteSettingsFromBase = async ({ fetch, base }) => {
 	const headers = {};
-	if (API_KEY_HEADER) {
-		headers['x-api-key'] = API_KEY_HEADER;
+	if (PUBLIC_API_KEY_HEADER) {
+		headers['x-api-key'] = PUBLIC_API_KEY_HEADER;
 	}
 	const response = await fetchWithTimeout({
 		fetch,
@@ -189,7 +189,8 @@ const fetchSiteSettingsFromBase = async ({ fetch, base }) => {
 	const rawHomeSlides = payload?.metadata?.homeSlides ?? payload?.homeSlides ?? null;
 	const rawMarketingCampaign =
 		payload?.metadata?.marketingCampaign ?? payload?.marketingCampaign ?? null;
-	const rawMarketplaceLinks = payload?.metadata?.marketplaceLinks ?? payload?.marketplaceLinks ?? null;
+	const rawMarketplaceLinks =
+		payload?.metadata?.marketplaceLinks ?? payload?.marketplaceLinks ?? null;
 	return {
 		siteFeatures: extractSiteFeatures(rawFeatures),
 		siteHomeSlides: extractHomeSlides(rawHomeSlides),
@@ -216,7 +217,9 @@ const getSiteSettingsPublic = async ({ fetch }) => {
 
 const getSiteSettingsCached = async ({ fetch }) => {
 	try {
-		return await SITE_FEATURES_CACHE.getOrLoad('site-settings:v3', () => getSiteSettingsPublic({ fetch }));
+		return await SITE_FEATURES_CACHE.getOrLoad('site-settings:v3', () =>
+			getSiteSettingsPublic({ fetch })
+		);
 	} catch {
 		return cloneSiteSettings(lastKnownSiteSettings || getDefaultSiteSettings());
 	}

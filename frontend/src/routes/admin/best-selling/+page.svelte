@@ -1,11 +1,14 @@
 <script>
-	import { onMount } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
+	import { onMount, untrack } from 'svelte';
 	import { locale, t } from '$lib/i18n/admin/index.js';
 	import { pushToast } from '$lib/stores/adminToast.js';
 
 	let { data, form } = $props();
 
-	let bestSelling = $state(Array.isArray(data?.bestSelling) ? [...data.bestSelling] : []);
+	let bestSelling = $state(
+		untrack(() => (Array.isArray(data?.bestSelling) ? [...data.bestSelling] : []))
+	);
 	let searchTerm = $state('');
 	let draggingId = $state('');
 	let draggingSource = $state('');
@@ -14,7 +17,7 @@
 
 	const allProducts = $derived(Array.isArray(data?.products) ? data.products : []);
 	const productMap = $derived.by(() => {
-		const map = new Map();
+		const map = new SvelteMap();
 		allProducts.forEach((product) => {
 			if (product?._id) map.set(String(product._id), product);
 		});
@@ -81,9 +84,7 @@
 
 	const handleListDragOver = (event) => {
 		event.preventDefault();
-		const items = Array.from(
-			event.currentTarget?.querySelectorAll('.best-selling-item') || []
-		);
+		const items = Array.from(event.currentTarget?.querySelectorAll('.best-selling-item') || []);
 		if (!items.length) {
 			dragOverIndex = 0;
 			return;
@@ -154,7 +155,9 @@
 			if (!product?._id || selected.has(product._id)) return false;
 			if (product.isPublished === false) return false;
 			if (!keyword) return true;
-			return String(product.product_name || '').toLowerCase().includes(keyword);
+			return String(product.product_name || '')
+				.toLowerCase()
+				.includes(keyword);
 		});
 		return a;
 	});
@@ -276,11 +279,12 @@
 					bind:value={searchTerm}
 				/>
 			</div>
-			<div class="available-list">
+			<div class="available-list" role="list">
 				{#if availableProducts().length}
 					{#each availableProducts() as product (product._id)}
 						<div
 							class="available-item"
+							role="listitem"
 							draggable="true"
 							ondragstart={(event) => handleDragStart(event, product, -1, 'available')}
 							ondragend={handleDragEnd}

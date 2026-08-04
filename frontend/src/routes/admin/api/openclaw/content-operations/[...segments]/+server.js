@@ -1,5 +1,10 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import {
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
 
 const ID = '[A-Za-z0-9_-]{1,128}';
 const ALLOWED = Object.freeze({
@@ -34,8 +39,6 @@ const ALLOWED = Object.freeze({
 });
 
 const MAX_BODY_CHARACTERS = 64 * 1024;
-const SAFE_ERROR_CODE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$/;
-const SAFE_ERROR_FIELD = /^[A-Za-z][A-Za-z0-9_.-]{0,119}$/;
 
 const normalizeSegments = (value) =>
 	String(value || '')
@@ -46,32 +49,15 @@ const normalizeSegments = (value) =>
 
 const isAllowed = (method, path) => (ALLOWED[method] || []).some((pattern) => pattern.test(path));
 
-const safeBackendError = (payload, httpStatus) => {
-	const numericStatus = Number.isInteger(httpStatus) ? httpStatus : 500;
-	const result = {
-		error:
-			numericStatus >= 500
-				? 'Internal Server Error'
-				: String(payload?.message || 'Content Operations request failed').slice(0, 500)
-	};
-	if (Number.isInteger(payload?.code) && payload.code >= 400 && payload.code <= 599) {
-		result.code = payload.code;
-	} else if (SAFE_ERROR_CODE.test(String(payload?.code || ''))) {
-		result.code = String(payload.code);
-	}
-	if (SAFE_ERROR_CODE.test(String(payload?.errorCode || ''))) {
-		result.errorCode = String(payload.errorCode);
-	}
-	if (SAFE_ERROR_FIELD.test(String(payload?.field || ''))) {
-		result.field = String(payload.field);
-	}
-	return result;
-};
-
 const proxy = async ({ request, cookies, fetch, params, url, method }) => {
+	const requestId = createOpenClawRequestId();
 	const path = normalizeSegments(params.segments);
 	if (!path || path.includes('..') || !isAllowed(method, path)) {
-		return json({ error: 'Unsupported Content Operations request' }, { status: 404 });
+		return openClawProxyClientError({
+			status: 404,
+			error: 'Unsupported Content Operations request',
+			requestId
+		});
 	}
 
 	const options = { method };
@@ -80,23 +66,29 @@ const proxy = async ({ request, cookies, fetch, params, url, method }) => {
 		try {
 			rawBody = await request.text();
 		} catch {
-			return json(
-				{ error: 'Unable to read JSON request body', code: 'INVALID_JSON' },
-				{ status: 400 }
-			);
+			return openClawProxyClientError({
+				status: 400,
+				error: 'Unable to read JSON request body',
+				requestId
+			});
 		}
 		if (rawBody.length > MAX_BODY_CHARACTERS) {
-			return json({ error: 'Content Operations request is too large' }, { status: 413 });
+			return openClawProxyClientError({
+				status: 413,
+				error: 'Content Operations request is too large',
+				requestId
+			});
 		}
 		let body = {};
 		if (rawBody.trim()) {
 			try {
 				body = JSON.parse(rawBody);
 			} catch {
-				return json(
-					{ error: 'Malformed JSON request body', code: 'INVALID_JSON' },
-					{ status: 400 }
-				);
+				return openClawProxyClientError({
+					status: 400,
+					error: 'Malformed JSON request body',
+					requestId
+				});
 			}
 		}
 		const serialized = JSON.stringify(body || {});
@@ -104,17 +96,16 @@ const proxy = async ({ request, cookies, fetch, params, url, method }) => {
 		options.body = serialized;
 	}
 
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: `/admin/openclaw/content-operations/${path}${url.search || ''}`,
-		options
+		options,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Content Operations request failed',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json(safeBackendError(payload, response.status), { status: response.status });
-	}
-	return json(payload?.metadata ?? payload ?? {});
 };
 
 export const GET = (event) => proxy({ ...event, method: 'GET' });

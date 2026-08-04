@@ -96,7 +96,8 @@ export const actions = {
 		const headers = buildAdminHeaders(session);
 		const form = await request.formData();
 		const titleInput = String(form.get('knowledgeTitle') || '').trim();
-		const category = String(form.get('knowledgeCategory') || 'general_policy').trim() || 'general_policy';
+		const category =
+			String(form.get('knowledgeCategory') || 'general_policy').trim() || 'general_policy';
 		const pastedContent = normalizeKnowledgeTextInput(form.get('knowledgeContent'));
 
 		let uploadData;
@@ -117,7 +118,10 @@ export const actions = {
 			{
 				id: randomUUID(),
 				title:
-					titleInput || (uploadData.sourceName ? uploadData.sourceName.replace(/\.[^.]+$/, '') : copy.defaultTitle),
+					titleInput ||
+					(uploadData.sourceName
+						? uploadData.sourceName.replace(/\.[^.]+$/, '')
+						: copy.defaultTitle),
 				category,
 				sourceType: uploadData.sourceName ? 'file' : 'text',
 				sourceName: uploadData.sourceName,

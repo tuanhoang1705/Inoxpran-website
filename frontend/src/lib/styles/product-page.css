@@ -140,7 +140,6 @@ body {
 	justify-content: center;
 	z-index: var(--overlay-z-top);
 	padding: 2rem 1rem;
-	
 }
 
 .gallery-modal-image {

@@ -1,4 +1,6 @@
 <script>
+	import { SvelteMap } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { browser } from '$app/environment';
 	import { enhance } from '$app/forms';
 	import { onDestroy } from 'svelte';
@@ -37,14 +39,6 @@
 		return new Intl.NumberFormat(localeValue).format(numeric);
 	};
 
-	const formatDate = (value) => {
-		if (!value) return '--';
-		const date = new Date(value);
-		if (Number.isNaN(date.getTime())) return '--';
-		const localeValue = $locale === 'en' ? 'en-US' : 'vi-VN';
-		return date.toLocaleString(localeValue);
-	};
-
 	const thumbUrl = $derived(product?.product_thumb || '');
 	const computeDiscount = (original, sale) => {
 		const originalValue = Number(original);
@@ -57,7 +51,7 @@
 	let salePrice = $state('');
 	let ratingAverage = $state('0');
 	let ratingCount = $state('0');
-	let discountPercent = $state(null);
+	let discountPercent = $derived(computeDiscount(originalPrice, salePrice));
 	let imageError = $state('');
 	let thumbUploadStatus = $state('idle');
 	let thumbUploadError = $state('');
@@ -98,7 +92,7 @@
 	);
 	let isSavingProduct = $state(false);
 	let uploadSessionId = $state('');
-	const uploadAssetCache = new Map();
+	const uploadAssetCache = new SvelteMap();
 	let isImageUploadPending = $derived(
 		isThumbUploading || isGalleryUploading || descriptionUploadStatus === 'uploading'
 	);
@@ -145,9 +139,7 @@
 			const parsed = new URL(sourceUrl, window.location.origin);
 			if (!['http:', 'https:'].includes(parsed.protocol)) return sourceUrl;
 			if (parsed.origin === window.location.origin) return sourceUrl;
-			return resolveAdminPath(
-				`/admin/api/image-proxy?url=${encodeURIComponent(parsed.href)}`
-			);
+			return resolveAdminPath(`/admin/api/image-proxy?url=${encodeURIComponent(parsed.href)}`);
 		} catch {
 			return sourceUrl;
 		}
@@ -249,26 +241,38 @@
 	) => {
 		if (!item || !file || !uploadSessionId) return null;
 		const uploadVersion = requestedVersion ?? Number(item?.uploadVersion || 0) + 1;
-		updateGalleryUploadState(item, {
-			uploadStatus: 'uploading',
-			uploadError: '',
-			uploadedAsset: null,
-			uploadVersion
-		}, requestedVersion);
+		updateGalleryUploadState(
+			item,
+			{
+				uploadStatus: 'uploading',
+				uploadError: '',
+				uploadedAsset: null,
+				uploadVersion
+			},
+			requestedVersion
+		);
 		try {
 			const asset = await uploadProductImageCached(file, 'gallery', cacheKey);
-			updateGalleryUploadState(item, {
-				uploadStatus: 'success',
-				uploadError: '',
-				uploadedAsset: asset
-			}, uploadVersion);
+			updateGalleryUploadState(
+				item,
+				{
+					uploadStatus: 'success',
+					uploadError: '',
+					uploadedAsset: asset
+				},
+				uploadVersion
+			);
 			return asset;
 		} catch (error) {
-			updateGalleryUploadState(item, {
-				uploadStatus: 'error',
-				uploadError: error?.message || 'Không thể tải ảnh chi tiết.',
-				uploadedAsset: null
-			}, uploadVersion);
+			updateGalleryUploadState(
+				item,
+				{
+					uploadStatus: 'error',
+					uploadError: error?.message || 'Không thể tải ảnh chi tiết.',
+					uploadedAsset: null
+				},
+				uploadVersion
+			);
 			return null;
 		}
 	};
@@ -318,10 +322,14 @@
 					thumbUploadError = error?.message || 'Không thể xử lý ảnh đại diện.';
 					return;
 				}
-				updateGalleryUploadState(cacheKey, {
-					uploadStatus: 'error',
-					uploadError: error?.message || 'Không thể xử lý ảnh chi tiết.'
-				}, galleryUploadVersion);
+				updateGalleryUploadState(
+					cacheKey,
+					{
+						uploadStatus: 'error',
+						uploadError: error?.message || 'Không thể xử lý ảnh chi tiết.'
+					},
+					galleryUploadVersion
+				);
 			});
 	};
 
@@ -367,17 +375,14 @@
 	let galleryCropPayload = $derived(
 		galleryItems
 			.map((item) => {
-				const dataUrl =
-					item?.croppedUrl || (!item?.isExisting && !item?.file ? item?.dataUrl : '');
+				const dataUrl = item?.croppedUrl || (!item?.isExisting && !item?.file ? item?.dataUrl : '');
 				if (!dataUrl) return null;
 				return { dataUrl, fileName: item?.fileName || '' };
 			})
 			.filter(Boolean)
 	);
 	let galleryCropStatesPayload = $derived(
-		galleryItems
-			.filter((item) => item?.croppedUrl)
-			.map((item) => item?.cropState || null)
+		galleryItems.filter((item) => item?.croppedUrl).map((item) => item?.cropState || null)
 	);
 
 	const confirmDelete = (event) => {
@@ -526,7 +531,7 @@
 		const items = [];
 		for (const file of files) {
 			const previewUrl = URL.createObjectURL(file);
-			let dataUrl = '';
+			let dataUrl;
 			try {
 				dataUrl = await readFileAsDataUrl(file);
 			} catch {
@@ -687,6 +692,22 @@
 		cropFrame?.releasePointerCapture?.(event.pointerId);
 	};
 
+	const handleCropFrameKeydown = (event) => {
+		const step = event.shiftKey ? 20 : 5;
+		const movement = {
+			ArrowLeft: [-step, 0],
+			ArrowRight: [step, 0],
+			ArrowUp: [0, -step],
+			ArrowDown: [0, step]
+		}[event.key];
+		if (!movement) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const clamped = clampCropOffsets(cropOffsetX + movement[0], cropOffsetY + movement[1]);
+		cropOffsetX = clamped.x;
+		cropOffsetY = clamped.y;
+	};
+
 	const applyCrop = () => {
 		if (!cropFrame || !cropImageEl) return;
 		const frameWidth = cropFrame.clientWidth;
@@ -701,10 +722,8 @@
 		const topLeftX = (frameWidth - scaledWidth) / 2 + cropOffsetX;
 		const topLeftY = (frameHeight - scaledHeight) / 2 + cropOffsetY;
 
-		const outputWidth =
-			cropMode === 'gallery' ? GALLERY_MAX_WIDTH : MAX_IMAGE_WIDTH;
-		const outputHeight =
-			cropMode === 'gallery' ? GALLERY_MAX_HEIGHT : MAX_IMAGE_HEIGHT;
+		const outputWidth = cropMode === 'gallery' ? GALLERY_MAX_WIDTH : MAX_IMAGE_WIDTH;
+		const outputHeight = cropMode === 'gallery' ? GALLERY_MAX_HEIGHT : MAX_IMAGE_HEIGHT;
 		const canvas = document.createElement('canvas');
 		canvas.width = outputWidth;
 		canvas.height = outputHeight;
@@ -961,9 +980,7 @@
 		const name = normalizeOption(sizeInput);
 		if (!name) return;
 		const price = normalizePrice(sizePriceInput);
-		const existingIndex = sizes.findIndex(
-			(item) => item.name.toLowerCase() === name.toLowerCase()
-		);
+		const existingIndex = sizes.findIndex((item) => item.name.toLowerCase() === name.toLowerCase());
 		if (existingIndex >= 0) {
 			sizes = sizes.map((item, index) =>
 				index === existingIndex ? { ...item, price: price ?? item.price } : item
@@ -1003,9 +1020,7 @@
 			(item) => `${item.color.toLowerCase()}::${item.size.toLowerCase()}` === key
 		);
 		if (existingIndex >= 0) {
-			combos = combos.map((item, index) =>
-				index === existingIndex ? { ...item, price } : item
-			);
+			combos = combos.map((item, index) => (index === existingIndex ? { ...item, price } : item));
 		} else {
 			combos = [...combos, { color, size, price }];
 		}
@@ -1013,9 +1028,7 @@
 	};
 
 	const removeCombo = (target) => {
-		combos = combos.filter(
-			(item) => !(item.color === target.color && item.size === target.size)
-		);
+		combos = combos.filter((item) => !(item.color === target.color && item.size === target.size));
 	};
 
 	const updateColorPrice = (name, value) => {
@@ -1081,9 +1094,9 @@
 		const variations = Array.isArray(productValue?.product_variations)
 			? productValue.product_variations
 			: [];
-		const colorMap = new Map();
-		const sizeMap = new Map();
-		const comboMap = new Map();
+		const colorMap = new SvelteMap();
+		const sizeMap = new SvelteMap();
+		const comboMap = new SvelteMap();
 
 		const addColor = (name, price) => {
 			if (!name) return;
@@ -1176,10 +1189,6 @@
 	});
 
 	$effect(() => {
-		discountPercent = computeDiscount(originalPrice, salePrice);
-	});
-
-	$effect(() => {
 		if (!browser) return;
 		const toast = form?.toast;
 		if (!toast?.message) return;
@@ -1221,9 +1230,7 @@
 			...(thumbUploadedAsset
 				? {
 						product_thumb: thumbUploadedAsset.url,
-						...(thumbUploadedAsset.path
-							? { product_thumb_path: thumbUploadedAsset.path }
-							: {}),
+						...(thumbUploadedAsset.path ? { product_thumb_path: thumbUploadedAsset.path } : {}),
 						...(thumbUploadedAsset.variants
 							? { product_thumb_variants: thumbUploadedAsset.variants }
 							: {}),
@@ -1231,9 +1238,7 @@
 					}
 				: {}),
 			product_gallery: galleryItems.map((item) =>
-				item?.cropState
-					? { ...item.uploadedAsset, crop_state: item.cropState }
-					: item.uploadedAsset
+				item?.cropState ? { ...item.uploadedAsset, crop_state: item.cropState } : item.uploadedAsset
 			)
 		};
 	};
@@ -1309,9 +1314,16 @@
 	<header class="product-header">
 		<div class="header-content">
 			<div class="header-left">
-				<a class="back-link" href="/admin/products">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-						<path d="M19 12H5M12 19l-7-7 7-7"/>
+				<a class="back-link" href={resolve('/admin/products')}>
+					<svg
+						width="20"
+						height="20"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path d="M19 12H5M12 19l-7-7 7-7" />
 					</svg>
 					<span>{$t('admin.productEditor.back')}</span>
 				</a>
@@ -1402,7 +1414,7 @@
 								{$t('admin.productEditor.productType')}
 							</label>
 							<select class="field-input" id="edit-product-type" name="product_type" required>
-								{#each productTypes as type}
+								{#each productTypes as type, __eachIndex1 (type?._id ?? type?.id ?? __eachIndex1)}
 									<option value={type.value} selected={type.value === product.product_type}>
 										{type.label}
 									</option>
@@ -1679,7 +1691,7 @@
 												</h6>
 											</div>
 											<div class="gallery-thumbs">
-												{#each galleryItems as item, index}
+												{#each galleryItems as item, index (item?._id ?? item?.id ?? index)}
 													<div
 														class="gallery-thumb-item"
 														class:upload-error={item.uploadStatus === 'error'}
@@ -1771,7 +1783,7 @@
 					<div style="margin-bottom: 16px;">
 						<RichTextEditor
 							value={descriptionValue}
-							uploadSessionId={uploadSessionId}
+							{uploadSessionId}
 							uploadEntityType="product"
 							onUploadStateChange={handleDescriptionUploadState}
 							onChange={(content) => {
@@ -1825,7 +1837,7 @@
 						</div>
 					</div>
 					<div class="variant-manager">
-						<label class="field-label">{$t('admin.productEditor.variantsTitle')}</label>
+						<h5 class="field-label">{$t('admin.productEditor.variantsTitle')}</h5>
 						<div class="variant-grid">
 							<div class="variant-card">
 								<h6>{$t('admin.productEditor.colors')}</h6>
@@ -1850,7 +1862,7 @@
 								</div>
 								{#if colors.length}
 									<div class="variant-list">
-										{#each colors as item}
+										{#each colors as item, __eachIndex5 (item?._id ?? item?.id ?? __eachIndex5)}
 											<div class="variant-pill">
 												<span>{item.name}</span>
 												<input
@@ -1895,7 +1907,7 @@
 								</div>
 								{#if sizes.length}
 									<div class="variant-list">
-										{#each sizes as item}
+										{#each sizes as item, __eachIndex6 (item?._id ?? item?.id ?? __eachIndex6)}
 											<div class="variant-pill">
 												<span>{item.name}</span>
 												<input
@@ -1905,8 +1917,7 @@
 													step="1"
 													placeholder={$t('admin.productEditor.priceOverride')}
 													value={item.price ?? ''}
-													oninput={(event) =>
-														updateSizePrice(item.name, event.currentTarget.value)}
+													oninput={(event) => updateSizePrice(item.name, event.currentTarget.value)}
 												/>
 												<button type="button" onclick={() => removeSize(item.name)}>x</button>
 											</div>
@@ -1924,13 +1935,13 @@
 							<div class="variant-row">
 								<select class="field-input" bind:value={comboColor}>
 									<option value="">{$t('admin.productEditor.selectColor')}</option>
-									{#each colors as item}
+									{#each colors as item, __eachIndex2 (item?._id ?? item?.id ?? __eachIndex2)}
 										<option value={item.name}>{item.name}</option>
 									{/each}
 								</select>
 								<select class="field-input" bind:value={comboSize}>
 									<option value="">{$t('admin.productEditor.selectSize')}</option>
-									{#each sizes as item}
+									{#each sizes as item, __eachIndex3 (item?._id ?? item?.id ?? __eachIndex3)}
 										<option value={item.name}>{item.name}</option>
 									{/each}
 								</select>
@@ -1948,7 +1959,7 @@
 							</div>
 							{#if combos.length}
 								<div class="variant-list">
-									{#each combos as item}
+									{#each combos as item, __eachIndex4 (item?._id ?? item?.id ?? __eachIndex4)}
 										<div class="variant-pill">
 											<span>{item.color} / {item.size}</span>
 											<span class="field-help">
@@ -2004,9 +2015,7 @@
 							</div>
 							<div class="preview-meta">
 								<span>{product.product_type}</span>
-								<span
-									>{$t('admin.productEditor.stockLabel', { count: inventoryStock })}</span
-								>
+								<span>{$t('admin.productEditor.stockLabel', { count: inventoryStock })}</span>
 							</div>
 						</div>
 					</div>
@@ -2098,9 +2107,12 @@
 						×
 					</button>
 				</div>
-				<div
+				<button
+					type="button"
 					class="cropper-frame"
 					bind:this={cropFrame}
+					aria-label={$t('admin.blogEditor.cropPreviewAlt')}
+					onkeydown={handleCropFrameKeydown}
 					onpointerdown={handleCropPointerDown}
 					onpointermove={handleCropPointerMove}
 					onpointerup={handleCropPointerUp}
@@ -2116,7 +2128,7 @@
 						draggable="false"
 						style={`transform: translate(-50%, -50%) translate(${cropOffsetX}px, ${cropOffsetY}px) scale(${cropBaseScale * cropZoom});`}
 					/>
-				</div>
+				</button>
 				<div class="cropper-controls">
 					<div class="cropper-zoom">
 						<div class="cropper-zoom-label">
@@ -2307,7 +2319,8 @@
 	}
 
 	@keyframes pulse {
-		0%, 100% {
+		0%,
+		100% {
 			opacity: 1;
 		}
 		50% {
@@ -3049,11 +3062,18 @@
 		border-radius: 10px;
 		overflow: hidden;
 		background: var(--bg-light);
+		padding: 0;
+		appearance: none;
 		cursor: grab;
 	}
 
 	.cropper-frame:active {
 		cursor: grabbing;
+	}
+
+	.cropper-frame:focus-visible {
+		outline: 3px solid var(--accent-primary, #0f766e);
+		outline-offset: 2px;
 	}
 
 	.cropper-image {
@@ -3481,6 +3501,4 @@
 			transform: rotate(360deg);
 		}
 	}
-
 </style>
-

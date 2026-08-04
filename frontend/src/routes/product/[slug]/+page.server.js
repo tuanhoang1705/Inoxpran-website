@@ -1,5 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, PUBLIC_API_KEY_HEADER } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/server.js';
 import { buildUserHeaders, clearSessionAndRedirect, getUserSession } from '$lib/server/userAuth.js';
 import { env } from '$env/dynamic/public';
@@ -9,8 +9,8 @@ import { randomUUID } from 'node:crypto';
 
 const buildHeaders = () => {
 	const headers = {};
-	if (API_KEY_HEADER) {
-		headers['x-api-key'] = API_KEY_HEADER;
+	if (PUBLIC_API_KEY_HEADER) {
+		headers['x-api-key'] = PUBLIC_API_KEY_HEADER;
 	}
 	return headers;
 };
@@ -272,7 +272,9 @@ const addItemToCart = async ({ request, fetch, cookies }) => {
 	const productId = String(payload?.productId ?? '').trim();
 	const quantityRaw = Number(payload?.quantity ?? 1);
 	const quantity = Number.isFinite(quantityRaw) ? Math.max(1, Math.floor(quantityRaw)) : 1;
-	const clientRequestId = String(payload?.clientRequestId ?? payload?.client_request_id ?? '').trim();
+	const clientRequestId = String(
+		payload?.clientRequestId ?? payload?.client_request_id ?? ''
+	).trim();
 	const sessionUserId = String(session?.userId || '').trim();
 	if (!productId) {
 		return { error: t('cart.errors.addFailed'), status: 400 };
@@ -346,9 +348,7 @@ export const actions = {
 		const quantity = Number.isFinite(quantityRaw) ? Math.max(1, Math.floor(quantityRaw)) : 1;
 		const variantPriceRaw = Number(payload?.variant_price ?? payload?.variantPrice);
 		const variantPrice =
-			Number.isFinite(variantPriceRaw) && variantPriceRaw > 0
-				? Math.floor(variantPriceRaw)
-				: null;
+			Number.isFinite(variantPriceRaw) && variantPriceRaw > 0 ? Math.floor(variantPriceRaw) : null;
 
 		if (!productId) {
 			return fail(400, { error: t('cart.errors.addFailed') });

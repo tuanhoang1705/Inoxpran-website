@@ -9,8 +9,10 @@
 		capabilityTone,
 		humanizeCapabilityToken,
 		normalizeCapabilityHealth,
+		schedulerWorkerReadiness,
 		upsertCapability
 	} from '$lib/openclaw/capabilityHealth.js';
+	import { normalizeOpenClawUiError, openClawUiErrorText } from '$lib/openclaw/uiError.js';
 
 	let {
 		health = {},
@@ -27,6 +29,11 @@
 	const capabilities = $derived(capabilityList(currentHealth));
 	const canCheck = $derived(currentHealth.actions?.check === true);
 	const isEn = $derived($locale === 'en');
+	const requestErrorText = (error) =>
+		openClawUiErrorText(error, {
+			isEn,
+			fallbackCode: 'OPENCLAW_CAPABILITY_CHECK_FAILED'
+		});
 
 	const resolveAdminPath = (path) => {
 		if (typeof window === 'undefined' || window.location.hostname !== 'admin.inoxpran.com') {
@@ -61,13 +68,16 @@
 		return capability.reasonCode
 			? translated(
 					capabilityReasonTranslationKey(capability.reasonCode),
-					humanizeCapabilityToken(capability.reasonCode)
+					$t('admin.contentOperations.capabilities.checkFailed')
 				)
 			: '';
 	};
 
 	const warningLabel = (warning) =>
-		translated(capabilityReasonTranslationKey(warning), humanizeCapabilityToken(warning));
+		translated(
+			capabilityReasonTranslationKey(warning),
+			$t('admin.contentOperations.capabilities.checkFailed')
+		);
 
 	const formatDateTime = (value) => {
 		if (!value) return $t('admin.contentOperations.capabilities.notChecked');
@@ -79,9 +89,19 @@
 		}).format(date);
 	};
 
+	const workerStateLabel = (workerState) => {
+		const valueKey =
+			workerState.state === 'unavailable' ? workerState.reasonCode : workerState.state;
+		return translated(
+			`admin.contentOperations.capabilities.runtime.workerStates.${valueKey}`,
+			$t('admin.contentOperations.capabilities.runtime.workerStates.unknown')
+		);
+	};
+
 	const runtimeFacts = (capability) => {
 		const runtime = capability.runtime || {};
 		const safe = capability.safeDetails || {};
+		const workerState = schedulerWorkerReadiness(capability);
 		const definitions = [
 			['lastSuccessfulRunAt', runtime.lastSuccessfulRunAt, true],
 			['nextRunAt', runtime.nextRunAt, true],
@@ -89,7 +109,11 @@
 			['lastHeartbeatAt', runtime.lastHeartbeatAt, true],
 			['dueTaskCount', runtime.dueTaskCount, false],
 			['persistedScheduleEnabled', runtime.persistedScheduleEnabled, false],
-			['workerActive', runtime.workerActive, false],
+			[
+				workerState.applies ? 'workerState' : 'workerActive',
+				workerState.applies ? workerStateLabel(workerState) : runtime.workerActive,
+				false
+			],
 			['schedulerActive', runtime.schedulerActive, false],
 			['activeRuns', runtime.activeRuns ?? safe.activeRuns, false],
 			['provider', safe.provider, false],
@@ -114,12 +138,7 @@
 		});
 		const payload = await response.json().catch(() => ({}));
 		if (!response.ok) {
-			throw new Error(
-				String(payload?.error || $t('admin.contentOperations.capabilities.checkFailed')).slice(
-					0,
-					300
-				)
-			);
+			throw normalizeOpenClawUiError(payload, 'OPENCLAW_CAPABILITY_CHECK_FAILED', response.headers);
 		}
 		return payload || {};
 	};
@@ -148,10 +167,7 @@
 			onUpdated(currentHealth);
 		} catch (error) {
 			currentHealth = previousHealth;
-			requestError =
-				error instanceof Error
-					? error.message
-					: $t('admin.contentOperations.capabilities.checkFailed');
+			requestError = requestErrorText(error);
 		} finally {
 			checkingAll = false;
 		}
@@ -179,10 +195,7 @@
 			onUpdated(currentHealth);
 		} catch (error) {
 			currentHealth = previousHealth;
-			requestError =
-				error instanceof Error
-					? error.message
-					: $t('admin.contentOperations.capabilities.checkFailed');
+			requestError = requestErrorText(error);
 		} finally {
 			checkingKey = '';
 		}
@@ -238,6 +251,10 @@
 		<li class="is-danger">
 			<i aria-hidden="true"></i>
 			<span>{$t('admin.contentOperations.capabilities.legend.danger')}</span>
+		</li>
+		<li class="is-muted">
+			<i aria-hidden="true"></i>
+			<span>{$t('admin.contentOperations.capabilities.legend.muted')}</span>
 		</li>
 	</ul>
 
@@ -388,7 +405,7 @@
 	}
 	.capability-panel__legend {
 		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-template-columns: repeat(4, minmax(0, 1fr));
 		gap: 0.45rem;
 		margin: 0;
 		padding: 0;
@@ -429,6 +446,11 @@
 		border-color: #efc4c4;
 		background: #fff5f5;
 		color: #a32d2d;
+	}
+	.capability-panel__legend li.is-muted {
+		border-color: #dce4e1;
+		background: #f7f9f8;
+		color: #64748b;
 	}
 	.capability-panel button {
 		display: inline-flex;

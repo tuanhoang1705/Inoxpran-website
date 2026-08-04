@@ -7,3 +7,12 @@ bun.lockb
 
 # Miscellaneous
 /static/
+/.svelte-kit/
+/build/
+/dist/
+/test-results/
+/.playwright-cli/
+/output/playwright/
+/.codex-tmp/
+**/*.log
+src/**/dist/

@@ -5,9 +5,8 @@
 
 	let { data, form } = $props();
 
-
-	const profile = form?.profile || data?.profile;
-	const loadError = data?.apiError;
+	const profile = $derived(form?.profile || data?.profile);
+	const loadError = $derived(data?.apiError);
 
 	onMount(() => {
 		if (form?.toast) {
@@ -62,12 +61,7 @@
 				<label class="form-label" for="admin-profile-avatar-file">
 					{$t('admin.profile.avatarFile')}
 				</label>
-				<input
-					class="form-control"
-					id="admin-profile-avatar-file"
-					name="avatar_file"
-					type="file"
-				/>
+				<input class="form-control" id="admin-profile-avatar-file" name="avatar_file" type="file" />
 			</div>
 			<div class="col-12">
 				<button class="btn btn-dark" type="submit">{$t('admin.profile.update')}</button>

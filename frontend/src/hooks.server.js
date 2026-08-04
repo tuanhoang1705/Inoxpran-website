@@ -45,6 +45,7 @@ const KNOWN_PUBLIC_TOP_LEVEL_PATHS = new Set([
 	'contact',
 	'faq',
 	'forgot-password',
+	'healthz',
 	'login',
 	'logout',
 	'orders',
@@ -88,10 +89,11 @@ const hasLegacyGarbageQuery = (searchParams) => {
 };
 
 const hasLegacyGarbagePath = (pathname) => {
-	const normalized = String(pathname || '')
-		.trim()
-		.toLowerCase()
-		.replace(/\/+$/, '') || '/';
+	const normalized =
+		String(pathname || '')
+			.trim()
+			.toLowerCase()
+			.replace(/\/+$/, '') || '/';
 	if (normalized === '/') return false;
 	const segments = normalized.split('/').filter(Boolean);
 	if (
@@ -195,7 +197,11 @@ export const handle = async ({ event, resolve }) => {
 	const normalizedPathname = pathname.replace(/\/+$/, '') || '/';
 	const routeId = String(event.route?.id || '');
 	const isAdminRequest = isAdminPath(pathname) || isAdminRouteId(routeId);
-	const adminPathname = isAdminPath(pathname) ? pathname : isAdminRouteId(routeId) ? routeId : pathname;
+	const adminPathname = isAdminPath(pathname)
+		? pathname
+		: isAdminRouteId(routeId)
+			? routeId
+			: pathname;
 	const adminLoginPath = url.hostname === ADMIN_SUBDOMAIN ? '/login' : '/admin/login';
 
 	if (url.hostname === ADMIN_SUBDOMAIN && isAdminPath(pathname)) {

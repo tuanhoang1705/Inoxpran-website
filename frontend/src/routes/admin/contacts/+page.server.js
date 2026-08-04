@@ -30,9 +30,7 @@ const parseJsonIdList = (value) => {
 	try {
 		const parsed = JSON.parse(value);
 		if (!Array.isArray(parsed)) return [];
-		return parsed
-			.map((item) => String(item || '').trim())
-			.filter(Boolean);
+		return parsed.map((item) => String(item || '').trim()).filter(Boolean);
 	} catch {
 		return [];
 	}
@@ -173,7 +171,10 @@ export const actions = {
 			return fail(response.status, { error: message, toast: { tone: 'error', message } });
 		}
 
-		setAdminToast(cookies, { tone: 'success', message: t('admin.contacts.success.deletedSelected') });
+		setAdminToast(cookies, {
+			tone: 'success',
+			message: t('admin.contacts.success.deletedSelected')
+		});
 		throw redirect(303, returnTo);
 	},
 

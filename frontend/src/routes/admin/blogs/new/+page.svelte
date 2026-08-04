@@ -213,6 +213,21 @@
 		cropFrame?.releasePointerCapture?.(event.pointerId);
 	};
 
+	const handleCropFrameKeydown = (event) => {
+		const step = event.shiftKey ? 20 : 5;
+		const movement = {
+			ArrowLeft: [-step, 0],
+			ArrowRight: [step, 0],
+			ArrowUp: [0, -step],
+			ArrowDown: [0, step]
+		}[event.key];
+		if (!movement) return;
+		event.preventDefault();
+		const clamped = clampCropOffsets(cropOffsetX + movement[0], cropOffsetY + movement[1]);
+		cropOffsetX = clamped.x;
+		cropOffsetY = clamped.y;
+	};
+
 	const applyCrop = () => {
 		if (!cropFrame || !cropImageEl) return;
 		const frameWidth = cropFrame.clientWidth;
@@ -382,9 +397,12 @@
 				{/if}
 				{#if coverPreviewUrl}
 					<div class="cropper mt-3">
-						<div
+						<button
+							type="button"
 							class="cropper-frame"
 							bind:this={cropFrame}
+							aria-label={$t('admin.blogEditor.cropPreviewAlt')}
+							onkeydown={handleCropFrameKeydown}
 							onpointerdown={handleCropPointerDown}
 							onpointermove={handleCropPointerMove}
 							onpointerup={handleCropPointerUp}
@@ -399,7 +417,7 @@
 								draggable="false"
 								style={`transform: translate(-50%, -50%) translate(${cropOffsetX}px, ${cropOffsetY}px) scale(${cropBaseScale * cropZoom});`}
 							/>
-						</div>
+						</button>
 						<div class="cropper-controls">
 							<div class="cropper-zoom">
 								<label for="crop-zoom">{$t('admin.blogEditor.cropZoom')}</label>
@@ -693,12 +711,19 @@
 		border-radius: 12px;
 		overflow: hidden;
 		background: #f7f7f7;
+		padding: 0;
+		appearance: none;
 		cursor: grab;
 		touch-action: none;
 	}
 
 	.cropper-frame:active {
 		cursor: grabbing;
+	}
+
+	.cropper-frame:focus-visible {
+		outline: 3px solid #0f766e;
+		outline-offset: 2px;
 	}
 
 	.cropper-image {

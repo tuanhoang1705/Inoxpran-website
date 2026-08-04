@@ -104,9 +104,7 @@ const buildMotionRegistry = () => {
 	if (services) {
 		const cards = Array.from(services.querySelectorAll('.icon-box'));
 		const items = cards
-			.map((card, index) =>
-				tagMotionItem(card, { y: 16, delayMs: index * 45, durationMs: 340 })
-			)
+			.map((card, index) => tagMotionItem(card, { y: 16, delayMs: index * 45, durationMs: 340 }))
 			.filter(Boolean);
 
 		if (items.length) {
@@ -272,7 +270,8 @@ export const initHomeSectionsMotion = async () => {
 		return () => {};
 	}
 
-	const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+	const prefersReducedMotion =
+		window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
 	const isCompactViewport = window.matchMedia?.('(max-width: 992px)')?.matches ?? false;
 	const useLegacyTransforms = !supportsTranslateLonghand();
 	if (useLegacyTransforms) {

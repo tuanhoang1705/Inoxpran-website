@@ -1,19 +1,41 @@
+import {
+	AdditiveBlending,
+	BufferAttribute,
+	BufferGeometry,
+	CanvasTexture,
+	Color,
+	Group,
+	LineBasicMaterial,
+	LineLoop,
+	Mesh,
+	MeshBasicMaterial,
+	PerspectiveCamera,
+	Points,
+	PointsMaterial,
+	Scene,
+	SphereGeometry,
+	Sprite,
+	SpriteMaterial,
+	SRGBColorSpace,
+	Vector3
+} from 'three/src/Three.Core.js';
+
 export const initKineticSphere = async (canvas) => {
 	if (!canvas || typeof window === 'undefined') return () => {};
 
-	let THREE;
+	const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
+	let WebGLRenderer;
 	try {
-		THREE = await import('three');
+		({ WebGLRenderer } = await import('three/src/renderers/WebGLRenderer.js'));
 	} catch {
 		return () => {};
 	}
 
-	const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? false;
-	const scene = new THREE.Scene();
-	const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+	const scene = new Scene();
+	const camera = new PerspectiveCamera(38, 1, 0.1, 100);
 	camera.position.set(0, 0, 4.6);
 
-	const renderer = new THREE.WebGLRenderer({
+	const renderer = new WebGLRenderer({
 		canvas,
 		alpha: true,
 		antialias: true,
@@ -21,7 +43,7 @@ export const initKineticSphere = async (canvas) => {
 	});
 	renderer.setClearColor(0x000000, 0);
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-	renderer.outputColorSpace = THREE.SRGBColorSpace;
+	renderer.outputColorSpace = SRGBColorSpace;
 
 	const geometries = [];
 	const materials = [];
@@ -36,8 +58,8 @@ export const initKineticSphere = async (canvas) => {
 		for (const [offset, color] of stops) gradient.addColorStop(offset, color);
 		ctx.fillStyle = gradient;
 		ctx.fillRect(0, 0, size, size);
-		const texture = new THREE.CanvasTexture(source);
-		texture.colorSpace = THREE.SRGBColorSpace;
+		const texture = new CanvasTexture(source);
+		texture.colorSpace = SRGBColorSpace;
 		textures.push(texture);
 		return texture;
 	};
@@ -55,21 +77,21 @@ export const initKineticSphere = async (canvas) => {
 		[1, 'rgba(121,210,230,0)']
 	]);
 
-	const group = new THREE.Group();
+	const group = new Group();
 	group.rotation.set(0.26, -0.16, 0.04);
 	scene.add(group);
 
 	if (haloTexture) {
-		const haloMaterial = new THREE.SpriteMaterial({
+		const haloMaterial = new SpriteMaterial({
 			map: haloTexture,
 			transparent: true,
 			opacity: 0.85,
 			depthWrite: false,
 			depthTest: false,
-			blending: THREE.AdditiveBlending
+			blending: AdditiveBlending
 		});
 		materials.push(haloMaterial);
-		const halo = new THREE.Sprite(haloMaterial);
+		const halo = new Sprite(haloMaterial);
 		halo.scale.set(3.65, 3.65, 1);
 		halo.renderOrder = 0;
 		scene.add(halo);
@@ -79,9 +101,9 @@ export const initKineticSphere = async (canvas) => {
 	const count = 1650;
 	const positions = new Float32Array(count * 3);
 	const colors = new Float32Array(count * 3);
-	const warm = new THREE.Color(0xffead1);
-	const cool = new THREE.Color(0x91dceb);
-	const rim = new THREE.Color(0xf4fdff);
+	const warm = new Color(0xffead1);
+	const cool = new Color(0x91dceb);
+	const rim = new Color(0xf4fdff);
 	const golden = Math.PI * (3 - Math.sqrt(5));
 
 	for (let i = 0; i < count; i += 1) {
@@ -105,37 +127,37 @@ export const initKineticSphere = async (canvas) => {
 		colors[i * 3 + 2] = color.b;
 	}
 
-	const pointGeometry = new THREE.BufferGeometry();
-	pointGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-	pointGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+	const pointGeometry = new BufferGeometry();
+	pointGeometry.setAttribute('position', new BufferAttribute(positions, 3));
+	pointGeometry.setAttribute('color', new BufferAttribute(colors, 3));
 	geometries.push(pointGeometry);
 
-	const pointMaterial = new THREE.PointsMaterial({
+	const pointMaterial = new PointsMaterial({
 		size: 0.043,
 		map: dotTexture || undefined,
 		vertexColors: true,
 		transparent: true,
 		opacity: 0.9,
 		depthWrite: false,
-		blending: THREE.AdditiveBlending,
+		blending: AdditiveBlending,
 		sizeAttenuation: true
 	});
 	materials.push(pointMaterial);
-	const points = new THREE.Points(pointGeometry, pointMaterial);
+	const points = new Points(pointGeometry, pointMaterial);
 	points.renderOrder = 2;
 	group.add(points);
 
-	const shellGeometry = new THREE.SphereGeometry(radius * 1.012, 64, 32);
+	const shellGeometry = new SphereGeometry(radius * 1.012, 64, 32);
 	geometries.push(shellGeometry);
-	const shellMaterial = new THREE.MeshBasicMaterial({
+	const shellMaterial = new MeshBasicMaterial({
 		color: 0x79d2e6,
 		transparent: true,
 		opacity: 0.045,
 		depthWrite: false,
-		blending: THREE.AdditiveBlending
+		blending: AdditiveBlending
 	});
 	materials.push(shellMaterial);
-	const shell = new THREE.Mesh(shellGeometry, shellMaterial);
+	const shell = new Mesh(shellGeometry, shellMaterial);
 	shell.renderOrder = 1;
 	group.add(shell);
 
@@ -145,17 +167,17 @@ export const initKineticSphere = async (canvas) => {
 		for (let i = 0; i < segments; i += 1) {
 			vertices.push(buildPoint((i / segments) * Math.PI * 2));
 		}
-		const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+		const geometry = new BufferGeometry().setFromPoints(vertices);
 		geometries.push(geometry);
-		const material = new THREE.LineBasicMaterial({
+		const material = new LineBasicMaterial({
 			color,
 			transparent: true,
 			opacity,
 			depthWrite: false,
-			blending: THREE.AdditiveBlending
+			blending: AdditiveBlending
 		});
 		materials.push(material);
-		const line = new THREE.LineLoop(geometry, material);
+		const line = new LineLoop(geometry, material);
 		line.renderOrder = 3;
 		return line;
 	};
@@ -164,7 +186,7 @@ export const initKineticSphere = async (canvas) => {
 		const lineRadius = Math.sqrt(Math.max(0, radius * radius - y * y));
 		group.add(
 			createLoop(
-				(angle) => new THREE.Vector3(Math.cos(angle) * lineRadius, y, Math.sin(angle) * lineRadius),
+				(angle) => new Vector3(Math.cos(angle) * lineRadius, y, Math.sin(angle) * lineRadius),
 				y === 0 ? 0.2 : 0.12
 			)
 		);
@@ -172,7 +194,7 @@ export const initKineticSphere = async (canvas) => {
 
 	for (const [index, rotation] of [0, Math.PI / 4, Math.PI / 2, (Math.PI * 3) / 4].entries()) {
 		const meridian = createLoop(
-			(angle) => new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0),
+			(angle) => new Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0),
 			index === 0 ? 0.18 : 0.12,
 			index === 0 ? 0xd7f7fb : 0xbfeaf2
 		);

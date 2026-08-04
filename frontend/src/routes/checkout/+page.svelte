@@ -1,5 +1,5 @@
 <script>
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import PaymentMethods from '$lib/components/PaymentMethods.svelte';
 	import { clearGuestCart, getGuestCartSummary, readGuestCart } from '$lib/client/guestCart.js';
@@ -14,8 +14,9 @@
 	const checkoutOrder = $derived(data?.checkoutOrder ?? null);
 	const reviewError = $derived(data?.reviewError ?? '');
 	const discountOptions = $derived(data?.discountOptions ?? []);
-	let discountCodeInput = $state(data?.discountCode ?? '');
-	let appliedDiscountCode = $state(data?.discountCode ?? '');
+	const initialDiscountCode = untrack(() => data?.discountCode ?? '');
+	let discountCodeInput = $state(initialDiscountCode);
+	let appliedDiscountCode = $state(initialDiscountCode);
 	let discountError = $state('');
 	let discountPreview = $state(null);
 	let isUpdatingDiscount = $state(false);
@@ -456,76 +457,6 @@
 			window.removeEventListener('storage', handleGuestCartChange);
 		};
 	});
-
-	const submitGuestCheckout = async (event) => {
-		event.preventDefault();
-		guestLeadSuccess = '';
-		guestLeadError = '';
-		const name = nameInput.trim();
-		const phone = phoneInput.trim();
-		const email = emailInput.trim();
-		const address = addressInput.trim();
-		if (!name || !phone || !address || !guestItems.length) {
-			guestLeadError =
-				$locale === 'en'
-					? 'Please enter name, phone, delivery address, and keep at least one item in cart.'
-					: 'Vui lòng nhập tên, số điện thoại, địa chỉ giao hàng và giữ ít nhất một sản phẩm trong giỏ.';
-			return;
-		}
-		guestLeadSubmitting = true;
-		try {
-			const itemLines = guestItems.map((item, index) => {
-				const variant = [item.variantColor, item.variantSize].filter(Boolean).join(' / ');
-				return `${index + 1}. ${item.name}${variant ? ` (${variant})` : ''} x${item.quantity} - ${formatPrice(item.price * item.quantity)}`;
-			});
-			const formData = new FormData();
-			formData.set('name', name);
-			formData.set('contact', [phone, email].filter(Boolean).join(' | '));
-			formData.set(
-				'message',
-				[
-					'[Guest COD checkout]',
-					`Địa chỉ: ${address}`,
-					noteInput.trim() ? `Ghi chú: ${noteInput.trim()}` : '',
-					`Tạm tính: ${formatPrice(guestSummary.subtotal)}`,
-					...itemLines
-				]
-					.filter(Boolean)
-					.join('\n')
-			);
-			formData.set('returnTo', '/checkout?guest=1');
-			const response = await fetch('/contact/submit', {
-				method: 'POST',
-				headers: {
-					accept: 'application/json',
-					'x-inoxpran-ajax': '1'
-				},
-				body: formData
-			});
-			const payload = await response.json().catch(() => null);
-			if (!response.ok || payload?.success === false) {
-				throw new Error(payload?.message || 'guest checkout failed');
-			}
-			clearGuestCart();
-			guestItems = [];
-			guestLeadSuccess =
-				$locale === 'en'
-					? 'Your COD request has been sent. Inoxpran will confirm by phone or Zalo.'
-					: 'Yêu cầu đặt COD đã được gửi. Inoxpran sẽ gọi hoặc nhắn Zalo để xác nhận.';
-			nameInput = '';
-			phoneInput = '';
-			emailInput = '';
-			addressInput = '';
-			noteInput = '';
-		} catch {
-			guestLeadError =
-				$locale === 'en'
-					? 'Unable to send your order request right now. Please call 0867 024 186.'
-					: 'Chưa gửi được yêu cầu đặt hàng. Vui lòng gọi 0867 024 186.';
-		} finally {
-			guestLeadSubmitting = false;
-		}
-	};
 
 	$effect(() => {
 		void nameInput;
@@ -1338,13 +1269,6 @@
 		margin-bottom: 22px;
 	}
 
-	.checkout-header .eyebrow {
-		margin: 0 0 6px;
-		font-size: 0.72rem;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-	}
-
 	.checkout-header .section-title {
 		margin: 0;
 		font-size: clamp(1.45rem, 2.2vw, 2rem);
@@ -1874,10 +1798,6 @@
 			margin-bottom: 16px;
 		}
 
-		.checkout-header .eyebrow {
-			font-size: 0.68rem;
-		}
-
 		.checkout-header .section-title {
 			font-size: 1.35rem;
 		}
@@ -1899,11 +1819,6 @@
 	@media (max-width: 640px) {
 		.checkout-header {
 			gap: 10px;
-		}
-
-		.checkout-header .eyebrow {
-			margin-bottom: 4px;
-			font-size: 0.65rem;
 		}
 
 		.checkout-header .section-title {

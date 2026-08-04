@@ -99,11 +99,7 @@
 	const language = () => ($locale === 'en' ? 'en' : 'vi');
 	const reasonCode = (item) =>
 		String(
-			item?.errorCode ||
-				item?.reason ||
-				item?.code ||
-				(typeof item === 'string' ? item : '') ||
-				''
+			item?.errorCode || item?.reason || item?.code || (typeof item === 'string' ? item : '') || ''
 		)
 			.trim()
 			.slice(0, 120);

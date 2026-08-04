@@ -73,7 +73,10 @@ export const PATCH = async ({ cookies, fetch, params, request }) => {
 	}).catch(() => null);
 
 	if (!response) {
-		return json({ ok: false, error: 'chat_room_update_unavailable' }, { status: 503, headers: noStore });
+		return json(
+			{ ok: false, error: 'chat_room_update_unavailable' },
+			{ status: 503, headers: noStore }
+		);
 	}
 
 	const payload = await readJson(response);
@@ -103,7 +106,10 @@ export const DELETE = async ({ cookies, fetch, params }) => {
 	}).catch(() => null);
 
 	if (!response) {
-		return json({ ok: false, error: 'chat_room_delete_unavailable' }, { status: 503, headers: noStore });
+		return json(
+			{ ok: false, error: 'chat_room_delete_unavailable' },
+			{ status: 503, headers: noStore }
+		);
 	}
 
 	const payload = await readJson(response);

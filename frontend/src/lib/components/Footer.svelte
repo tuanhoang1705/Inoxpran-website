@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { locale, t } from '$lib/i18n/index.js';
@@ -32,7 +33,7 @@
 		nextUrl.searchParams.delete('contact');
 		const nextPath = `${nextUrl.pathname}${nextUrl.search}`;
 		if (nextPath !== `${page.url.pathname}${page.url.search}`) {
-			goto(nextPath, { replaceState: true, noScroll: true, keepfocus: true });
+			goto(resolve(nextPath), { replaceState: true, noScroll: true, keepfocus: true });
 		}
 	};
 
@@ -130,8 +131,8 @@
 							></textarea>
 						</div>
 						<button class="cta" type="submit" disabled={isSubmittingContact}>
-									{isSubmittingContact ? $t('footer.sendingRequest') : $t('footer.sendRequest')}
-								</button>
+							{isSubmittingContact ? $t('footer.sendingRequest') : $t('footer.sendRequest')}
+						</button>
 					</div>
 				</form>
 			</div>
@@ -159,17 +160,27 @@
 				<ul>
 					<li>{$t('footer.address')}</li>
 					<li>{SITE_CONTACT.phone}</li>
-					<li>{@html '<!--email_off-->'}{SITE_CONTACT.email}{@html '<!--/email_off-->'}</li>
+					<li><!--email_off-->{SITE_CONTACT.email}<!--/email_off--></li>
 				</ul>
 			</div>
 			<div class="footer-column">
 				<h3>{$t('footer.policies')}</h3>
 				<ul>
-					<li><a class="footer-link" href={privacyPolicyHref}>{$t('footer.policyPrivacy')}</a></li>
-					<li><a class="footer-link" href={shippingPolicyHref}>{$t('footer.policyShipping')}</a></li>
-					<li><a class="footer-link" href={returnsPolicyHref}>{$t('footer.policyReturns')}</a></li>
 					<li>
-						<a class="footer-link" href={warrantyPolicyHref}>
+						<a class="footer-link" href={resolve(privacyPolicyHref)}>{$t('footer.policyPrivacy')}</a
+						>
+					</li>
+					<li>
+						<a class="footer-link" href={resolve(shippingPolicyHref)}
+							>{$t('footer.policyShipping')}</a
+						>
+					</li>
+					<li>
+						<a class="footer-link" href={resolve(returnsPolicyHref)}>{$t('footer.policyReturns')}</a
+						>
+					</li>
+					<li>
+						<a class="footer-link" href={resolve(warrantyPolicyHref)}>
 							{$locale === 'en' ? 'Warranty policy' : 'Chính sách bảo hành'}
 						</a>
 					</li>

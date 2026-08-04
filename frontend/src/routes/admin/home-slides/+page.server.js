@@ -27,7 +27,9 @@ const normalizeSlide = (value = {}) => ({
 	imageUrl: String(value?.imageUrl || '').trim(),
 	imagePath: String(value?.imagePath || '').trim(),
 	imageVariants:
-		value?.imageVariants && typeof value.imageVariants === 'object' && !Array.isArray(value.imageVariants)
+		value?.imageVariants &&
+		typeof value.imageVariants === 'object' &&
+		!Array.isArray(value.imageVariants)
 			? value.imageVariants
 			: null,
 	isHeroBackground: value?.isHeroBackground === true
@@ -76,7 +78,8 @@ export const actions = {
 		const form = await request.formData();
 
 		const currentCountValue = Number(form.get('current_count') || 0);
-		const currentCount = Number.isFinite(currentCountValue) && currentCountValue > 0 ? currentCountValue : 0;
+		const currentCount =
+			Number.isFinite(currentCountValue) && currentCountValue > 0 ? currentCountValue : 0;
 		const remainingSlots = Math.max(0, MAX_SLIDES - currentCount);
 		if (remainingSlots <= 0) {
 			return fail(400, {
@@ -166,10 +169,9 @@ export const actions = {
 					action: 'upload',
 					uploadBatchToken,
 					uploadedSlides,
-					uploadError:
-						uploadedSlides.length
-							? 'One or more slide uploads failed. Uploaded slides were kept in the draft list.'
-							: 'Slide image upload failed.'
+					uploadError: uploadedSlides.length
+						? 'One or more slide uploads failed. Uploaded slides were kept in the draft list.'
+						: 'Slide image upload failed.'
 				});
 			}
 

@@ -123,9 +123,7 @@ export const actions = {
 			...(productRatingsAverage !== undefined
 				? { product_ratingsAverage: productRatingsAverage }
 				: {}),
-			...(productRatingsCount !== undefined
-				? { product_ratingsCount: productRatingsCount }
-				: {})
+			...(productRatingsCount !== undefined ? { product_ratingsCount: productRatingsCount } : {})
 		};
 		const response = await adminApiFetch({
 			cookies,

@@ -1,9 +1,10 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
 import {
-	sanitizeOpenClawClientPayload,
-	sanitizeOpenClawErrorMessage
-} from '$lib/server/openclawClientPayload.js';
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
 import {
 	safeRuntimeControlBody,
 	safeRuntimeControlIdempotencyKey,
@@ -18,37 +19,66 @@ const normalizePath = (value) =>
 		.join('/');
 
 const proxy = async ({ params, cookies, fetch, request, url, method }) => {
+	const requestId = createOpenClawRequestId();
 	const path = normalizePath(params.segments);
 	if (url.search) {
-		return json({ error: 'Runtime control query parameters are not supported' }, { status: 400 });
+		return openClawProxyClientError({
+			status: 400,
+			error: 'Runtime control query parameters are not supported',
+			requestId
+		});
 	}
 	if (method === 'GET' && path) {
-		return json({ error: 'Unsupported runtime control request' }, { status: 404 });
+		return openClawProxyClientError({
+			status: 404,
+			error: 'Unsupported runtime control request',
+			requestId
+		});
 	}
 	const controlKey = method === 'PATCH' ? safeRuntimeControlKey(path) : '';
 	if (method === 'PATCH' && !controlKey) {
-		return json({ error: 'Unsupported runtime control request' }, { status: 404 });
+		return openClawProxyClientError({
+			status: 404,
+			error: 'Unsupported runtime control request',
+			requestId
+		});
 	}
 
 	const options = { method };
 	if (method === 'PATCH') {
 		const rawBody = await request.text().catch(() => '');
 		if (rawBody.length > 4 * 1024) {
-			return json({ error: 'Runtime control request is too large' }, { status: 413 });
+			return openClawProxyClientError({
+				status: 413,
+				error: 'Runtime control request is too large',
+				requestId
+			});
 		}
 		let parsed;
 		try {
 			parsed = JSON.parse(rawBody);
 		} catch {
-			return json({ error: 'Malformed JSON request body' }, { status: 400 });
+			return openClawProxyClientError({
+				status: 400,
+				error: 'Malformed JSON request body',
+				requestId
+			});
 		}
 		const body = safeRuntimeControlBody(parsed);
 		if (!body) {
-			return json({ error: 'Invalid runtime control request body' }, { status: 400 });
+			return openClawProxyClientError({
+				status: 400,
+				error: 'Invalid runtime control request body',
+				requestId
+			});
 		}
 		const idempotencyKey = safeRuntimeControlIdempotencyKey(request.headers.get('idempotency-key'));
 		if (!idempotencyKey) {
-			return json({ error: 'A valid Idempotency-Key is required' }, { status: 400 });
+			return openClawProxyClientError({
+				status: 400,
+				error: 'A valid Idempotency-Key is required',
+				requestId
+			});
 		}
 		options.headers = {
 			'content-type': 'application/json',
@@ -58,28 +88,16 @@ const proxy = async ({ params, cookies, fetch, request, url, method }) => {
 	}
 
 	const suffix = controlKey ? `/${controlKey}` : '';
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: `/admin/openclaw/runtime-controls${suffix}`,
-		options
+		options,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'OpenClaw runtime control request failed',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json(
-			{
-				error:
-					response.status >= 500
-						? 'Internal Server Error'
-						: sanitizeOpenClawErrorMessage(
-								payload?.message,
-								'OpenClaw runtime control request failed'
-							)
-			},
-			{ status: response.status }
-		);
-	}
-	return json(sanitizeOpenClawClientPayload(payload?.metadata ?? payload ?? {}));
 };
 
 export const GET = (event) => proxy({ ...event, method: 'GET' });

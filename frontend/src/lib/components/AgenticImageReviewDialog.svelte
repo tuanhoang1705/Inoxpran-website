@@ -185,7 +185,8 @@
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({
 						target,
-						selection: preview.kind === 'ai' ? preview : { kind: 'pexels', assetId: preview.assetId }
+						selection:
+							preview.kind === 'ai' ? preview : { kind: 'pexels', assetId: preview.assetId }
 					})
 				});
 			}
@@ -315,8 +316,7 @@
 					type="button"
 					class:active={mode === 'local'}
 					aria-pressed={mode === 'local'}
-					onclick={() => switchMode('local')}
-					>{$t('admin.blogImageReview.dialog.localTab')}</button
+					onclick={() => switchMode('local')}>{$t('admin.blogImageReview.dialog.localTab')}</button
 				>
 			</div>
 
@@ -331,7 +331,7 @@
 					></textarea>
 					<div class="suggestions">
 						<span>{$t('admin.blogImageReview.dialog.suggestions')}</span>
-						{#each suggestions as suggestion}
+						{#each suggestions as suggestion, __eachIndex1 (suggestion?._id ?? suggestion?.id ?? __eachIndex1)}
 							<button type="button" onclick={() => (prompt = suggestion)}>{suggestion}</button>
 						{/each}
 					</div>

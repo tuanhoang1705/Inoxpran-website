@@ -39,7 +39,10 @@ export const GET = async ({ cookies, fetch, url }) => {
 	}).catch(() => null);
 
 	if (!response) {
-		return json({ ok: false, error: 'chat_room_list_unavailable' }, { status: 503, headers: noStore });
+		return json(
+			{ ok: false, error: 'chat_room_list_unavailable' },
+			{ status: 503, headers: noStore }
+		);
 	}
 
 	const payload = await readJson(response);

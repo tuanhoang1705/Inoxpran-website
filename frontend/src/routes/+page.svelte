@@ -1,9 +1,12 @@
 <script>
-	import { onMount, tick } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
+	import { onMount, tick, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { enhance } from '$app/forms';
 	import { env } from '$env/dynamic/public';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { locale, t } from '$lib/i18n/index.js';
 	import { flyToCart } from '$lib/client/flyToCart.js';
 	import { addGuestCartItem } from '$lib/client/guestCart.js';
@@ -39,21 +42,14 @@
 		if (text.length <= limit) return text;
 		return `${text.slice(0, limit - 3).trim()}...`;
 	};
-	const escapeJsonLd = (value) =>
-		String(value || '')
-			.replace(/</g, '\\u003c')
-			.replace(/>/g, '\\u003e')
-			.replace(/&/g, '\\u0026')
-			.replace(/\u2028/g, '\\u2028')
-			.replace(/\u2029/g, '\\u2029');
 	const handleLatestPostClick = (event, href) => {
 		if (event?.target?.closest?.('a')) return;
-		goto(href);
+		goto(resolve(href));
 	};
 	const handleLatestPostKeydown = (event, href) => {
 		if (event.key !== 'Enter' && event.key !== ' ') return;
 		event.preventDefault();
-		goto(href);
+		goto(resolve(href));
 	};
 	const normalizeAssetIndex = (value, max, fallback = 1) => {
 		const parsed = Number.parseInt(String(value || ''), 10);
@@ -129,10 +125,15 @@
 	let addedId = $state(null);
 	let lockedAddIds = $state(new Set());
 
-	let bestSelling = $state(Array.isArray(data?.bestSelling) ? data.bestSelling : []);
-	let latestPosts = $state(Array.isArray(data?.latestPosts) ? data.latestPosts.slice(0, 4) : []);
-	let apiError = $state(String(data?.apiError || ''));
-	let isHomeFeedLoading = $state(!Boolean(data?.homeFeedLoaded));
+	const initialHomeFeed = untrack(() => data);
+	let bestSelling = $state(
+		Array.isArray(initialHomeFeed?.bestSelling) ? initialHomeFeed.bestSelling : []
+	);
+	let latestPosts = $state(
+		Array.isArray(initialHomeFeed?.latestPosts) ? initialHomeFeed.latestPosts.slice(0, 4) : []
+	);
+	let apiError = $state(String(initialHomeFeed?.apiError || ''));
+	let isHomeFeedLoading = $state(!initialHomeFeed?.homeFeedLoaded);
 	let heroSceneEl = null;
 	let kineticSphereEl = null;
 	let heroMotionReduced = $state(false);
@@ -202,12 +203,6 @@
 		() => homeInoxSlides.find((slide) => slide.isHeroBackground) || null
 	);
 	const heroBackgroundUrl = $derived(heroBackgroundSlide?.imageUrl || heroCompositeUrl);
-	const heroBackgroundAlt = $derived(
-		heroBackgroundSlide?.alt ||
-			($locale === 'en'
-				? 'Inoxpran premium cookware for modern kitchens'
-				: 'Gia dụng Inoxpran cao cấp cho căn bếp hiện đại')
-	);
 	const heroIntroCopy = $derived.by(() =>
 		$locale === 'en'
 			? {
@@ -403,14 +398,14 @@
 
 	const lockAddId = (id) => {
 		if (!id) return;
-		const next = new Set(lockedAddIds);
+		const next = new SvelteSet(lockedAddIds);
 		next.add(String(id));
 		lockedAddIds = next;
 	};
 
 	const unlockAddId = (id) => {
 		if (!id) return;
-		const next = new Set(lockedAddIds);
+		const next = new SvelteSet(lockedAddIds);
 		next.delete(String(id));
 		lockedAddIds = next;
 	};
@@ -491,7 +486,7 @@
 	const normalizeLegacyProductImage = (value) => {
 		const raw = String(value || '').trim();
 		if (!raw) return '';
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -566,7 +561,7 @@
 	const getBlogImage = (post, index) => {
 		const image = String(post?.image || '').trim();
 		if (!image) return blogFallbackImages[index % blogFallbackImages.length];
-		let decoded = image;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(image);
 		} catch {
@@ -581,7 +576,7 @@
 	const getPostItemWebpSrcSet = (imageValue) => {
 		const raw = String(imageValue || '').trim();
 		if (!raw) return '';
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -596,7 +591,7 @@
 	const getPostItemAvifSrcSet = (imageValue) => {
 		const raw = String(imageValue || '').trim();
 		if (!raw) return '';
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -611,7 +606,7 @@
 	const getProductCardWebpSrcSet = (imageValue) => {
 		const raw = String(imageValue || '').trim();
 		if (!raw) return '';
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -626,7 +621,7 @@
 	const getProductCardAvifSrcSet = (imageValue) => {
 		const raw = String(imageValue || '').trim();
 		if (!raw) return '';
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -694,7 +689,7 @@
 		hideTooltips();
 		const loginHref = resolveLoginRedirectHref();
 		if (typeof window === 'undefined') {
-			void goto(loginHref);
+			void goto(resolve(loginHref));
 			return;
 		}
 		window.location.assign(loginHref);
@@ -733,7 +728,7 @@
 	};
 
 	const createAddToCartEnhance = (product) => {
-		return ({ form, submitter, cancel }) => {
+		return ({ form, cancel }) => {
 			cartToast.hide();
 
 			const productId = product?._id;
@@ -1308,7 +1303,6 @@
 	<meta name="twitter:title" content={seoTitle} />
 	<meta name="twitter:description" content={seoDescription} />
 	<meta name="twitter:image" content={ogImageUrl} />
-	{@html `<script type="application/ld+json">${escapeJsonLd(homePageJsonLd)}</script>`}
 	<link
 		rel="preload"
 		as="image"
@@ -1334,6 +1328,8 @@
 		media="(min-width: 1025px)"
 	/>
 </svelte:head>
+
+<JsonLd value={homePageJsonLd} />
 
 <div class="search-popup">
 	<div class="search-popup-container">
@@ -1362,19 +1358,19 @@
 		<ul class="cat-list">
 			<li class="cat-list-item">
 				<a
-					href={localizeInternalHref('/category/noi-inox', $locale)}
+					href={resolve(localizeInternalHref('/category/noi-inox', $locale))}
 					title={$t('home.searchCategoryInox')}>{$t('home.searchCategoryInox')}</a
 				>
 			</li>
 			<li class="cat-list-item">
 				<a
-					href={localizeInternalHref('/category/noi-gang', $locale)}
+					href={resolve(localizeInternalHref('/category/noi-gang', $locale))}
 					title={$t('home.searchCategoryCastIron')}>{$t('home.searchCategoryCastIron')}</a
 				>
 			</li>
 			<li class="cat-list-item">
 				<a
-					href={localizeInternalHref('/category/gia-dung-dien', $locale)}
+					href={resolve(localizeInternalHref('/category/gia-dung-dien', $locale))}
 					title={$t('home.searchCategoryElectronics')}>{$t('home.searchCategoryElectronics')}</a
 				>
 			</li>
@@ -1422,10 +1418,10 @@
 				</h1>
 
 				<div class="hero-actions">
-					<a class="cta btn-s1" href={localizeInternalHref('/shop', $locale)}>
+					<a class="cta btn-s1" href={resolve(localizeInternalHref('/shop', $locale))}>
 						{heroIntroCopy.cta}
 					</a>
-					<a class="hero-story-link" href={localizeInternalHref('/about', $locale)}>
+					<a class="hero-story-link" href={resolve(localizeInternalHref('/about', $locale))}>
 						{heroIntroCopy.storyCta}
 					</a>
 				</div>
@@ -1717,7 +1713,9 @@
 		<div class="container">
 			<div class="section-title home-section-title mb-3">
 				<h3 class="d-flex align-items-center">{$t('home.bestSellingTitle')}</h3>
-				<a href={localizeInternalHref('/shop', $locale)} class="btn">{$t('common.viewAll')}</a>
+				<a href={resolve(localizeInternalHref('/shop', $locale))} class="btn"
+					>{$t('common.viewAll')}</a
+				>
 			</div>
 			<div
 				class="position-absolute top-50 end-0 pe-0 pe-xxl-5 me-0 me-xxl-5 swiper-next product-slider-button-next"
@@ -1768,7 +1766,7 @@
 									{/if}
 									<a
 										class="product-card-link"
-										href={getProductHref(product)}
+										href={resolve(getProductHref(product))}
 										aria-label={getProductName(product, index)}
 									>
 										<div class="product-thumb">
@@ -1852,7 +1850,7 @@
 							</div>
 						{/each}
 					{:else if isHomeFeedLoading}
-						{#each Array(4) as _, idx}
+						{#each Array(4) as _, idx (_?._id ?? _?.id ?? idx)}
 							<div class="swiper-slide">
 								<div class="card product-card position-relative p-4 border rounded-3">
 									<div class="product-thumb skeleton skeleton-thumb"></div>
@@ -1887,7 +1885,7 @@
 			<div class="row">
 				<div class="col-md-4">
 					<div class="card mb-4 border-0 rounded-3 align-items-center position-relative">
-						<a href={localizeInternalHref('/category/noi-inox', $locale)}>
+						<a href={resolve(localizeInternalHref('/category/noi-inox', $locale))}>
 							<picture>
 								<source
 									type="image/avif"
@@ -1921,7 +1919,7 @@
 				</div>
 				<div class="col-md-4">
 					<div class="card text-center mb-4 border-0 rounded-3 align-items-center">
-						<a href={localizeInternalHref('/category/noi-gang', $locale)}>
+						<a href={resolve(localizeInternalHref('/category/noi-gang', $locale))}>
 							<picture>
 								<source
 									type="image/avif"
@@ -1955,7 +1953,7 @@
 				</div>
 				<div class="col-md-4">
 					<div class="card text-center mb-4 border-0 rounded-3 align-items-center">
-						<a href={localizeInternalHref('/category/gia-dung-dien', $locale)}>
+						<a href={resolve(localizeInternalHref('/category/gia-dung-dien', $locale))}>
 							<picture>
 								<source
 									type="image/avif"
@@ -1995,7 +1993,9 @@
 		<div class="container">
 			<div class="section-title home-section-title mb-4">
 				<h3 class="d-flex align-items-center">{$t('home.latestPostsTitle')}</h3>
-				<a href={localizeInternalHref('/blog', $locale)} class="btn">{$t('common.viewAll')}</a>
+				<a href={resolve(localizeInternalHref('/blog', $locale))} class="btn"
+					>{$t('common.viewAll')}</a
+				>
 			</div>
 			<div class="row">
 				{#if latestPosts.length}
@@ -2040,7 +2040,7 @@
 									/>
 								</picture>
 								<a
-									href={postCategoryHref}
+									href={resolve(postCategoryHref)}
 									class="home-post-category-link"
 									aria-label={getBlogCategoryLinkLabel(post)}
 								>
@@ -2048,7 +2048,7 @@
 								</a>
 							</div>
 							<h4 class="card-title mb-2 text-capitalize text-dark">
-								<a class="home-post-title-link" href={getBlogHref(post)}>
+								<a class="home-post-title-link" href={resolve(getBlogHref(post))}>
 									{truncateWords(post.title, 15)}
 								</a>
 							</h4>
@@ -2057,7 +2057,7 @@
 								<span>
 									<a
 										class="home-post-readmore text-decoration-underline text-black-50"
-										href={getBlogHref(post)}
+										href={resolve(getBlogHref(post))}
 									>
 										{$t('common.readMore')}
 									</a>
@@ -2066,7 +2066,7 @@
 						</div>
 					{/each}
 				{:else if isHomeFeedLoading}
-					{#each Array(4) as _, idx (idx)}
+					{#each Array(4).keys() as idx (idx)}
 						<div class="col-6 col-md-3 posts mb-4" aria-hidden="true">
 							<div class="img-fluid rounded-3 skeleton skeleton-thumb"></div>
 							<div class="skeleton-line lg skeleton"></div>

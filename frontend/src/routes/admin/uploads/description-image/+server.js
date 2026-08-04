@@ -6,10 +6,10 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const isFileLike = (value) =>
 	Boolean(
 		value &&
-			typeof value === 'object' &&
-			typeof value.size === 'number' &&
-			typeof value.type === 'string' &&
-			typeof value.arrayBuffer === 'function'
+		typeof value === 'object' &&
+		typeof value.size === 'number' &&
+		typeof value.type === 'string' &&
+		typeof value.arrayBuffer === 'function'
 	);
 
 export const POST = async ({ request, cookies, fetch }) => {

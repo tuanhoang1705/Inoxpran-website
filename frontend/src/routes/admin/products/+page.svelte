@@ -1,4 +1,6 @@
 <script>
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
 	import { locale, t } from '$lib/i18n/admin/index.js';
 
@@ -53,7 +55,7 @@
 		isLoadingAll = true;
 
 		try {
-			const params = new URLSearchParams();
+			const params = new SvelteURLSearchParams();
 			params.set('limit', '10000');
 			params.set('page', '1');
 			params.set('sort', 'created');
@@ -152,7 +154,7 @@
 	};
 
 	// Use allProducts if available (search mode), otherwise use paginated data
-	const productsToSearch = $derived(allProducts.length > 0 ? allProducts : data?.products ?? []);
+	const productsToSearch = $derived(allProducts.length > 0 ? allProducts : (data?.products ?? []));
 	const filteredProducts = $derived(searchProducts(productsToSearch, searchQuery));
 
 	const buildPageHref = (target) => {
@@ -170,8 +172,12 @@
 	<div class="d-flex justify-content-between align-items-center mb-3">
 		<h2 class="mb-0">{$t('admin.products.title')}</h2>
 		<div class="d-flex gap-2">
-			<a class="btn btn-outline-dark" href="/admin/products/drafts">{$t('admin.products.drafts')}</a>
-			<a class="btn btn-dark" href="/admin/products/new">{$t('admin.products.newDraft')}</a>
+			<a class="btn btn-outline-dark" href={resolve('/admin/products/drafts')}
+				>{$t('admin.products.drafts')}</a
+			>
+			<a class="btn btn-dark" href={resolve('/admin/products/new')}
+				>{$t('admin.products.newDraft')}</a
+			>
 		</div>
 	</div>
 
@@ -183,7 +189,7 @@
 		<input
 			type="text"
 			class="form-control form-control-lg"
-			placeholder='Tìm kiếm sản phẩm...'
+			placeholder="Tìm kiếm sản phẩm..."
 			bind:value={searchQuery}
 		/>
 	</div>
@@ -205,7 +211,7 @@
 				</thead>
 				<tbody>
 					{#if filteredProducts?.length}
-						{#each filteredProducts as product}
+						{#each filteredProducts as product, __eachIndex1 (product?._id ?? product?.id ?? __eachIndex1)}
 							{@const statusInfo = getStatusBadge(product)}
 							<tr>
 								<td>{product.product_name}</td>
@@ -220,7 +226,7 @@
 								<td>
 									<a
 										class="btn btn-sm btn-primary fw-semibold text-white"
-										href={`/admin/products/${product._id}`}
+										href={resolve(`/admin/products/${product._id}`)}
 										style="padding: 0.4rem 0.8rem; border-radius: 0.375rem; transition: all 0.3s ease;"
 									>
 										✎ {$t('admin.products.edit')}
@@ -230,7 +236,9 @@
 						{/each}
 					{:else}
 						<tr>
-							<td colspan="8" class="text-center text-black-50 py-4">{$t('admin.products.empty')}</td>
+							<td colspan="8" class="text-center text-black-50 py-4"
+								>{$t('admin.products.empty')}</td
+							>
 						</tr>
 					{/if}
 				</tbody>
@@ -242,7 +250,7 @@
 		<div class="d-flex justify-content-between align-items-center mt-3">
 			<a
 				class="btn btn-outline-dark"
-				href={buildPageHref(Math.max(pagination.page - 1, 1))}
+				href={resolve(buildPageHref(Math.max(pagination.page - 1, 1)))}
 				aria-disabled={!pagination.hasPrev}
 				class:disabled={!pagination.hasPrev}
 			>
@@ -253,7 +261,7 @@
 			</span>
 			<a
 				class="btn btn-outline-dark"
-				href={buildPageHref(pagination.page + 1)}
+				href={resolve(buildPageHref(pagination.page + 1))}
 				aria-disabled={!pagination.hasNext}
 				class:disabled={!pagination.hasNext}
 			>

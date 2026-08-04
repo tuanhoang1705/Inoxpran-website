@@ -92,26 +92,28 @@ const loadExternalScript = (src, timeoutMs = 7000) => {
 	return promise;
 };
 
-const createNativeScrollToTarget = () => (target, animate = true) => {
-	if (typeof window === 'undefined') return;
-	const behavior = animate ? 'smooth' : 'auto';
+const createNativeScrollToTarget =
+	() =>
+	(target, animate = true) => {
+		if (typeof window === 'undefined') return;
+		const behavior = animate ? 'smooth' : 'auto';
 
-	if (typeof target === 'number' && Number.isFinite(target)) {
-		window.scrollTo({ top: Math.max(0, target), left: 0, behavior });
-		return;
-	}
-
-	if (typeof target === 'string' && target) {
-		const el = document.querySelector(target);
-		if (el) {
-			const top = el.getBoundingClientRect().top + window.scrollY;
-			window.scrollTo({ top: Math.max(0, top), left: 0, behavior });
+		if (typeof target === 'number' && Number.isFinite(target)) {
+			window.scrollTo({ top: Math.max(0, target), left: 0, behavior });
 			return;
 		}
-	}
 
-	window.scrollTo({ top: 0, left: 0, behavior });
-};
+		if (typeof target === 'string' && target) {
+			const el = document.querySelector(target);
+			if (el) {
+				const top = el.getBoundingClientRect().top + window.scrollY;
+				window.scrollTo({ top: Math.max(0, top), left: 0, behavior });
+				return;
+			}
+		}
+
+		window.scrollTo({ top: 0, left: 0, behavior });
+	};
 
 const scheduleIdleTask = (task, { timeoutMs = 1200, fallbackDelayMs = 180 } = {}) => {
 	if (typeof window === 'undefined') return () => {};
@@ -407,7 +409,9 @@ export function initClient() {
 		setupScrollLinks(addCleanup);
 		setupNativeProductSliders(addCleanup);
 
-		const hasHomeSections = Boolean(document.querySelector('#hero') || document.querySelector('#inox'));
+		const hasHomeSections = Boolean(
+			document.querySelector('#hero') || document.querySelector('#inox')
+		);
 		const shouldEnableHomeSectionsMotion = hasHomeSections;
 		if (shouldEnableHomeSectionsMotion) {
 			try {
@@ -439,7 +443,6 @@ export function initClient() {
 			}
 
 			setupTooltips(addCleanup);
-
 		});
 		addCleanup(cancelDeferredUiInit);
 	};

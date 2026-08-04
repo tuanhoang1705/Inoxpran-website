@@ -1,6 +1,8 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { page } from '$app/stores';
 	import { env } from '$env/dynamic/public';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { t } from '$lib/i18n/index.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
 	import { onMount } from 'svelte';
@@ -17,14 +19,6 @@
 		if (text.length <= limit) return text;
 		return `${text.slice(0, limit - 3).trim()}...`;
 	};
-	const escapeJsonLd = (value) =>
-		String(value || '')
-			.replace(/</g, '\\u003c')
-			.replace(/>/g, '\\u003e')
-			.replace(/&/g, '\\u0026')
-			.replace(/\u2028/g, '\\u2028')
-			.replace(/\u2029/g, '\\u2029');
-
 	let visibleItems = $state(new Set());
 
 	const siteUrl = $derived(normalizeSiteUrl(env.PUBLIC_SITE_URL));
@@ -145,8 +139,7 @@
 			year: '2026',
 			period: 'Phát triển tại thị trường Việt Nam',
 			periodEn: 'Vietnam Market Development',
-			image:
-				'https://firebasestorage.googleapis.com/v0/b/her-ai-a4653.appspot.com/o/users%2Fz7612268791195_2faa614cdff937471335a0358f2d521f.jpg?alt=media&token=ae3690d1-e350-4504-8b7b-6db9b084d943',
+			image: '/images/optimized/hero-cookware-960.jpg',
 			imageAspect: '4 / 5',
 			imagePosition: 'center 38%',
 			imagePositionMobile: 'center 34%',
@@ -260,8 +253,9 @@
 	<meta name="twitter:title" content={seoTitle} />
 	<meta name="twitter:description" content={seoDescription} />
 	<meta name="twitter:image" content={ogImageUrl} />
-	{@html `<script type="application/ld+json">${escapeJsonLd(aboutPageJsonLd)}</script>`}
 </svelte:head>
+
+<JsonLd value={aboutPageJsonLd} />
 
 <!-- Hero Section -->
 <section class="about-hero padding-xlarge">
@@ -299,7 +293,7 @@
 						</div>
 
 						<ul class="highlights-list">
-							{#each isEnglish ? item.highlightsEn : item.highlights as highlight}
+							{#each isEnglish ? item.highlightsEn : item.highlights as highlight, __eachIndex1 (highlight?._id ?? highlight?.id ?? __eachIndex1)}
 								<li class="highlight-item">
 									<div class="highlight-icon"></div>
 									<span>{highlight}</span>
@@ -328,7 +322,10 @@
 				<h2>{aboutContent.ctaTitle}</h2>
 				<p>{aboutContent.ctaText}</p>
 			</div>
-			<a href={localizeInternalHref('/shop', $page.data?.locale || 'vi')} class="cta-button">
+			<a
+				href={resolve(localizeInternalHref('/shop', $page.data?.locale || 'vi'))}
+				class="cta-button"
+			>
 				<span>{aboutContent.ctaLabel}</span>
 				<svg
 					width="20"
@@ -495,11 +492,6 @@
 		color: #666;
 		margin: 0;
 		animation: slideInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.3s backwards;
-	}
-
-	.hero-subtitle strong {
-		color: #0dcaf0;
-		font-weight: 600;
 	}
 
 	/* Timeline Section */
@@ -714,11 +706,6 @@
 		color: #555;
 		line-height: 1.6;
 		font-size: 0.95rem;
-	}
-
-	.highlight-item strong {
-		color: #272727;
-		font-weight: 600;
 	}
 
 	.highlight-icon {

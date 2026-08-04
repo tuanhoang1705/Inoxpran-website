@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { locale } from '$lib/i18n/index.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
@@ -50,10 +51,10 @@
 		{/if}
 
 		<div class="complete-actions">
-			<a class="complete-primary" href={ordersHref}>
+			<a class="complete-primary" href={resolve(ordersHref)}>
 				{isEnglish ? 'View my orders' : 'Quay lại đơn hàng'}
 			</a>
-			<a class="complete-secondary" href={homeHref}>
+			<a class="complete-secondary" href={resolve(homeHref)}>
 				{isEnglish ? 'Back to home' : 'Về trang chủ'}
 			</a>
 		</div>
@@ -66,9 +67,7 @@
 		display: grid;
 		place-items: center;
 		padding: clamp(48px, 8vw, 96px) 18px;
-		background:
-			linear-gradient(180deg, rgba(245, 250, 250, 0.82), rgba(255, 255, 255, 0.96)),
-			#fff;
+		background: linear-gradient(180deg, rgba(245, 250, 250, 0.82), rgba(255, 255, 255, 0.96)), #fff;
 		color: #17202a;
 	}
 

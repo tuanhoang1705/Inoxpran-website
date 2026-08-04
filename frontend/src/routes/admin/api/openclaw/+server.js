@@ -1,33 +1,27 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
 import {
-	sanitizeOpenClawClientPayload,
-	sanitizeOpenClawErrorMessage
-} from '$lib/server/openclawClientPayload.js';
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
 
 export const GET = async ({ url, cookies, fetch }) => {
+	const requestId = createOpenClawRequestId();
 	if ([...url.searchParams.keys()].length) {
-		return json(
-			{ error: 'OpenClaw dashboard query parameters are not supported' },
-			{ status: 400 }
-		);
+		return openClawProxyClientError({
+			status: 400,
+			error: 'OpenClaw dashboard query parameters are not supported',
+			requestId
+		});
 	}
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
-		path: '/admin/openclaw'
+		path: '/admin/openclaw',
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Unable to load OpenClaw dashboard',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json(
-			{
-				error:
-					response.status >= 500
-						? 'Internal Server Error'
-						: sanitizeOpenClawErrorMessage(payload?.message, 'Unable to load OpenClaw dashboard')
-			},
-			{ status: response.status }
-		);
-	}
-	return json(sanitizeOpenClawClientPayload(payload?.metadata || {}));
 };

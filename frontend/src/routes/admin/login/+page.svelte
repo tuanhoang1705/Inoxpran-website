@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { t } from '$lib/i18n/admin/index.js';
@@ -41,7 +42,8 @@
 			</form>
 
 			<p class="text-center mt-3 mb-0">
-				{$t('admin.auth.noAccount')} <a href="/admin/register">{$t('admin.auth.createAccount')}</a>
+				{$t('admin.auth.noAccount')}
+				<a href={resolve('/admin/register')}>{$t('admin.auth.createAccount')}</a>
 			</p>
 		</div>
 	</div>

@@ -26,10 +26,7 @@ export const GET = async ({ cookies, fetch, url }) => {
 		});
 
 		if (!response.ok) {
-			return json(
-				{ error: 'Failed to fetch products', data: [] },
-				{ status: response.status }
-			);
+			return json({ error: 'Failed to fetch products', data: [] }, { status: response.status });
 		}
 
 		const payload = await parsePayload(response);
@@ -38,9 +35,6 @@ export const GET = async ({ cookies, fetch, url }) => {
 		return json({ data: products, success: true });
 	} catch (error) {
 		console.error('Error fetching all products:', error);
-		return json(
-			{ error: 'Internal server error', data: [] },
-			{ status: 500 }
-		);
+		return json({ error: 'Internal server error', data: [] }, { status: 500 });
 	}
 };

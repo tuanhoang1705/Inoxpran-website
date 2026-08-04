@@ -2,10 +2,11 @@
 	import { enhance } from '$app/forms';
 	import { locale } from '$lib/i18n/admin/index.js';
 	import { pushToast } from '$lib/stores/adminToast.js';
+	import { untrack } from 'svelte';
 
 	let { data, form } = $props();
 
-	let slides = $state(Array.isArray(data?.slides) ? [...data.slides] : []);
+	let slides = $state(untrack(() => (Array.isArray(data?.slides) ? [...data.slides] : [])));
 	let draggingId = $state('');
 	let draggingIndex = $state(-1);
 	let dragOverIndex = $state(-1);
@@ -497,9 +498,11 @@
 				<input type="hidden" name="current_count" value={slides.length} />
 
 				<div class="field">
-					<label for="slide-image-input">{pageCopy.image}</label>
+					<label id="slide-image-label" for="slide-image-input">{pageCopy.image}</label>
 					<div
 						class="upload-dropzone"
+						role="group"
+						aria-labelledby="slide-image-label"
 						class:is-active={isUploadDragActive}
 						class:is-disabled={!canUploadMore || isUploading}
 						ondragenter={handleUploadDragEnter}

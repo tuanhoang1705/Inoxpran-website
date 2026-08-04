@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { locale, t } from '$lib/i18n/admin/index.js';
@@ -10,10 +11,7 @@
 	const telemetry = $derived(user?.telemetry || user?.activityTelemetry || user?.analytics || null);
 	const viewedProducts = $derived.by(() => {
 		const list =
-			telemetry?.viewedProducts ||
-			telemetry?.productsViewed ||
-			telemetry?.recentProducts ||
-			[];
+			telemetry?.viewedProducts || telemetry?.productsViewed || telemetry?.recentProducts || [];
 		return Array.isArray(list) ? list : [];
 	});
 	const recommendedProducts = $derived.by(() => {
@@ -61,7 +59,7 @@
 		return date.toLocaleString($locale === 'en' ? 'en-US' : 'vi-VN');
 	};
 	const formatBool = (value) =>
-		value ? ($locale === 'en' ? 'Yes' : 'Có') : ($locale === 'en' ? 'No' : 'Không');
+		value ? ($locale === 'en' ? 'Yes' : 'Có') : $locale === 'en' ? 'No' : 'Không';
 	const formatDuration = (seconds) => {
 		const total = Number(seconds);
 		if (!Number.isFinite(total) || total <= 0) return '0m';
@@ -98,12 +96,13 @@
 		}
 	});
 </script>
+
 <svelte:head>
 	<title>{$t('admin.users.detailTitle')} | Admin</title>
 </svelte:head>
 
 <section>
-	<a class="btn btn-link mb-3" href="/admin/users">{$t('admin.users.back')}</a>
+	<a class="btn btn-link mb-3" href={resolve('/admin/users')}>{$t('admin.users.back')}</a>
 	<h2 class="mb-4">{$t('admin.users.detailTitle')}</h2>
 
 	{#if loadError}
@@ -127,18 +126,24 @@
 				</div>
 				<div class="col-md-6">
 					<div class="text-black-50 small">{$t('admin.users.roles')}</div>
-					<div class="fw-semibold">{Array.isArray(user.roles) ? user.roles.join(', ') : user.roles}</div>
+					<div class="fw-semibold">
+						{Array.isArray(user.roles) ? user.roles.join(', ') : user.roles}
+					</div>
 				</div>
 				<div class="col-md-6">
 					<div class="text-black-50 small">{$locale === 'en' ? 'Phone' : 'Số điện thoại'}</div>
 					<div class="fw-semibold">{user.phone || '—'}</div>
 				</div>
 				<div class="col-md-6">
-					<div class="text-black-50 small">{$locale === 'en' ? 'Email verified' : 'Đã xác minh email'}</div>
+					<div class="text-black-50 small">
+						{$locale === 'en' ? 'Email verified' : 'Đã xác minh email'}
+					</div>
 					<div class="fw-semibold">{formatBool(Boolean(user.verify))}</div>
 				</div>
 				<div class="col-md-6">
-					<div class="text-black-50 small">{$locale === 'en' ? 'Preferred language' : 'Ngôn ngữ ưu tiên'}</div>
+					<div class="text-black-50 small">
+						{$locale === 'en' ? 'Preferred language' : 'Ngôn ngữ ưu tiên'}
+					</div>
 					<div class="fw-semibold">{localeLabel(user.preferredLocale)}</div>
 				</div>
 				<div class="col-md-6">
@@ -150,7 +155,9 @@
 					<div class="fw-semibold">{formatDate(user.createdAt)}</div>
 				</div>
 				<div class="col-md-6">
-					<div class="text-black-50 small">{$locale === 'en' ? 'Updated at' : 'Cập nhật gần nhất'}</div>
+					<div class="text-black-50 small">
+						{$locale === 'en' ? 'Updated at' : 'Cập nhật gần nhất'}
+					</div>
 					<div class="fw-semibold">{formatDate(user.updatedAt)}</div>
 				</div>
 			</div>
@@ -159,7 +166,7 @@
 				<div>
 					<label class="form-label" for="admin-user-status">{$t('admin.users.updateStatus')}</label>
 					<select class="form-select" id="admin-user-status" name="status">
-						{#each statusOptions as option}
+						{#each statusOptions as option, __eachIndex1 (option?._id ?? option?.id ?? __eachIndex1)}
 							<option value={option.value}>{option.label}</option>
 						{/each}
 					</select>
@@ -191,7 +198,9 @@
 
 		<div class="border rounded-3 p-4 bg-white mt-3">
 			<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-				<h3 class="h6 mb-0">{$locale === 'en' ? 'Customer telemetry' : 'Hành vi truy cập khách hàng'}</h3>
+				<h3 class="h6 mb-0">
+					{$locale === 'en' ? 'Customer telemetry' : 'Hành vi truy cập khách hàng'}
+				</h3>
 				<span class="badge text-bg-light border">
 					{$locale === 'en' ? 'Admin insight' : 'Phân tích nội bộ'}
 				</span>
@@ -204,7 +213,9 @@
 						<div class="fw-semibold text-break">{telemetry.lastIp || telemetry.ip || '—'}</div>
 					</div>
 					<div class="col-md-6">
-						<div class="text-black-50 small">{$locale === 'en' ? 'Last seen' : 'Truy cập gần nhất'}</div>
+						<div class="text-black-50 small">
+							{$locale === 'en' ? 'Last seen' : 'Truy cập gần nhất'}
+						</div>
 						<div class="fw-semibold">{formatDate(telemetry.lastSeenAt || telemetry.lastSeen)}</div>
 					</div>
 					<div class="col-md-4">
@@ -212,14 +223,18 @@
 						<div class="fw-semibold">{telemetry.clickCount ?? telemetry.clicks ?? '—'}</div>
 					</div>
 					<div class="col-md-4">
-						<div class="text-black-50 small">{$locale === 'en' ? 'Scroll depth' : 'Độ sâu cuộn'}</div>
+						<div class="text-black-50 small">
+							{$locale === 'en' ? 'Scroll depth' : 'Độ sâu cuộn'}
+						</div>
 						<div class="fw-semibold">
 							{telemetry.maxScrollDepthPercent ?? telemetry.scrollDepthPercent ?? '—'}
 							{#if telemetry.maxScrollDepthPercent || telemetry.scrollDepthPercent}%{/if}
 						</div>
 					</div>
 					<div class="col-md-4">
-						<div class="text-black-50 small">{$locale === 'en' ? 'Time on site' : 'Thời gian trên web'}</div>
+						<div class="text-black-50 small">
+							{$locale === 'en' ? 'Time on site' : 'Thời gian trên web'}
+						</div>
 						<div class="fw-semibold">
 							{telemetry.totalTimeSeconds ?? telemetry.totalDurationSeconds ?? '—'}
 							{#if telemetry.totalTimeSeconds || telemetry.totalDurationSeconds}s{/if}
@@ -229,13 +244,20 @@
 
 				<div class="mt-3">
 					<div class="text-black-50 small mb-2">
-						{$locale === 'en' ? 'Viewed products / recommended push list' : 'Sản phẩm đã xem / gợi ý nên đẩy'}
+						{$locale === 'en'
+							? 'Viewed products / recommended push list'
+							: 'Sản phẩm đã xem / gợi ý nên đẩy'}
 					</div>
 					{#if viewedProducts.length}
 						<div class="d-flex flex-wrap gap-2">
-							{#each viewedProducts as item}
+							{#each viewedProducts as item, __eachIndex2 (item?._id ?? item?.id ?? __eachIndex2)}
 								<span class="badge text-bg-light border">
-									{item?.name || item?.product_name || item?.title || item?.slug || item?._id || item}
+									{item?.name ||
+										item?.product_name ||
+										item?.title ||
+										item?.slug ||
+										item?._id ||
+										item}
 								</span>
 							{/each}
 						</div>
@@ -255,13 +277,17 @@
 						</div>
 						{#if recommendedProducts.length}
 							<div class="list-group list-group-flush border rounded-3 overflow-hidden">
-								{#each recommendedProducts as item}
+								{#each recommendedProducts as item, __eachIndex3 (item?._id ?? item?.id ?? __eachIndex3)}
 									<div class="list-group-item">
 										<div class="fw-semibold">
 											{item?.name || item?.product_name || item?.slug || item?._id || '—'}
 										</div>
 										<div class="small text-black-50 d-flex flex-wrap gap-2">
-											<span>{$locale === 'en' ? 'Views' : 'Lượt xem'}: {item?.count ?? item?.views ?? '—'}</span>
+											<span
+												>{$locale === 'en' ? 'Views' : 'Lượt xem'}: {item?.count ??
+													item?.views ??
+													'—'}</span
+											>
 											{#if item?.reason}<span>• {item.reason}</span>{/if}
 										</div>
 									</div>
@@ -278,12 +304,16 @@
 
 					<div class="col-lg-6">
 						<div class="text-black-50 small mb-2">
-							{$locale === 'en' ? 'Daily time on site (30 days)' : 'Thời gian truy cập theo ngày (30 ngày)'}
+							{$locale === 'en'
+								? 'Daily time on site (30 days)'
+								: 'Thời gian truy cập theo ngày (30 ngày)'}
 						</div>
 						{#if dailyActiveTime.length}
 							<div class="list-group list-group-flush border rounded-3 overflow-hidden">
-								{#each dailyActiveTime as item}
-									<div class="list-group-item d-flex justify-content-between gap-3 align-items-center">
+								{#each dailyActiveTime as item, __eachIndex4 (item?._id ?? item?.id ?? __eachIndex4)}
+									<div
+										class="list-group-item d-flex justify-content-between gap-3 align-items-center"
+									>
 										<div class="fw-semibold">{item?.date || '—'}</div>
 										<div class="small text-black-50 text-end">
 											<div>{formatDuration(item?.totalDurationSeconds)}</div>
@@ -294,7 +324,9 @@
 							</div>
 						{:else}
 							<div class="text-black-50 small">
-								{$locale === 'en' ? 'No daily time data yet.' : 'Chưa có dữ liệu thời gian theo ngày.'}
+								{$locale === 'en'
+									? 'No daily time data yet.'
+									: 'Chưa có dữ liệu thời gian theo ngày.'}
 							</div>
 						{/if}
 					</div>
@@ -302,10 +334,12 @@
 
 				<div class="row g-3 mt-1">
 					<div class="col-lg-6">
-						<div class="text-black-50 small mb-2">{$locale === 'en' ? 'Recent clicks' : 'Click gần đây'}</div>
+						<div class="text-black-50 small mb-2">
+							{$locale === 'en' ? 'Recent clicks' : 'Click gần đây'}
+						</div>
 						{#if recentClicks.length}
 							<div class="list-group list-group-flush border rounded-3 overflow-hidden">
-								{#each recentClicks as item}
+								{#each recentClicks as item, __eachIndex5 (item?._id ?? item?.id ?? __eachIndex5)}
 									<div class="list-group-item">
 										<div class="fw-semibold text-break">
 											{item?.label || item?.trackName || item?.href || '—'}
@@ -330,7 +364,7 @@
 						</div>
 						{#if visitedPaths.length}
 							<div class="list-group list-group-flush border rounded-3 overflow-hidden">
-								{#each visitedPaths as item}
+								{#each visitedPaths as item, __eachIndex6 (item?._id ?? item?.id ?? __eachIndex6)}
 									<div class="list-group-item d-flex justify-content-between gap-3">
 										<div class="fw-semibold text-break">{item?.path || '—'}</div>
 										<div class="small text-black-50 text-end">
@@ -342,7 +376,9 @@
 							</div>
 						{:else}
 							<div class="text-black-50 small">
-								{$locale === 'en' ? 'No page history captured yet.' : 'Chưa có lịch sử trang truy cập.'}
+								{$locale === 'en'
+									? 'No page history captured yet.'
+									: 'Chưa có lịch sử trang truy cập.'}
 							</div>
 						{/if}
 					</div>

@@ -10,8 +10,12 @@
 	);
 </script>
 
-<div class="payment-methods" class:compact aria-label={$locale === 'en' ? 'Payment methods' : 'Phương thức thanh toán'}>
-	{#each methods as method}
+<div
+	class="payment-methods"
+	class:compact
+	aria-label={$locale === 'en' ? 'Payment methods' : 'Phương thức thanh toán'}
+>
+	{#each methods as method, __eachIndex1 (method?._id ?? method?.id ?? __eachIndex1)}
 		<span>{method}</span>
 	{/each}
 </div>

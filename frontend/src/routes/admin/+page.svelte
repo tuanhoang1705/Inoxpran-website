@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { locale, t } from '$lib/i18n/admin/index.js';
 
 	let { data, form } = $props();
@@ -9,11 +10,15 @@
 	const dashboardWindows = $derived(dashboard?.windows ?? {});
 	const selectedWindow = $derived(dashboardWindows?.[selectedWindowKey] ?? null);
 	const dashboardOps = $derived(dashboard?.operations ?? {});
-	const topPages30d = $derived(Array.isArray(dashboard?.top?.pages30d) ? dashboard.top.pages30d : []);
+	const topPages30d = $derived(
+		Array.isArray(dashboard?.top?.pages30d) ? dashboard.top.pages30d : []
+	);
 	const topProducts30d = $derived(
 		Array.isArray(dashboard?.top?.products30d) ? dashboard.top.products30d : []
 	);
-	const topBlogs30d = $derived(Array.isArray(dashboard?.top?.blogs30d) ? dashboard.top.blogs30d : []);
+	const topBlogs30d = $derived(
+		Array.isArray(dashboard?.top?.blogs30d) ? dashboard.top.blogs30d : []
+	);
 	const daily30d = $derived(Array.isArray(dashboard?.daily30d) ? dashboard.daily30d : []);
 	const recentDailyRows = $derived.by(() => daily30d.slice(-14));
 
@@ -71,7 +76,8 @@
 					noDashboard: 'Dashboard summary is unavailable right now.'
 				}
 			: {
-					trackingScope: 'S\u1ED1 li\u1EC7u traffic d\u1EF1a tr\u00EAn telemetry \u0111\u00E3 \u0111\u01B0\u1EE3c ng\u01B0\u1EDDi d\u00F9ng \u0111\u1ED3ng \u00FD (consent).',
+					trackingScope:
+						'S\u1ED1 li\u1EC7u traffic d\u1EF1a tr\u00EAn telemetry \u0111\u00E3 \u0111\u01B0\u1EE3c ng\u01B0\u1EDDi d\u00F9ng \u0111\u1ED3ng \u00FD (consent).',
 					generatedAt: 'C\u1EADp nh\u1EADt l\u00FAc',
 					windows: {
 						last24h: '24 gi\u1EDD',
@@ -119,7 +125,8 @@
 					daily: 'Xu h\u01B0\u1EDBng theo ng\u00E0y (14 ng\u00E0y g\u1EA7n nh\u1EA5t)',
 					dailyHint: 'Phi\u00EAn / l\u01B0\u1EE3t xem trang / \u0111\u01A1n h\u00E0ng',
 					noData: 'Ch\u01B0a c\u00F3 d\u1EEF li\u1EC7u telemetry.',
-					noDashboard: 'Hi\u1EC7n ch\u01B0a t\u1EA3i \u0111\u01B0\u1EE3c t\u1ED5ng h\u1EE3p dashboard.'
+					noDashboard:
+						'Hi\u1EC7n ch\u01B0a t\u1EA3i \u0111\u01B0\u1EE3c t\u1ED5ng h\u1EE3p dashboard.'
 				}
 	);
 
@@ -231,7 +238,9 @@
 						<div class="small text-uppercase text-black-50">{dashboardCopy.kpis.sessions}</div>
 						<div class="h4 mb-1">{formatNumber(selectedWindow.sessions)}</div>
 						<div class="small text-black-50">
-							{$locale === 'en' ? 'Identified' : '\u0110\u1ECBnh danh'}: {formatNumber(selectedWindow.identifiedSessions)}
+							{$locale === 'en' ? 'Identified' : '\u0110\u1ECBnh danh'}: {formatNumber(
+								selectedWindow.identifiedSessions
+							)}
 						</div>
 					</div>
 				</div>
@@ -249,7 +258,9 @@
 						<div class="small text-uppercase text-black-50">{dashboardCopy.kpis.orders}</div>
 						<div class="h4 mb-1">{formatNumber(selectedWindow.orderCount)}</div>
 						<div class="small text-black-50">
-							{dashboardCopy.quality.deliveredOrders}: {formatNumber(selectedWindow.deliveredOrderCount)}
+							{dashboardCopy.quality.deliveredOrders}: {formatNumber(
+								selectedWindow.deliveredOrderCount
+							)}
 						</div>
 					</div>
 				</div>
@@ -260,7 +271,9 @@
 						</div>
 						<div class="h4 mb-1 text-break">{formatCurrency(selectedWindow.revenue)}</div>
 						<div class="small text-black-50">
-							{$locale === 'en' ? 'Delivered AOV' : 'Gi\u00E1 tr\u1ECB TB/\u0111\u01A1n giao th\u00E0nh c\u00F4ng'}: {formatCurrency(
+							{$locale === 'en'
+								? 'Delivered AOV'
+								: 'Gi\u00E1 tr\u1ECB TB/\u0111\u01A1n giao th\u00E0nh c\u00F4ng'}: {formatCurrency(
 								selectedWindow.avgOrderValue
 							)}
 						</div>
@@ -290,10 +303,14 @@
 				</div>
 				<div class="col-6 col-xl-3">
 					<div class="border rounded-3 p-3 bg-white h-100">
-						<div class="small text-uppercase text-black-50">{dashboardCopy.kpis.checkoutSessions}</div>
+						<div class="small text-uppercase text-black-50">
+							{dashboardCopy.kpis.checkoutSessions}
+						</div>
 						<div class="h4 mb-1">{formatNumber(selectedWindow.checkoutSessions)}</div>
 						<div class="small text-black-50">
-							{dashboardCopy.quality.addToCartSessions}: {formatNumber(selectedWindow.addToCartSessions)}
+							{dashboardCopy.quality.addToCartSessions}: {formatNumber(
+								selectedWindow.addToCartSessions
+							)}
 						</div>
 					</div>
 				</div>
@@ -333,7 +350,9 @@
 								<div class="fw-semibold">{formatPercent(selectedWindow.sessionToOrderRate)}</div>
 							</div>
 							<div class="col-6">
-								<div class="small text-black-50">{dashboardCopy.quality.sessionToDeliveredRate}</div>
+								<div class="small text-black-50">
+									{dashboardCopy.quality.sessionToDeliveredRate}
+								</div>
 								<div class="fw-semibold">
 									{formatPercent(selectedWindow.sessionToDeliveredOrderRate)}
 								</div>
@@ -402,15 +421,27 @@
 								<div class="small text-black-50">{dashboardCopy.ops.orders}</div>
 								<div class="fw-semibold">{formatNumber(dashboardOps?.orders?.total)}</div>
 								<div class="small text-black-50">
-									{dashboardCopy.ops.pending}: {formatNumber(dashboardOps?.orders?.byStatus?.pending)}
+									{dashboardCopy.ops.pending}: {formatNumber(
+										dashboardOps?.orders?.byStatus?.pending
+									)}
 								</div>
 							</div>
 						</div>
 						<hr />
-						<div class="small text-black-50 mb-1">{$locale === 'en' ? 'New users (30d)' : 'Ng\u01B0\u1EDDi d\u00F9ng m\u1EDBi (30 ng\u00E0y)'}</div>
+						<div class="small text-black-50 mb-1">
+							{$locale === 'en'
+								? 'New users (30d)'
+								: 'Ng\u01B0\u1EDDi d\u00F9ng m\u1EDBi (30 ng\u00E0y)'}
+						</div>
 						<div class="fw-semibold">{formatNumber(dashboardOps?.users?.newUsers?.last30d)}</div>
-						<div class="small text-black-50 mt-2 mb-1">{$locale === 'en' ? 'Delivered orders (30d)' : '\u0110\u01A1n giao th\u00E0nh c\u00F4ng (30 ng\u00E0y)'}</div>
-						<div class="fw-semibold">{formatNumber(dashboardOps?.orders?.windows?.last30d?.deliveredOrders)}</div>
+						<div class="small text-black-50 mt-2 mb-1">
+							{$locale === 'en'
+								? 'Delivered orders (30d)'
+								: '\u0110\u01A1n giao th\u00E0nh c\u00F4ng (30 ng\u00E0y)'}
+						</div>
+						<div class="fw-semibold">
+							{formatNumber(dashboardOps?.orders?.windows?.last30d?.deliveredOrders)}
+						</div>
 					</div>
 				</div>
 			</div>
@@ -429,28 +460,55 @@
 								<div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-2">
 									<div class="fw-semibold">{row.date}</div>
 									<div class="small text-black-50 d-flex flex-wrap gap-2">
-										<span>{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}: {formatNumber(row.sessions)}</span>
-										<span>{$locale === 'en' ? 'Pages' : 'Trang'}: {formatNumber(row.pageViewCount)}</span>
-										<span>{$locale === 'en' ? 'Orders' : '\u0110\u01A1n'}: {formatNumber(row.orders)}</span>
+										<span
+											>{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}: {formatNumber(
+												row.sessions
+											)}</span
+										>
+										<span
+											>{$locale === 'en' ? 'Pages' : 'Trang'}: {formatNumber(
+												row.pageViewCount
+											)}</span
+										>
+										<span
+											>{$locale === 'en' ? 'Orders' : '\u0110\u01A1n'}: {formatNumber(
+												row.orders
+											)}</span
+										>
 									</div>
 								</div>
 								<div class="d-grid gap-2">
 									<div>
-										<div class="small text-black-50 mb-1">{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}</div>
+										<div class="small text-black-50 mb-1">
+											{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}
+										</div>
 										<div class="progress">
-											<div class="progress-bar bg-dark" style={`width:${((row.sessions || 0) / maxDailySessions) * 100}%`}></div>
+											<div
+												class="progress-bar bg-dark"
+												style={`width:${((row.sessions || 0) / maxDailySessions) * 100}%`}
+											></div>
 										</div>
 									</div>
 									<div>
-										<div class="small text-black-50 mb-1">{$locale === 'en' ? 'Page views' : 'L\u01B0\u1EE3t xem trang'}</div>
+										<div class="small text-black-50 mb-1">
+											{$locale === 'en' ? 'Page views' : 'L\u01B0\u1EE3t xem trang'}
+										</div>
 										<div class="progress">
-											<div class="progress-bar bg-secondary" style={`width:${((row.pageViewCount || 0) / maxDailyPageViews) * 100}%`}></div>
+											<div
+												class="progress-bar bg-secondary"
+												style={`width:${((row.pageViewCount || 0) / maxDailyPageViews) * 100}%`}
+											></div>
 										</div>
 									</div>
 									<div>
-										<div class="small text-black-50 mb-1">{$locale === 'en' ? 'Orders' : '\u0110\u01A1n h\u00E0ng'}</div>
+										<div class="small text-black-50 mb-1">
+											{$locale === 'en' ? 'Orders' : '\u0110\u01A1n h\u00E0ng'}
+										</div>
 										<div class="progress">
-											<div class="progress-bar bg-success" style={`width:${((row.orders || 0) / maxDailyOrders) * 100}%`}></div>
+											<div
+												class="progress-bar bg-success"
+												style={`width:${((row.orders || 0) / maxDailyOrders) * 100}%`}
+											></div>
 										</div>
 									</div>
 								</div>
@@ -468,12 +526,16 @@
 						<h5 class="mb-3">{dashboardCopy.topPages}</h5>
 						<ul class="list-group list-group-flush">
 							{#if topPages30d.length}
-								{#each topPages30d.slice(0, 10) as row}
+								{#each topPages30d.slice(0, 10) as row, __eachIndex3 (row?._id ?? row?.id ?? __eachIndex3)}
 									<li class="list-group-item px-0">
 										<div class="fw-semibold text-break">{row.path}</div>
 										<div class="small text-black-50 d-flex flex-wrap gap-2">
 											<span>{$locale === 'en' ? 'PV' : 'PV'}: {formatNumber(row.pageViews)}</span>
-											<span>{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}: {formatNumber(row.uniqueSessions)}</span>
+											<span
+												>{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}: {formatNumber(
+													row.uniqueSessions
+												)}</span
+											>
 										</div>
 									</li>
 								{/each}
@@ -488,12 +550,22 @@
 						<h5 class="mb-3">{dashboardCopy.topProducts}</h5>
 						<ul class="list-group list-group-flush">
 							{#if topProducts30d.length}
-								{#each topProducts30d.slice(0, 10) as row}
+								{#each topProducts30d.slice(0, 10) as row, __eachIndex4 (row?._id ?? row?.id ?? __eachIndex4)}
 									<li class="list-group-item px-0">
-										<div class="fw-semibold text-break">{row.name || row.slug || row.productId}</div>
+										<div class="fw-semibold text-break">
+											{row.name || row.slug || row.productId}
+										</div>
 										<div class="small text-black-50 d-flex flex-wrap gap-2">
-											<span>{$locale === 'en' ? 'Views' : 'L\u01B0\u1EE3t xem'}: {formatNumber(row.views)}</span>
-											<span>{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}: {formatNumber(row.uniqueSessions)}</span>
+											<span
+												>{$locale === 'en' ? 'Views' : 'L\u01B0\u1EE3t xem'}: {formatNumber(
+													row.views
+												)}</span
+											>
+											<span
+												>{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}: {formatNumber(
+													row.uniqueSessions
+												)}</span
+											>
 										</div>
 									</li>
 								{/each}
@@ -508,12 +580,20 @@
 						<h5 class="mb-3">{dashboardCopy.topBlogs}</h5>
 						<ul class="list-group list-group-flush">
 							{#if topBlogs30d.length}
-								{#each topBlogs30d.slice(0, 10) as row}
+								{#each topBlogs30d.slice(0, 10) as row, __eachIndex5 (row?._id ?? row?.id ?? __eachIndex5)}
 									<li class="list-group-item px-0">
 										<div class="fw-semibold text-break">{row.title || row.slug || row.path}</div>
 										<div class="small text-black-50 d-flex flex-wrap gap-2">
-											<span>{$locale === 'en' ? 'Views' : 'L\u01B0\u1EE3t xem'}: {formatNumber(row.views)}</span>
-											<span>{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}: {formatNumber(row.uniqueSessions)}</span>
+											<span
+												>{$locale === 'en' ? 'Views' : 'L\u01B0\u1EE3t xem'}: {formatNumber(
+													row.views
+												)}</span
+											>
+											<span
+												>{$locale === 'en' ? 'Sessions' : 'Phi\u00EAn'}: {formatNumber(
+													row.uniqueSessions
+												)}</span
+											>
 										</div>
 									</li>
 								{/each}
@@ -568,7 +648,9 @@
 								<div class="text-black-50">{$t('admin.dashboard.siteSettings.noFlags')}</div>
 							{/if}
 							<div>
-								<button class="btn btn-dark" type="submit">{$t('admin.dashboard.siteSettings.saveButton')}</button>
+								<button class="btn btn-dark" type="submit"
+									>{$t('admin.dashboard.siteSettings.saveButton')}</button
+								>
 							</div>
 						</form>
 					</div>
@@ -580,7 +662,8 @@
 								<div>
 									<h6 class="mb-1">Marketing campaign & marketplace</h6>
 									<p class="small text-black-50 mb-0">
-										Header offer, lead popup copy, and official marketplace links used on the storefront.
+										Header offer, lead popup copy, and official marketplace links used on the
+										storefront.
 									</p>
 								</div>
 								<button class="btn btn-dark" type="submit">Save marketing</button>
@@ -787,18 +870,24 @@
 			<div class="border rounded-3 p-3 bg-white h-100 admin-fade-up">
 				<h5 class="mb-3">{$t('admin.dashboard.latestUsers')}</h5>
 				<div class="small text-black-50 mb-3">
-					{$locale === 'en' ? 'New users (last 24h)' : 'Ng\u01B0\u1EDDi d\u00F9ng m\u1EDBi (24 gi\u1EDD g\u1EA7n nh\u1EA5t)'}:
+					{$locale === 'en'
+						? 'New users (last 24h)'
+						: 'Ng\u01B0\u1EDDi d\u00F9ng m\u1EDBi (24 gi\u1EDD g\u1EA7n nh\u1EA5t)'}:
 					{formatNumber(dashboardOps?.users?.newUsers?.last24h)}
 				</div>
 				<ul class="list-group list-group-flush">
 					{#if data?.recentUsers?.length}
-						{#each data.recentUsers as user}
-							<li class="list-group-item px-0 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2">
+						{#each data.recentUsers as user, __eachIndex1 (user?._id ?? user?.id ?? __eachIndex1)}
+							<li
+								class="list-group-item px-0 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2"
+							>
 								<div class="min-w-0">
 									<div class="fw-semibold text-break">{user.name || user.email}</div>
 									<div class="text-black-50 small text-break">{user.email}</div>
 								</div>
-								<a class="btn btn-sm btn-outline-dark" href={`/admin/users/${user._id}`}>{$t('admin.dashboard.view')}</a>
+								<a class="btn btn-sm btn-outline-dark" href={resolve(`/admin/users/${user._id}`)}
+									>{$t('admin.dashboard.view')}</a
+								>
 							</li>
 						{/each}
 					{:else}
@@ -813,13 +902,18 @@
 				<h5 class="mb-3">{$t('admin.dashboard.latestProducts')}</h5>
 				<ul class="list-group list-group-flush">
 					{#if data?.recentProducts?.length}
-						{#each data.recentProducts as product}
-							<li class="list-group-item px-0 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2">
+						{#each data.recentProducts as product, __eachIndex2 (product?._id ?? product?.id ?? __eachIndex2)}
+							<li
+								class="list-group-item px-0 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-2"
+							>
 								<div class="min-w-0">
 									<div class="fw-semibold text-break">{product.product_name}</div>
 									<div class="text-black-50 small text-break">{product.product_type}</div>
 								</div>
-								<a class="btn btn-sm btn-outline-dark" href={`/admin/products/${product._id}`}>{$t('admin.dashboard.edit')}</a>
+								<a
+									class="btn btn-sm btn-outline-dark"
+									href={resolve(`/admin/products/${product._id}`)}>{$t('admin.dashboard.edit')}</a
+								>
 							</li>
 						{/each}
 					{:else}

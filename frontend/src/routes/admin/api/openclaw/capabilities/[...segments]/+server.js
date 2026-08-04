@@ -1,9 +1,10 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
 import {
-	sanitizeOpenClawClientPayload,
-	sanitizeOpenClawErrorMessage
-} from '$lib/server/openclawClientPayload.js';
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
 import { isExactEmptyJsonBody } from '$lib/server/exactEmptyJsonBody.js';
 
 const FEATURE_KEY = '[a-z0-9_]{1,64}';
@@ -29,18 +30,31 @@ const hasExactEmptyBody = async (request) => {
 };
 
 const proxy = async ({ params, cookies, fetch, request, url, method }) => {
+	const requestId = createOpenClawRequestId();
 	const path = normalizePath(params.segments);
 	if (!path || !(ALLOWED[method] || []).some((pattern) => pattern.test(path))) {
-		return json({ error: 'Unsupported capability health request' }, { status: 404 });
+		return openClawProxyClientError({
+			status: 404,
+			error: 'Unsupported capability health request',
+			requestId
+		});
 	}
 	if (url.search) {
-		return json({ error: 'Unsupported capability health query' }, { status: 400 });
+		return openClawProxyClientError({
+			status: 400,
+			error: 'Unsupported capability health query',
+			requestId
+		});
 	}
 	if (method === 'POST' && !(await hasExactEmptyBody(request))) {
-		return json({ error: 'Capability health request body must be empty' }, { status: 400 });
+		return openClawProxyClientError({
+			status: 400,
+			error: 'Capability health request body must be empty',
+			requestId
+		});
 	}
 
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: `/admin/openclaw/capabilities/${path}`,
@@ -51,21 +65,12 @@ const proxy = async ({ params, cookies, fetch, request, url, method }) => {
 						headers: { 'content-type': 'application/json' },
 						body: '{}'
 					}
-				: undefined
+				: undefined,
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Capability health request failed',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json(
-			{
-				error:
-					response.status >= 500
-						? 'Internal Server Error'
-						: sanitizeOpenClawErrorMessage(payload?.message, 'Capability health request failed')
-			},
-			{ status: response.status }
-		);
-	}
-	return json(sanitizeOpenClawClientPayload(payload?.metadata ?? payload ?? {}));
 };
 
 export const GET = (event) => proxy({ ...event, method: 'GET' });

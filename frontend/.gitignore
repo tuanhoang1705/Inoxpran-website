@@ -7,6 +7,14 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+/dist
+/test-results
+/output
+/.playwright-cli
+/.codex-tmp
+
+# Local runtime/build logs
+*.log
 
 # OS
 .DS_Store

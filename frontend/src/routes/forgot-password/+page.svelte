@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { t } from '$lib/i18n/index.js';
 
 	export let form;
@@ -40,7 +41,7 @@
 			</form>
 
 			<p class="text-center mt-3 mb-0">
-				{$t('auth.rememberPassword')} <a href="/login">{$t('auth.login')}</a>
+				{$t('auth.rememberPassword')} <a href={resolve('/login')}>{$t('auth.login')}</a>
 			</p>
 		</div>
 	</div>

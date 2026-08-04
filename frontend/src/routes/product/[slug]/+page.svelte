@@ -1,12 +1,15 @@
 ﻿<script>
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import '$lib/styles/product-page.css';
 	import { onDestroy, onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { env } from '$env/dynamic/public';
 	import { flyToCart } from '$lib/client/flyToCart.js';
 	import { addGuestCartItem } from '$lib/client/guestCart.js';
 	import { syncCartCountFromActionResult } from '$lib/client/cartCountSync.js';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import RichTextDisplay from '$lib/components/RichTextDisplay.svelte';
 	import { locale, t } from '$lib/i18n/index.js';
 	import {
@@ -107,13 +110,6 @@
 		const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
 		return `${siteUrl}${normalizedPath}`;
 	};
-	const escapeJsonLd = (value) =>
-		String(value || '')
-			.replace(/</g, '\\u003c')
-			.replace(/>/g, '\\u003e')
-			.replace(/&/g, '\\u0026')
-			.replace(/\u2028/g, '\\u2028')
-			.replace(/\u2029/g, '\\u2029');
 	const buildMerchantReturnPolicyJsonLd = (localeValue = 'vi') => ({
 		'@type': 'MerchantReturnPolicy',
 		'@id': `${siteUrl}/#merchant-return-policy`,
@@ -331,12 +327,6 @@
 			.replace(/&nbsp;/gi, ' ')
 			.replace(/\s+/g, ' ')
 			.trim();
-	};
-
-	const truncate = (text, limit = 200) => {
-		if (!text) return '';
-		if (text.length <= limit) return text;
-		return `${text.slice(0, limit).trim()}...`;
 	};
 
 	const truncateAtWordBoundary = (text, limit = 200) => {
@@ -615,10 +605,7 @@
 		if (Math.abs(dx) <= 4 || Math.abs(dx) <= Math.abs(dy) * 1.05) return;
 		galleryThumbStripDragging = true;
 		event.preventDefault?.();
-		element.scrollLeft = clampGalleryThumbScroll(
-			galleryThumbStripStartScrollLeft - dx,
-			element
-		);
+		element.scrollLeft = clampGalleryThumbScroll(galleryThumbStripStartScrollLeft - dx, element);
 	};
 
 	const endGalleryThumbStripDrag = (event, pointerId) => {
@@ -667,18 +654,15 @@
 		const touchId = Number(galleryThumbStripPointerId.replace('touch-', ''));
 		const touch = Array.from(event.touches || []).find((item) => item.identifier === touchId);
 		if (!touch) return;
-		moveGalleryThumbStripDrag(
-			event,
-			galleryThumbStripPointerId,
-			touch.clientX,
-			touch.clientY
-		);
+		moveGalleryThumbStripDrag(event, galleryThumbStripPointerId, touch.clientX, touch.clientY);
 	};
 
 	const handleGalleryThumbStripTouchEnd = (event) => {
 		if (typeof galleryThumbStripPointerId !== 'string') return;
 		const touchId = Number(galleryThumbStripPointerId.replace('touch-', ''));
-		const touch = Array.from(event.changedTouches || []).find((item) => item.identifier === touchId);
+		const touch = Array.from(event.changedTouches || []).find(
+			(item) => item.identifier === touchId
+		);
 		if (!touch) return;
 		endGalleryThumbStripDrag(event, galleryThumbStripPointerId);
 	};
@@ -757,7 +741,7 @@
 	const getProductItemKey = (imageValue) => {
 		const raw = String(imageValue || '').trim();
 		if (!raw) return '';
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -777,7 +761,7 @@
 	const getProductLargeKey = (imageValue) => {
 		const raw = String(imageValue || '').trim();
 		if (!raw) return '';
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -853,11 +837,11 @@
 		const variations = Array.isArray(productValue?.product_variations)
 			? productValue.product_variations
 			: [];
-		const colors = new Set();
-		const sizes = new Set();
+		const colors = new SvelteSet();
+		const sizes = new SvelteSet();
 		const comboOverrides = [];
-		const colorOverrides = new Map();
-		const sizeOverrides = new Map();
+		const colorOverrides = new SvelteMap();
+		const sizeOverrides = new SvelteMap();
 
 		variations.forEach((item) => {
 			if (typeof item === 'string' || typeof item === 'number') {
@@ -1481,7 +1465,7 @@
 		hideTooltips();
 		const loginHref = resolveLoginRedirectHref();
 		if (typeof window === 'undefined') {
-			void goto(loginHref);
+			void goto(resolve(loginHref));
 			return;
 		}
 		window.location.assign(loginHref);
@@ -1493,7 +1477,6 @@
 			const existing = window.bootstrap.Tooltip.getInstance(el);
 			if (existing) existing.dispose();
 			const trigger = el.getAttribute('data-bs-trigger') || 'hover';
-			// eslint-disable-next-line no-new
 			new window.bootstrap.Tooltip(el, { trigger });
 		});
 	};
@@ -1512,14 +1495,14 @@
 
 	const lockRelatedAddId = (id) => {
 		if (!id) return;
-		const next = new Set(relatedLockedAddIds);
+		const next = new SvelteSet(relatedLockedAddIds);
 		next.add(String(id));
 		relatedLockedAddIds = next;
 	};
 
 	const unlockRelatedAddId = (id) => {
 		if (!id) return;
-		const next = new Set(relatedLockedAddIds);
+		const next = new SvelteSet(relatedLockedAddIds);
 		next.delete(String(id));
 		relatedLockedAddIds = next;
 	};
@@ -1757,7 +1740,7 @@
 			cancel();
 			addGuestCartItem(toGuestCartProduct(product, submittedQuantity), submittedQuantity);
 			cartToast.show($t('cart.addedNotice', { count: submittedQuantity }), 'success');
-			goto(localizeInternalHref('/checkout?guest=1', $locale));
+			goto(resolve(localizeInternalHref('/checkout?guest=1', $locale)));
 			return;
 		}
 		formData?.set?.('quantity', String(submittedQuantity));
@@ -1768,7 +1751,7 @@
 		return async ({ result }) => {
 			buyNowRequestId = createActionRequestId();
 			if (result?.type === 'redirect') {
-				goto(result.location);
+				goto(resolve(result.location));
 				return;
 			}
 
@@ -1818,7 +1801,7 @@
 		const incoming = Array.from(event.currentTarget?.files || []);
 		const combinedFiles = [...reviewSelectedImages.map((item) => item.file), ...incoming];
 		const dedupedFiles = [];
-		const seen = new Set();
+		const seen = new SvelteSet();
 
 		for (const file of combinedFiles) {
 			const key = `${file.name}:${file.size}:${file.lastModified}`;
@@ -1867,7 +1850,7 @@
 			isSubmittingReview = false;
 
 			if (result?.type === 'redirect') {
-				goto(result.location);
+				goto(resolve(result.location));
 				return;
 			}
 
@@ -2310,16 +2293,17 @@
 	<meta name="twitter:title" content={seoTitle} />
 	<meta name="twitter:description" content={seoDescription} />
 	<meta name="twitter:image" content={seoImage} />
-	{#if productBreadcrumbJsonLd}
-		{@html '<script type="application/ld+json">' + escapeJsonLd(productBreadcrumbJsonLd) + '</script>'}
-	{/if}
-	{#if productJsonLd}
-		{@html '<script type="application/ld+json">' + escapeJsonLd(productJsonLd) + '</script>'}
-	{/if}
-	{#if productFaqJsonLd}
-		{@html '<script type="application/ld+json">' + escapeJsonLd(productFaqJsonLd) + '</script>'}
-	{/if}
 </svelte:head>
+
+{#if productBreadcrumbJsonLd}
+	<JsonLd value={productBreadcrumbJsonLd} />
+{/if}
+{#if productJsonLd}
+	<JsonLd value={productJsonLd} />
+{/if}
+{#if productFaqJsonLd}
+	<JsonLd value={productFaqJsonLd} />
+{/if}
 
 <svelte:window
 	onkeydown={handleGalleryKeydown}
@@ -2349,7 +2333,7 @@
 						>
 							<div class="swiper large-swiper">
 								<div class="swiper-wrapper">
-									{#each galleryImages as image, index}
+									{#each galleryImages as image, index (`main-${image}-${index}`)}
 										{@const galleryAvifSrcSet = getProductGalleryAvifSrcSet(image)}
 										{@const galleryWebpSrcSet = getProductGalleryWebpSrcSet(image)}
 										<div class="swiper-slide">
@@ -2388,7 +2372,7 @@
 
 						<div class="thumbnail-gallery swiper thumb-swiper">
 							<div class="swiper-wrapper">
-								{#each galleryImages as image, index}
+								{#each galleryImages as image, index (`thumb-${image}-${index}`)}
 									<button
 										type="button"
 										class="swiper-slide thumbnail-image"
@@ -2440,7 +2424,7 @@
 							>
 								<span class="rating-badge" class:rating-badge--empty={!hasRating}>
 									<span class="rating-stars" aria-hidden="true">
-										{#each ratingStars as star}
+										{#each ratingStars as star, index (`summary-${star.type}-${index}`)}
 											<svg
 												class="rating-star"
 												class:rating-star--filled={star.type === 'full'}
@@ -2503,7 +2487,7 @@
 								<div class="option-group">
 									<div class="option-label">{$t('product.size')}</div>
 									<ul class="option-list">
-										{#each sizeOptions as size}
+										{#each sizeOptions as size (size)}
 											<li class="option-item">
 												<button
 													class="option-btn"
@@ -2522,7 +2506,7 @@
 								<div class="option-group">
 									<div class="option-label">{$t('product.color')}</div>
 									<ul class="option-list">
-										{#each colorOptions as color}
+										{#each colorOptions as color (color)}
 											<li class="option-item">
 												<button
 													class="option-btn"
@@ -2669,7 +2653,7 @@
 				{#if apiError}
 					<p style="color: #999; margin: 1rem 0;">{apiError}</p>
 				{/if}
-				<a href="/shop" class="btn-primary-action" style="display: inline-block;">
+				<a href={resolve('/shop')} class="btn-primary-action" style="display: inline-block;">
 					{$t('product.backToShop')}
 				</a>
 			</div>
@@ -2782,7 +2766,7 @@
 						</ul>
 						<div class="product-faq-list">
 							<h3>{$locale === 'en' ? 'Common questions' : 'Câu hỏi thường gặp'}</h3>
-							{#each productFaqItems as item}
+							{#each productFaqItems as item (item.question)}
 								<details>
 									<summary>{item.question}</summary>
 									<p>{item.answer}</p>
@@ -2806,7 +2790,7 @@
 									<span class="reviews-score-scale">/5</span>
 								</div>
 								<div class="rating-stars rating-stars--summary" aria-hidden="true">
-									{#each ratingStars as star}
+									{#each ratingStars as star, index (`reviews-summary-${star.type}-${index}`)}
 										<svg
 											class="rating-star"
 											class:rating-star--filled={star.type === 'full'}
@@ -2898,7 +2882,7 @@
 										<p>{$t('product.reviewLoginRequiredDesc')}</p>
 										<a
 											class="review-login-link"
-											href={localizeInternalHref(resolveLoginRedirectHref(), $locale)}
+											href={resolve(localizeInternalHref(resolveLoginRedirectHref(), $locale))}
 											>{$t('product.reviewLoginCta')}</a
 										>
 									</div>
@@ -2948,7 +2932,7 @@
 												role="radiogroup"
 												aria-label={$t('product.reviewRatingLabel')}
 											>
-												{#each [5, 4, 3, 2, 1] as star}
+												{#each [5, 4, 3, 2, 1] as star (star)}
 													<label
 														class="review-rating-option"
 														class:active={reviewFormValues.rating === star}
@@ -2961,7 +2945,7 @@
 															required
 														/>
 														<span class="rating-stars rating-stars--selector" aria-hidden="true">
-															{#each buildRatingStars(star) as icon}
+															{#each buildRatingStars(star) as icon, index (`selector-${star}-${icon.type}-${index}`)}
 																<svg
 																	class="rating-star"
 																	class:rating-star--filled={icon.type === 'full'}
@@ -3074,7 +3058,7 @@
 
 							{#if reviewItems.length}
 								<div class="review-list">
-									{#each reviewItems as review}
+									{#each reviewItems as review (review.id ?? review._id)}
 										<article class="review-card">
 											<div class="review-card-head">
 												<div>
@@ -3092,7 +3076,7 @@
 												</div>
 												{#if review.rating > 0}
 													<div class="rating-stars rating-stars--compact" aria-hidden="true">
-														{#each review.stars as star}
+														{#each review.stars as star, index (`review-star-${review.id ?? review._id}-${index}`)}
 															<svg
 																class="rating-star"
 																class:rating-star--filled={star.type === 'full'}
@@ -3115,6 +3099,7 @@
 											{#if review.images?.length}
 												<div class="review-gallery">
 													{#each review.images as image, index (`review-${review.id}-${image.path || image.url || index}`)}
+														<!-- eslint-disable svelte/no-navigation-without-resolve -- review media URLs are validated external or object URLs -->
 														<a
 															class="review-gallery-item"
 															href={resolveReviewImageUrl(image)}
@@ -3126,6 +3111,7 @@
 																alt={review.title || review.author}
 															/>
 														</a>
+														<!-- eslint-enable svelte/no-navigation-without-resolve -->
 													{/each}
 												</div>
 											{/if}
@@ -3154,7 +3140,7 @@
 		<div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0 1rem;">
 			<div class="section-title d-md-flex justify-content-between align-items-center mb-4">
 				<h3 class="d-flex align-items-center">{$t('product.relatedTitle')}</h3>
-				<a href="/shop" class="btn">{$t('common.viewAll')}</a>
+				<a href={resolve('/shop')} class="btn">{$t('common.viewAll')}</a>
 			</div>
 			<div
 				class="position-absolute top-50 end-0 pe-0 pe-xxl-5 me-0 me-xxl-5 swiper-next product-slider-button-next"
@@ -3181,7 +3167,7 @@
 			<div class="swiper product-swiper">
 				<div class="swiper-wrapper">
 					{#if relatedProducts.length}
-						{#each relatedProducts as item, index}
+						{#each relatedProducts as item, index (item._id ?? item.id ?? item.product_slug ?? index)}
 							{@const discountPercent = getDiscountPercent(item)}
 							{@const originalPrice = getOriginalPrice(item)}
 							{@const relatedThumb = resolveThumb(item.product_thumb, index)}
@@ -3199,7 +3185,7 @@
 									{/if}
 									<a
 										class="product-card-link"
-										href={getProductHref(item)}
+										href={resolve(getProductHref(item))}
 										aria-label={item.product_name}
 										data-track="product_click"
 										data-track-section="product_related"
@@ -3303,11 +3289,7 @@
 	</section>
 
 	{#if isGalleryOpen}
-		<div
-			class="gallery-overlay"
-			use:portalToBody
-			onwheel={preventGalleryOverlayScroll}
-		>
+		<div class="gallery-overlay" use:portalToBody onwheel={preventGalleryOverlayScroll}>
 			<button
 				type="button"
 				class="gallery-overlay-backdrop"
@@ -3368,7 +3350,7 @@
 
 				<div class="gallery-modal-body">
 					<div class="gallery-modal-thumbs gallery-modal-thumbs-desktop">
-						{#each galleryImages as image, index}
+						{#each galleryImages as image, index (`modal-desktop-${image}-${index}`)}
 							<button
 								type="button"
 								class="gallery-modal-thumb"
@@ -3402,6 +3384,10 @@
 							class:is-zoomed={galleryZoom > 1}
 							class:is-panning={isGalleryPanning}
 							bind:this={galleryViewportEl}
+							role="group"
+							aria-label={$locale === 'en'
+								? 'Zoomable product image'
+								: 'Ảnh sản phẩm có thể thu phóng'}
 							onpointerdown={handleGalleryPanStart}
 							onwheel={handleGalleryWheel}
 						>
@@ -3436,6 +3422,8 @@
 				<div
 					class="gallery-modal-thumbs gallery-modal-thumbs-mobile"
 					bind:this={galleryModalThumbsMobileEl}
+					role="group"
+					aria-label={$locale === 'en' ? 'Product image thumbnails' : 'Ảnh thu nhỏ sản phẩm'}
 					onpointerdown={handleGalleryThumbStripPointerDown}
 					onpointermove={handleGalleryThumbStripPointerMove}
 					onpointerup={handleGalleryThumbStripPointerEnd}
@@ -3445,7 +3433,7 @@
 					ontouchend={handleGalleryThumbStripTouchEnd}
 					ontouchcancel={handleGalleryThumbStripTouchEnd}
 				>
-					{#each galleryImages as image, index}
+					{#each galleryImages as image, index (`modal-mobile-${image}-${index}`)}
 						<button
 							type="button"
 							class="gallery-modal-thumb"

@@ -15,7 +15,8 @@ const readJson = async (response) => {
 	}
 };
 
-const isRootAdmin = (session) => Array.isArray(session?.roles) && session.roles.includes('SUPER_ADMIN');
+const isRootAdmin = (session) =>
+	Array.isArray(session?.roles) && session.roles.includes('SUPER_ADMIN');
 
 const buildListParams = (filters = {}, page = 1, limit = 200) => {
 	const params = new URLSearchParams();
@@ -35,7 +36,7 @@ const buildListParams = (filters = {}, page = 1, limit = 200) => {
 const fetchAllMatchingSessionIds = async ({ fetch, session, filters }) => {
 	const sessionIds = [];
 	let page = 1;
-	let totalPages = 1;
+	let totalPages;
 
 	do {
 		const params = buildListParams(filters, page);

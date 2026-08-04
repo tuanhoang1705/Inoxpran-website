@@ -41,4 +41,3 @@ export const GET = async ({ fetch, cookies }) => {
 		return json({ count: 0 });
 	}
 };
-

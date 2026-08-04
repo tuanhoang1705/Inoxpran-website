@@ -18,7 +18,8 @@ const buildParams = (url) => {
 	if (page) params.set('page', page);
 	if (limit) params.set('limit', limit);
 	if (mine && mine !== '0' && mine !== 'false') params.set('mine', mine);
-	if (unreadOnly && unreadOnly !== '0' && unreadOnly !== 'false') params.set('unreadOnly', unreadOnly);
+	if (unreadOnly && unreadOnly !== '0' && unreadOnly !== 'false')
+		params.set('unreadOnly', unreadOnly);
 	return params;
 };
 
@@ -60,7 +61,9 @@ export const load = async ({ fetch, cookies, url }) => {
 				status: url.searchParams.get('status') || '',
 				q: url.searchParams.get('q') || '',
 				mine: ['1', 'true'].includes(String(url.searchParams.get('mine') || '').toLowerCase()),
-				unreadOnly: ['1', 'true'].includes(String(url.searchParams.get('unreadOnly') || '').toLowerCase())
+				unreadOnly: ['1', 'true'].includes(
+					String(url.searchParams.get('unreadOnly') || '').toLowerCase()
+				)
 			},
 			statusCounts: { all: 0, open: 0, handoff: 0, closed: 0 },
 			returnTo: buildReturnTo(url),

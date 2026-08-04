@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit';
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, USER_API_KEY_HEADER } from '$lib/server/api.js';
 import { redirect } from '@sveltejs/kit';
 import { getTranslator } from '$lib/i18n/server.js';
 import { buildUserHeaders, clearSessionAndRedirect, getUserSession } from '$lib/server/userAuth.js';
@@ -14,7 +14,7 @@ const readJson = async (response) => {
 
 const buildPublicHeaders = () => {
 	const headers = {};
-	if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+	if (USER_API_KEY_HEADER) headers['x-api-key'] = USER_API_KEY_HEADER;
 	return headers;
 };
 
@@ -226,7 +226,12 @@ export const load = async ({ fetch, cookies, locals }) => {
 	const cartProducts = Array.isArray(cart.cart_products) ? cart.cart_products : [];
 	const shopId = resolveShopId(cartProducts);
 	console.log('Resolved shopId:', cart.cart_userId);
-	const discountOptions = await fetchDiscounts({ fetch, shopId: cart.cart_userId, session, cookies });
+	const discountOptions = await fetchDiscounts({
+		fetch,
+		shopId: cart.cart_userId,
+		session,
+		cookies
+	});
 
 	return {
 		authRequired: false,

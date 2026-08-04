@@ -1,6 +1,10 @@
-import { json } from '@sveltejs/kit';
 import { adminApiFetch } from '$lib/server/adminApi.js';
-import { sanitizeOpenClawClientPayload } from '$lib/server/openclawClientPayload.js';
+import {
+	createOpenClawRequestId,
+	isOpenClawObjectPayload,
+	openClawProxyClientError,
+	proxyOpenClawRequest
+} from '$lib/server/openclawRoadmapProxy.js';
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9._:-]{8,128}$/;
 
@@ -13,41 +17,52 @@ const exactRunBody = (body) => {
 };
 
 export const GET = async ({ url, cookies, fetch }) => {
+	const requestId = createOpenClawRequestId();
 	if ([...url.searchParams.keys()].length) {
-		return json({ error: 'OpenClaw run query parameters are not supported' }, { status: 400 });
+		return openClawProxyClientError({
+			status: 400,
+			error: 'OpenClaw run query parameters are not supported',
+			requestId
+		});
 	}
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
-		path: '/admin/openclaw/runs'
+		path: '/admin/openclaw/runs',
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Unable to load OpenClaw runs',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json(
-			{ error: payload?.message || 'Unable to load OpenClaw runs' },
-			{ status: response.status }
-		);
-	}
-	return json(sanitizeOpenClawClientPayload(payload?.metadata || { runs: [] }));
 };
 
 export const POST = async ({ request, url, cookies, fetch }) => {
+	const requestId = createOpenClawRequestId();
 	if ([...url.searchParams.keys()].length) {
-		return json({ error: 'OpenClaw run query parameters are not supported' }, { status: 400 });
+		return openClawProxyClientError({
+			status: 400,
+			error: 'OpenClaw run query parameters are not supported',
+			requestId
+		});
 	}
 	const body = await request.json().catch(() => ({}));
 	const safeBody = exactRunBody(body);
 	if (!safeBody) {
-		return json(
-			{ error: 'OpenClaw run body must contain exactly string action and profile' },
-			{ status: 400 }
-		);
+		return openClawProxyClientError({
+			status: 400,
+			error: 'OpenClaw run body must contain exactly string action and profile',
+			requestId
+		});
 	}
 	const idempotencyKey = String(request.headers.get('idempotency-key') || '').trim();
 	if (!IDEMPOTENCY_KEY.test(idempotencyKey)) {
-		return json({ error: 'A valid Idempotency-Key is required' }, { status: 400 });
+		return openClawProxyClientError({
+			status: 400,
+			error: 'A valid Idempotency-Key is required',
+			requestId
+		});
 	}
-	const response = await adminApiFetch({
+	return proxyOpenClawRequest({
 		cookies,
 		fetch,
 		path: '/admin/openclaw/runs',
@@ -61,14 +76,10 @@ export const POST = async ({ request, url, cookies, fetch }) => {
 				action: safeBody.action,
 				profile: safeBody.profile
 			})
-		}
+		},
+		validatePayload: isOpenClawObjectPayload,
+		fallbackError: 'Unable to start OpenClaw run',
+		requestId,
+		adminFetch: adminApiFetch
 	});
-	const payload = await response.json().catch(() => null);
-	if (!response.ok) {
-		return json(
-			{ error: payload?.message || 'Unable to start OpenClaw run' },
-			{ status: response.status }
-		);
-	}
-	return json(sanitizeOpenClawClientPayload(payload?.metadata || {}));
 };

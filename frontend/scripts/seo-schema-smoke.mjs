@@ -107,7 +107,8 @@ const getNodeTypes = (node) => {
 	return Array.isArray(value) ? value.map(String) : [String(value)];
 };
 
-const hasType = (nodes, targetType) => nodes.some((node) => getNodeTypes(node).includes(targetType));
+const hasType = (nodes, targetType) =>
+	nodes.some((node) => getNodeTypes(node).includes(targetType));
 
 const ensureAbsoluteUrl = (baseUrl, target) => new URL(target, baseUrl).toString();
 
@@ -166,17 +167,18 @@ const validatePage = (label, snapshot, requiredTypes, baseUrl) => {
 const main = async () => {
 	const args = parseArgs(process.argv);
 	const baseUrl = String(args.base || DEFAULT_BASE_URL).replace(/\/+$/, '');
-	const timeoutMs = Number.parseInt(String(args.timeout || DEFAULT_TIMEOUT_MS), 10) || DEFAULT_TIMEOUT_MS;
+	const timeoutMs =
+		Number.parseInt(String(args.timeout || DEFAULT_TIMEOUT_MS), 10) || DEFAULT_TIMEOUT_MS;
 
 	const categoryUrl =
 		args.category ||
 		(await findFirstSitemapUrl(baseUrl, /\/category\//i, timeoutMs)) ||
 		ensureAbsoluteUrl(baseUrl, '/shop');
-	const productUrl = args.product || (await findFirstSitemapUrl(baseUrl, /\/product\//i, timeoutMs));
+	const productUrl =
+		args.product || (await findFirstSitemapUrl(baseUrl, /\/product\//i, timeoutMs));
 	const blogIndexUrl = args.blog || ensureAbsoluteUrl(baseUrl, '/blog');
 	const blogArticleUrl =
-		args['blog-article'] ||
-		(await findFirstSitemapUrl(baseUrl, /\/blog\/[^/?#]+/i, timeoutMs));
+		args['blog-article'] || (await findFirstSitemapUrl(baseUrl, /\/blog\/[^/?#]+/i, timeoutMs));
 	const faqUrl = args.faq || ensureAbsoluteUrl(baseUrl, '/faq');
 	const policiesUrl = args.policies || ensureAbsoluteUrl(baseUrl, '/policies');
 	const policyDetailUrl =
@@ -192,18 +194,32 @@ const main = async () => {
 	}
 
 	if (!policyDetailUrl) {
-		throw new Error('Cannot find a policy detail URL from sitemap. Pass --policy-detail explicitly.');
+		throw new Error(
+			'Cannot find a policy detail URL from sitemap. Pass --policy-detail explicitly.'
+		);
 	}
 
 	const checks = [
-		{ label: 'home', url: ensureAbsoluteUrl(baseUrl, '/'), requiredTypes: ['Organization', 'WebSite', 'WebPage'] },
+		{
+			label: 'home',
+			url: ensureAbsoluteUrl(baseUrl, '/'),
+			requiredTypes: ['Organization', 'WebSite', 'WebPage']
+		},
 		{ label: 'about', url: ensureAbsoluteUrl(baseUrl, '/about'), requiredTypes: ['AboutPage'] },
 		{ label: 'category', url: categoryUrl, requiredTypes: ['CollectionPage', 'BreadcrumbList'] },
 		{ label: 'product', url: productUrl, requiredTypes: ['Product', 'BreadcrumbList'] },
 		{ label: 'blog', url: blogIndexUrl, requiredTypes: ['CollectionPage', 'BreadcrumbList'] },
-		{ label: 'blog-article', url: blogArticleUrl, requiredTypes: ['Article', 'BlogPosting', 'BreadcrumbList'] },
+		{
+			label: 'blog-article',
+			url: blogArticleUrl,
+			requiredTypes: ['Article', 'BlogPosting', 'BreadcrumbList']
+		},
 		{ label: 'faq', url: faqUrl, requiredTypes: ['FAQPage', 'WebPage', 'BreadcrumbList'] },
-		{ label: 'policies', url: policiesUrl, requiredTypes: ['WebPage', 'CollectionPage', 'BreadcrumbList'] },
+		{
+			label: 'policies',
+			url: policiesUrl,
+			requiredTypes: ['WebPage', 'CollectionPage', 'BreadcrumbList']
+		},
 		{ label: 'policy-detail', url: policyDetailUrl, requiredTypes: ['WebPage', 'BreadcrumbList'] }
 	];
 
@@ -222,7 +238,9 @@ const main = async () => {
 		console.log(`- ${result.label}: ${result.url}`);
 		console.log(`  status: ${result.status}`);
 		console.log(`  canonical: ${result.canonical || '(missing)'}`);
-		console.log(`  types: ${Array.from(new Set(result.nodes.flatMap(getNodeTypes))).join(', ') || '(none)'}`);
+		console.log(
+			`  types: ${Array.from(new Set(result.nodes.flatMap(getNodeTypes))).join(', ') || '(none)'}`
+		);
 		if (result.issues.length) {
 			console.log(`  issues: ${result.issues.join(', ')}`);
 		}
@@ -239,4 +257,3 @@ main().catch((error) => {
 	console.error(error instanceof Error ? error.message : String(error));
 	process.exitCode = 1;
 });
-

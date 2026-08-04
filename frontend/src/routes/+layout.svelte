@@ -1,6 +1,8 @@
 <script>
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import '../app.css';
 	import Header from '$lib/components/Header.svelte';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import IconDefs from '$lib/components/IconDefs.svelte';
 	import Footer from '$lib/components/Footer.svelte';
 	import CookieConsentBanner from '$lib/components/CookieConsentBanner.svelte';
@@ -10,11 +12,11 @@
 	import LeadCaptureModal from '$lib/components/LeadCaptureModal.svelte';
 	import { clearClientAccountState } from '$lib/client/accountState.js';
 	import { getGuestCartCount } from '$lib/client/guestCart.js';
-	import { initLocale, t, translate } from '$lib/i18n/index.js';
+	import { initLocale, translate } from '$lib/i18n/index.js';
 	import { page } from '$app/state';
 	import { afterNavigate } from '$app/navigation';
 	import { env } from '$env/dynamic/public';
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { setCartCount } from '$lib/stores/cartCount.js';
 	import { cartToast } from '$lib/stores/cartToast.js';
 	import { fetchCartCountFromServer } from '$lib/client/cartCountSync.js';
@@ -22,7 +24,11 @@
 	import { initSmoothScroll } from '$lib/client/smoothScroll.js';
 	import { markNavigationType } from '$lib/client/navigationState.js';
 	import { getTelemetryTracker } from '$lib/client/telemetry.js';
-	import { cookieConsent, canTrackTelemetry, initCookieConsent } from '$lib/stores/cookieConsent.js';
+	import {
+		cookieConsent,
+		canTrackTelemetry,
+		initCookieConsent
+	} from '$lib/stores/cookieConsent.js';
 	import { SITE_CONTACT } from '$lib/config/siteContact.js';
 	import {
 		FREE_SHIPPING_THRESHOLD,
@@ -77,7 +83,7 @@
 		const rawPath = normalizePathname(url?.pathname || '/');
 		const pathKey = stripLocalePrefix(rawPath);
 		const params = new URLSearchParams(url?.search || '');
-		const filtered = new URLSearchParams();
+		const filtered = new SvelteURLSearchParams();
 		const allowedParams = INDEXABLE_QUERY_PARAMS_BY_PATH.get(pathKey);
 
 		for (const [key, value] of params) {
@@ -171,19 +177,13 @@
 	const hrefLangXDefault = $derived.by(() => {
 		return resolveAlternateHref(hreflangConfig?.xDefault, hrefLangVi);
 	});
-	const merchantReturnPolicyUrl = $derived.by(() =>
-		`${siteUrl}${locale === 'en' ? '/en/policies/returns-policy' : '/policies/returns-policy'}`
+	const merchantReturnPolicyUrl = $derived.by(
+		() =>
+			`${siteUrl}${locale === 'en' ? '/en/policies/returns-policy' : '/policies/returns-policy'}`
 	);
-	const websiteSearchUrlTemplate = $derived.by(() =>
-		`${siteUrl}${locale === 'en' ? '/en/shop' : '/shop'}?q={search_term_string}`
+	const websiteSearchUrlTemplate = $derived.by(
+		() => `${siteUrl}${locale === 'en' ? '/en/shop' : '/shop'}?q={search_term_string}`
 	);
-	const escapeJsonLd = (value) =>
-		String(value || '')
-			.replace(/</g, '\\u003c')
-			.replace(/>/g, '\\u003e')
-			.replace(/&/g, '\\u0026')
-			.replace(/\u2028/g, '\\u2028')
-			.replace(/\u2029/g, '\\u2029');
 	const ogLocale = $derived(locale === 'en' ? 'en_US' : 'vi_VN');
 	const ogImageUrl = $derived(`${siteUrl}/og-image.png`);
 	const ogImageAlt = $derived(
@@ -193,9 +193,9 @@
 	);
 	const logoUrl = $derived(`${siteUrl}/images/logo-inoxpran.png`);
 	const brandSameAs = $derived.by(() => {
-		const marketplaceUrls = (Array.isArray(page.data?.siteMarketplaceLinks)
-			? page.data.siteMarketplaceLinks
-			: [])
+		const marketplaceUrls = (
+			Array.isArray(page.data?.siteMarketplaceLinks) ? page.data.siteMarketplaceLinks : []
+		)
 			.filter((link) => link?.enabled && link?.url)
 			.map((link) => String(link.url));
 		return Array.from(new Set([...BRAND_SAME_AS, ...marketplaceUrls]));
@@ -240,8 +240,7 @@
 				url: merchantReturnPolicyUrl,
 				applicableCountry: 'VN',
 				returnPolicyCountry: 'VN',
-				returnPolicyCategory:
-					'https://schema.org/MerchantReturnFiniteReturnWindow',
+				returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow',
 				merchantReturnDays: MERCHANT_RETURN_DAYS,
 				returnMethod: 'https://schema.org/ReturnByMail',
 				returnFees: 'https://schema.org/ReturnFeesCustomerResponsibility',
@@ -323,7 +322,7 @@
 	};
 
 	// Ensure SSR markup is translated with the route locale before hydration.
-	syncI18nLocale(locale);
+	untrack(() => syncI18nLocale(locale));
 
 	const runClientInit = () => {
 		clientInitCleanup();
@@ -527,11 +526,14 @@
 			<meta name="twitter:image" content={ogImageUrl} />
 			<meta name="twitter:image:alt" content={ogImageAlt} />
 		{/if}
-		{@html `<script type="application/ld+json">${escapeJsonLd(organizationJsonLd)}</script>`}
-		{@html `<script type="application/ld+json">${escapeJsonLd(localBusinessJsonLd)}</script>`}
-		{@html `<script type="application/ld+json">${escapeJsonLd(websiteJsonLd)}</script>`}
 	{/if}
 </svelte:head>
+
+{#if !hideSiteChrome}
+	<JsonLd value={organizationJsonLd} />
+	<JsonLd value={localBusinessJsonLd} />
+	<JsonLd value={websiteJsonLd} />
+{/if}
 
 <div
 	id="smooth-wrapper"

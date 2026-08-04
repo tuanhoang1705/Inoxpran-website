@@ -38,7 +38,6 @@ const readCookieValue = (name) => {
 };
 
 const normalizeConsent = (input) => {
-	const base = createDefaultState();
 	const source = input && typeof input === 'object' ? input : {};
 	const analytics =
 		typeof source.analytics === 'boolean'
@@ -81,7 +80,9 @@ const persistConsent = (consent) => {
 	const encoded = JSON.stringify(serializable);
 	try {
 		window.localStorage.setItem(STORAGE_KEY, encoded);
-	} catch {}
+	} catch {
+		// The cookie below remains the persistence fallback when localStorage is unavailable.
+	}
 
 	const secure = window.location?.protocol === 'https:' ? '; Secure' : '';
 	document.cookie = `${COOKIE_KEY}=${encodeURIComponent(encoded)}; Path=/; Max-Age=${60 * 60 * 24 * 180}; SameSite=Lax${secure}`;
@@ -117,7 +118,7 @@ export const initCookieConsent = () => {
 	}
 	initialized = true;
 
-	let raw = '';
+	let raw;
 	try {
 		raw = String(window.localStorage.getItem(STORAGE_KEY) || '');
 	} catch {
@@ -157,7 +158,9 @@ export const resetCookieConsentForDebug = () => {
 	if (typeof window === 'undefined' || typeof document === 'undefined') return;
 	try {
 		window.localStorage.removeItem(STORAGE_KEY);
-	} catch {}
+	} catch {
+		// The cookie is still cleared below when localStorage access is blocked.
+	}
 	document.cookie = `${COOKIE_KEY}=; Path=/; Max-Age=0; SameSite=Lax`;
 };
 

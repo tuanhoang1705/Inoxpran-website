@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, USER_API_KEY_HEADER } from '$lib/server/api.js';
 import { getLocaleFromCookies, getTranslator } from '$lib/i18n/server.js';
 import { translateAuthApiMessage } from '$lib/server/authApiMessage.js';
 import { setUserCookies } from '$lib/server/userAuth.js';
@@ -81,7 +81,7 @@ export const actions = {
 				// ignore
 			}
 		}
-		if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+		if (USER_API_KEY_HEADER) headers['x-api-key'] = USER_API_KEY_HEADER;
 
 		let response;
 		try {
@@ -129,4 +129,3 @@ export const actions = {
 		throw redirect(303, postLoginRedirect);
 	}
 };
-

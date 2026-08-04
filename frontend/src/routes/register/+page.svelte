@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { t } from '$lib/i18n/index.js';
 	import { getStoredTelemetrySessionId, getTelemetryTracker } from '$lib/client/telemetry.js';
@@ -118,7 +119,7 @@
 					<input class="form-check-input" type="checkbox" id="policy" required />
 					<label class="form-check-label" for="policy">
 						{$t('auth.agreePolicy')}
-						<a href="/policies" class="fw-semibold">{$t('auth.policyLink')}</a>.
+						<a href={resolve('/policies')} class="fw-semibold">{$t('auth.policyLink')}</a>.
 					</label>
 				</div>
 
@@ -139,7 +140,7 @@
 
 			<div class="text-center mt-4">
 				<span class="text-black-50">{$t('auth.haveAccount')}</span>
-				<a class="fw-semibold ms-1" href="/login">{$t('auth.login')}</a>
+				<a class="fw-semibold ms-1" href={resolve('/login')}>{$t('auth.login')}</a>
 			</div>
 		</div>
 	</div>

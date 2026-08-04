@@ -1,5 +1,5 @@
 import { json } from '@sveltejs/kit';
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, PUBLIC_API_KEY_HEADER } from '$lib/server/api.js';
 import { getUserSession } from '$lib/server/userAuth.js';
 import { getLocaleFromCookies } from '$lib/i18n/server.js';
 
@@ -22,16 +22,23 @@ const pickForwardHeaders = (request) => {
 };
 
 export const POST = async ({ request, fetch, cookies }) => {
-	let body = null;
+	let body;
 	try {
 		body = await request.json();
 	} catch {
 		return json({ ok: false, error: 'invalid_json' }, { status: 400 });
 	}
 
-	const incomingEvents = Array.isArray(body?.events) ? body.events : body?.event ? [body.event] : [];
+	const incomingEvents = Array.isArray(body?.events)
+		? body.events
+		: body?.event
+			? [body.event]
+			: [];
 	if (!incomingEvents.length) {
-		return json({ ok: true, metadata: { accepted: 0 } }, { headers: { 'cache-control': 'no-store' } });
+		return json(
+			{ ok: true, metadata: { accepted: 0 } },
+			{ headers: { 'cache-control': 'no-store' } }
+		);
 	}
 
 	const session = getUserSession(cookies);
@@ -49,8 +56,8 @@ export const POST = async ({ request, fetch, cookies }) => {
 		'content-type': 'application/json',
 		...pickForwardHeaders(request)
 	};
-	if (API_KEY_HEADER) {
-		headers['x-api-key'] = API_KEY_HEADER;
+	if (PUBLIC_API_KEY_HEADER) {
+		headers['x-api-key'] = PUBLIC_API_KEY_HEADER;
 	}
 
 	try {
@@ -61,7 +68,8 @@ export const POST = async ({ request, fetch, cookies }) => {
 		});
 
 		const backendPayload = await readJson(response);
-		const sessionId = response.headers.get('x-telemetry-session-id') || backendPayload?.metadata?.sessionId || null;
+		const sessionId =
+			response.headers.get('x-telemetry-session-id') || backendPayload?.metadata?.sessionId || null;
 		if (!response.ok) {
 			return json(
 				{

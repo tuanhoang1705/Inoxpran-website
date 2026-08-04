@@ -71,8 +71,7 @@ const normalizeSiteFeatures = (payload, definitions) => {
 	const source = rawFeatures && typeof rawFeatures === 'object' ? rawFeatures : {};
 	return definitions.reduce((result, definition) => {
 		const key = definition.key;
-		result[key] =
-			typeof source[key] === 'boolean' ? source[key] : Boolean(definition.defaultValue);
+		result[key] = typeof source[key] === 'boolean' ? source[key] : Boolean(definition.defaultValue);
 		return result;
 	}, {});
 };
@@ -83,7 +82,8 @@ const normalizeMarketingCampaign = (payload) => {
 	return {
 		...DEFAULT_MARKETING_CAMPAIGN,
 		...source,
-		enabled: typeof source.enabled === 'boolean' ? source.enabled : DEFAULT_MARKETING_CAMPAIGN.enabled,
+		enabled:
+			typeof source.enabled === 'boolean' ? source.enabled : DEFAULT_MARKETING_CAMPAIGN.enabled,
 		headerEnabled:
 			typeof source.headerEnabled === 'boolean'
 				? source.headerEnabled
@@ -176,7 +176,8 @@ export const load = async ({ cookies, fetch }) => {
 
 	const usersRes = usersResult.status === 'fulfilled' ? usersResult.value : null;
 	const productsRes = productsResult.status === 'fulfilled' ? productsResult.value : null;
-	const siteSettingsRes = siteSettingsResult.status === 'fulfilled' ? siteSettingsResult.value : null;
+	const siteSettingsRes =
+		siteSettingsResult.status === 'fulfilled' ? siteSettingsResult.value : null;
 	const dashboardSummaryRes =
 		dashboardSummaryResult.status === 'fulfilled' ? dashboardSummaryResult.value : null;
 	// Hidden with the admin AI knowledge shortcut by request.
@@ -186,7 +187,9 @@ export const load = async ({ cookies, fetch }) => {
 	const usersPayload = usersRes?.ok ? await safeJson(usersRes) : null;
 	const productsPayload = productsRes?.ok ? await safeJson(productsRes) : null;
 	const siteSettingsPayload = siteSettingsRes?.ok ? await safeJson(siteSettingsRes) : null;
-	const dashboardSummaryPayload = dashboardSummaryRes?.ok ? await safeJson(dashboardSummaryRes) : null;
+	const dashboardSummaryPayload = dashboardSummaryRes?.ok
+		? await safeJson(dashboardSummaryRes)
+		: null;
 	// Hidden with the admin AI knowledge shortcut by request.
 	// const agentKnowledgePayload = agentKnowledgeRes?.ok ? await safeJson(agentKnowledgeRes) : null;
 	const siteFeatureDefinitions = normalizeSiteFeatureDefinitions(siteSettingsPayload);
@@ -245,7 +248,9 @@ export const actions = {
 		if (!response.ok) {
 			const payload = await safeJson(response);
 			const message =
-				payload?.message || payload?.metadata?.message || t('admin.dashboard.siteSettings.errors.update');
+				payload?.message ||
+				payload?.metadata?.message ||
+				t('admin.dashboard.siteSettings.errors.update');
 			return fail(response.status, { error: message });
 		}
 
@@ -309,7 +314,8 @@ export const actions = {
 
 		if (!response.ok) {
 			const payload = await safeJson(response);
-			const message = payload?.message || payload?.metadata?.message || 'Update marketing settings failed';
+			const message =
+				payload?.message || payload?.metadata?.message || 'Update marketing settings failed';
 			return fail(response.status, { error: message });
 		}
 

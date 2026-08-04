@@ -6,7 +6,9 @@ const noStore = { 'cache-control': 'no-store' };
 export const POST = async ({ request, fetch, cookies }) => {
 	const body = await request.json().catch(() => ({}));
 	const sessionId = String(body?.sessionId || '').trim();
-	const state = String(body?.state || '').trim().toLowerCase();
+	const state = String(body?.state || '')
+		.trim()
+		.toLowerCase();
 
 	if (!sessionId || !['active', 'left'].includes(state)) {
 		return json(

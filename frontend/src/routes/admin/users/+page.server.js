@@ -8,7 +8,11 @@ import { setAdminToast } from '$lib/server/adminToast.js';
 const ROOT_ADMIN_EMAILS = new Set(
 	String(env.ROOT_ADMIN_EMAILS || 'congtytnhhdaututhangvuong2@gmail.com')
 		.split(',')
-		.map((value) => String(value || '').trim().toLowerCase())
+		.map((value) =>
+			String(value || '')
+				.trim()
+				.toLowerCase()
+		)
 		.filter(Boolean)
 );
 
@@ -35,7 +39,11 @@ const hasRootAdminAccess = (session) => {
 	if (!session) return false;
 	const roles = Array.isArray(session.roles) ? session.roles : [];
 	if (roles.includes('SUPER_ADMIN')) return true;
-	return ROOT_ADMIN_EMAILS.has(String(session.email || '').trim().toLowerCase());
+	return ROOT_ADMIN_EMAILS.has(
+		String(session.email || '')
+			.trim()
+			.toLowerCase()
+	);
 };
 
 const buildUserParams = (url) => {
@@ -95,7 +103,9 @@ export const load = async ({ cookies, fetch, url }) => {
 	];
 
 	if (canManageAdminAccounts) {
-		requests.push(fetch(`${API_BASE}/admin/admin-accounts?${adminAccountParams.toString()}`, { headers }));
+		requests.push(
+			fetch(`${API_BASE}/admin/admin-accounts?${adminAccountParams.toString()}`, { headers })
+		);
 		requests.push(fetch(`${API_BASE}/admin/admin-account-audit-logs?limit=20`, { headers }));
 	}
 
@@ -217,7 +227,8 @@ export const load = async ({ cookies, fetch, url }) => {
 			const metadata = payload?.metadata;
 			adminAccountsData = {
 				adminAccounts: Array.isArray(metadata?.items) ? metadata.items : [],
-				adminAccountsPagination: metadata?.pagination || adminAccountsFallback.adminAccountsPagination,
+				adminAccountsPagination:
+					metadata?.pagination || adminAccountsFallback.adminAccountsPagination,
 				adminAccountsFilters: metadata?.filters || adminAccountsFallback.adminAccountsFilters
 			};
 		} else {

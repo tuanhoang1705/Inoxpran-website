@@ -11,7 +11,7 @@ const readJson = async (response) => {
 };
 
 export const POST = async ({ request, fetch, cookies }) => {
-	let body = null;
+	let body;
 	try {
 		body = await request.json();
 	} catch {
@@ -44,7 +44,10 @@ export const POST = async ({ request, fetch, cookies }) => {
 
 	const payload = await readJson(response);
 	if (!response.ok) {
-		return json({ error: payload?.message || 'Unable to apply voucher.' }, { status: response.status });
+		return json(
+			{ error: payload?.message || 'Unable to apply voucher.' },
+			{ status: response.status }
+		);
 	}
 
 	return json({ metadata: payload?.metadata ?? null });

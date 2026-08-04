@@ -21,7 +21,10 @@
 	const initials = $derived.by(() => {
 		const name = profile?.name || '';
 		const parts = name.trim().split(/\s+/).filter(Boolean);
-		const letters = parts.slice(0, 2).map((part) => part[0]).join('');
+		const letters = parts
+			.slice(0, 2)
+			.map((part) => part[0])
+			.join('');
 		return letters || 'U';
 	});
 </script>
@@ -40,7 +43,6 @@
 				{#if apiError}
 					<div class="alert alert-warning" role="alert">{apiError}</div>
 				{/if}
-				
 			</div>
 			<div class="account-hero-card">
 				<div class="hero-line">
@@ -112,7 +114,9 @@
 					<ul class="account-list">
 						<li><span>{$t('account.status')}</span><strong>{verifyLabel}</strong></li>
 						<li><span>{$t('account.recentLogin')}</span><strong>{$t('common.today')}</strong></li>
-						<li><span>{$t('account.accountStatus')}</span><strong>{$t('account.active')}</strong></li>
+						<li>
+							<span>{$t('account.accountStatus')}</span><strong>{$t('account.active')}</strong>
+						</li>
 					</ul>
 					<p class="small text-black-50 mb-0">{$t('account.reloginHint')}</p>
 				</div>

@@ -1,9 +1,11 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
 	import { env } from '$env/dynamic/public';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import RichTextDisplay from '$lib/components/RichTextDisplay.svelte';
 	import BlogCommentThread from '$lib/components/BlogCommentThread.svelte';
 	import { locale, t } from '$lib/i18n/index.js';
@@ -41,13 +43,6 @@
 		const normalizedPath = raw.startsWith('/') ? raw : `/${raw}`;
 		return `${siteUrl}${normalizedPath}`;
 	};
-	const escapeJsonLd = (value) =>
-		String(value || '')
-			.replace(/</g, '\u003c')
-			.replace(/>/g, '\u003e')
-			.replace(/&/g, '\u0026')
-			.replace(/\u2028/g, '\u2028')
-			.replace(/\u2029/g, '\u2029');
 
 	const categoryLabels = $derived.by(() => ({
 		all: $t('blog.categoryAll'),
@@ -67,7 +62,6 @@
 	});
 	let rememberInfo = $state(false);
 	let replyTo = $state(null);
-	let commentNotice = $state('');
 	let commentError = $state('');
 	let lastCommentToastKey = '';
 
@@ -98,7 +92,6 @@
 					lastCommentToastKey = toastKey;
 					cartToast.show(successMessage, 'success', 2200);
 				}
-				commentNotice = '';
 				commentError = '';
 				if (rememberInfo && browser) {
 					localStorage.setItem(
@@ -127,7 +120,6 @@
 					cartToast.show(failureMessage, 'danger', 2800);
 				}
 				commentError = failureMessage;
-				commentNotice = '';
 			}
 		};
 	};
@@ -147,7 +139,6 @@
 				cartToast.show(message, 'danger', 2800);
 			}
 			commentError = message;
-			commentNotice = '';
 		} else if (form?.commentSuccess) {
 			const message = $t('blogDetail.submitSuccess');
 			const toastKey = `success:${message}`;
@@ -156,7 +147,6 @@
 				cartToast.show(message, 'success', 2200);
 			}
 			commentError = '';
-			commentNotice = '';
 		}
 	});
 
@@ -195,7 +185,9 @@
 					if (parsed?.email) commentForm.email = parsed.email;
 					if (parsed?.author || parsed?.email) rememberInfo = true;
 				}
-			} catch {}
+			} catch {
+				// Ignore malformed optional commenter preferences from local storage.
+			}
 		}
 
 		scrollToBlogBreadcrumb();
@@ -218,7 +210,7 @@
 		const fallback = `/images/post-item${(fallbackIndex % 4) + 1}.jpg`;
 		const raw = String(imageValue || '').trim();
 		if (!raw) return fallback;
-		let decoded = raw;
+		let decoded;
 		try {
 			decoded = decodeURIComponent(raw);
 		} catch {
@@ -403,26 +395,25 @@
 	<meta name="twitter:description" content={seoDescription} />
 	<meta name="twitter:image" content={ogImageUrl} />
 	<meta name="twitter:image:alt" content={ogImageAlt} />
-	{#if articleBreadcrumbJsonLd}
-		{@html '<script type="application/ld+json">' +
-			escapeJsonLd(articleBreadcrumbJsonLd) +
-			'</script>'}
-	{/if}
-	{#if articleJsonLd}
-		{@html '<script type="application/ld+json">' + escapeJsonLd(articleJsonLd) + '</script>'}
-	{/if}
 	{#if lcpBlogImage}
 		<link rel="preload" as="image" href={lcpBlogImage} fetchpriority="high" />
 	{/if}
 </svelte:head>
 
+{#if articleBreadcrumbJsonLd}
+	<JsonLd value={articleBreadcrumbJsonLd} />
+{/if}
+{#if articleJsonLd}
+	<JsonLd value={articleJsonLd} />
+{/if}
+
 {#if blogPost}
 	<section class="blog-post-header">
 		<div class="container" style="max-width: 1200px; margin: 0 auto; padding: 0rem 1rem;">
 			<div class="blog-breadcrumb" bind:this={blogBreadcrumbEl}>
-				<a href={homeHref}>{$t('common.home')}</a>
+				<a href={resolve(homeHref)}>{$t('common.home')}</a>
 				<span class="breadcrumb-separator">/</span>
-				<a href={blogHref}>{$t('common.blog')}</a>
+				<a href={resolve(blogHref)}>{$t('common.blog')}</a>
 				<span class="breadcrumb-separator breadcrumb-title-separator">/</span>
 				<span class="breadcrumb-current">{blogPost.title}</span>
 			</div>
@@ -540,8 +531,8 @@
 				<div class="post-tags">
 					<span>{$t('blogDetail.tagsLabel')}</span>
 					<div class="tag-list">
-						{#each [$t('blogDetail.tags.tag1'), $t('blogDetail.tags.tag2'), $t('blogDetail.tags.tag3'), $t('blogDetail.tags.tag4')] as tag}
-							<a href={getTagHref(tag)} class="post-tag">{tag}</a>
+						{#each [$t('blogDetail.tags.tag1'), $t('blogDetail.tags.tag2'), $t('blogDetail.tags.tag3'), $t('blogDetail.tags.tag4')] as tag, __eachIndex2 (tag?._id ?? tag?.id ?? __eachIndex2)}
+							<a href={resolve(getTagHref(tag))} class="post-tag">{tag}</a>
 						{/each}
 					</div>
 				</div>
@@ -565,8 +556,8 @@
 				<div class="sidebar-widget">
 					<h3 class="widget-title">{$t('blogDetail.relatedTitle')}</h3>
 					<div class="related-posts-list">
-						{#each blogPost.relatedPosts || [] as post, index}
-							<a href={getBlogPostHref(post)} class="related-post-item">
+						{#each blogPost.relatedPosts || [] as post, index (post?._id ?? post?.id ?? index)}
+							<a href={resolve(getBlogPostHref(post))} class="related-post-item">
 								<div class="related-image">
 									<img
 										src={normalizeBlogImage(post.image, index + 1)}
@@ -660,7 +651,6 @@
 						action="?/comment"
 						use:enhance={handleCommentEnhance}
 						onsubmit={() => {
-							commentNotice = '';
 							commentError = '';
 						}}
 					>
@@ -706,8 +696,8 @@
 		<div class="container" style="max-width: 1200px; margin: 0 auto;">
 			<h2 class="section-title">{$t('blogDetail.otherPostsTitle')}</h2>
 			<div class="posts-carousel">
-				{#each blogPost.relatedPosts || [] as post, index}
-					<a href={getBlogPostHref(post)} class="carousel-card">
+				{#each blogPost.relatedPosts || [] as post, index (post?._id ?? post?.id ?? index)}
+					<a href={resolve(getBlogPostHref(post))} class="carousel-card">
 						<div class="carousel-image">
 							<img
 								src={normalizeBlogImage(post.image, index + 1)}
@@ -733,7 +723,7 @@
 		<div class="container" style="max-width: 900px; margin: 0 auto; text-align: center;">
 			<h1 class="blog-post-title">{$t('blog.pageTitle')}</h1>
 			<p>{apiError || 'Blog not found.'}</p>
-			<a href={blogHref}>{$t('common.blog')}</a>
+			<a href={resolve(blogHref)}>{$t('common.blog')}</a>
 		</div>
 	</section>
 {/if}
@@ -1133,23 +1123,6 @@
 		margin-bottom: 0px;
 	}
 
-	.follow-btn {
-		width: 100%;
-		padding: 0.75rem;
-		background: #6ea6b9;
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.3s ease;
-	}
-
-	.follow-btn:hover {
-		background: #5a8fa3;
-		transform: translateY(-2px);
-	}
-
 	/* Related Posts List */
 	.related-posts-list {
 		display: flex;
@@ -1449,11 +1422,6 @@
 		margin-bottom: 1rem;
 		font-weight: 600;
 		font-size: 0.9rem;
-	}
-
-	.comment-alert.success {
-		background: #def4e5;
-		color: #1c6b3a;
 	}
 
 	.comment-alert.error {

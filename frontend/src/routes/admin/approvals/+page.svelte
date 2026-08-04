@@ -106,7 +106,11 @@
 							<td>{admin.phone || '--'}</td>
 							<td class="small text-black-50">{formatDate(admin.createdAt)}</td>
 							<td>
-								<div class="approval-role-group" role="group" aria-label={$t('admin.approvals.roles')}>
+								<div
+									class="approval-role-group"
+									role="group"
+									aria-label={$t('admin.approvals.roles')}
+								>
 									{#each approvalRoleOptions as role (role.value)}
 										<label class="approval-role-option">
 											<input

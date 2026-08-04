@@ -1,5 +1,10 @@
 import { env } from '$env/dynamic/public';
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { dev } from '$app/environment';
+import { ADMIN_BFF_API_KEY_HEADER, API_BASE } from '$lib/server/api.js';
+import {
+	buildHostOnlyCookieOptions,
+	resolveLegacyCookieDomain
+} from '$lib/server/cookieSecurity.js';
 
 const ADMIN_COOKIE = {
 	accessToken: 'admin_access_token',
@@ -12,32 +17,21 @@ const ADMIN_COOKIE = {
 
 const THIRTY_DAYS_SECONDS = 60 * 60 * 24 * 30;
 
-const resolveCookieDomain = () => {
-	const raw = String(env.PUBLIC_SITE_URL || '').trim();
-	if (!raw) return undefined;
-	try {
-		const { hostname } = new URL(raw);
-		if (!hostname || hostname === 'localhost' || hostname === '127.0.0.1') return undefined;
-		return hostname;
-	} catch {
-		return undefined;
-	}
+const LEGACY_COOKIE_DOMAIN = resolveLegacyCookieDomain(env.PUBLIC_SITE_URL);
+const cookieOptions = buildHostOnlyCookieOptions({
+	siteUrl: env.PUBLIC_SITE_URL,
+	nodeEnv: dev ? 'development' : 'production',
+	maxAge: THIRTY_DAYS_SECONDS
+});
+
+const deleteLegacyDomainCookie = (cookies, key) => {
+	if (!LEGACY_COOKIE_DOMAIN) return;
+	cookies.delete(key, { path: '/', domain: LEGACY_COOKIE_DOMAIN });
 };
 
-const COOKIE_DOMAIN = resolveCookieDomain();
-const COOKIE_SECURE = (() => {
-	const raw = String(env.PUBLIC_SITE_URL || '').trim();
-	if (!raw) return process.env.NODE_ENV === 'production';
-	return raw.startsWith('https://');
-})();
-
-const cookieOptions = {
-	path: '/',
-	httpOnly: true,
-	sameSite: 'lax',
-	secure: COOKIE_SECURE,
-	maxAge: THIRTY_DAYS_SECONDS,
-	...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {})
+const setHostOnlyAdminCookie = (cookies, key, value) => {
+	deleteLegacyDomainCookie(cookies, key);
+	cookies.set(key, value, cookieOptions);
 };
 
 export const getAdminSession = (cookies) => {
@@ -72,7 +66,7 @@ export const getAdminSession = (cookies) => {
 
 export const buildAdminHeaders = (session) => {
 	const headers = {};
-	if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+	if (ADMIN_BFF_API_KEY_HEADER) headers['x-api-key'] = ADMIN_BFF_API_KEY_HEADER;
 	if (session?.userId) headers['x-client-id'] = session.userId;
 	if (session?.accessToken) headers['authorization'] = session.accessToken;
 	return headers;
@@ -81,29 +75,29 @@ export const buildAdminHeaders = (session) => {
 export const setAdminCookies = (cookies, { admin, tokens }) => {
 	if (!admin?._id || !tokens?.accessToken || !tokens?.refreshToken) return false;
 
-	cookies.set(ADMIN_COOKIE.clientId, String(admin._id), cookieOptions);
-	cookies.set(ADMIN_COOKIE.accessToken, tokens.accessToken, cookieOptions);
-	cookies.set(ADMIN_COOKIE.refreshToken, tokens.refreshToken, cookieOptions);
-	cookies.set(ADMIN_COOKIE.name, admin.name || '', cookieOptions);
-	cookies.set(ADMIN_COOKIE.email, admin.email || '', cookieOptions);
-	cookies.set(ADMIN_COOKIE.roles, JSON.stringify(admin.roles || []), cookieOptions);
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.clientId, String(admin._id));
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.accessToken, tokens.accessToken);
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.refreshToken, tokens.refreshToken);
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.name, admin.name || '');
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.email, admin.email || '');
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.roles, JSON.stringify(admin.roles || []));
 
 	return true;
 };
 
 export const setAdminTokenCookies = (cookies, tokens) => {
 	if (!tokens?.accessToken || !tokens?.refreshToken) return false;
-	cookies.set(ADMIN_COOKIE.accessToken, tokens.accessToken, cookieOptions);
-	cookies.set(ADMIN_COOKIE.refreshToken, tokens.refreshToken, cookieOptions);
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.accessToken, tokens.accessToken);
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.refreshToken, tokens.refreshToken);
 	return true;
 };
 
 export const setAdminProfileCookies = (cookies, admin) => {
 	if (!admin?._id) return false;
-	cookies.set(ADMIN_COOKIE.clientId, String(admin._id), cookieOptions);
-	cookies.set(ADMIN_COOKIE.name, admin.name || '', cookieOptions);
-	cookies.set(ADMIN_COOKIE.email, admin.email || '', cookieOptions);
-	cookies.set(ADMIN_COOKIE.roles, JSON.stringify(admin.roles || []), cookieOptions);
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.clientId, String(admin._id));
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.name, admin.name || '');
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.email, admin.email || '');
+	setHostOnlyAdminCookie(cookies, ADMIN_COOKIE.roles, JSON.stringify(admin.roles || []));
 	return true;
 };
 
@@ -116,7 +110,7 @@ export const refreshAdminSession = async ({ cookies, fetch }) => {
 		'x-client-id': userId,
 		'x-rtoken-id': refreshToken
 	};
-	if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+	if (ADMIN_BFF_API_KEY_HEADER) headers['x-api-key'] = ADMIN_BFF_API_KEY_HEADER;
 
 	let response;
 	try {
@@ -202,8 +196,10 @@ export const ensureAdminSession = async ({ cookies, fetch }) => {
 };
 
 export const clearAdminCookies = (cookies) => {
-	const options = { path: '/', ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}) };
-	Object.values(ADMIN_COOKIE).forEach((key) => cookies.delete(key, options));
+	Object.values(ADMIN_COOKIE).forEach((key) => {
+		cookies.delete(key, { path: '/' });
+		deleteLegacyDomainCookie(cookies, key);
+	});
 };
 
 export { ADMIN_COOKIE };

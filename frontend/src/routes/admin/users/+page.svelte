@@ -1,5 +1,7 @@
 ﻿<script>
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { enhance } from '$app/forms';
+	import { resolve } from '$app/paths';
 	import { locale, t } from '$lib/i18n/admin/index.js';
 
 	let { data } = $props();
@@ -100,7 +102,7 @@
 	);
 
 	const buildBaseParams = () => {
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		params.set('page', String(currentPage));
 		params.set('limit', String(currentLimit));
 		if (activeStatus) params.set('status', activeStatus);
@@ -256,7 +258,10 @@
 	};
 
 	const resolveUserMappedIp = (user) =>
-		user?.telemetrySummary?.lastIp || user?.lastLoginIp || user?.telemetryIdentity?.lastMappedIp || '—';
+		user?.telemetrySummary?.lastIp ||
+		user?.lastLoginIp ||
+		user?.telemetryIdentity?.lastMappedIp ||
+		'—';
 
 	const resolveUserMapText = (user) => {
 		const mappedCount =
@@ -271,7 +276,9 @@
 
 	const resolveVisitorCardTone = (visitor) => (visitor?.user ? 'mapped' : 'unmapped');
 	const resolveVisitorLink = (visitor) =>
-		visitor?.user?._id ? `/admin/users/${visitor.user._id}` : `/admin/users/anonymous/${visitor.sessionId}`;
+		visitor?.user?._id
+			? `/admin/users/${visitor.user._id}`
+			: `/admin/users/anonymous/${visitor.sessionId}`;
 	const resolveVisitorLinkLabel = (visitor) =>
 		visitor?.user?._id
 			? $locale === 'en'
@@ -307,8 +314,10 @@
 		</div>
 		<form method="get" class="toolbar-form">
 			<select class="form-select" name="status" value={activeStatus}>
-				{#each statusOptions as option}
-					<option value={option.value} selected={option.value === activeStatus}>{option.label}</option>
+				{#each statusOptions as option (option.value)}
+					<option value={option.value} selected={option.value === activeStatus}
+						>{option.label}</option
+					>
 				{/each}
 			</select>
 			<input type="hidden" name="page" value="1" />
@@ -335,7 +344,9 @@
 	{/if}
 	{#if data?.adminDeleted}
 		<div class="alert alert-success">
-			{$locale === 'en' ? 'Admin account deleted successfully.' : 'Đã xóa tài khoản admin thành công.'}
+			{$locale === 'en'
+				? 'Admin account deleted successfully.'
+				: 'Đã xóa tài khoản admin thành công.'}
 		</div>
 	{/if}
 
@@ -346,13 +357,14 @@
 				<div class="text-black-50 small">{paginationSummary}</div>
 			</div>
 			<div class="text-black-50 small">
-				{$locale === 'en' ? 'Page' : 'Trang'} {currentPage} / {totalPages}
+				{$locale === 'en' ? 'Page' : 'Trang'}
+				{currentPage} / {totalPages}
 			</div>
 		</div>
 
 		{#if users.length}
 			<div class="card-list card-list--users">
-				{#each users as user}
+				{#each users as user (user._id ?? user.id)}
 					<article class="entity-card">
 						<div class="entity-card__top">
 							<div class="entity-card__identity">
@@ -363,7 +375,7 @@
 								<span class={`badge text-bg-${resolveStatusTone(user.status)}`}>
 									{resolveStatusLabel(user.status)}
 								</span>
-								<a class="btn btn-sm btn-outline-dark" href={`/admin/users/${user._id}`}>
+								<a class="btn btn-sm btn-outline-dark" href={resolve(`/admin/users/${user._id}`)}>
 									{$t('admin.users.view')}
 								</a>
 							</div>
@@ -380,7 +392,9 @@
 								<div class="entity-meta-block__label">
 									{$locale === 'en' ? 'Mapped IP / telemetry' : 'IP map / telemetry'}
 								</div>
-								<div class="entity-meta-block__value break-anywhere">{resolveUserMappedIp(user)}</div>
+								<div class="entity-meta-block__value break-anywhere">
+									{resolveUserMappedIp(user)}
+								</div>
 								<div class="entity-meta-block__hint">{resolveUserMapText(user)}</div>
 							</div>
 							<div class="entity-meta-block entity-meta-block--compact">
@@ -408,18 +422,18 @@
 		<nav class="pagination-bar" aria-label="Users pagination">
 			<a
 				class="btn btn-sm btn-outline-dark"
-				href={buildPageHref(currentPage - 1)}
+				href={resolve(buildPageHref(currentPage - 1))}
 				aria-disabled={!pagination.hasPrevPage}
 				class:disabled={!pagination.hasPrevPage}
 			>
 				{$locale === 'en' ? 'Previous' : 'Trước'}
 			</a>
-			{#each pageNumbers as pageNumber}
+			{#each pageNumbers as pageNumber (pageNumber)}
 				<a
 					class="btn btn-sm"
 					class:btn-dark={pageNumber === currentPage}
 					class:btn-outline-dark={pageNumber !== currentPage}
-					href={buildPageHref(pageNumber)}
+					href={resolve(buildPageHref(pageNumber))}
 					aria-current={pageNumber === currentPage ? 'page' : undefined}
 				>
 					{pageNumber}
@@ -427,7 +441,7 @@
 			{/each}
 			<a
 				class="btn btn-sm btn-outline-dark"
-				href={buildPageHref(currentPage + 1)}
+				href={resolve(buildPageHref(currentPage + 1))}
 				aria-disabled={!pagination.hasNextPage}
 				class:disabled={!pagination.hasNextPage}
 			>
@@ -456,8 +470,10 @@
 							: 'Tìm theo tên, email, số điện thoại...'}
 					/>
 					<select class="form-select" name="adminStatus" value={adminStatus}>
-						{#each adminAccountStatusOptions as option}
-							<option value={option.value} selected={option.value === adminStatus}>{option.label}</option>
+						{#each adminAccountStatusOptions as option (option.value)}
+							<option value={option.value} selected={option.value === adminStatus}
+								>{option.label}</option
+							>
 						{/each}
 					</select>
 					<input type="hidden" name="page" value={currentPage} />
@@ -482,7 +498,7 @@
 
 			{#if adminAccounts.length}
 				<div class="card-list card-list--admins">
-					{#each adminAccounts as admin}
+					{#each adminAccounts as admin (admin._id ?? admin.id)}
 						<article class="entity-card entity-card--admin">
 							<div class="entity-card__top">
 								<div class="entity-card__identity">
@@ -501,7 +517,12 @@
 								</div>
 							</div>
 
-							<form method="post" action="?/updateAdminAccount" class="admin-account-form" use:enhance>
+							<form
+								method="post"
+								action="?/updateAdminAccount"
+								class="admin-account-form"
+								use:enhance
+							>
 								<input type="hidden" name="adminId" value={admin._id} />
 								<input type="hidden" name="returnTo" value={returnTo} />
 
@@ -511,7 +532,7 @@
 											{$locale === 'en' ? 'Status' : 'Trạng thái'}
 										</div>
 										<select class="form-select mt-2" name="status">
-											{#each adminAccountStatusOptions.slice(1) as option}
+											{#each adminAccountStatusOptions.slice(1) as option (option.value)}
 												<option
 													value={option.value}
 													selected={option.value === admin.status}
@@ -528,7 +549,7 @@
 											{$locale === 'en' ? 'Roles / permissions' : 'Vai trò / quyền hạn'}
 										</div>
 										<div class="admin-role-grid mt-2">
-											{#each adminRoleOptions as role}
+											{#each adminRoleOptions as role (role.value ?? role)}
 												<label class="admin-role-option">
 													<input
 														type="checkbox"
@@ -603,18 +624,18 @@
 			<nav class="pagination-bar" aria-label="Admin accounts pagination">
 				<a
 					class="btn btn-sm btn-outline-dark"
-					href={buildAdminPageHref(adminCurrentPage - 1)}
+					href={resolve(buildAdminPageHref(adminCurrentPage - 1))}
 					aria-disabled={!adminAccountsPagination.hasPrevPage}
 					class:disabled={!adminAccountsPagination.hasPrevPage}
 				>
 					{$locale === 'en' ? 'Previous' : 'Trước'}
 				</a>
-				{#each adminPageNumbers as pageNumber}
+				{#each adminPageNumbers as pageNumber (pageNumber)}
 					<a
 						class="btn btn-sm"
 						class:btn-dark={pageNumber === adminCurrentPage}
 						class:btn-outline-dark={pageNumber !== adminCurrentPage}
-						href={buildAdminPageHref(pageNumber)}
+						href={resolve(buildAdminPageHref(pageNumber))}
 						aria-current={pageNumber === adminCurrentPage ? 'page' : undefined}
 					>
 						{pageNumber}
@@ -622,7 +643,7 @@
 				{/each}
 				<a
 					class="btn btn-sm btn-outline-dark"
-					href={buildAdminPageHref(adminCurrentPage + 1)}
+					href={resolve(buildAdminPageHref(adminCurrentPage + 1))}
 					aria-disabled={!adminAccountsPagination.hasNextPage}
 					class:disabled={!adminAccountsPagination.hasNextPage}
 				>
@@ -651,7 +672,7 @@
 
 			{#if adminAuditLogs.length}
 				<div class="audit-log-list">
-					{#each adminAuditLogs as log}
+					{#each adminAuditLogs as log (log._id ?? log.id ?? log.createdAt)}
 						<article class="audit-log-card">
 							<div class="audit-log-card__top">
 								<div>
@@ -667,7 +688,9 @@
 
 							<div class="audit-log-card__grid">
 								<div class="entity-meta-block">
-									<div class="entity-meta-block__label">{$locale === 'en' ? 'Actor' : 'Người thực hiện'}</div>
+									<div class="entity-meta-block__label">
+										{$locale === 'en' ? 'Actor' : 'Người thực hiện'}
+									</div>
 									<div class="entity-meta-block__value break-anywhere">
 										{log.actorSnapshot?.name || '—'}
 									</div>
@@ -676,7 +699,9 @@
 									</div>
 								</div>
 								<div class="entity-meta-block">
-									<div class="entity-meta-block__label">{$locale === 'en' ? 'Target' : 'Tài khoản bị tác động'}</div>
+									<div class="entity-meta-block__label">
+										{$locale === 'en' ? 'Target' : 'Tài khoản bị tác động'}
+									</div>
 									<div class="entity-meta-block__value break-anywhere">
 										{log.targetSnapshot?.name || '—'}
 									</div>
@@ -723,7 +748,10 @@
 													<span> · auto</span>
 												{/if}
 												{#if log.metadata?.previousRouting?.shiftEnabled}
-													<span> · {log.metadata.previousRouting.shiftStart || '--'}-{log.metadata.previousRouting.shiftEnd || '--'}</span>
+													<span>
+														· {log.metadata.previousRouting.shiftStart || '--'}-{log.metadata
+															.previousRouting.shiftEnd || '--'}</span
+													>
 												{/if}
 												<span class="audit-log-diff__arrow">→</span>
 												{log.metadata?.nextRouting?.enabled ? 'enabled' : 'disabled'}
@@ -731,7 +759,10 @@
 													<span> · auto</span>
 												{/if}
 												{#if log.metadata?.nextRouting?.shiftEnabled}
-													<span> · {log.metadata.nextRouting.shiftStart || '--'}-{log.metadata.nextRouting.shiftEnd || '--'}</span>
+													<span>
+														· {log.metadata.nextRouting.shiftStart || '--'}-{log.metadata
+															.nextRouting.shiftEnd || '--'}</span
+													>
 												{/if}
 											</span>
 										</div>
@@ -759,8 +790,10 @@
 			</div>
 			<form method="get" class="toolbar-form">
 				<select class="form-select" name="anonMapped" value={anonMapped}>
-					{#each anonymousMappedOptions as option}
-						<option value={option.value} selected={option.value === anonMapped}>{option.label}</option>
+					{#each anonymousMappedOptions as option (option.value)}
+						<option value={option.value} selected={option.value === anonMapped}
+							>{option.label}</option
+						>
 					{/each}
 				</select>
 				<input type="hidden" name="page" value={currentPage} />
@@ -776,7 +809,7 @@
 
 		{#if anonymousVisitors.length}
 			<div class="card-list card-list--anonymous">
-				{#each anonymousVisitors as visitor}
+				{#each anonymousVisitors as visitor (visitor._id ?? visitor.sessionId ?? visitor.id)}
 					<article class={`entity-card entity-card--${resolveVisitorCardTone(visitor)}`}>
 						<div class="entity-card__top">
 							<div class="entity-card__identity">
@@ -787,9 +820,11 @@
 								{#if visitor.user}
 									<span class="badge text-bg-info">{$locale === 'en' ? 'Mapped' : 'Đã map'}</span>
 								{:else}
-									<span class="badge text-bg-secondary">{$locale === 'en' ? 'Anonymous' : 'Khách lạ'}</span>
+									<span class="badge text-bg-secondary"
+										>{$locale === 'en' ? 'Anonymous' : 'Khách lạ'}</span
+									>
 								{/if}
-								<a class="btn btn-sm btn-outline-dark" href={resolveVisitorLink(visitor)}>
+								<a class="btn btn-sm btn-outline-dark" href={resolve(resolveVisitorLink(visitor))}>
 									{resolveVisitorLinkLabel(visitor)}
 								</a>
 							</div>
@@ -814,7 +849,9 @@
 									{$locale === 'en' ? 'Scroll' : 'Cuộn'}: {visitor.maxScrollDepthPercent ?? 0}%
 								</div>
 								<div class="entity-meta-block__hint break-anywhere">
-									{$locale === 'en' ? 'Time' : 'Thời gian'}: {formatDuration(visitor.totalTimeSeconds)}
+									{$locale === 'en' ? 'Time' : 'Thời gian'}: {formatDuration(
+										visitor.totalTimeSeconds
+									)}
 									{#if visitor.lastPath}<span> · {visitor.lastPath}</span>{/if}
 								</div>
 							</div>
@@ -824,7 +861,10 @@
 									{$locale === 'en' ? 'Mapped account' : 'Tài khoản map'}
 								</div>
 								{#if visitor.user}
-									<a class="entity-link break-anywhere" href={`/admin/users/${visitor.user._id}`}>
+									<a
+										class="entity-link break-anywhere"
+										href={resolve(`/admin/users/${visitor.user._id}`)}
+									>
 										{visitor.user.name || visitor.user.email || visitor.user._id}
 									</a>
 									<div class="entity-meta-block__hint break-anywhere">
@@ -846,7 +886,7 @@
 									<div class="entity-meta-block__hint break-anywhere">
 										{$locale === 'en' ? 'Mapped at' : 'Map lúc'}: {formatDate(visitor.mappedUserAt)}
 										{#if visitor.mappingConfidence}
-											 · {$locale === 'en' ? 'Confidence' : 'Độ tin cậy'}: {visitor.mappingConfidence}
+											· {$locale === 'en' ? 'Confidence' : 'Độ tin cậy'}: {visitor.mappingConfidence}
 										{/if}
 									</div>
 								{/if}
@@ -868,18 +908,18 @@
 		<nav class="pagination-bar" aria-label="Anonymous visitors pagination">
 			<a
 				class="btn btn-sm btn-outline-dark"
-				href={buildAnonymousPageHref(anonCurrentPage - 1)}
+				href={resolve(buildAnonymousPageHref(anonCurrentPage - 1))}
 				aria-disabled={!anonymousPagination.hasPrevPage}
 				class:disabled={!anonymousPagination.hasPrevPage}
 			>
 				{$locale === 'en' ? 'Previous' : 'Trước'}
 			</a>
-			{#each anonPageNumbers as pageNumber}
+			{#each anonPageNumbers as pageNumber (pageNumber)}
 				<a
 					class="btn btn-sm"
 					class:btn-dark={pageNumber === anonCurrentPage}
 					class:btn-outline-dark={pageNumber !== anonCurrentPage}
-					href={buildAnonymousPageHref(pageNumber)}
+					href={resolve(buildAnonymousPageHref(pageNumber))}
 					aria-current={pageNumber === anonCurrentPage ? 'page' : undefined}
 				>
 					{pageNumber}
@@ -887,7 +927,7 @@
 			{/each}
 			<a
 				class="btn btn-sm btn-outline-dark"
-				href={buildAnonymousPageHref(anonCurrentPage + 1)}
+				href={resolve(buildAnonymousPageHref(anonCurrentPage + 1))}
 				aria-disabled={!anonymousPagination.hasNextPage}
 				class:disabled={!anonymousPagination.hasNextPage}
 			>
@@ -1125,7 +1165,11 @@
 		padding: 1rem;
 		border: 1px solid #d8e7ef;
 		border-radius: 16px;
-		background: linear-gradient(180deg, rgba(244, 250, 253, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+		background: linear-gradient(
+			180deg,
+			rgba(244, 250, 253, 0.96) 0%,
+			rgba(255, 255, 255, 0.98) 100%
+		);
 		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
 	}
 
@@ -1194,12 +1238,6 @@
 		justify-content: space-between;
 	}
 
-	.telegram-toggle input {
-		position: absolute;
-		opacity: 0;
-		pointer-events: none;
-	}
-
 	.telegram-toggle__track {
 		position: relative;
 		width: 44px;
@@ -1220,14 +1258,6 @@
 		background: #ffffff;
 		box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
 		transition: transform 0.18s ease;
-	}
-
-	.telegram-toggle input:checked + .telegram-toggle__track {
-		background: #1d9a6c;
-	}
-
-	.telegram-toggle input:checked + .telegram-toggle__track .telegram-toggle__thumb {
-		transform: translateX(20px);
 	}
 
 	.telegram-toggle__text {

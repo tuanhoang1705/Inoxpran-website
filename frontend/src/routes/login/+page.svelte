@@ -1,4 +1,5 @@
 <script>
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { t } from '$lib/i18n/index.js';
@@ -104,7 +105,9 @@
 						</div>
 					</div>
 					<div class="col-6 text-end">
-						<a href="/forgot-password" class="text-primary small">{$t('auth.forgotPassword')}</a>
+						<a href={resolve('/forgot-password')} class="text-primary small"
+							>{$t('auth.forgotPassword')}</a
+						>
 					</div>
 				</div>
 
@@ -125,7 +128,7 @@
 
 			<div class="text-center mt-4">
 				<span class="text-black-50">{$t('auth.noAccount')}</span>
-				<a class="fw-semibold ms-1" href="/register">{$t('auth.registerNow')}</a>
+				<a class="fw-semibold ms-1" href={resolve('/register')}>{$t('auth.registerNow')}</a>
 			</div>
 		</div>
 	</div>

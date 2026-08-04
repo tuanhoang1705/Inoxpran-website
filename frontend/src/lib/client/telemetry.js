@@ -31,7 +31,9 @@ const createSessionId = () => {
 		if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
 			return `sid_${crypto.randomUUID()}`;
 		}
-	} catch {}
+	} catch {
+		// Fall back to the local non-cryptographic identifier below.
+	}
 	return `sid_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
 };
 
@@ -52,7 +54,9 @@ const persistSessionId = (value) => {
 		if (value) {
 			window.localStorage.setItem(STORAGE_SESSION_KEY, value);
 		}
-	} catch {}
+	} catch {
+		// Storage may be disabled; telemetry can continue for this page session.
+	}
 };
 
 const normalizeHrefToPath = (href) => {
@@ -411,7 +415,10 @@ class TelemetryTracker {
 			if (maxScrollable < 200) return;
 			const percent = Math.round((Math.max(0, scrollTop) / maxScrollable) * 100);
 			const clampedPercent = Math.min(100, Math.max(0, percent));
-			this.currentPage.maxScrollDepth = Math.max(this.currentPage.maxScrollDepth || 0, clampedPercent);
+			this.currentPage.maxScrollDepth = Math.max(
+				this.currentPage.maxScrollDepth || 0,
+				clampedPercent
+			);
 			for (const threshold of SCROLL_THRESHOLDS) {
 				if (clampedPercent < threshold) continue;
 				if (this.currentPage.sentScrollThresholds.has(threshold)) continue;
@@ -448,7 +455,9 @@ class TelemetryTracker {
 			safeString(el.textContent, 180);
 		const trackName = safeString(dataset.track || dataset.trackClick, 80);
 		const trackSection = safeString(dataset.trackSection, 80);
-		const path = this.currentPage.path || (typeof window !== 'undefined' ? buildPathFromLocation(window.location) : '/');
+		const path =
+			this.currentPage.path ||
+			(typeof window !== 'undefined' ? buildPathFromLocation(window.location) : '/');
 		const normalizedHref = normalizeHrefToPath(href);
 
 		const clickPayload = {

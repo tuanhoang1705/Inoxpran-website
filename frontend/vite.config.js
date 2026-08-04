@@ -8,9 +8,15 @@ export default defineConfig({
 	// Vite can fail to finalize its optimizer cache in Unicode workspace paths on Windows.
 	cacheDir:
 		process.platform === 'win32'
-			? path.join(os.tmpdir(), 'inoxpran-website-vite-cache')
+			? path.join(os.tmpdir(), 'inoxpran-website-vite-cache-v2')
 			: 'node_modules/.vite',
 	optimizeDeps: {
+		esbuildOptions: {
+			// Inline maps preserve local debugging without external `.map` requests.
+			// Those requests can overlap SSR and trigger a SvelteKit false-positive
+			// eager-fetch warning. Production sourcemaps remain disabled below.
+			sourcemap: 'inline'
+		},
 		include: [
 			'@tiptap/core',
 			'@tiptap/extension-color',
@@ -24,6 +30,12 @@ export default defineConfig({
 		]
 	},
 	server: {
+		watch: {
+			// adapter-node and browser-test output can contain tens of thousands of files.
+			// They are immutable inputs to neither Vite dev nor HMR, so watching them can
+			// exhaust Windows handles and eventually stall every SSR request.
+			ignored: ['**/build/**', '**/output/**']
+		},
 		proxy: {
 			'^/api/(?!home-feed(?:$|/|\\?)|telemetry(?:$|/|\\?)|chat(?:$|/|\\?)|cart/count(?:$|/|\\?)).*':
 				'http://localhost:3056',
@@ -36,6 +48,22 @@ export default defineConfig({
 	build: {
 		sourcemap: false,
 		target: ['es2018', 'safari12', 'ios12'],
-		cssTarget: 'safari12'
+		cssTarget: 'safari12',
+		rollupOptions: {
+			output: {
+				// WebGLRenderer is lazy, but its transitive graph is still just over Vite's
+				// 500 KiB safety warning. Isolate the renderer module without pulling all
+				// of its dependencies into the same manual chunk; Rollup can then share the
+				// Three.js core used by the lightweight scene module.
+				onlyExplicitManualChunks: true,
+				manualChunks(id) {
+					const normalizedId = id.replaceAll('\\', '/');
+					if (normalizedId.endsWith('/node_modules/three/src/renderers/WebGLRenderer.js')) {
+						return 'three-webgl-renderer';
+					}
+					return undefined;
+				}
+			}
+		}
 	}
 });

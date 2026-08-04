@@ -1,4 +1,6 @@
 <script>
+	import BlogCommentThread from './BlogCommentThread.svelte';
+
 	let {
 		comments = [],
 		depth = 0,
@@ -7,7 +9,7 @@
 		replyLabel = 'Trả lời'
 	} = $props();
 
-	const safeDepth = Math.min(Math.max(Number(depth) || 0, 0), 4);
+	const safeDepth = $derived(Math.min(Math.max(Number(depth) || 0, 0), 4));
 </script>
 
 {#if comments?.length}
@@ -35,12 +37,12 @@
 			</article>
 			{#if comment.replies?.length}
 				<div class="comment-children" style={`margin-left:${nextDepth * 18}px;`}>
-					<svelte:self
+					<BlogCommentThread
 						comments={comment.replies}
 						depth={nextDepth}
-						onReply={onReply}
-						formatDate={formatDate}
-						replyLabel={replyLabel}
+						{onReply}
+						{formatDate}
+						{replyLabel}
 					/>
 				</div>
 			{/if}

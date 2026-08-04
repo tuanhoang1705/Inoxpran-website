@@ -29,8 +29,8 @@ test('runtime control request helpers enforce exact fail-closed contracts', () =
 	assert.equal(safeRuntimeControlBody({ ...valid, expectedRevision: -1 }), null);
 });
 
-test('Daily Draft exposes four audited switches and a guarded confirmation dialog', () => {
-	const source = read('src/routes/admin/openclaw/daily-draft/+page.svelte');
+test('BOS exposes four audited switches and a guarded confirmation dialog', () => {
+	const source = read('src/routes/admin/openclaw/blogs/settings/+page.svelte');
 	for (const key of ['blog_cron', 'auto_publish', 'telegram_approval', 'image_pipeline']) {
 		assert.match(source, new RegExp(`openRuntimeControlDialog\\('${key}'\\)`));
 	}
@@ -40,6 +40,8 @@ test('Daily Draft exposes four audited switches and a guarded confirmation dialo
 	assert.match(source, /controlAcknowledged/);
 	assert.match(source, /readyToEnable/);
 	assert.match(source, /LIVE RUNTIME \/ AUDITED/);
+	assert.match(source, /\.dd-modal\s*\{[\s\S]*?--oc-surface:\s*var\(--admin-surface,\s*#ffffff\)/);
+	assert.match(source, /background:\s*var\(--oc-surface,\s*#ffffff\)/);
 	assert.doesNotMatch(source, /openRuntimeControlDialog\('openclaw_gateway'\)/);
 	assert.doesNotMatch(source, /openRuntimeControlDialog\('seo_agent'\)/);
 });
@@ -55,8 +57,8 @@ test('runtime-control proxy permits only GET root and PATCH allowlisted controls
 	assert.match(source, /\/admin\/openclaw\/runtime-controls/);
 });
 
-test('Daily Draft server load includes runtime controls without exposing raw backend errors', () => {
-	const source = read('src/routes/admin/openclaw/daily-draft/+page.server.js');
+test('BOS server load includes runtime controls without exposing raw backend errors', () => {
+	const source = read('src/routes/admin/openclaw/blogs/settings/+page.server.js');
 	assert.match(source, /path: '\/admin\/openclaw\/runtime-controls'/);
 	assert.match(source, /sanitizeOpenClawClientPayload/);
 	assert.match(source, /runtimeControls:/);

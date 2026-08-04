@@ -11,6 +11,7 @@
 
 	let { children, data } = $props();
 	let lastToastKey = '';
+	let lastAdminPathname = '';
 	let mobileSidebarOpen = $state(false);
 	let isMobileViewport = $state(false);
 	const ADMIN_SUBDOMAIN = 'admin.inoxpran.com';
@@ -28,18 +29,13 @@
 			{ href: '/admin/reviews', label: $t('admin.nav.reviews') },
 			{ href: '/admin/blogs', label: $t('admin.nav.blogs') },
 			{
-				href: '/admin/openclaw',
-				label: 'OpenClaw AI',
-				roles: ['ADMIN', 'SUPER_ADMIN']
-			},
-			{
-				href: '/admin/openclaw/content-operations',
-				label: $t('admin.nav.contentOperations'),
-				roles: ['ADMIN', 'SUPER_ADMIN']
-			},
-			{
 				href: '/admin/openclaw/google-intelligence',
 				label: $locale === 'en' ? 'Google Intelligence' : 'Google Intelligence',
+				roles: ['ADMIN', 'SUPER_ADMIN']
+			},
+			{
+				href: '/admin/openclaw/blogs',
+				label: 'Blog OpenClaw',
 				roles: ['ADMIN', 'SUPER_ADMIN']
 			},
 			{ href: '/admin/best-selling', label: $t('admin.nav.bestSelling') },
@@ -69,10 +65,10 @@
 
 	const isActive = (href) => {
 		const routeId = String($page.route?.id || '');
-		const path = routeId === '/admin' || routeId.startsWith('/admin/') ? routeId : $page.url.pathname;
+		const path =
+			routeId === '/admin' || routeId.startsWith('/admin/') ? routeId : $page.url.pathname;
 		if (path === href) return true;
 		if (href === '/admin') return false;
-		if (href === '/admin/openclaw') return false;
 		return path.startsWith(`${href}/`);
 	};
 
@@ -102,12 +98,15 @@
 	});
 
 	$effect(() => {
-		$page.url.pathname;
-		mobileSidebarOpen = false;
+		const pathname = $page.url.pathname;
+		if (lastAdminPathname && pathname !== lastAdminPathname) {
+			mobileSidebarOpen = false;
+		}
+		lastAdminPathname = pathname;
 		if (browser && window.location.hostname === ADMIN_SUBDOMAIN) {
 			const cleanPath = stripAdminPrefix(window.location.pathname);
 			if (cleanPath !== window.location.pathname) {
-				goto(`${cleanPath}${window.location.search}${window.location.hash}`, {
+				goto(resolve(`${cleanPath}${window.location.search}${window.location.hash}`), {
 					replaceState: true,
 					noScroll: true,
 					keepFocus: true
@@ -239,7 +238,11 @@
 							<span>{item.label}</span>
 						</a>
 					{/each}
-					<a class="admin-nav-link danger" href={resolve(resolveAdminHref('/admin/logout'))} onclick={handleLogoutClick}>
+					<a
+						class="admin-nav-link danger"
+						href={resolve(resolveAdminHref('/admin/logout'))}
+						onclick={handleLogoutClick}
+					>
 						<span>{$t('admin.layout.logout')}</span>
 					</a>
 				</nav>

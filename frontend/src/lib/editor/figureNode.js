@@ -40,14 +40,11 @@ export const Figure = Node.create({
 						title: img.getAttribute('title'),
 						width: img.getAttribute('width'),
 						height: img.getAttribute('height'),
-						imageId:
-							element.getAttribute('data-image-id') || img.getAttribute('data-image-id'),
+						imageId: element.getAttribute('data-image-id') || img.getAttribute('data-image-id'),
 						sourceType:
-							element.getAttribute('data-source-type') ||
-							img.getAttribute('data-source-type'),
+							element.getAttribute('data-source-type') || img.getAttribute('data-source-type'),
 						reviewStatus:
-							element.getAttribute('data-review-status') ||
-							img.getAttribute('data-review-status')
+							element.getAttribute('data-review-status') || img.getAttribute('data-review-status')
 					};
 				}
 			}

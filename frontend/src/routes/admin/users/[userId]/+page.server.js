@@ -95,10 +95,7 @@ export const actions = {
 						message: payload?.metadata?.message || payload?.message,
 						locale,
 						t
-					}) ||
-					(locale === 'en'
-						? 'Password reset email sent.'
-						: 'Đã gửi email cấp lại mật khẩu.')
+					}) || (locale === 'en' ? 'Password reset email sent.' : 'Đã gửi email cấp lại mật khẩu.')
 			}
 		};
 	},
@@ -116,8 +113,7 @@ export const actions = {
 			return fail(response.status, {
 				toast: {
 					tone: 'error',
-					message:
-						locale === 'en' ? 'Failed to delete user.' : 'Không thể xóa người dùng.'
+					message: locale === 'en' ? 'Failed to delete user.' : 'Không thể xóa người dùng.'
 				}
 			});
 		}

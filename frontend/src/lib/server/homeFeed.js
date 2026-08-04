@@ -1,5 +1,10 @@
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, PUBLIC_API_KEY_HEADER } from '$lib/server/api.js';
 import { createAsyncTtlCache } from '$lib/server/asyncTtlCache.js';
+import {
+	extractBestSellingItems,
+	extractLatestBlogItems,
+	isCompleteHomeFeed
+} from '$lib/server/homeFeedContract.js';
 
 const HOME_FEED_TTL_MS = 60_000;
 const HOME_FEED_API_TIMEOUT_MS = 1_200;
@@ -10,8 +15,8 @@ let lastHomeFeedSnapshot = null;
 
 const buildHeaders = () => {
 	const headers = {};
-	if (API_KEY_HEADER) {
-		headers['x-api-key'] = API_KEY_HEADER;
+	if (PUBLIC_API_KEY_HEADER) {
+		headers['x-api-key'] = PUBLIC_API_KEY_HEADER;
 	}
 	return headers;
 };
@@ -148,39 +153,51 @@ const fetchHomeFeedUncached = async ({ fetch }) => {
 		fetchWithTimeout({ fetch, url: bestSellingUrl, headers }),
 		fetchWithTimeout({ fetch, url: latestBlogsUrl, headers })
 	]);
-	const bestSellingResponse = bestSellingResult.status === 'fulfilled' ? bestSellingResult.value : null;
-	const latestBlogsResponse = latestBlogsResult.status === 'fulfilled' ? latestBlogsResult.value : null;
+	const bestSellingResponse =
+		bestSellingResult.status === 'fulfilled' ? bestSellingResult.value : null;
+	const latestBlogsResponse =
+		latestBlogsResult.status === 'fulfilled' ? latestBlogsResult.value : null;
 
 	let bestSelling = [];
 	let bestSellingLoaded = false;
 	if (bestSellingResponse?.ok) {
 		const payload = await readJson(bestSellingResponse);
-		bestSelling = Array.isArray(payload?.metadata)
-			? payload.metadata.map(normalizeBestSellingProduct).filter(Boolean)
-			: [];
-		bestSellingLoaded = true;
+		const items = extractBestSellingItems(payload);
+		if (items) {
+			bestSelling = items.map(normalizeBestSellingProduct).filter(Boolean);
+			bestSellingLoaded = true;
+		}
 	}
 
 	let latestPosts = [];
 	let latestPostsLoaded = false;
 	if (latestBlogsResponse?.ok) {
 		const latestBlogsPayload = await readJson(latestBlogsResponse);
-		const blogItems = Array.isArray(latestBlogsPayload?.metadata?.items)
-			? latestBlogsPayload.metadata.items
-			: [];
-		latestPosts = sortByLatestPublishedPast(blogItems)
-			.slice(0, 4)
-			.map(normalizeLatestPost)
-			.filter(Boolean);
-		latestPostsLoaded = true;
+		const blogItems = extractLatestBlogItems(latestBlogsPayload);
+		if (blogItems) {
+			latestPosts = sortByLatestPublishedPast(blogItems)
+				.slice(0, 4)
+				.map(normalizeLatestPost)
+				.filter(Boolean);
+			latestPostsLoaded = true;
+		}
 	}
 
+	const loaded = isCompleteHomeFeed({
+		bestSellingItems: bestSellingLoaded ? bestSelling : null,
+		latestBlogItems: latestPostsLoaded ? latestPosts : null
+	});
+
 	const result = {
-		success: true,
+		success: loaded,
 		bestSelling,
 		latestPosts,
 		apiError: '',
-		loaded: bestSellingLoaded || latestPostsLoaded
+		loaded,
+		sourceHealth: {
+			bestSelling: bestSellingLoaded ? 'ready' : 'unavailable',
+			latestPosts: latestPostsLoaded ? 'ready' : 'unavailable'
+		}
 	};
 
 	if (result.loaded) {
@@ -192,20 +209,35 @@ const fetchHomeFeedUncached = async ({ fetch }) => {
 
 export const getHomeFeed = async ({ fetch }) => {
 	try {
-		const result = await homeFeedCache.getOrLoad('home-feed:v2', () => fetchHomeFeedUncached({ fetch }));
+		const result = await homeFeedCache.getOrLoad('home-feed:v3', async () => {
+			const next = await fetchHomeFeedUncached({ fetch });
+			if (!next.loaded) {
+				const error = new Error('Home feed sources are unavailable');
+				error.code = 'HOME_FEED_UPSTREAM_UNAVAILABLE';
+				error.feed = next;
+				throw error;
+			}
+			return next;
+		});
 		if (result?.loaded) return result;
 		return lastHomeFeedSnapshot || result;
-	} catch {
+	} catch (error) {
 		if (lastHomeFeedSnapshot) {
-			return lastHomeFeedSnapshot;
+			return { ...lastHomeFeedSnapshot, stale: true };
 		}
-		return {
-			success: false,
-			bestSelling: [],
-			latestPosts: [],
-			apiError: '',
-			loaded: false
-		};
+		return (
+			error?.feed || {
+				success: false,
+				bestSelling: [],
+				latestPosts: [],
+				apiError: '',
+				loaded: false,
+				sourceHealth: {
+					bestSelling: 'unavailable',
+					latestPosts: 'unavailable'
+				}
+			}
+		);
 	}
 };
 

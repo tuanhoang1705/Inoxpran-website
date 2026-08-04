@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { API_BASE, API_BASE_CANDIDATES, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, API_BASE_CANDIDATES, PUBLIC_API_KEY_HEADER } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/server.js';
 import { buildUserHeaders, clearSessionAndRedirect, getUserSession } from '$lib/server/userAuth.js';
 import { env } from '$env/dynamic/public';
@@ -25,7 +25,7 @@ const UNTRANSLATED_ENGLISH_ROBOTS = Object.freeze({
 
 const buildHeaders = () => {
 	const headers = {};
-	if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+	if (PUBLIC_API_KEY_HEADER) headers['x-api-key'] = PUBLIC_API_KEY_HEADER;
 	return headers;
 };
 

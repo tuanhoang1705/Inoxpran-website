@@ -1,4 +1,5 @@
 ﻿<script>
+	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import { onMount, tick } from 'svelte';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
@@ -105,7 +106,9 @@
 		if (item?.role === 'system') return 'system';
 		if (
 			item?.role === 'assistant' &&
-			new Set(['handoff_confirmation', 'rate_limit_notice']).has(String(item?.meta?.kind || '').trim())
+			new Set(['handoff_confirmation', 'rate_limit_notice']).has(
+				String(item?.meta?.kind || '').trim()
+			)
 		) {
 			return 'system';
 		}
@@ -126,7 +129,10 @@
 	const buildUiMessagesFromPersisted = (items = []) =>
 		(Array.isArray(items) ? items : []).map(normalizePersistedMessage).filter(Boolean);
 	const syncMessageSeq = (items = []) => {
-		messageSeq = items.reduce((max, item, index) => Math.max(max, Number(item?.id) || index + 1), 0);
+		messageSeq = items.reduce(
+			(max, item, index) => Math.max(max, Number(item?.id) || index + 1),
+			0
+		);
 	};
 	const setMessagesFromSnapshot = (items = []) => {
 		messages = Array.isArray(items) ? items.map((item) => ({ ...item, pending: false })) : [];
@@ -145,7 +151,10 @@
 		if (!nextItems.length) return;
 		const shouldAutoScroll = isNearMessagesBottom;
 		const newConsultantCount = nextItems.filter((item) => item.role === 'consultant').length;
-		const nextMessages = [...messages, ...nextItems.map((item) => ({ ...item, id: nextMessageId() }))];
+		const nextMessages = [
+			...messages,
+			...nextItems.map((item) => ({ ...item, id: nextMessageId() }))
+		];
 		messages = nextMessages;
 		lastRemoteMessageAt = nextItems[nextItems.length - 1]?.createdAt || lastRemoteMessageAt;
 		await tick();
@@ -252,7 +261,9 @@
 					'Nên chọn dòng Inoxpran nào cho nhu cầu của tôi?'
 				];
 	};
-	const promptSuggestions = $derived.by(() => buildPromptSuggestions({ path: currentPath, locale: $locale }));
+	const promptSuggestions = $derived.by(() =>
+		buildPromptSuggestions({ path: currentPath, locale: $locale })
+	);
 	const visiblePromptSuggestions = $derived.by(() =>
 		Array.isArray(promptSuggestions) ? promptSuggestions.slice(0, 3) : []
 	);
@@ -284,7 +295,10 @@
 			.filter(Boolean);
 
 		return blocks.map((block) => {
-			const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+			const lines = block
+				.split('\n')
+				.map((line) => line.trim())
+				.filter(Boolean);
 			const listLike = lines.length > 0 && lines.every((line) => line.startsWith('- '));
 			return {
 				type: listLike ? 'list' : 'paragraphs',
@@ -437,7 +451,7 @@
 				title: copy.messengerTitle,
 				subtitle: copy.messengerSubtitle,
 				href: CHAT_SUPPORT_CONFIG.messengerUrl
-			},
+			}
 			/*
 			 * Temporarily disabled: direct live chat option.
 			 * Keeping this commented prevents the "Chat trực tiếp ngay" button from rendering,
@@ -537,7 +551,7 @@
 
 	const fetchLiveMessages = async () => {
 		if (!chatSessionId || !handoffRequested) return;
-		const params = new URLSearchParams({ sessionId: chatSessionId, limit: '60' });
+		const params = new SvelteURLSearchParams({ sessionId: chatSessionId, limit: '60' });
 		if (lastRemoteMessageAt) params.set('after', lastRemoteMessageAt);
 
 		try {
@@ -820,7 +834,8 @@
 			}
 
 			handoffRequested = true;
-			lastRemoteMessageAt = payload?.metadata?.messages?.at?.(-1)?.createdAt || new Date().toISOString();
+			lastRemoteMessageAt =
+				payload?.metadata?.messages?.at?.(-1)?.createdAt || new Date().toISOString();
 			liveSupport = payload?.metadata?.liveSupport || liveSupport;
 			customerPresence = payload?.metadata?.customerPresence || customerPresence;
 			await appendPersistedMessages(payload?.metadata?.messages || []);
@@ -1142,6 +1157,7 @@
 											</span>
 										</button>
 									{:else}
+										<!-- eslint-disable svelte/no-navigation-without-resolve -- Configured support actions are outbound HTTPS or tel links, not SvelteKit routes. -->
 										<a
 											class="support-chat__item"
 											href={action.href}
@@ -1176,6 +1192,7 @@
 												<span class="support-chat__item-subtitle">{action.subtitle}</span>
 											</span>
 										</a>
+										<!-- eslint-enable svelte/no-navigation-without-resolve -->
 									{/if}
 								</li>
 							{/each}
@@ -1236,41 +1253,41 @@
 											</div>
 										{/if}
 										<div
-										class="support-chat__bubble"
-										class:is-user={message.role === 'user'}
-										class:is-consultant={message.role === 'consultant'}
-										class:is-system={message.role === 'system'}
-									>
-										{#each parseBubbleBlocks(message.text) as block}
-											{#if block.type === 'list'}
-												<ul class="support-chat__bubble-list">
-													{#each block.items as item}
-														<li class="support-chat__bubble-list-item">
-															{#if item.label}
-																<strong class="support-chat__bubble-key">{item.label}:</strong>
-																<span>{item.value}</span>
-															{:else}
-																<span>{item.text}</span>
-															{/if}
-														</li>
-													{/each}
-												</ul>
-											{:else}
-												<div class="support-chat__bubble-paragraphs">
-													{#each block.items as item}
-														<p class="support-chat__bubble-line">
-															{#if item.label}
-																<strong class="support-chat__bubble-key">{item.label}:</strong>
-																<span>{item.value}</span>
-															{:else}
-																<span>{item.text}</span>
-															{/if}
-														</p>
-													{/each}
-												</div>
-											{/if}
-										{/each}
-									</div>
+											class="support-chat__bubble"
+											class:is-user={message.role === 'user'}
+											class:is-consultant={message.role === 'consultant'}
+											class:is-system={message.role === 'system'}
+										>
+											{#each parseBubbleBlocks(message.text) as block, blockIndex (`${message.id}-${block.type}-${blockIndex}`)}
+												{#if block.type === 'list'}
+													<ul class="support-chat__bubble-list">
+														{#each block.items as item, itemIndex (`${message.id}-${blockIndex}-list-${itemIndex}`)}
+															<li class="support-chat__bubble-list-item">
+																{#if item.label}
+																	<strong class="support-chat__bubble-key">{item.label}:</strong>
+																	<span>{item.value}</span>
+																{:else}
+																	<span>{item.text}</span>
+																{/if}
+															</li>
+														{/each}
+													</ul>
+												{:else}
+													<div class="support-chat__bubble-paragraphs">
+														{#each block.items as item, itemIndex (`${message.id}-${blockIndex}-paragraph-${itemIndex}`)}
+															<p class="support-chat__bubble-line">
+																{#if item.label}
+																	<strong class="support-chat__bubble-key">{item.label}:</strong>
+																	<span>{item.value}</span>
+																{:else}
+																	<span>{item.text}</span>
+																{/if}
+															</p>
+														{/each}
+													</div>
+												{/if}
+											{/each}
+										</div>
 									</div>
 								</div>
 							{/each}
@@ -1333,7 +1350,7 @@
 									<p class="support-chat__hint-subtitle">{copy.starterHint}</p>
 								</div>
 								<div class="support-chat__prompt-group support-chat__prompt-group--compact">
-									{#each visiblePromptSuggestions as prompt}
+									{#each visiblePromptSuggestions as prompt (prompt)}
 										<button
 											type="button"
 											class="support-chat__prompt"

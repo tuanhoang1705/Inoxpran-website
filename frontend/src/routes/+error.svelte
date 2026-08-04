@@ -1,11 +1,12 @@
 <script>
-	import { page } from '$app/stores';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
 
-	let { status, error } = $props();
-
-	const isNotFound = status === 404;
-	const currentLocale = $derived($page.data?.locale === 'en' ? 'en' : 'vi');
+	const status = $derived(page.status);
+	const error = $derived(page.error);
+	const isNotFound = $derived(status === 404);
+	const currentLocale = $derived(page.data?.locale === 'en' ? 'en' : 'vi');
 	const isEnglish = $derived(currentLocale === 'en');
 	const copy = $derived(
 		isEnglish
@@ -72,15 +73,15 @@
 			{/if}
 
 			<div class="error-actions">
-				<a class="btn btn-dark" href={homeHref}>{copy.home}</a>
-				<a class="btn btn-outline-dark" href={shopHref}>{copy.shop}</a>
+				<a class="btn btn-dark" href={resolve(homeHref)}>{copy.home}</a>
+				<a class="btn btn-outline-dark" href={resolve(shopHref)}>{copy.shop}</a>
 			</div>
 
 			<div class="error-links">
 				<span>{copy.quickLinks}</span>
-				<a href={shopHref}>{copy.catalog}</a>
-				<a href={blogHref}>{copy.blog}</a>
-				<a href={contactHref}>{copy.contact}</a>
+				<a href={resolve(shopHref)}>{copy.catalog}</a>
+				<a href={resolve(blogHref)}>{copy.blog}</a>
+				<a href={resolve(contactHref)}>{copy.contact}</a>
 			</div>
 		</div>
 

@@ -52,6 +52,26 @@ test('clears only the matching key after a definitive response', () => {
 	assert.equal(shouldRetainOpenClawActionKey(409), false);
 });
 
+test('expires retained action keys after the bounded 24-hour recovery window', () => {
+	const storage = memoryStorage();
+	let now = 1_000;
+	let generated = 0;
+	const options = {
+		getStorage: () => storage,
+		generateKey: () => `openclaw-ttl-key-${++generated}`,
+		now: () => now
+	};
+	const firstPage = createOpenClawActionIdempotencyManager(options);
+	const request = { action: 'schedule-run-now', profile: 'schedule-1' };
+	const first = firstPage.acquire(request);
+	assert.equal(firstPage.peek(request), first);
+
+	now += 24 * 60 * 60 * 1000 + 1;
+	const reloadedPage = createOpenClawActionIdempotencyManager(options);
+	assert.equal(reloadedPage.peek(request), '');
+	assert.notEqual(reloadedPage.acquire(request), first);
+});
+
 test('OpenClaw frontend proxies reject unknown query/body fields instead of dropping them', () => {
 	const listProxy = readFileSync(
 		new URL('../src/routes/admin/api/openclaw/runs/+server.js', import.meta.url),
@@ -76,7 +96,7 @@ test('OpenClaw frontend proxies reject unknown query/body fields instead of drop
 
 test('OpenClaw action buttons remain disabled while their durable run is active', () => {
 	const page = readFileSync(
-		new URL('../src/routes/admin/openclaw/+page.svelte', import.meta.url),
+		new URL('../src/routes/admin/openclaw/blogs/settings/console/+page.svelte', import.meta.url),
 		'utf8'
 	);
 	assert.match(page, /const actionIsActive/);

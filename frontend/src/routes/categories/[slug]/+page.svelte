@@ -1,6 +1,7 @@
 <script>
 	import { page } from '$app/stores';
 	import { env } from '$env/dynamic/public';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { t } from '$lib/i18n/index.js';
 
 	export let params;
@@ -25,7 +26,7 @@
 	$: slugValue = params?.slug ?? $page.params?.slug ?? '';
 	$: seoTitle = $t('categoriesPage.headTitle', { slug: slugValue });
 	$: seoDescription = truncateMeta($t('categoriesPage.description'));
-	$: ogImageUrl = `${siteUrl}/og-image.png`;
+	const ogImageUrl = `${siteUrl}/og-image.png`;
 	$: ogUrl = `${siteUrl}${$page.url?.pathname || '/categories'}${$page.url?.search || ''}`;
 	const buildCategoryBreadcrumbJsonLd = (slug) =>
 		JSON.stringify({
@@ -68,8 +69,9 @@
 	<meta name="twitter:title" content={seoTitle} />
 	<meta name="twitter:description" content={seoDescription} />
 	<meta name="twitter:image" content={ogImageUrl} />
-	{@html `<script type="application/ld+json">${buildCategoryBreadcrumbJsonLd(slugValue)}</script>`}
 </svelte:head>
+
+<JsonLd value={buildCategoryBreadcrumbJsonLd(slugValue)} />
 
 <section class="padding-large">
 	<div class="container">

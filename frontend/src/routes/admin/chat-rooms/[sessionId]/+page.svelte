@@ -1,15 +1,20 @@
 <script>
+	import { SvelteDate, SvelteMap, SvelteURLSearchParams } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { browser } from '$app/environment';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { locale, t } from '$lib/i18n/admin/index.js';
 
 	let { data } = $props();
 
-	let roomState = $state(data?.room || null);
-	let consultantsState = $state(Array.isArray(data?.consultants) ? data.consultants : []);
-	let currentAdmin = $state(data?.currentAdmin || null);
-	let roomListState = $state(Array.isArray(data?.roomList) ? data.roomList : []);
-	let apiError = $state(data?.apiError || '');
+	const initialData = untrack(() => data);
+	let roomState = $state(initialData?.room || null);
+	let consultantsState = $state(
+		Array.isArray(initialData?.consultants) ? initialData.consultants : []
+	);
+	let currentAdmin = $state(initialData?.currentAdmin || null);
+	let roomListState = $state(Array.isArray(initialData?.roomList) ? initialData.roomList : []);
+	let apiError = $state(initialData?.apiError || '');
 	let infoMessage = $state('');
 	let roomActionBusy = $state('');
 	let sendingMessage = $state(false);
@@ -21,8 +26,8 @@
 	let copiedRoomCode = $state(false);
 	let copiedSessionId = $state(false);
 	let nowTs = $state(Date.now());
-	let typingRequested = $state(Boolean(data?.room?.session?.liveSupport?.typing?.active));
-	let typingActiveSent = $state(Boolean(data?.room?.session?.liveSupport?.typing?.active));
+	let typingRequested = $state(Boolean(initialData?.room?.session?.liveSupport?.typing?.active));
+	let typingActiveSent = $state(Boolean(initialData?.room?.session?.liveSupport?.typing?.active));
 	let typingRequestInFlight = $state(false);
 	let optimisticMessages = $state([]);
 	let conversationEl = $state(null);
@@ -44,7 +49,7 @@
 	let roomSwitchError = $state('');
 	let roomFetchToken = 0;
 	let roomSwitchAbortController = null;
-	let roomSnapshotCache = new Map();
+	let roomSnapshotCache = new SvelteMap();
 	let lastRoomListAutoPageKey = $state('');
 
 	const room = $derived(roomState || null);
@@ -245,11 +250,11 @@
 		if (!value) return '--';
 		const date = new Date(value);
 		if (Number.isNaN(date.getTime())) return '--';
-		const target = new Date(date);
+		const target = new SvelteDate(date);
 		target.setHours(0, 0, 0, 0);
-		const today = new Date(nowTs);
+		const today = new SvelteDate(nowTs);
 		today.setHours(0, 0, 0, 0);
-		const yesterday = new Date(today);
+		const yesterday = new SvelteDate(today);
 		yesterday.setDate(yesterday.getDate() - 1);
 		if (target.getTime() === today.getTime()) return $t('common.today');
 		if (target.getTime() === yesterday.getTime()) return $t('common.yesterday');
@@ -264,7 +269,7 @@
 		const groups = [];
 		for (const item of visibleRoomList) {
 			const activityAt = roomActivityAt(item);
-			const date = activityAt ? new Date(activityAt) : null;
+			const date = activityAt ? new SvelteDate(activityAt) : null;
 			const key =
 				date && !Number.isNaN(date.getTime())
 					? new Date(date.setHours(0, 0, 0, 0)).toISOString()
@@ -488,7 +493,7 @@
 		targetSessionId,
 		{ markRead = true, signal, messageLimit = 300 } = {}
 	) => {
-		const params = new URLSearchParams({ messageLimit: String(messageLimit) });
+		const params = new SvelteURLSearchParams({ messageLimit: String(messageLimit) });
 		if (markRead) params.set('markRead', '1');
 		const response = await fetch(`/admin/api/chat-rooms/${targetSessionId}?${params.toString()}`, {
 			headers: { 'cache-control': 'no-store' },
@@ -1044,13 +1049,17 @@
 	<section class="room-detail-empty">
 		<h1>{$t('admin.chatRooms.detailTitle')}</h1>
 		<p>{apiError || $t('admin.chatRooms.errors.notFound')}</p>
-		<a class="room-detail-empty__link" href={returnTo}>{$t('admin.chatRooms.backToList')}</a>
+		<a class="room-detail-empty__link" href={resolve(returnTo)}
+			>{$t('admin.chatRooms.backToList')}</a
+		>
 	</section>
 {:else}
 	<section class="room-detail-page">
 		<header class="room-detail-page__header">
 			<div class="room-detail-page__header-main">
-				<a class="room-detail-page__back" href={returnTo}>{$t('admin.chatRooms.backToList')}</a>
+				<a class="room-detail-page__back" href={resolve(returnTo)}
+					>{$t('admin.chatRooms.backToList')}</a
+				>
 				<div>
 					<h1>{$t('admin.chatRooms.detailTitle')}</h1>
 					<p>{$t('admin.chatRooms.lede')}</p>
@@ -1131,7 +1140,7 @@
 											class="room-switcher__item"
 											class:active={roomItem.sessionId === activeRoomSelectionId}
 											class:pending={roomItem.sessionId === roomSwitchTargetId}
-											href={roomListHref(roomItem.sessionId)}
+											href={resolve(roomListHref(roomItem.sessionId))}
 											data-sveltekit-preload-data="hover"
 											aria-label={`${$t('admin.chatRooms.detail.inboxOpenRoom')}: ${roomListTitle(roomItem)}`}
 											aria-busy={roomItem.sessionId === roomSwitchTargetId}
@@ -1384,7 +1393,7 @@
 				<div class="room-console__composer">
 					{#if cannedReplies.length}
 						<div class="room-console__quick-replies">
-							{#each cannedReplies as reply}
+							{#each cannedReplies as reply, __eachIndex1 (reply?._id ?? reply?.id ?? __eachIndex1)}
 								<button
 									type="button"
 									class="quick-reply"
@@ -1570,7 +1579,7 @@
 							/>
 							<div class="room-panel__consultants">
 								{#if filteredConsultants.length}
-									{#each filteredConsultants as consultant, index}
+									{#each filteredConsultants as consultant, index (consultant?._id ?? consultant?.id ?? index)}
 										<button
 											type="button"
 											class:selected={String(selectedConsultantAdminId) ===

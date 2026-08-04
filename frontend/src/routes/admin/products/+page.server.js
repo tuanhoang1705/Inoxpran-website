@@ -94,7 +94,15 @@ export const load = async ({ cookies, fetch, url }) => {
 		}
 
 		const payload = await parsePayload(response);
-		const products = Array.isArray(payload?.metadata) ? payload.metadata : [];
+		if (!Array.isArray(payload?.metadata)) {
+			return {
+				products: [],
+				apiError: t('admin.products.errors.load'),
+				pagination: null,
+				creatorLookup: {}
+			};
+		}
+		const products = payload.metadata;
 		const creatorLookup = await resolveCreatorLookup({ products, headers, fetch });
 		const hasNext = products.length > perPage;
 		const trimmed = hasNext ? products.slice(0, perPage) : products;

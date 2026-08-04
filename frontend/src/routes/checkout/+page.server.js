@@ -1,5 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
-import { API_BASE, API_KEY_HEADER } from '$lib/server/api.js';
+import { API_BASE, USER_API_KEY_HEADER } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/server.js';
 import { buildUserHeaders, clearSessionAndRedirect, getUserSession } from '$lib/server/userAuth.js';
 import { buildFallbackShippingQuote } from '$lib/server/shippingFeeFallback.js';
@@ -14,7 +14,7 @@ const readJson = async (response) => {
 
 const buildPublicHeaders = () => {
 	const headers = {};
-	if (API_KEY_HEADER) headers['x-api-key'] = API_KEY_HEADER;
+	if (USER_API_KEY_HEADER) headers['x-api-key'] = USER_API_KEY_HEADER;
 	return headers;
 };
 
@@ -404,7 +404,9 @@ export const load = async ({ fetch, cookies, locals, url }) => {
 		const matchedCartItem =
 			cartProducts.find((entry) => String(entry.productId) === buyNowProductIdParam) ?? null;
 		const normalizedPriceParam =
-			Number.isFinite(buyNowPriceParam) && buyNowPriceParam > 0 ? Math.floor(buyNowPriceParam) : null;
+			Number.isFinite(buyNowPriceParam) && buyNowPriceParam > 0
+				? Math.floor(buyNowPriceParam)
+				: null;
 		const matchedPriceRaw = Number(matchedCartItem?.price);
 		const matchedPrice =
 			Number.isFinite(matchedPriceRaw) && matchedPriceRaw > 0 ? Math.floor(matchedPriceRaw) : null;
@@ -464,7 +466,7 @@ export const load = async ({ fetch, cookies, locals, url }) => {
 				price:
 					Number.isFinite(Number(entry?.price)) && Number(entry.price) > 0
 						? Math.floor(Number(entry.price))
-						: effectiveBuyNowPrice ?? 0
+						: (effectiveBuyNowPrice ?? 0)
 			}))
 		: effectiveCartProducts;
 	const shopOrders = buildShopOrders(
@@ -574,7 +576,7 @@ export const actions = {
 				request: shippingFeePayload
 			});
 
-		let shippingFeeQuote = buildFallbackQuote('guest_checkout_shipping_fallback');
+		let shippingFeeQuote;
 		try {
 			const { response: shippingFeeResponse, data: shippingFeeData } = await fetchShippingFee({
 				fetch,
@@ -783,7 +785,7 @@ export const actions = {
 				reason,
 				request: shippingFeePayload
 			});
-		let shippingFeeQuote = buildFallbackQuote('checkout_shipping_fallback');
+		let shippingFeeQuote;
 
 		try {
 			const { response: shippingFeeResponse, data: shippingFeeData } = await fetchShippingFee({
@@ -812,8 +814,7 @@ export const actions = {
 		const isBuyNowFlow = Boolean(buyNowProductId);
 		const isSelectedCartFlow = Boolean(selectedProductIds);
 		const isPartialCartFlow =
-			isSelectedCartFlow ||
-			normalizedEffectiveCartProducts.length !== originalCartProducts.length;
+			isSelectedCartFlow || normalizedEffectiveCartProducts.length !== originalCartProducts.length;
 		const orderPayloadBody = {
 			shop_order_ids: shopOrders,
 			user_address: shippingAddress,

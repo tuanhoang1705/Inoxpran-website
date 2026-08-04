@@ -1,4 +1,6 @@
 <script>
+	import { SvelteSet, SvelteURLSearchParams } from 'svelte/reactivity';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { pushToast } from '$lib/stores/adminToast.js';
@@ -55,7 +57,7 @@
 	const totalPages = $derived(Math.max(1, Math.ceil(pagination.total / pagination.limit)));
 
 	const makePageLink = (page) => {
-		const params = new URLSearchParams();
+		const params = new SvelteURLSearchParams();
 		if (filters?.q) params.set('q', filters.q);
 		if (filters?.status) params.set('status', filters.status);
 		params.set('page', String(page));
@@ -66,7 +68,7 @@
 	const toggleContactSelection = (contactId) => {
 		const id = String(contactId || '').trim();
 		if (!id) return;
-		const next = new Set(selectedContactIds);
+		const next = new SvelteSet(selectedContactIds);
 		if (next.has(id)) {
 			next.delete(id);
 		} else {
@@ -76,7 +78,7 @@
 	};
 
 	const toggleSelectAllVisibleContacts = () => {
-		const next = new Set(selectedContactIds);
+		const next = new SvelteSet(selectedContactIds);
 		if (allVisibleContactsSelected) {
 			for (const id of visibleContactIds) next.delete(id);
 		} else {
@@ -107,7 +109,7 @@
 
 	$effect(() => {
 		const visibleSet = new Set(visibleContactIds);
-		const next = new Set();
+		const next = new SvelteSet();
 		for (const id of selectedContactIds) {
 			if (visibleSet.has(id)) next.add(id);
 		}
@@ -161,7 +163,7 @@
 		<div class="filter-field">
 			<label for="contacts-status">{$t('admin.contacts.filters.status')}</label>
 			<select id="contacts-status" name="status" class="form-select">
-				{#each statusOptions as option}
+				{#each statusOptions as option, __eachIndex1 (option?._id ?? option?.id ?? __eachIndex1)}
 					<option value={option.value} selected={option.value === filters.status}>
 						{option.label}
 					</option>
@@ -170,7 +172,9 @@
 		</div>
 		<div class="filter-actions">
 			<button class="btn btn-dark" type="submit">{$t('admin.contacts.filters.apply')}</button>
-			<a class="btn btn-outline-dark" href="/admin/contacts">{$t('admin.contacts.filters.reset')}</a>
+			<a class="btn btn-outline-dark" href={resolve('/admin/contacts')}
+				>{$t('admin.contacts.filters.reset')}</a
+			>
 		</div>
 	</form>
 
@@ -229,21 +233,21 @@
 			<p>{$t('admin.contacts.emptyDesc')}</p>
 		</div>
 	{:else}
-			<div class="contacts-grid">
-				{#each contacts as contact (contact._id)}
-					<article class="contact-card">
-						<header>
-							<label class="row-check">
-								<input
-									type="checkbox"
-									checked={selectedContactIds.has(String(contact?._id || ''))}
-									aria-label={$t('admin.contacts.bulk.selectItem')}
-									onclick={() => toggleContactSelection(contact?._id)}
-								/>
-							</label>
-							<div>
-								<h3>{contact.fullName}</h3>
-								<p class="muted">
+		<div class="contacts-grid">
+			{#each contacts as contact (contact._id)}
+				<article class="contact-card">
+					<header>
+						<label class="row-check">
+							<input
+								type="checkbox"
+								checked={selectedContactIds.has(String(contact?._id || ''))}
+								aria-label={$t('admin.contacts.bulk.selectItem')}
+								onclick={() => toggleContactSelection(contact?._id)}
+							/>
+						</label>
+						<div>
+							<h3>{contact.fullName}</h3>
+							<p class="muted">
 								{contact.phone || contact.email || '--'}
 							</p>
 						</div>
@@ -305,9 +309,11 @@
 					<form method="post" action="?/update" class="contact-actions">
 						<input type="hidden" name="contactId" value={contact._id} />
 						<div class="field">
-							<label>{$t('admin.contacts.fields.status')}</label>
-							<select class="form-select" name="status">
-								{#each statusOptions.slice(1) as option}
+							<label for={`contact-status-${contact._id}`}>
+								{$t('admin.contacts.fields.status')}
+							</label>
+							<select id={`contact-status-${contact._id}`} class="form-select" name="status">
+								{#each statusOptions.slice(1) as option, __eachIndex2 (option?._id ?? option?.id ?? __eachIndex2)}
 									<option value={option.value} selected={option.value === contact.status}>
 										{option.label}
 									</option>
@@ -315,13 +321,17 @@
 							</select>
 						</div>
 						<div class="field">
-							<label>{$t('admin.contacts.fields.internalNote')}</label>
+							<label for={`contact-note-${contact._id}`}>
+								{$t('admin.contacts.fields.internalNote')}
+							</label>
 							<textarea
+								id={`contact-note-${contact._id}`}
 								name="internalNote"
 								rows="2"
 								class="form-control"
 								placeholder={$t('admin.contacts.fields.internalNotePlaceholder')}
-							>{contact.internalNote || ''}</textarea>
+								>{contact.internalNote || ''}</textarea
+							>
 						</div>
 						<label class="assign-toggle">
 							<input type="checkbox" name="assignToMe" />
@@ -340,15 +350,17 @@
 		<nav class="pagination">
 			<a
 				class={`page-link ${pagination.page <= 1 ? 'disabled' : ''}`}
-				href={pagination.page <= 1 ? '#' : makePageLink(pagination.page - 1)}
+				href={pagination.page <= 1 ? '#' : resolve(makePageLink(pagination.page - 1))}
 				aria-disabled={pagination.page <= 1}
 			>
 				{$t('admin.contacts.pagination.prev')}
 			</a>
-			<span>{$t('admin.contacts.pagination.page', { page: pagination.page, total: totalPages })}</span>
+			<span
+				>{$t('admin.contacts.pagination.page', { page: pagination.page, total: totalPages })}</span
+			>
 			<a
 				class={`page-link ${pagination.page >= totalPages ? 'disabled' : ''}`}
-				href={pagination.page >= totalPages ? '#' : makePageLink(pagination.page + 1)}
+				href={pagination.page >= totalPages ? '#' : resolve(makePageLink(pagination.page + 1))}
 				aria-disabled={pagination.page >= totalPages}
 			>
 				{$t('admin.contacts.pagination.next')}

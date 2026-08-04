@@ -17,7 +17,11 @@ const CUSTOMER_REQUEST_LIMIT = 10;
 const CUSTOMER_REQUEST_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 const normalizeLocale = (value = 'vi') =>
-	String(value || 'vi').trim().toLowerCase() === 'en' ? 'en' : 'vi';
+	String(value || 'vi')
+		.trim()
+		.toLowerCase() === 'en'
+		? 'en'
+		: 'vi';
 
 const normalizeFailureCode = (error) => {
 	const raw = String(error?.message || '').trim();
@@ -98,7 +102,7 @@ const persistChatExchange = async ({
 		if (response.ok && payload?.metadata) {
 			return payload.metadata;
 		}
-	} catch (error) {
+	} catch {
 		console.error('[chat-message] persistence failed');
 	}
 

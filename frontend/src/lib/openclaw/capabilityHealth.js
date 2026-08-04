@@ -5,6 +5,15 @@ const STATUS_ALIASES = Object.freeze({
 	ready: 'healthy'
 });
 
+const SCHEDULER_CAPABILITY_KEYS = new Set([
+	'blog_cron',
+	'content_operations_cron',
+	'google_intelligence',
+	'content_performance_monitoring'
+]);
+const DEFAULT_SCHEDULER_POLL_INTERVAL_MS = 30_000;
+const MINIMUM_SCHEDULER_FRESHNESS_MS = 60_000;
+
 const SENSITIVE_URL_KEY = /(token|secret|api[_-]?key|authorization|credential|password)/i;
 
 const containsControlCharacter = (value) => {
@@ -112,9 +121,12 @@ export const normalizeCapability = (value = {}, fallbackKey = '') => {
 		reasonCode: normalizeFeatureKey(source.reasonCode || ''),
 		messageKey: String(source.messageKey || '').trim(),
 		lastCheckedAt: source.lastCheckedAt || source.checkedAt || null,
-		latencyMs: Number.isFinite(Number(source.latencyMs))
-			? Math.max(0, Number(source.latencyMs))
-			: null,
+		latencyMs:
+			source.latencyMs !== null &&
+			source.latencyMs !== undefined &&
+			Number.isFinite(Number(source.latencyMs))
+				? Math.max(0, Number(source.latencyMs))
+				: null,
 		runtime: source.runtime && typeof source.runtime === 'object' ? source.runtime : {},
 		warnings: Array.isArray(source.warnings)
 			? source.warnings.map((warning) => String(warning).slice(0, 240)).slice(0, 8)
@@ -158,6 +170,61 @@ export const normalizeCapabilityHealth = (payload = {}) => {
 	};
 };
 
+const triStateBoolean = (value) => (value === true ? true : value === false ? false : null);
+
+/**
+ * `workerActive` on scheduler capabilities is a busy flag for the current tick,
+ * not a liveness flag. Derive an operator-facing state from scheduler authority
+ * and its heartbeat while keeping unknown values unknown.
+ */
+export const schedulerWorkerReadiness = (capability = {}, { now = Date.now() } = {}) => {
+	const normalized = normalizeCapability(capability);
+	if (!SCHEDULER_CAPABILITY_KEYS.has(normalized.featureKey)) {
+		return { applies: false, state: 'not_applicable', reasonCode: '' };
+	}
+
+	if (!normalized.checked) {
+		return { applies: true, state: 'unknown', reasonCode: 'health_not_checked' };
+	}
+
+	const runtime = normalized.runtime || {};
+	const schedulerActive = triStateBoolean(runtime.schedulerActive);
+	if (schedulerActive === null) {
+		return { applies: true, state: 'unknown', reasonCode: 'scheduler_state_unknown' };
+	}
+	if (!schedulerActive) {
+		return { applies: true, state: 'unavailable', reasonCode: 'scheduler_disabled' };
+	}
+
+	const heartbeatAt = runtime.lastHeartbeatAt ? new Date(runtime.lastHeartbeatAt).getTime() : NaN;
+	if (!Number.isFinite(heartbeatAt)) {
+		return { applies: true, state: 'unavailable', reasonCode: 'heartbeat_missing' };
+	}
+
+	const nowMs = now instanceof Date ? now.getTime() : Number(now);
+	if (!Number.isFinite(nowMs)) {
+		return { applies: true, state: 'unknown', reasonCode: 'clock_unknown' };
+	}
+	const configuredPollMs = Number(runtime.pollIntervalMs);
+	const pollIntervalMs =
+		Number.isFinite(configuredPollMs) && configuredPollMs > 0
+			? Math.max(1_000, configuredPollMs)
+			: DEFAULT_SCHEDULER_POLL_INTERVAL_MS;
+	const freshnessLimitMs = Math.max(MINIMUM_SCHEDULER_FRESHNESS_MS, pollIntervalMs * 3);
+	if (nowMs - heartbeatAt > freshnessLimitMs) {
+		return { applies: true, state: 'unavailable', reasonCode: 'heartbeat_stale' };
+	}
+
+	const workerActive = triStateBoolean(runtime.workerActive);
+	if (workerActive === true) {
+		return { applies: true, state: 'processing', reasonCode: 'tick_in_progress' };
+	}
+	if (workerActive === false) {
+		return { applies: true, state: 'ready_idle', reasonCode: 'waiting_for_work' };
+	}
+	return { applies: true, state: 'ready', reasonCode: 'tick_state_unknown' };
+};
+
 export const capabilityList = (health) =>
 	Object.values(normalizeCapabilityHealth(health).capabilities).sort((a, b) =>
 		a.featureKey.localeCompare(b.featureKey)
@@ -187,15 +254,40 @@ export const upsertCapability = (health, capability) => {
 };
 
 export const capabilityTone = (capability = {}) => {
-	const status = normalizeStatus(capability?.status || capability?.availability);
-	if (['healthy', 'expected_disabled', 'not_applicable'].includes(status)) return 'good';
-	if (['failed', 'unavailable', 'error', 'missing_config', 'blocked'].includes(status))
-		return 'danger';
+	const normalized = normalizeCapability(capability);
 	if (
-		['degraded', 'partial', 'pending_check', 'manual_review', 'stale', 'unknown'].includes(status)
+		normalized.status === 'healthy' &&
+		normalized.enabled &&
+		normalized.configured &&
+		normalized.checked
 	)
-		return 'warn';
+		return 'good';
+	if (['failed', 'unavailable', 'missing_config'].includes(normalized.status)) return 'danger';
+	if (normalized.status === 'degraded') return 'warn';
 	return 'muted';
+};
+
+export const capabilityHealthOverallTone = (health = {}) => {
+	const normalizedHealth = normalizeCapabilityHealth(health);
+	const capabilities = Object.values(normalizedHealth.capabilities);
+	const tones = capabilities.map((capability) => capabilityTone(capability));
+	if (tones.includes('danger')) return 'danger';
+	if (tones.includes('warn')) return 'warn';
+	if (!normalizedHealth.healthEnabled) return 'muted';
+
+	const enabledCapabilities = capabilities.filter((capability) => capability.enabled);
+	const allEnabledVerifiedHealthy =
+		enabledCapabilities.length > 0 &&
+		enabledCapabilities.every(
+			(capability) => capability.checked && capability.configured && capability.status === 'healthy'
+		);
+	const allOtherCapabilitiesIntentional = capabilities
+		.filter((capability) => !capability.enabled)
+		.every((capability) =>
+			['disabled', 'expected_disabled', 'not_applicable'].includes(capability.status)
+		);
+
+	return allEnabledVerifiedHealthy && allOtherCapabilitiesIntentional ? 'good' : 'muted';
 };
 
 export const capabilityStatusTranslationKey = (status) =>

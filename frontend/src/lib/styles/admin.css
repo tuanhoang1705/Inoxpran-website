@@ -140,16 +140,16 @@ body.admin-sidebar-lock {
 	transition: all 0.3s ease;
 }
 
-.admin-hamburger[aria-expanded="true"] span:nth-child(1) {
+.admin-hamburger[aria-expanded='true'] span:nth-child(1) {
 	transform: rotate(45deg) translateY(13px);
 }
 
-.admin-hamburger[aria-expanded="true"] span:nth-child(2) {
+.admin-hamburger[aria-expanded='true'] span:nth-child(2) {
 	opacity: 0;
 	transform: translateX(-10px);
 }
 
-.admin-hamburger[aria-expanded="true"] span:nth-child(3) {
+.admin-hamburger[aria-expanded='true'] span:nth-child(3) {
 	transform: rotate(-45deg) translateY(-13px);
 }
 
@@ -305,7 +305,9 @@ body.admin-sidebar-lock {
 	color: #fff;
 	font-weight: 700;
 	cursor: pointer;
-	transition: background 0.2s ease, transform 0.2s ease;
+	transition:
+		background 0.2s ease,
+		transform 0.2s ease;
 }
 
 .admin-shell .admin-push-card__action:hover:not(:disabled) {
@@ -455,7 +457,7 @@ body.admin-sidebar-lock {
 	width: 100%;
 }
 
-.admin-shell .admin-content>section {
+.admin-shell .admin-content > section {
 	animation: adminFadeUp 0.4s ease both;
 }
 
@@ -1040,7 +1042,6 @@ body.admin-sidebar-lock {
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @media (max-width: 1024px) {
-
 	/* Hide mobile header on large screens */
 	.admin-mobile-header {
 		display: none !important;
@@ -1152,7 +1153,7 @@ body.admin-sidebar-lock {
 		min-width: 0;
 	}
 
-	.admin-shell .admin-content>section {
+	.admin-shell .admin-content > section {
 		min-width: 0;
 	}
 }
@@ -1658,7 +1659,7 @@ body.admin-sidebar-lock {
 	color: var(--admin-accent-strong);
 }
 
-.admin-shell .breadcrumb-item+.breadcrumb-item::before {
+.admin-shell .breadcrumb-item + .breadcrumb-item::before {
 	content: '/';
 	color: var(--admin-border);
 	margin: 0 4px;
@@ -1759,10 +1760,7 @@ body.admin-sidebar-lock {
 /* ─ Skeleton Loaders ─ */
 
 .admin-shell .skeleton {
-	background: linear-gradient(90deg,
-			#f3f3f3 25%,
-			#f9f9f9 50%,
-			#f3f3f3 75%);
+	background: linear-gradient(90deg, #f3f3f3 25%, #f9f9f9 50%, #f3f3f3 75%);
 	background-size: 200% 100%;
 	animation: adminSkeleton 1.5s infinite;
 	border-radius: var(--admin-radius);
@@ -2155,11 +2153,11 @@ body.admin-sidebar-lock {
 	transition: transform 0.2s ease;
 }
 
-.admin-shell input:checked+.slider {
+.admin-shell input:checked + .slider {
 	background-color: var(--admin-accent);
 }
 
-.admin-shell input:checked+.slider:before {
+.admin-shell input:checked + .slider:before {
 	transform: translateX(20px);
 }
 
@@ -2218,8 +2216,8 @@ body.admin-sidebar-lock {
 
 /* ─ Section Headers ─ */
 
-.admin-shell section>h2:first-child,
-.admin-shell section>h3:first-child {
+.admin-shell section > h2:first-child,
+.admin-shell section > h3:first-child {
 	margin-bottom: 16px;
 }
 
@@ -2249,24 +2247,24 @@ body.admin-sidebar-lock {
 	gap: 20px;
 }
 
-.admin-shell section>.admin-card,
-.admin-shell section>.card {
+.admin-shell section > .admin-card,
+.admin-shell section > .card {
 	animation: adminFadeUp 0.4s ease both;
 }
 
-.admin-shell section>.admin-card:nth-child(1) {
+.admin-shell section > .admin-card:nth-child(1) {
 	animation-delay: 0ms;
 }
 
-.admin-shell section>.admin-card:nth-child(2) {
+.admin-shell section > .admin-card:nth-child(2) {
 	animation-delay: 50ms;
 }
 
-.admin-shell section>.admin-card:nth-child(3) {
+.admin-shell section > .admin-card:nth-child(3) {
 	animation-delay: 100ms;
 }
 
-.admin-shell section>.admin-card:nth-child(4) {
+.admin-shell section > .admin-card:nth-child(4) {
 	animation-delay: 150ms;
 }
 
