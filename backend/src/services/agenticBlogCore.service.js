@@ -49,6 +49,10 @@ const { isProductionEnv } = require('../config/runtimeEnv');
 const { BlogNoveltyIndexService } = require('./contentOperations/blogNoveltyIndex.service');
 const { scoreDraftOriginality } = require('./contentOperations/draftOriginalityScoring.service');
 const {
+  buildRevisionBrief,
+  reviewEditorialQuality
+} = require('./contentOperations/editorialReviewBoard.service');
+const {
   ACCEPTANCE_SCORE,
   MIN_NOVELTY_SUBTOTAL,
   RUBRIC_VERSION,
@@ -427,7 +431,8 @@ const buildEvidenceWritingContract = evidenceMap => ({
   revisionContext = null,
   evidenceMap = null,
   editorialBrief = null,
-  avoidStructures = null
+  avoidStructures = null,
+  revisionBrief = null
 }) => {
   const evidenceContract = buildEvidenceWritingContract(evidenceMap);
   const system = [
@@ -453,6 +458,13 @@ const buildEvidenceWritingContract = evidenceMap => ({
     'Ràng buộc tối thiểu (không phải khuôn mẫu): mở đầu bằng 1 đoạn không heading; ít nhất 3 mục <h2> bám sát chủ đề; nội dung đủ sâu, dễ đọc, có giá trị thực; kết lại tự nhiên.',
     'Công cụ TÙY CHỌN, chỉ dùng khi thực sự phù hợp với chủ đề, không bắt buộc và không đặt cố định một chỗ: khối <aside class="answer-block"><strong>Trả lời nhanh:</strong> ...</aside> cho câu hỏi cần trả lời ngay; danh sách <ul>/<ol> khi có bước hoặc tiêu chí; <table> khi cần so sánh; mục <h2>Câu hỏi thường gặp</h2> với vài <h3> khi có câu hỏi thường gặp thật sự. Chọn công cụ theo nhu cầu của bài, không dùng máy móc cho mọi bài.',
     'Không dùng <img>, không chèn link, không inline style, không markdown.',
+    // These four rules are exactly what the editorial board measures. Stating
+    // them up front is what turns a rewrite loop into a first-pass acceptance.
+    'MỞ BÀI: 40-160 từ văn xuôi (không tính khối tóm tắt), nêu đúng vấn đề người đọc đang gặp và đặt từ khoá chính trong 100 từ đầu.',
+    'TÓM TẮT NHANH: ngay sau mở bài, thêm một <ul> gồm 3-5 gạch đầu dòng nêu kết luận chính của bài. Đây là phần công cụ tìm kiếm và trợ lý AI trích dẫn nhiều nhất.',
+    'TRẢ LỜI TRƯỚC: ngay dưới mỗi <h2>, đoạn đầu tiên phải dài 25-90 từ và trả lời thẳng câu hỏi của mục đó; lý do, bằng chứng và chi tiết đặt ở các đoạn sau.',
+    'GIÁ TRỊ MỚI (bắt buộc, ít nhất 3 trong 6): con số hoặc ngưỡng đo cụ thể kèm đơn vị; một tình huống sử dụng thật; một điều nhiều người vẫn làm sai kèm lý do; dẫn nguồn hoặc khuyến cáo nhà sản xuất; một bảng hoặc danh sách so sánh; chỉ dẫn theo điều kiện dạng "nếu… thì…". Bài chỉ nhắc lại kiến thức phổ thông sẽ bị trả lại.',
+    'Mỗi đoạn <p> tối đa 120 từ, mỗi đoạn một ý; phần liệt kê phải chuyển thành <ul> hoặc <ol>.',
     'OUTPUT CONTRACT: the JSON must also include "materialClaims": [{"evidenceKey": string, "contentExcerpt": string, "qualificationApplied": boolean}]. The excerpt must occur verbatim in html. Use an empty array only when html contains no material factual claim.',
     'Never invent or silently omit a material claim from materialClaims. Editorial advice without a factual assertion does not need an evidence entry.',
     ...(revisionContext
@@ -544,10 +556,32 @@ const buildEvidenceWritingContract = evidenceMap => ({
       : null,
     evidenceContract,
     revisionContext,
+    // A retry that is only told "write it differently" changes the wording and
+    // fails the same gate again. When the board has already judged the previous
+    // attempt, hand back the named defects and their remedies so the rewrite is
+    // targeted rather than random.
+    editorialCorrections: revisionBrief?.all?.length
+      ? {
+          attempt: revisionBrief.attempt,
+          maxAttempts: revisionBrief.maxAttempts,
+          mustFix: revisionBrief.blocking.map(item => ({
+            defect: item.code,
+            problem: item.problem,
+            howToFix: item.fix
+          })),
+          shouldFix: revisionBrief.advisory.map(item => ({
+            defect: item.code,
+            problem: item.problem,
+            howToFix: item.fix
+          }))
+        }
+      : null,
     variation:
-      attempt > 0
-        ? `Lần viết lại thứ ${attempt}: thay đổi hẳn bộ heading, cách mở bài và cách diễn đạt so với các lần trước.`
-        : ''
+      revisionBrief?.blocking?.length
+        ? `Bản nộp lần ${revisionBrief.attempt} bị biên tập trả lại. Sửa DỨT ĐIỂM từng lỗi trong editorialCorrections.mustFix theo đúng hướng dẫn howToFix, giữ nguyên những phần đã đạt. Không viết lại lan man những chỗ không bị nêu lỗi.`
+        : attempt > 0
+          ? `Lần viết lại thứ ${attempt}: thay đổi hẳn bộ heading, cách mở bài và cách diễn đạt so với các lần trước.`
+          : ''
   });
   return [
     { role: 'system', content: system },
@@ -574,7 +608,8 @@ const generateLlmDraft = async ({
   revisionContext = null,
   evidenceMap = null,
   editorialBrief = null,
-  avoidStructures = null
+  avoidStructures = null,
+  revisionBrief = null
 }) => {
   const useOpenClawWriter = normalizeString(process.env.OPENCLAW_TOPIC_AGENTIC_WRITER_ENABLED).toLowerCase() !== 'false';
   const parsedTemperature = Number(process.env.OPENAI_WRITER_TEMPERATURE);
@@ -598,7 +633,8 @@ const generateLlmDraft = async ({
     revisionContext,
     evidenceMap,
     editorialBrief,
-    avoidStructures
+    avoidStructures,
+    revisionBrief
   });
   if (useOpenClawWriter) {
     const adapter = new OpenClawAgentAdapter({ fetchImpl });
@@ -2563,6 +2599,17 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         let originalityAttempts = 0;
         let llmDraft = null;
         let llmGenerationError = '';
+        // Every editorial reviewer now runs inside the retry loop. They used to
+        // run only after it exited, so a draft that satisfied originality but
+        // failed brand voice, spam or depth was blocked with no attempt left to
+        // fix it — the single largest source of "the article was rejected again".
+        let factuality = null;
+        let peopleSpam = null;
+        let brandVoice = null;
+        let productReviews = null;
+        let editorialPlacementReview = null;
+        let editorialReview = null;
+        let revisionBrief = null;
         for (let attempt = 0; attempt < maxOriginalityAttempts; attempt += 1) {
             originalityAttempts = attempt + 1;
             let generated = null;
@@ -2588,7 +2635,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
           revisionContext,
           evidenceMap: context.evidenceMap,
           editorialBrief,
-          avoidStructures
+          avoidStructures,
+          revisionBrief
         });
             } catch (error) {
                 llmGenerationError = safeErrorCode({ code: error?.code || 'LLM_GENERATION_FAILED' });
@@ -2657,7 +2705,52 @@ const claimed = await ContentWorkOrderService.claimForProduction({
                     reasons: [...(originality.reasons || []), ...formulaic.reasons]
                 };
             }
-            if (originality.passed) break;
+            factuality = reviewFacts(contentHtml);
+            peopleSpam = reviewPeopleFirstAndSpam({ html: contentHtml, primaryKeyword });
+            brandVoice = reviewBrandVoice(contentHtml);
+            productReviews = reviewProductLayer({ html: contentHtml, plan: context.productSeedPlan });
+            editorialPlacementReview = reviewEditorialProductPlacement({
+              html: contentHtml,
+              title: llmDraft?.title || context.effectiveTopic || topic,
+              productSeedPlan: context.productSeedPlan,
+              placementPlan: context.editorialPlacementPlan
+            });
+            editorialReview = reviewEditorialQuality({
+              html: contentHtml,
+              title: llmDraft?.title || context.effectiveTopic || topic,
+              primaryKeyword,
+              searchIntent: roadmapContext?.searchIntent || context.strategy?.searchIntent || '',
+              primaryQuestion: roadmapContext?.primaryQuestion || '',
+              productNames: (context.productSeedPlan?.selected || context.productSeedPlan?.products || [])
+                .map(item => item?.name || item?.sku)
+                .filter(Boolean)
+            });
+            const boardPassed = originality.passed &&
+              factuality.passed &&
+              peopleSpam.passed &&
+              brandVoice.passed &&
+              productReviews.pass &&
+              editorialPlacementReview.pass &&
+              editorialReview.passed;
+            if (boardPassed) {
+              revisionBrief = null;
+              break;
+            }
+            // Carry the named defects into the next attempt. Without this the
+            // rewrite is blind and converges only by luck.
+            revisionBrief = buildRevisionBrief({
+              editorial: editorialReview,
+              reviews: [
+                { name: 'trùng lặp', passed: originality.passed, reasons: originality.reasons, severity: 'critical' },
+                { name: 'dẫn chứng', passed: factuality.passed, reasons: factuality.reasons },
+                { name: 'spam & người đọc', passed: peopleSpam.passed, reasons: peopleSpam.reasons },
+                { name: 'giọng thương hiệu', passed: brandVoice.passed, violations: brandVoice.violations },
+                { name: 'lớp sản phẩm', passed: productReviews.pass, reasons: productReviews.reasons },
+                { name: 'cài đặt sản phẩm', passed: editorialPlacementReview.pass, reasons: editorialPlacementReview.reasons }
+              ],
+              attempt: originalityAttempts,
+              maxAttempts: maxOriginalityAttempts
+            });
         }
     if (revisionContext && !llmDraft?.html) {
       const error = new Error(
@@ -2666,11 +2759,31 @@ const claimed = await ContentWorkOrderService.claimForProduction({
       error.code = 'REVISION_WRITER_UNAVAILABLE';
       throw error;
     }
-    const factuality = reviewFacts(contentHtml);
-        const peopleSpam = reviewPeopleFirstAndSpam({ html: contentHtml, primaryKeyword });
-        const brandVoice = reviewBrandVoice(contentHtml);
-        const productReviews = reviewProductLayer({ html: contentHtml, plan: context.productSeedPlan });
-        const editorialPlacementReview = reviewEditorialProductPlacement({ html: contentHtml, title: llmDraft?.title || context.effectiveTopic || topic, productSeedPlan: context.productSeedPlan, placementPlan: context.editorialPlacementPlan });
+    // The loop can exit before any reviewer ran (an empty revision draft breaks
+    // out early). Reviews must never be left unset, or the risk gate below would
+    // read undefined and let an unreviewed draft through.
+    if (!factuality) factuality = reviewFacts(contentHtml);
+    if (!peopleSpam) peopleSpam = reviewPeopleFirstAndSpam({ html: contentHtml, primaryKeyword });
+    if (!brandVoice) brandVoice = reviewBrandVoice(contentHtml);
+    if (!productReviews) productReviews = reviewProductLayer({ html: contentHtml, plan: context.productSeedPlan });
+    if (!editorialPlacementReview) {
+      editorialPlacementReview = reviewEditorialProductPlacement({
+        html: contentHtml,
+        title: llmDraft?.title || context.effectiveTopic || topic,
+        productSeedPlan: context.productSeedPlan,
+        placementPlan: context.editorialPlacementPlan
+      });
+    }
+    if (!editorialReview) {
+      editorialReview = reviewEditorialQuality({
+        html: contentHtml,
+        title: llmDraft?.title || context.effectiveTopic || topic,
+        primaryKeyword,
+        searchIntent: roadmapContext?.searchIntent || context.strategy?.searchIntent || '',
+        primaryQuestion: roadmapContext?.primaryQuestion || '',
+        productNames: []
+      });
+    }
         const wordCount = normalizeForSimilarity(contentHtml).split(' ').filter(Boolean).length;
         // Structure is now writer-designed per topic, so quality is judged on the
         // ACTUAL rendered article (real <h2> coverage + enough depth), not on a
@@ -2687,7 +2800,7 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             generativeSearchReady: factuality.passed && brandVoice.passed,
             promisesInclusion: false
         };
-        const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed || !productReviews.pass || !editorialPlacementReview.pass;
+        const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed || !productReviews.pass || !editorialPlacementReview.pass || !editorialReview.passed;
     if (context.contentWorkOrder) {
       const workOrderId = context.contentWorkOrder._id || context.contentWorkOrder.id;
       const claimToken = getActiveClaimToken(context.contentWorkOrder);

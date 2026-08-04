@@ -11,6 +11,7 @@ const {
     ROADMAP_SCORE_UNREACHABLE,
     RUBRIC_VERSION,
     assessTopicPlanReachability,
+    productFamiliesFor,
     resolveRoadmapThresholds
 } = require('./topicRoadmapScoring.service')
 
@@ -230,12 +231,42 @@ const compactMarketSignal = (signal = {}) => ({
 })
 const MAX_COMPACT_MARKET_SIGNALS = 24
 
+// Research is gathered for the products the brief prioritises, but the catalog
+// handed to the ideator lists everything. The agent then proposed articles about
+// products no source covered, and the evidence-alignment gate correctly rejected
+// every one of them — a full agent budget spent for no usable topic. Rank the
+// cards so evidence-backed products come first, and mark which ones a candidate
+// can actually be defended with.
+const scopeCardsToEvidence = (cards = [], signals = []) => {
+    const evidenceFamilies = new Set(signals.flatMap((signal) => productFamiliesFor(
+        [signal.title, signal.topic, signal.snippet, signal.summary].filter(Boolean).join(' ')
+    )))
+    const decorated = (Array.isArray(cards) ? cards : []).map((card) => {
+        const families = productFamiliesFor([card.name, card.categoryKey, card.category?.id].filter(Boolean).join(' '))
+        return {
+            card,
+            evidenceBacked: families.length > 0 && families.some((family) => evidenceFamilies.has(family))
+        }
+    })
+    const backed = decorated.filter((entry) => entry.evidenceBacked)
+    // Never hand back an empty catalog: a brief with no matching evidence still
+    // needs cards so the run fails on the honest reason instead of on emptiness.
+    const ordered = backed.length ? [...backed, ...decorated.filter((entry) => !entry.evidenceBacked)] : decorated
+    return {
+        cards: ordered.map((entry) => ({ ...entry.card, evidenceBacked: entry.evidenceBacked })),
+        evidenceBackedCount: backed.length,
+        evidenceFamilies: [...evidenceFamilies]
+    }
+}
+
 const compactBrief = (brief = {}) => {
     const coverage = brief.productCoverage || {}
-    const productCards = Array.isArray(coverage.promptCards) && coverage.promptCards.length
+    const rawCards = Array.isArray(coverage.promptCards) && coverage.promptCards.length
         ? coverage.promptCards
         : coverage.cards
     const marketEvidence = brief.marketEvidence || {}
+    const scoped = scopeCardsToEvidence(rawCards, boundedArray(marketEvidence.signals, MAX_COMPACT_MARKET_SIGNALS))
+    const productCards = scoped.cards
     return {
         direction: compactText(brief.direction, 500),
         interpretation: {
@@ -252,7 +283,12 @@ const compactBrief = (brief = {}) => {
             generation: Number(coverage.generation || 0),
             productCount: Number(coverage.productCount || 0),
             coverageHash: compactText(coverage.coverageHash || coverage.evidenceHash, 128),
-            cards: boundedArray(productCards, 12).map(compactProductCard)
+            evidenceBackedCount: scoped.evidenceBackedCount,
+            evidenceFamilies: scoped.evidenceFamilies.slice(0, 12),
+            cards: boundedArray(productCards, 12).map((card) => ({
+                ...compactProductCard(card),
+                evidenceBacked: card.evidenceBacked === true
+            }))
         },
         marketEvidence: {
             status: compactText(marketEvidence.status, 40),
@@ -466,14 +502,21 @@ class TopicIdeationOrchestratorService {
                         `Return exactly ${CANDIDATE_BATCH_SIZE} distinct, concise ideas in an ideas array.`,
                         focusForRound(round, index),
                         round > 1
-                            ? 'Treat noveltyAvoidance as negative examples only: do not paraphrase them. Every new idea must pivot at least two of these dimensions: core subject, reader situation, primary decision, search intent, or article plan.'
+                            ? 'Treat noveltyAvoidance as negative examples only: do not paraphrase them. Every new idea must pivot at least two of these dimensions: reader situation, primary decision, search intent, or article plan. Do NOT pivot to a product the supplied evidence does not cover — changing product is not a valid way to be different.'
                             : '',
                         'Each idea must use: topic, angle, primaryQuestion, supportingQuestions, searchIntent, categoryKey, productScope, rationale, keywords, primaryKeyword, targetAudience, userProblems, productIds, productEvidenceKeys, and marketEvidenceIds.',
                         'Keep supportingQuestions to 2, keywords to 4, targetAudience to 2, userProblems to 2, and rationale under 180 characters.',
                         'Every idea must cite at least one supplied eligible market evidence ID in marketEvidenceIds that directly supports its primaryQuestion. If no supplied evidence supports an idea, omit that idea.',
-                        compactContext.brief.productCoverage.cards.length
-                            ? 'Verified product cards are supplied, so every idea must cite at least one exact supplied productId and must name that product or its family in the topic and primaryQuestion.'
-                            : '',
+                        // The alignment gate scores a candidate only on sources that
+                        // match its own product and search intent. An idea about a
+                        // product no supplied source discusses is therefore certain
+                        // to be rejected, so it must never be produced.
+                        compactContext.brief.productCoverage.evidenceBackedCount
+                            ? 'Product cards marked evidenceBacked=true are the ONLY products the supplied sources actually discuss. Every idea must be about one of those products, must cite its exact supplied productId, and must name that product or its family in both the topic and the primaryQuestion. Ideas about any other product will be rejected.'
+                            : compactContext.brief.productCoverage.cards.length
+                                ? 'Verified product cards are supplied, so every idea must cite at least one exact supplied productId and must name that product or its family in the topic and primaryQuestion.'
+                                : '',
+                        'The cited market evidence must discuss the SAME product and the SAME kind of question as the idea. Do not support a cleaning question with a buying-guide source, and never support one product with another product\'s source.',
                         'For product-led ideas, cite only exact supplied productIds and productEvidenceKeys that support the proposed angle.',
                         'Use productIds and evidence IDs only when they exactly match IDs supplied in the input; never invent or alter an ID.',
                         'Do not return candidate scores; the backend normalizes and scores every idea.'
