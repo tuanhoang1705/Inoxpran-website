@@ -1,5 +1,6 @@
 import { API_BASE } from '$lib/server/api.js';
 import { buildAdminHeaders, getAdminSession, refreshAdminSession } from '$lib/server/adminAuth.js';
+import { shouldRefreshAdminSession } from '$lib/server/adminSessionRefresh.js';
 
 const unauthorizedResponse = () =>
 	new Response(JSON.stringify({ message: 'Session expired. Please login again.' }), {
@@ -25,7 +26,7 @@ export const adminApiFetch = async ({ cookies, fetch, path, options = {} }) => {
 		});
 
 	let response = await execute(session);
-	if (![401, 403].includes(response.status)) return response;
+	if (!shouldRefreshAdminSession(response.status)) return response;
 
 	await refreshAdminSession({ cookies, fetch });
 	session = getAdminSession(cookies);

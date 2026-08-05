@@ -5,6 +5,10 @@ import {
 	buildHostOnlyCookieOptions,
 	resolveLegacyCookieDomain
 } from '$lib/server/cookieSecurity.js';
+import {
+	coordinateAdminRefresh,
+	shouldRefreshAdminSession
+} from '$lib/server/adminSessionRefresh.js';
 
 const ADMIN_COOKIE = {
 	accessToken: 'admin_access_token',
@@ -106,25 +110,33 @@ export const refreshAdminSession = async ({ cookies, fetch }) => {
 	const userId = cookies.get(ADMIN_COOKIE.clientId);
 	if (!refreshToken || !userId) return null;
 
-	const headers = {
-		'x-client-id': userId,
-		'x-rtoken-id': refreshToken
-	};
-	if (ADMIN_BFF_API_KEY_HEADER) headers['x-api-key'] = ADMIN_BFF_API_KEY_HEADER;
+	const tokens = await coordinateAdminRefresh({
+		userId,
+		refreshToken,
+		refresh: async () => {
+			const headers = {
+				'x-client-id': userId,
+				'x-rtoken-id': refreshToken
+			};
+			if (ADMIN_BFF_API_KEY_HEADER) headers['x-api-key'] = ADMIN_BFF_API_KEY_HEADER;
 
-	let response;
-	try {
-		response = await fetch(`${API_BASE}/admin/refresh-token`, {
-			method: 'POST',
-			headers
-		});
-	} catch {
-		return null;
-	}
+			let response;
+			try {
+				response = await fetch(`${API_BASE}/admin/refresh-token`, {
+					method: 'POST',
+					headers
+				});
+			} catch {
+				return null;
+			}
 
-	if (!response.ok) return null;
-	const payload = await response.json().catch(() => null);
-	const tokens = payload?.metadata?.tokens;
+			if (!response.ok) return null;
+			const payload = await response.json().catch(() => null);
+			const refreshedTokens = payload?.metadata?.tokens;
+			if (!refreshedTokens?.accessToken || !refreshedTokens?.refreshToken) return null;
+			return refreshedTokens;
+		}
+	});
 	if (!tokens?.accessToken || !tokens?.refreshToken) return null;
 
 	setAdminTokenCookies(cookies, tokens);
@@ -163,7 +175,7 @@ export const ensureAdminSession = async ({ cookies, fetch }) => {
 		}
 		return session;
 	}
-	if (![401, 403].includes(response.status)) return session;
+	if (!shouldRefreshAdminSession(response.status)) return session;
 
 	await refreshAdminSession({ cookies, fetch });
 	session = getAdminSession(cookies);
@@ -187,7 +199,7 @@ export const ensureAdminSession = async ({ cookies, fetch }) => {
 			}
 			return session;
 		}
-		if ([401, 403].includes(retry.status)) return null;
+		if (shouldRefreshAdminSession(retry.status)) return null;
 	} catch {
 		return session;
 	}
