@@ -1933,7 +1933,16 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             source.blogId ||
             source.snapshotId ||
             '',
-          productCatalogSnapshotId: source.productCatalogSnapshotId || null,
+          // A product claim without the matching catalog snapshot is blocked by
+          // the evidence map. Roadmap-selected product evidence arrives through
+          // the work order and never carried the id, so every catalog-backed
+          // fact was blocked even though this run already resolved the very
+          // snapshot the guard asks for.
+          productCatalogSnapshotId:
+            source.productCatalogSnapshotId ||
+            (/product_catalog/.test(sourceType)
+              ? productSeedPlan?.productCatalogSnapshotId || null
+              : null),
           checkedAt: source.checkedAt || now,
           confidence: source.confidence || 0,
           allowedUsage: source.allowedUsage || '',
@@ -2054,7 +2063,12 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             : 'content-maintenance',
         confidence: 0.82
       },
-      userProblems: unifiedBrief?.contentGap?.length
+      // The brief already carries the roadmap's real reader problems. Reading
+      // contentGap first handed the writer the generic gap placeholder as if it
+      // were a user problem, and the researched problems were dropped.
+      userProblems: unifiedBrief?.userProblems?.length
+        ? unifiedBrief.userProblems
+        : unifiedBrief?.contentGap?.length
         ? unifiedBrief.contentGap
         : [
             'Need verifiable material guidance',

@@ -222,7 +222,12 @@ const applyTrustedRoadmapSelection = (input, context) => {
     sourceUrl: textBound(item?.canonicalUrl, 2_000),
     internalReferenceId: textBound(item?.sourceId, 160),
     checkedAt: item?.fetchedAt || item?.observedAt || null,
-    classification: "unknown",
+    // "unknown" maps to a blocked evidence status, which contradicts the
+    // allowedUsage/requiredQualification written right below it and blocked
+    // every market signal the roadmap had already relevance-scored and pinned
+    // to a fetched source. Attributed third-party context is an inference:
+    // usable with qualification, never assertable as fact.
+    classification: "inferred",
     confidence: Math.min(1, Math.max(0, Number(item?.confidence) || 0)),
     allowedUsage:
       "Use as attributed qualitative market context only; never infer numerical demand or a product performance claim.",
