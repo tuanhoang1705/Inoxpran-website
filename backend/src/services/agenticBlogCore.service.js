@@ -204,6 +204,17 @@ const boundTopic = value => {
     return (lastSpace > 60 ? cut.slice(0, lastSpace) : cut).trim();
 };
 
+// Search engines render the title tag as written, so a hard character slice
+// shipped titles that stop mid-syllable ("... món ăn, vệ si"). Fall back to the
+// hard cut only when the text has no usable word boundary near the limit.
+const trimToWord = (value, max) => {
+    const cleaned = String(value || '').trim();
+    if (cleaned.length <= max) return cleaned;
+    const cut = cleaned.slice(0, max);
+    const lastSpace = cut.lastIndexOf(' ');
+    return (lastSpace >= max * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[\s,;:.\-–—]+$/, '').trim();
+};
+
 const LLM_DRAFT_TIMEOUT_MS = Math.min(Math.max(Number(process.env.OPENAI_DRAFT_TIMEOUT_MS || 90_000), 20_000), 240_000);
 
 const roadmapText = (value, max) =>
@@ -692,10 +703,10 @@ const generateLlmDraft = async ({
     if (words < 350) throw new Error(`openclaw_draft_too_short_${words}_words`);
     return {
       html,
-      title: normalizeString(parsed.title).replace(/["“”]/g, '').slice(0, 110),
-      excerpt: normalizeString(parsed.excerpt).slice(0, 220),
-      seoTitle: normalizeString(parsed.seoTitle).replace(/["“”]/g, '').slice(0, 60),
-      seoDescription: normalizeString(parsed.seoDescription).slice(0, 155),
+      title: trimToWord(normalizeString(parsed.title).replace(/["“”]/g, ''), 110),
+      excerpt: trimToWord(normalizeString(parsed.excerpt), 220),
+      seoTitle: trimToWord(normalizeString(parsed.seoTitle).replace(/["“”]/g, ''), 60),
+      seoDescription: trimToWord(normalizeString(parsed.seoDescription), 155),
       tags: Array.isArray(parsed.tags) ? [...new Set(parsed.tags.map(normalizeString).filter(Boolean))].slice(0, 6) : [],
       imageQuery: normalizeString(parsed.imageQuery).replace(/["“”]/g, '').slice(0, 90),
       materialClaims: normalizeWriterMaterialClaims(parsed.materialClaims),
