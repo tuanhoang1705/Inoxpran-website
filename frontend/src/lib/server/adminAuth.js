@@ -9,6 +9,7 @@ import {
 	coordinateAdminRefresh,
 	shouldRefreshAdminSession
 } from '$lib/server/adminSessionRefresh.js';
+import { readAdminCookie, rememberAdminCookie } from '$lib/server/adminCookieState.js';
 
 const ADMIN_COOKIE = {
 	accessToken: 'admin_access_token',
@@ -36,18 +37,19 @@ const deleteLegacyDomainCookie = (cookies, key) => {
 const setHostOnlyAdminCookie = (cookies, key, value) => {
 	deleteLegacyDomainCookie(cookies, key);
 	cookies.set(key, value, cookieOptions);
+	rememberAdminCookie(cookies, key, value);
 };
 
 export const getAdminSession = (cookies) => {
-	const accessToken = cookies.get(ADMIN_COOKIE.accessToken);
-	const refreshToken = cookies.get(ADMIN_COOKIE.refreshToken);
-	const userId = cookies.get(ADMIN_COOKIE.clientId);
+	const accessToken = readAdminCookie(cookies, ADMIN_COOKIE.accessToken);
+	const refreshToken = readAdminCookie(cookies, ADMIN_COOKIE.refreshToken);
+	const userId = readAdminCookie(cookies, ADMIN_COOKIE.clientId);
 
 	if (!accessToken || !userId) return null;
 
-	const name = cookies.get(ADMIN_COOKIE.name);
-	const email = cookies.get(ADMIN_COOKIE.email);
-	const rolesRaw = cookies.get(ADMIN_COOKIE.roles);
+	const name = readAdminCookie(cookies, ADMIN_COOKIE.name);
+	const email = readAdminCookie(cookies, ADMIN_COOKIE.email);
+	const rolesRaw = readAdminCookie(cookies, ADMIN_COOKIE.roles);
 	let roles = [];
 
 	if (rolesRaw) {
@@ -211,6 +213,7 @@ export const clearAdminCookies = (cookies) => {
 	Object.values(ADMIN_COOKIE).forEach((key) => {
 		cookies.delete(key, { path: '/' });
 		deleteLegacyDomainCookie(cookies, key);
+		rememberAdminCookie(cookies, key, undefined);
 	});
 };
 
