@@ -1,6 +1,7 @@
 'use strict'
 
 const crypto = require('node:crypto');
+const { sequenceSimilarity } = require('../services/contentOperations/presentationSignature.service');
 
 const normalizeForSimilarity = (value) => String(value || '')
     .normalize('NFD')
@@ -55,13 +56,23 @@ const structuralFingerprint = (html) => {
 
 const structuralSimilarity = (left, right) => {
     if (!left || !right) return 0;
-    const levelScore = jaccardSimilarity(new Set(left.headingLevels || []), new Set(right.headingLevels || []));
-    const modeScore = jaccardSimilarity(new Set(left.headingModes || []), new Set(right.headingModes || []));
-    const rhythmScore = textSimilarity(left.paragraphRhythm || '', right.paragraphRhythm || '', 2);
+    // Heading levels and modes are ORDERED. Comparing them as sets collapsed
+    // every well-formed article onto one fingerprint: ["question","statement",
+    // "numbered","statement","question"] and ["statement","question","numbered",
+    // "statement","question"] share a set, and almost every article is a flat run
+    // of <h2>, so heading levels were a constant 1.0. Compare the sequences, and
+    // drop heading levels — they carry no discriminating signal here.
+    const modeScore = sequenceSimilarity(left.headingModes || [], right.headingModes || []);
+    const rhythmScore = sequenceSimilarity(
+        String(left.paragraphRhythm || '').split('-').filter(Boolean),
+        String(right.paragraphRhythm || '').split('-').filter(Boolean)
+    );
     const countDelta = Math.abs(Number(left.headingCount || 0) - Number(right.headingCount || 0));
     const countScore = 1 - Math.min(1, countDelta / Math.max(1, Number(left.headingCount || 1), Number(right.headingCount || 1)));
-    return Number(((levelScore + modeScore + rhythmScore + countScore) / 4).toFixed(4));
+    return Number(((modeScore + rhythmScore + countScore) / 3).toFixed(4));
 };
+
+const STRUCTURE_CORROBORATION_MIN = Number(process.env.CONTENT_STRUCTURE_CORROBORATION_MIN || 0.25);
 
 const reviewOriginality = ({ title, contentHtml, existing = [], thresholds = {} }) => {
     const contentThreshold = Number(thresholds.content || process.env.CONTENT_SIMILARITY_THRESHOLD || 0.82);
@@ -83,7 +94,15 @@ const reviewOriginality = ({ title, contentHtml, existing = [], thresholds = {} 
     const reasons = [];
     if (maximum.content >= contentThreshold) reasons.push('content_similarity_high');
     if (maximum.headings >= headingThreshold) reasons.push('heading_similarity_high');
-    if (maximum.structure >= structureThreshold) reasons.push('structural_similarity_high');
+    // Shape alone is not plagiarism. Paragraph rhythm and heading count stay near
+    // 1.0 for any two competently written articles, so an unqualified structure
+    // verdict rejected drafts sharing 0.3% of their wording. Structure now only
+    // corroborates duplication that the text itself already shows — a real clone
+    // (the same template refilled) still trips it, because its headings match too.
+    if (maximum.structure >= structureThreshold &&
+        Math.max(maximum.content, maximum.headings) >= STRUCTURE_CORROBORATION_MIN) {
+        reasons.push('structural_similarity_high');
+    }
     if (maximum.title >= 0.85) reasons.push('title_similarity_high');
     return { passed: reasons.length === 0, risk: reasons.length ? 'high' : Math.max(maximum.content, maximum.headings, maximum.structure) > 0.6 ? 'medium' : 'low', reasons, maximumSimilarity: maximum, fingerprint };
 };
