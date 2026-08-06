@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto')
 const { normalizeForSimilarity, tokenize } = require('../../utils/agenticBlogCore.util')
+const { HOUSEHOLD_ANCHORS, normalizeText } = require('./topicResearchQuery.service')
 const { requireBlogIdeationModel, resolveBlogIdeationModel } = require('../../config/openaiBlog.config')
 
 const INTERPRETATIONS = Object.freeze(['broad', 'narrow', 'mixed'])
@@ -142,10 +143,25 @@ const isGenericCatalogDirection = (value) => {
     ].some((pattern) => pattern.test(normalized))
 }
 
+// A focus term becomes a market-search query, and the relevance gate downstream
+// discards any result without a household anchor. So a clause carrying no anchor
+// can never produce usable evidence: it is operating policy ("chỉ dùng bằng
+// chứng nguồn đáng tin cậy", "không lặp chủ đề"), not a subject. Searching for
+// those returned school textbooks and phone how-tos, every hit was correctly
+// rejected, and the roadmap stalled on ROADMAP_REQUIRED_EVIDENCE_UNAVAILABLE
+// forever. Emitting nothing is strictly better: an empty focus list leaves the
+// product coverage unscoped, so the queries are built from the catalog instead.
+const carriesHouseholdAnchor = (value) => {
+    const normalized = normalizeText(value)
+    if (!normalized) return false
+    return HOUSEHOLD_ANCHORS.some((anchor) => normalized.includes(normalizeText(anchor)))
+}
+
 const extractHeuristicFocusTerms = (direction) => {
     const focus = stripManagerDirectionWrapper(direction)
     if (!focus || isGenericCatalogDirection(focus)) return []
-    return uniqueList(focus.split(/[,;|]/), { maxItems: 8, maxLength: 160 })
+    const clauses = uniqueList(focus.split(/[,;|]/), { maxItems: 8, maxLength: 160 })
+    return clauses.filter(carriesHouseholdAnchor)
 }
 
 const inferHeuristicInterpretation = ({ direction = '', catalog = {} } = {}) => {
