@@ -697,10 +697,36 @@ const generateLlmDraft = async ({
       maxOutputTokens: 16000
     });
     const parsed = result.output;
-    if (!parsed || !normalizeString(parsed.html)) throw new Error('openclaw_invalid_draft_response');
+    // The writer states WHY it produced nothing. Carrying that forward is the
+    // difference between repairing the brief and blindly asking again: the
+    // agent answers with status/reason/missingRequiredContext, and the caller
+    // hands those back on the next attempt.
+    if (!parsed || !normalizeString(parsed.html)) {
+      const error = new Error('openclaw_invalid_draft_response');
+      error.code = 'OPENCLAW_WRITER_RETURNED_NO_DRAFT';
+      error.writerRefusal = {
+        status: normalizeString(parsed?.status) || 'empty_draft',
+        reason: normalizeString(parsed?.reason),
+        missingRequiredContext: Array.isArray(parsed?.missingRequiredContext)
+          ? parsed.missingRequiredContext.map(normalizeString).filter(Boolean).slice(0, 20)
+          : [],
+        requiredResolution: normalizeString(parsed?.requiredResolution)
+      };
+      throw error;
+    }
     const html = sanitizeLlmHtml(parsed.html);
     const words = normalizeForSimilarity(html).split(' ').filter(Boolean).length;
-    if (words < 350) throw new Error(`openclaw_draft_too_short_${words}_words`);
+    if (words < 350) {
+      const error = new Error(`openclaw_draft_too_short_${words}_words`);
+      error.code = 'OPENCLAW_WRITER_DRAFT_TOO_SHORT';
+      error.writerRefusal = {
+        status: 'too_short',
+        reason: `Bản nháp chỉ có ${words} từ, dưới ngưỡng tối thiểu 350 từ.`,
+        missingRequiredContext: [],
+        requiredResolution: 'Viết đủ độ dài yêu cầu trong brief, đừng dừng lại ở phần mở đầu.'
+      };
+      throw error;
+    }
     return {
       html,
       title: trimToWord(normalizeString(parsed.title).replace(/["“”]/g, ''), 110),
@@ -1270,6 +1296,40 @@ const buildOriginalityCorpusFilter = ({ targetIds = [], qaContext = null } = {})
   _id: { $nin: Array.from(targetIds, String) },
   ...qaScopeFilter(qaContext)
 });
+
+// A writer that refused names what it thinks is missing. Most of that list is
+// pipeline lineage the orchestrator deliberately keeps on its own side, so the
+// useful reply is to say so plainly rather than to repeat the same request.
+const buildWriterUnblockBrief = ({ refusal = null, attempt = 1, maxAttempts = 3 } = {}) => {
+  const reason = normalizeString(refusal?.reason).slice(0, 400);
+  const missing = (refusal?.missingRequiredContext || []).slice(0, 10).join(', ');
+  const findings = [{
+    code: 'writer_returned_no_draft',
+    severity: 'critical',
+    problem: reason
+      ? `Lần viết trước không trả về bài. Agent nêu lý do: ${reason}`
+      : 'Lần viết trước trả về bài rỗng mà không nêu lý do.',
+    fix: [
+      'Bối cảnh trong yêu cầu này CHÍNH LÀ chuỗi sản xuất đầy đủ cho một bài mới.',
+      missing
+        ? `Các trường bạn báo thiếu (${missing}) là ID nội bộ của hệ thống điều phối, cố tình không gửi cho người viết; thiếu chúng nghĩa là "viết bài mới", không phải lỗi.`
+        : '',
+      'Hãy viết từ topic, editorialBrief, hợp đồng bằng chứng và hợp đồng trình bày đã có.',
+      'Nếu một dữ kiện cụ thể không được cấp, hãy bỏ dữ kiện đó và viết phần còn lại; chỉ từ chối khi bằng chứng không đủ cho BẤT KỲ nội dung an toàn nào.'
+    ].filter(Boolean).join(' ')
+  }];
+  if (refusal?.status === 'too_short') {
+    findings[0].code = 'writer_draft_too_short';
+    findings[0].fix = 'Viết đủ độ dài yêu cầu trong brief. Đừng dừng ở phần mở đầu hay ở một đoạn tóm tắt.';
+  }
+  return buildRevisionBrief({
+    editorial: { findings: [] },
+    reviews: [],
+    seniorFindings: findings,
+    attempt,
+    maxAttempts
+  });
+};
 
 class AgenticBlogCoreService {
   static async seedStyleLibrary() {
@@ -2689,6 +2749,8 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         let originalityAttempts = 0;
         let llmDraft = null;
         let llmGenerationError = '';
+        let writerRefusal = null;
+        const writerRefusals = [];
         // Every editorial reviewer now runs inside the retry loop. They used to
         // run only after it exited, so a draft that satisfied originality but
         // failed brand voice, spam or depth was blocked with no attempt left to
@@ -2731,16 +2793,26 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         });
             } catch (error) {
                 llmGenerationError = safeErrorCode({ code: error?.code || 'LLM_GENERATION_FAILED' });
+                if (error?.writerRefusal) {
+                    writerRefusal = error.writerRefusal;
+                    writerRefusals.push({ attempt: originalityAttempts, ...error.writerRefusal });
+                }
             }
             if (generated?.html) {
                 llmDraft = generated;
                 contentHtml = generated.html;
             } else if (!revisionContext) {
-                llmDraft = null;
-                contentHtml = buildDraft({
-                    topic, primaryKeyword, architecture: context.architecture, style: context.style,
-                    variantIndex: Number(context.style.activeVariant?.usageIndex || 0) + attempt
+                // A writer that returned nothing is a defective brief, not a weak
+                // draft. Filling in from the template bank published boilerplate
+                // under a real topic AND sent the board off to review the
+                // template, so the next attempt was handed a revision brief about
+                // defects the writer had never written. Repair and ask again.
+                revisionBrief = buildWriterUnblockBrief({
+                    refusal: writerRefusal,
+                    attempt: originalityAttempts,
+                    maxAttempts: maxOriginalityAttempts
                 });
+                continue;
             } else {
         contentHtml = '';
         break;
@@ -2877,6 +2949,18 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         `The ${revisionAction} revision writer did not return a safe context-aware draft`
       );
       error.code = 'REVISION_WRITER_UNAVAILABLE';
+      throw error;
+    }
+    // Nothing but an agent-written draft may be persisted. Publishing the
+    // template bank under a researched topic looked like success in every
+    // report while shipping off-topic boilerplate, which is worse than shipping
+    // nothing: the run is stopped, the roadmap topic goes back to ready, and the
+    // schedule tries again instead of quietly lowering the bar.
+    if (!llmDraft?.html) {
+      const error = new Error('The content writer returned no usable draft in any attempt');
+      error.code = 'WRITER_DRAFT_UNAVAILABLE';
+      error.writerRefusals = writerRefusals;
+      error.llmGenerationError = llmGenerationError;
       throw error;
     }
     // The loop can exit before any reviewer ran (an empty revision draft breaks
@@ -3153,6 +3237,7 @@ module.exports = {
   buildLlmDraftMessages,
   buildRevisionWritingContext,
   buildDraft,
+  buildWriterUnblockBrief,
     buildProductRecommendationHtml,
     buildSearchConsoleContext,
     decideTopicAction,

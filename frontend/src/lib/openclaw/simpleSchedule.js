@@ -188,7 +188,10 @@ const SOURCE_WARNING_CODES = new Set([
 	'GOOGLE_INTELLIGENCE_SNAPSHOT_UNAVAILABLE',
 	'ROADMAP_INTELLIGENCE_UNAVAILABLE',
 	'ROADMAP_REQUIRED_EVIDENCE_UNAVAILABLE',
-	'ROADMAP_SCORE_UNREACHABLE'
+	'ROADMAP_SCORE_UNREACHABLE',
+	// Not a breakage: the run declined to save a template stand-in and kept the
+	// topic for the next slot.
+	'WRITER_DRAFT_UNAVAILABLE'
 ]);
 
 export const simpleExecutionOutcomeKind = (errorCode) => {
@@ -244,6 +247,10 @@ const ERROR_LABELS = {
 	ROADMAP_REQUIRED_EVIDENCE_UNAVAILABLE: {
 		vi: 'Bằng chứng bắt buộc cho việc chấm điểm chủ đề chưa sẵn sàng. Lần chạy được dừng an toàn và kế hoạch cũ vẫn được giữ nguyên.',
 		en: 'Required scoring evidence is unavailable. The run stopped safely and the previous roadmap remains active.'
+	},
+	WRITER_DRAFT_UNAVAILABLE: {
+		vi: 'Người viết chưa trả về bản nháp đạt yêu cầu trong lượt này. Hệ thống không lưu bài mẫu thay thế; chủ đề được giữ lại và sẽ thử lại.',
+		en: 'The writer returned no usable draft this run. No template article was saved; the topic is kept and will be retried.'
 	},
 	ROADMAP_SCORE_UNREACHABLE: {
 		vi: 'Dữ liệu đã xác thực hiện có chưa thể đạt ngưỡng chất lượng. Hệ thống không gọi model, không thay kế hoạch cũ và sẽ chờ nguồn tốt hơn.',

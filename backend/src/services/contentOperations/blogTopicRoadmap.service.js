@@ -40,6 +40,9 @@ const TRANSIENT_FAILURE_CODES = new Set([
     'GOOGLE_INTELLIGENCE_BUILD_BUSY',
     'GOOGLE_INTELLIGENCE_BUILD_LEASE_LOST',
     'ROADMAP_INTELLIGENCE_UNAVAILABLE',
+    // The writer produced nothing this run. The topic itself was never the
+    // problem, so return it to the queue instead of burning it.
+    'WRITER_DRAFT_UNAVAILABLE',
     'OPENCLAW_AGENT_GATEWAY_UNREACHABLE',
     'OPENCLAW_AGENT_HTTP_408',
     'OPENCLAW_AGENT_HTTP_429',

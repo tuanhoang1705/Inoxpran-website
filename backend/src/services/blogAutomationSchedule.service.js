@@ -54,7 +54,11 @@ const TRANSIENT_EXECUTION_CODE_PATTERNS = [
     /(?:^|[_-])(?:RATE_LIMIT|TOO_MANY_REQUESTS)(?:$|[_-])/,
     /(?:^|[_-])(?:SERVICE_UNAVAILABLE|GATEWAY_UNAVAILABLE|GATEWAY_TIMEOUT)(?:$|[_-])/,
     /(?:^|[_-])(?:TEMPORARY|TRANSIENT|UPSTREAM_UNAVAILABLE)(?:$|[_-])/,
-    /^E(?:CONNRESET|CONNREFUSED|TIMEDOUT|AI_AGAIN|NETUNREACH|HOSTUNREACH|PIPE)$/
+    /^E(?:CONNRESET|CONNREFUSED|TIMEDOUT|AI_AGAIN|NETUNREACH|HOSTUNREACH|PIPE)$/,
+    // The writer returned nothing this run. Nothing is misconfigured and the
+    // topic is still good, so this is worth retrying with backoff rather than
+    // failing the schedule.
+    /^WRITER_DRAFT_UNAVAILABLE$/
 ];
 const TERMINAL_EXECUTION_CODE_PATTERNS = [
     /(?:^|[_-])(?:INVALID|VALIDATION|MALFORMED|UNSUPPORTED|MISSING|NOT_ALLOWED|UNSAFE)(?:$|[_-])/,
