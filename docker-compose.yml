@@ -343,8 +343,11 @@
       PORT: 20128
       HOSTNAME: 0.0.0.0
       DATA_DIR: /app/data
-      BASE_URL: http://nine-router:20128
-      NEXT_PUBLIC_BASE_URL: http://nine-router:20128
+      # The dashboard builds its own redirects from these. Left at the internal
+      # host they point a browser at a name it cannot resolve, so the login flow
+      # dead-ends the moment the panel is reached through a public hostname.
+      BASE_URL: ${NINE_ROUTER_PUBLIC_URL:-http://nine-router:20128}
+      NEXT_PUBLIC_BASE_URL: ${NINE_ROUTER_PUBLIC_URL:-http://nine-router:20128}
       JWT_SECRET: ${NINE_ROUTER_JWT_SECRET:?Set the 9router dashboard JWT secret through the deployment secret store}
       INITIAL_PASSWORD: ${NINE_ROUTER_INITIAL_PASSWORD:?Set a strong initial 9router dashboard password}
       API_KEY_SECRET: ${NINE_ROUTER_API_KEY_SECRET:?Set the 9router API-key signing secret through the deployment secret store}
@@ -352,7 +355,9 @@
       ENABLE_REQUEST_LOGS: "false"
       OBSERVABILITY_ENABLED: "false"
       REQUIRE_API_KEY: "true"
-      AUTH_COOKIE_SECURE: "false"
+      # Must become "true" wherever the panel is served over HTTPS, or the
+      # session cookie ships without the Secure attribute.
+      AUTH_COOKIE_SECURE: ${NINE_ROUTER_AUTH_COOKIE_SECURE:-false}
     volumes:
       - ${NINE_ROUTER_DATA_HOST_PATH:?Set the external 9router data directory}:/app/data
     restart: unless-stopped
@@ -557,6 +562,11 @@
     restart: unless-stopped
     networks:
       - appnet
+      # Reaching the 9router dashboard from a browser needs the public proxy to
+      # share a network with it. This is the one place where the internet-facing
+      # edge can address the model router, so its server block below refuses any
+      # request that did not come through Cloudflare Access.
+      - modelnet
 
   certbot:
     image: ${CERTBOT_IMAGE:?Set CERTBOT_IMAGE to a reviewed immutable digest}
