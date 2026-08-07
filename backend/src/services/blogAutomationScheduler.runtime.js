@@ -121,6 +121,18 @@ const tick = async () => {
     const tickErrors = [];
     if (registrationPromise) await registrationPromise.catch(() => false);
     if (stopping) return null;
+    // Runtime control toggles only mutate process.env in the process that served the
+    // admin request, so this scheduler re-reads the persisted state before every tick;
+    // otherwise a toggle stays invisible in the worker process until it restarts.
+    // Required lazily to break the cycle back through openclawCapabilityHealth.service.
+    const { openClawRuntimeControlService } = require('./openclawRuntimeControl.service');
+    await openClawRuntimeControlService.hydrate({ waitForConnection: false })
+        .catch((error) => {
+            const errorCode = safeErrorCode(error);
+            tickErrors.push(errorCode);
+            console.error('OpenClaw runtime control refresh failed:', errorCode);
+            return null;
+        });
     if (!isSeoAgentEnabled() && !isCronEnabled() && !isGoogleIntelligenceEnabled() && !isContentOperationsScheduleEnabled() && !isPerformanceMonitoringEnabled()) {
         lastTickCompletedAt = new Date();
         lastSuccessfulTickAt = lastTickCompletedAt;
