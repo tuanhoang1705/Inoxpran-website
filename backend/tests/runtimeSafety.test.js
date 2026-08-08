@@ -27,6 +27,13 @@ const repositoryRoot = path.resolve(
   "..",
 );
 
+// These assertions match against literal newlines, and a Windows checkout stores
+// these files with CRLF, which silently fails every multi-line pattern here.
+const readRepositoryFile = (relativePath) =>
+  fs
+    .readFileSync(path.join(repositoryRoot, relativePath), "utf8")
+    .replace(/\r\n/g, "\n");
+
 const productionEnv = (overrides = {}) => ({
   NODE_ENV: "production",
   MONGODB_URI: "mongodb://database.invalid/app",
@@ -88,18 +95,9 @@ describe("runtime production safety", () => {
   });
 
   it("hard-disables the simple-schedule publish opt-in across release surfaces", () => {
-    const deployScript = fs.readFileSync(
-      path.join(repositoryRoot, "deploy/scripts/deploy.sh"),
-      "utf8",
-    );
-    const compose = fs.readFileSync(
-      path.join(repositoryRoot, "docker-compose.yml"),
-      "utf8",
-    );
-    const exampleEnv = fs.readFileSync(
-      path.join(repositoryRoot, ".env.example"),
-      "utf8",
-    );
+    const deployScript = readRepositoryFile("deploy/scripts/deploy.sh");
+    const compose = readRepositoryFile("docker-compose.yml");
+    const exampleEnv = readRepositoryFile(".env.example");
     expect(deployScript).toMatch(
       /for protected_flag in[\s\S]*OPENCLAW_BLOG_AUTO_PUBLISH[\s\S]*do/,
     );
@@ -108,22 +106,10 @@ describe("runtime production safety", () => {
   });
 
   it("plumbs fail-closed model identity and opt-in evidence search through release surfaces", () => {
-    const deployScript = fs.readFileSync(
-      path.join(repositoryRoot, "deploy/scripts/deploy.sh"),
-      "utf8",
-    );
-    const compose = fs.readFileSync(
-      path.join(repositoryRoot, "docker-compose.yml"),
-      "utf8",
-    );
-    const exampleEnv = fs.readFileSync(
-      path.join(repositoryRoot, ".env.example"),
-      "utf8",
-    );
-    const openclawConfig = fs.readFileSync(
-      path.join(repositoryRoot, "deploy/openclaw/openclaw.json5"),
-      "utf8",
-    );
+    const deployScript = readRepositoryFile("deploy/scripts/deploy.sh");
+    const compose = readRepositoryFile("docker-compose.yml");
+    const exampleEnv = readRepositoryFile(".env.example");
+    const openclawConfig = readRepositoryFile("deploy/openclaw/openclaw.json5");
     const patcher = fs.readFileSync(
       path.join(
         repositoryRoot,
