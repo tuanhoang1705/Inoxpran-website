@@ -14,6 +14,7 @@ const { optimizeImage } = require("./imageOptimize.service");
 const { reviewImageQuality } = require("./imageQualityReview.service");
 const { downloadRemoteImage, searchImages } = require("./imageSearch.service");
 const { buildVisualPlan } = require("./visualPlan.service");
+const { composePoster, isPosterEnabled } = require("./posterComposer.service");
 
 const parseBoolean = (value, fallback = false) => {
   if (typeof value === "boolean") return value;
@@ -190,12 +191,35 @@ const acquirePlanItemImage = async ({
   prompt,
   seo,
   warnings,
+  posterProductImageUrl = "",
 }) => {
   const source = await resolveSourceImage({ planItem, prompt, warnings });
   if (!source) return null;
 
+  // Composed before optimisation so the existing resize, WebP encode and checksum
+  // still describe exactly what gets stored.
+  let baseBuffer = source.buffer;
+  let posterApplied = [];
+  if (planItem.purpose === "cover" && isPosterEnabled()) {
+    try {
+      const productImageBuffer = posterProductImageUrl
+        ? (await downloadRemoteImage(posterProductImageUrl)).buffer
+        : null;
+      const poster = await composePoster({
+        baseBuffer,
+        productImageBuffer,
+        width: Number(planItem.width) || 1200,
+        height: Number(planItem.height) || 675,
+      });
+      baseBuffer = poster.buffer;
+      posterApplied = poster.applied;
+    } catch (error) {
+      warnings.push(error?.message || "poster_composition_failed");
+    }
+  }
+
   const optimized = await optimizeImage({
-    buffer: source.buffer,
+    buffer: baseBuffer,
     purpose: planItem.purpose,
     width: planItem.width,
     height: planItem.height,
@@ -256,6 +280,7 @@ const acquirePlanItemImage = async ({
     qualityReview: {
       ...finalReview,
       manualReviewRequired: source.manualReviewRequired,
+      ...(posterApplied.length ? { posterOverlays: posterApplied } : {}),
     },
     ...(planItem.purpose === "inline"
       ? {
@@ -273,6 +298,7 @@ const processPlanItem = async ({
   slug,
   primaryKeyword,
   warnings,
+  posterProductImageUrl = "",
 }) => {
   const prompt = buildImagePrompt(planItem);
   const seo = buildImageSeoMetadata({
@@ -291,6 +317,7 @@ const processPlanItem = async ({
         prompt,
         seo,
         warnings,
+        posterProductImageUrl,
       });
       if (acquired) return acquired;
       lastReason = "no_image_provider_result";
@@ -313,6 +340,7 @@ const runImagePipeline = async ({
   articleType,
   imageSearchQuery = "",
   editorialProductPlacement = null,
+  posterProductImageUrl = "",
 } = {}) => {
   const visualPlan = buildVisualPlan({
     title,
@@ -365,7 +393,7 @@ const runImagePipeline = async ({
   for (const planItem of planItems) {
     try {
       results.push(
-        await processPlanItem({ planItem, slug, primaryKeyword, warnings }),
+        await processPlanItem({ planItem, slug, primaryKeyword, warnings, posterProductImageUrl }),
       );
     } catch (error) {
       warnings.push(error?.message || `${planItem.id}_image_pipeline_failed`);

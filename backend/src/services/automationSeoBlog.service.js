@@ -1892,6 +1892,7 @@ class AutomationSeoBlogService {
           primaryKeyword: normalized.primaryKeyword,
           articleType: normalized.articleType,
           imageSearchQuery: normalizeString(payload.imageSearchQuery || ''),
+        posterProductImageUrl: mentionEnrichment.productImageUrl || '',
           editorialProductPlacement: verifiedPlacementPlan
         });
       } catch (error) {

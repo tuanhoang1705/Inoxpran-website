@@ -174,7 +174,8 @@ const enrichProductMentions = async ({
             reason: '',
             code,
             productId: String(item._id),
-            productName: item.product_name
+            productName: item.product_name,
+            productImageUrl: normalizeString(item.product_thumb)
         };
     }
 
