@@ -1888,6 +1888,7 @@ class AutomationSeoBlogService {
           articleType: normalized.articleType,
           imageSearchQuery: normalizeString(payload.imageSearchQuery || ''),
         posterProductImageUrl: mention.productImageUrl || '',
+        productSubject: mention.productSubject || '',
           editorialProductPlacement: verifiedPlacementPlan
         });
       } catch (error) {

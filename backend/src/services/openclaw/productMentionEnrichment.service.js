@@ -58,6 +58,17 @@ const resolveProductByCode = async (code, model = product) => {
     return found;
 };
 
+// "Máy sấy bát đĩa INOXPRAN INP6601" -> "Máy sấy bát đĩa". Image prompts need the
+// appliance type; the brand and model code mean nothing to an image model, and the
+// prompts forbid brand marks in the frame anyway.
+const toProductSubject = (name) => normalizeString(
+    String(name || '')
+        .replace(/\bINOXPRAN\b/gi, ' ')
+        .replace(/\bINP\s?\d{4}[a-z0-9-]*/gi, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/[-–—,]\s*$/, '')
+);
+
 const formatPrice = (value) => {
     const amount = Number(value);
     if (!Number.isFinite(amount) || amount <= 0) return '';
@@ -155,6 +166,7 @@ const resolveMentionedProduct = async ({ html, productModel = product } = {}) =>
             item,
             productId: String(item._id),
             productName: item.product_name,
+            productSubject: toProductSubject(item.product_name),
             productImageUrl: normalizeString(item.product_thumb)
         };
     }
@@ -218,5 +230,6 @@ module.exports = {
     enrichProductMentions,
     findMentionedCodes,
     resolveInsertionPoint,
-    resolveMentionedProduct
+    resolveMentionedProduct,
+    toProductSubject
 };

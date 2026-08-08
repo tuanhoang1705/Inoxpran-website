@@ -78,7 +78,8 @@ const buildVisualPlan = ({
     contentHtml,
     targetKeyword,
     articleType,
-    editorialProductPlacement = null
+    editorialProductPlacement = null,
+    productSubject = ''
 } = {}) => {
     const resolvedType = detectArticleType({ title, category, articleType });
     const headings = extractHeadings(contentHtml, outline);
@@ -93,6 +94,7 @@ const buildVisualPlan = ({
         category: normalizeString(category),
         summary: normalizeString(summary),
         targetKeyword: normalizeString(targetKeyword),
+        productSubject: normalizeString(productSubject),
         visualRule: TYPE_RULES[resolvedType]
     };
 

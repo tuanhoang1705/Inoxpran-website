@@ -41,21 +41,33 @@ const NEGATIVE_PROMPT = [
 
 const buildImagePrompt = (planItem = {}) => {
     const subject = normalizeString(planItem.afterHeading || planItem.articleTitle);
+    // The article title carries a model code, which means nothing to an image
+    // model, while the generic fallbacks below name cookware outright. An article
+    // about a dish dryer was illustrated with pots because that is literally what
+    // the prompt asked for, so the real product type leads when it is known.
+    const productSubject = normalizeString(planItem.productSubject);
     const purposeDirection = planItem.purpose === 'cover'
         ? 'Editorial cover photograph with a clear focal point, useful negative space, strong but natural composition for blog click-through.'
         : `Documentary editorial photograph that directly illustrates the section "${subject}".`;
     const careDirection = planItem.articleType === 'product_care' || planItem.articleType === 'how_to'
-        ? 'When relevant show mild yellow stains, white mineral deposits, light burn marks, a soft cloth, lemon, vinegar, baking soda, or warm water; keep the scene practical and safe.'
+        ? productSubject
+            ? `Show realistic everyday upkeep of ${productSubject} only; use props that genuinely belong to that appliance and keep the scene practical and safe.`
+            : 'When relevant show mild yellow stains, white mineral deposits, light burn marks, a soft cloth, lemon, vinegar, baking soda, or warm water; keep the scene practical and safe.'
         : '';
 
     return {
         positivePrompt: [
             purposeDirection,
+            productSubject
+                ? `The pictured appliance must be ${productSubject}. Do not substitute pots, pans, kettles or any other cookware.`
+                : '',
             `Topic: ${normalizeString(planItem.articleTitle)}.`,
             `Visual rule: ${normalizeString(planItem.visualRule)}.`,
             planItem.imageSearchQuery
                 ? `Scene guidance: ${normalizeString(planItem.imageSearchQuery)}. Realistic Vietnamese home setting, natural window light, believable proportions and materials.`
-                : 'Realistic Vietnamese home kitchen, natural window light, real countertops, practical stainless steel cookware, believable proportions and materials.',
+                : productSubject
+                    ? 'Realistic Vietnamese home kitchen, natural window light, real countertops, believable proportions and materials.'
+                    : 'Realistic Vietnamese home kitchen, natural window light, real countertops, practical stainless steel cookware, believable proportions and materials.',
             careDirection,
             // Varied look + fixed safety clause (no brand marks / no in-image text).
             `${pickAesthetic(`${normalizeString(planItem.articleTitle)}|${subject}|${planItem.purpose || ''}`)} No visible brand marks, no text inside the image.`
