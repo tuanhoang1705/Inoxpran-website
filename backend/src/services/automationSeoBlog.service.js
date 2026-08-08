@@ -36,6 +36,7 @@ const { EditorialProductPlacementPlanningService } = require('./editorialProduct
 const { extractProductBlocks, reviewProductLayer } = require('./productSeedingReview.service');
 const { extractPlacementBlocks, reviewEditorialProductPlacement } = require('./editorialProductPlacementReview.service');
 const { TelegramApprovalService } = require('./telegramApproval.service');
+const { enrichProductMentions } = require('./openclaw/productMentionEnrichment.service');
 
 const {
   BlogRevisionService
@@ -1861,6 +1862,25 @@ class AutomationSeoBlogService {
         publishReady: false
       };
     } else {
+      // The writer can name a model the placement plan never registered, which
+      // leaves the reader a bare code and no way to see what it is. Attaching the
+      // catalog image here means the editorial images are laid out around it.
+      const mentionEnrichment = await enrichProductMentions({
+        html: normalized.contentHtml,
+        disclosureText: verifiedPlacementPlan?.disclosure?.text || ''
+      }).catch((error) => ({
+        html: normalized.contentHtml,
+        applied: false,
+        reason: sanitizeErrorCode(error)
+      }));
+      normalized.contentHtml = mentionEnrichment.html;
+      normalized.productMentionEnrichment = {
+        applied: mentionEnrichment.applied,
+        reason: mentionEnrichment.reason || '',
+        code: mentionEnrichment.code || '',
+        productId: mentionEnrichment.productId || ''
+      };
+
       try {
         imagePipeline = await runImagePipeline({
           title: normalized.title,
