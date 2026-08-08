@@ -53,7 +53,9 @@ const validateTelegramImageUrl = async ({
         const body = await readLimitedImage(response, maxBytes);
         const sizeBytes = body.byteLength;
         if (!sizeBytes) throw new Error('telegram_image_empty');
-        return { safe: true, canonicalUrl, mimeType, sizeBytes };
+        // The bytes are already in hand, and handing them to the caller lets it
+        // upload the image instead of passing on a URL that carries a read token.
+        return { safe: true, canonicalUrl, mimeType, sizeBytes, bytes: body };
     } catch (error) {
         if (error?.name === 'AbortError') throw new Error('telegram_image_timeout');
         throw error;

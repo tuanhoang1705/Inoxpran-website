@@ -200,6 +200,7 @@ const acquirePlanItemImage = async ({
   // still describe exactly what gets stored.
   let baseBuffer = source.buffer;
   let posterApplied = [];
+  let posterDesign = "";
   if (planItem.purpose === "cover" && isPosterEnabled()) {
     try {
       const productImageBuffer = posterProductImageUrl
@@ -210,9 +211,11 @@ const acquirePlanItemImage = async ({
         productImageBuffer,
         width: Number(planItem.width) || 1200,
         height: Number(planItem.height) || 675,
+        designSeed: slug,
       });
       baseBuffer = poster.buffer;
       posterApplied = poster.applied;
+      posterDesign = poster.design;
     } catch (error) {
       warnings.push(error?.message || "poster_composition_failed");
     }
@@ -280,7 +283,9 @@ const acquirePlanItemImage = async ({
     qualityReview: {
       ...finalReview,
       manualReviewRequired: source.manualReviewRequired,
-      ...(posterApplied.length ? { posterOverlays: posterApplied } : {}),
+      ...(posterApplied.length
+        ? { posterOverlays: posterApplied, posterDesign }
+        : {}),
     },
     ...(planItem.purpose === "inline"
       ? {

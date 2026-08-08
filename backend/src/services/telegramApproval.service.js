@@ -187,7 +187,47 @@ const sendMessageWithRetry = async (args) => {
     throw lastError;
 };
 
-const sendPhoto = async ({ chatId, photo, caption, adminEditUrl, token = normalizeString(process.env.TELEGRAM_BOT_TOKEN), postTelegramImpl = postTelegram }) => {
+// Storage download URLs carry a read token, so the image is uploaded as bytes
+// rather than handed to Telegram as a link. Passing the link would leak a working
+// credential to a third party, which the URL guard refuses outright.
+const uploadPhoto = async ({ chatId, bytes, mimeType, caption, adminEditUrl, token, fetchImpl = global.fetch, timeoutMs = 20_000 }) => {
+    const form = new FormData();
+    form.set('chat_id', String(chatId));
+    if (caption) form.set('caption', caption);
+    form.set('reply_markup', JSON.stringify({
+        inline_keyboard: adminEditUrl ? [[{ text: 'Open admin editor', url: adminEditUrl }]] : []
+    }));
+    form.set('photo', new Blob([bytes], { type: mimeType || 'image/jpeg' }), 'cover.webp');
+
+    const response = await fetchImpl(`${TELEGRAM_API_BASE}/bot${token}/sendPhoto`, {
+        method: 'POST',
+        body: form,
+        signal: AbortSignal.timeout(timeoutMs)
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok === false) {
+        throw new Error(payload?.description || `telegram_sendPhoto_failed_${response.status}`);
+    }
+    return payload.result || payload;
+};
+
+const sendPhoto = async ({
+    chatId,
+    photo,
+    photoBytes = null,
+    photoMimeType = '',
+    caption,
+    adminEditUrl,
+    token = normalizeString(process.env.TELEGRAM_BOT_TOKEN),
+    postTelegramImpl = postTelegram,
+    uploadPhotoImpl = uploadPhoto
+}) => {
+    if (photoBytes?.byteLength) {
+        const uploaded = await uploadPhotoImpl({
+            chatId, bytes: photoBytes, mimeType: photoMimeType, caption, adminEditUrl, token
+        });
+        return { sent: true, messageId: uploaded?.message_id ? String(uploaded.message_id) : '' };
+    }
     const result = await postTelegramImpl({
         token, method: 'sendPhoto',
         body: {
@@ -210,7 +250,12 @@ const sendApprovalNotification = async ({
         try {
             const validated = await validateImageImpl({ url: approval.coverImageUrl });
             const result = await sendPhotoImpl({
-                chatId, photo: validated.canonicalUrl, caption: buildDraftCaption({ approval }), adminEditUrl: approval.adminEditUrl
+                chatId,
+                photo: validated.canonicalUrl,
+                photoBytes: validated.bytes,
+                photoMimeType: validated.mimeType,
+                caption: buildDraftCaption({ approval }),
+                adminEditUrl: approval.adminEditUrl
             });
             return { ...result, notificationType: 'photo', notificationStatus: 'sent', notificationError: '' };
         } catch (error) {
@@ -345,7 +390,11 @@ class TelegramApprovalService {
             approvalId: String(approval._id), approvalCode: approval.approvalCode,
             status: sent.length ? 'sent' : 'failed', notificationType: approval.notificationType,
             notificationStatus: approval.notificationStatus, sent, failed,
-            reason: sent.length ? '' : (failed[0]?.error || approval.notificationError || 'telegram_send_failed')
+            // A photo that failed while the text went through is still a fault the
+            // operator has to see, so the reason is reported on partial success too.
+            reason: failed[0]?.error
+                || approval.notificationError
+                || (sent.length ? '' : 'telegram_send_failed')
         };
     }
 

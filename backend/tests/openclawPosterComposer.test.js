@@ -4,9 +4,11 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const sharp = require("sharp");
 const {
+  DESIGNS,
   composePoster,
   isPosterEnabled,
   layout,
+  pickDesign,
 } = require("../src/services/openclaw/posterComposer.service");
 
 const solid = (width, height, background) =>
@@ -24,7 +26,33 @@ describe("isPosterEnabled", () => {
   });
 });
 
+describe("pickDesign", () => {
+  it("gives one article the same look every time it is rebuilt", () => {
+    expect(pickDesign("noi-com-inp6002").id).toBe(pickDesign("noi-com-inp6002").id);
+  });
+
+  it("spreads articles across the available designs", () => {
+    const seen = new Set(
+      Array.from({ length: 60 }, (_, i) => pickDesign(`bai-viet-so-${i}`).id),
+    );
+    expect(seen.size).toBeGreaterThan(1);
+    for (const id of seen) expect(DESIGNS.map((d) => d.id)).toContain(id);
+  });
+});
+
 describe("layout", () => {
+  it("keeps every design inside the canvas with the logo clear of the product", () => {
+    for (const design of DESIGNS) {
+      const box = layout(1200, 675, design);
+      expect(box.productLeft).toBeGreaterThanOrEqual(0);
+      expect(box.productLeft + box.productWidth).toBeLessThanOrEqual(1200);
+      expect(box.productTop + box.productHeight).toBeLessThanOrEqual(675);
+      const logoRight = box.logoLeft + box.logoWidth;
+      const overlaps = logoRight > box.productLeft && box.logoLeft < box.productLeft + box.productWidth;
+      expect(overlaps).toBe(false);
+    }
+  });
+
   it("keeps the product panel inside the canvas", () => {
     const box = layout(1200, 675);
 
