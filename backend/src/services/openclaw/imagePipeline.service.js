@@ -24,6 +24,33 @@ const parseBoolean = (value, fallback = false) => {
   return fallback;
 };
 
+// Storage returns these for its own transient faults; a planned image is lost for
+// good if one of them ends the attempt, so the upload is retried before giving up.
+const TRANSIENT_UPLOAD_ERROR =
+  /internalerror|backenderror|serviceunavailable|timeout|fetch failed|econnres|etimedout|econnrefused|socket hang up|network|und_err|eai_again|"code"\s*:\s*5\d\d/i;
+
+const uploadImageWithRetry = async (
+  params,
+  { attempts = 3, uploadImpl = uploadImage, retryDelayMs = 1500 } = {},
+) => {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await uploadImpl(params);
+    } catch (error) {
+      lastError = error;
+      const retryable = TRANSIENT_UPLOAD_ERROR.test(
+        `${error?.message || ""} ${error?.code || ""} ${error?.cause?.code || ""}`,
+      );
+      if (!retryable || attempt === attempts) throw lastError;
+      await new Promise((resolve) =>
+        setTimeout(resolve, attempt * retryDelayMs),
+      );
+    }
+  }
+  throw lastError;
+};
+
 const buildStorageFolder = (slug, date = new Date()) => {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -184,7 +211,7 @@ const processPlanItem = async ({
     index: planItem.headingIndex,
     extension: "webp",
   });
-  const uploaded = await uploadImage({
+  const uploaded = await uploadImageWithRetry({
     file: {
       buffer: optimized.buffer,
       mimetype: optimized.mimeType,
@@ -358,4 +385,5 @@ const runImagePipeline = async ({
 module.exports = {
   buildStorageFolder,
   runImagePipeline,
+  uploadImageWithRetry,
 };
