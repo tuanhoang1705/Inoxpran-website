@@ -35,6 +35,7 @@ const { ProductSeedPlanningService } = require('./productSeedPlanning.service');
 const { EditorialProductPlacementPlanningService } = require('./editorialProductPlacementPlanning.service');
 const { extractProductBlocks, reviewProductLayer } = require('./productSeedingReview.service');
 const { extractPlacementBlocks, reviewEditorialProductPlacement } = require('./editorialProductPlacementReview.service');
+const { TelegramApprovalService } = require('./telegramApproval.service');
 
 const {
   BlogRevisionService
@@ -189,6 +190,28 @@ const buildPublicUrl = slug => {
 
 const appendDraftReason = (reasons, reason) => {
     if (!reasons.includes(reason)) reasons.push(reason);
+};
+
+// The pipeline already retried each of these images and still came back without a
+// file, so nobody learns about the gap unless the article is opened. Telegram is
+// where the operator already handles drafts, so the shortfall is reported there.
+const alertOnMissingImages = async ({ title, slug, imagePipeline }) => {
+    const planned = [imagePipeline?.coverImage, ...(imagePipeline?.contentImages || [])]
+        .filter(Boolean);
+    const missing = planned.filter((image) => !image.url);
+    if (!planned.length || !missing.length) return { sent: false, reason: 'no_missing_images' };
+
+    const reasons = [...new Set(missing.map((image) => image.warning).filter(Boolean))];
+    const text = [
+        'Bai blog thieu anh sau khi da thu lai du so lan.',
+        `Tieu de: ${title}`,
+        `Slug: ${slug}`,
+        `Thieu ${missing.length}/${planned.length} anh${missing.includes(imagePipeline?.coverImage) ? ' (bao gom anh bia)' : ''}.`,
+        reasons.length ? `Ly do: ${reasons.join(' | ')}` : ''
+    ].filter(Boolean).join('\n');
+
+    return TelegramApprovalService.notifyOperators({ text })
+        .catch((error) => ({ sent: false, reason: error?.message || 'telegram_notify_failed' }));
 };
 
 const buildBlogLifecycleMetadata = ({
@@ -1866,6 +1889,12 @@ class AutomationSeoBlogService {
       }
     }
 
+    await alertOnMissingImages({
+      title: normalized.title,
+      slug: normalized.slug,
+      imagePipeline
+    });
+
     const requireCover = parseBoolean(
       process.env.OPENCLAW_REQUIRE_COVER_IMAGE_FOR_PUBLISH,
       true
@@ -2251,3 +2280,4 @@ AutomationSeoBlogService.assertPublisherArtifactChainProvenance =
   assertPublisherArtifactChainProvenance;
 
 module.exports = AutomationSeoBlogService;
+module.exports.alertOnMissingImages = alertOnMissingImages;

@@ -242,6 +242,26 @@ class TelegramApprovalService {
     static validateWebhookSecret({ headers }) { validateWebhookSecretHeader(headers); }
     static parseCommand(text) { return parseTelegramCommand(text); }
 
+    // Operator-facing alert that carries no approval code: it reports a condition
+    // someone has to act on, rather than asking for a publish decision.
+    static async notifyOperators({ text, sendMessageImpl = sendMessageWithRetry }) {
+        if (!isTelegramEnabled()) return { sent: false, reason: 'telegram_disabled' };
+        const chatIds = getNotifyChatIds();
+        if (!chatIds.length) return { sent: false, reason: 'telegram_no_notify_chat' };
+        const failures = [];
+        for (const chatId of chatIds) {
+            try {
+                await sendMessageImpl({ chatId, text });
+            } catch (error) {
+                failures.push(error?.message || 'telegram_notify_failed');
+            }
+        }
+        if (failures.length === chatIds.length) {
+            return { sent: false, reason: failures[0] };
+        }
+        return { sent: true, reason: failures[0] || '' };
+    }
+
     static async createDraftApprovalAndNotify({
         blogId, blogTitle, blogSlug, scheduleId, executionId,
         coverImageUrl = '', snapshotStatus = '', styleFamily = '', reviewStatus = ''
