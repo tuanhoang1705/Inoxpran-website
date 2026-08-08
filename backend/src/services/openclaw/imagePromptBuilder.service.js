@@ -58,8 +58,10 @@ const buildImagePrompt = (planItem = {}) => {
     return {
         positivePrompt: [
             purposeDirection,
+            // Naming forbidden items backfires once the subject is one of them, so
+            // the rule is stated against the named subject rather than a list.
             productSubject
-                ? `The pictured appliance must be ${productSubject}. Do not substitute pots, pans, kettles or any other cookware.`
+                ? `The pictured appliance must be ${productSubject}, and no other kind of kitchen appliance or cookware may stand in for it.`
                 : '',
             `Topic: ${normalizeString(planItem.articleTitle)}.`,
             `Visual rule: ${normalizeString(planItem.visualRule)}.`,

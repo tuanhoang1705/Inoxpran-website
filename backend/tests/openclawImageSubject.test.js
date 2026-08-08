@@ -42,7 +42,9 @@ describe("image prompts for an article about a known product", () => {
     for (const item of [plan.cover, ...plan.inline]) {
       const { positivePrompt } = buildImagePrompt(item);
       expect(positivePrompt).toContain("must be Máy sấy bát đĩa");
-      expect(positivePrompt).toContain("Do not substitute pots, pans, kettles");
+      expect(positivePrompt).toContain("no other kind of kitchen appliance");
+      // Naming forbidden items breaks down when the subject is one of them.
+      expect(positivePrompt).not.toMatch(/Do not substitute[^.]*kettles/);
       // The generic fallbacks are what produced pots for a dish dryer article.
       expect(positivePrompt).not.toContain("practical stainless steel cookware");
       expect(positivePrompt).not.toContain("light burn marks");
@@ -55,5 +57,21 @@ describe("image prompts for an article about a known product", () => {
 
     expect(positivePrompt).toContain("practical stainless steel cookware");
     expect(positivePrompt).not.toContain("must be");
+  });
+});
+
+describe("a subject that is itself common cookware", () => {
+  it("does not forbid the very appliance it asks for", () => {
+    const plan = buildVisualPlan({
+      title: "Te tay hay thay nuoc quanh am: luc nao phai ngat dien ngay?",
+      slug: "te-tay-hay-thay-nuoc-quanh-am",
+      contentHtml: "<h2>Dau hieu</h2><p>x</p><h2>Xu ly</h2><p>y</p>",
+      articleType: "product_care",
+      productSubject: "Ấm điện siêu tốc",
+    });
+    const { positivePrompt } = buildImagePrompt(plan.cover);
+
+    expect(positivePrompt).toContain("must be Ấm điện siêu tốc");
+    expect(positivePrompt).not.toContain("kettles");
   });
 });
