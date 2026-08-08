@@ -15,21 +15,19 @@ const approval = {
 };
 
 describe("cover delivery to Telegram", () => {
-  it("uploads the bytes instead of handing over a tokenised URL", async () => {
-    const bytes = Buffer.from("fake-image-bytes");
-    const validateImageImpl = vi.fn().mockResolvedValue({
-      safe: true,
-      canonicalUrl: approval.coverImageUrl,
-      mimeType: "image/webp",
-      sizeBytes: bytes.byteLength,
+  it("uploads a tokenised storage cover instead of refusing it", async () => {
+    const bytes = Buffer.from("stored-cover-bytes");
+    const validateOwnAsset = vi.fn().mockResolvedValue({
       bytes,
+      mimeType: "image/webp",
+      canonicalUrl: approval.coverImageUrl,
     });
     const sendPhotoImpl = vi.fn().mockResolvedValue({ sent: true, messageId: "9" });
 
     const result = await sendApprovalNotification({
       chatId: "1",
       approval,
-      validateImageImpl,
+      validateImageImpl: validateOwnAsset,
       sendPhotoImpl,
       sendMessageImpl: vi.fn(),
     });
@@ -40,21 +38,56 @@ describe("cover delivery to Telegram", () => {
     expect(args.photoMimeType).toBe("image/webp");
   });
 
-  it("falls back to text and keeps the reason when the photo cannot be sent", async () => {
-    const sendMessageImpl = vi.fn().mockResolvedValue({ sent: true, messageId: "10" });
+  it("falls back to text and reports why the photo failed", async () => {
+    const sendMessageImpl = vi
+      .fn()
+      .mockResolvedValue({ sent: true, messageId: "10" });
 
     const result = await sendApprovalNotification({
       chatId: "1",
       approval,
       validateImageImpl: vi
         .fn()
-        .mockRejectedValue(new Error("GOOGLE_SOURCE_URL_SENSITIVE_QUERY_NOT_ALLOWED")),
+        .mockRejectedValue(new Error("telegram_image_too_large")),
       sendPhotoImpl: vi.fn(),
       sendMessageImpl,
     });
 
     expect(result.notificationType).toBe("text_fallback");
-    expect(result.notificationError).toContain("SENSITIVE_QUERY");
+    expect(result.notificationError).toContain("telegram_image_too_large");
     expect(sendMessageImpl).toHaveBeenCalledTimes(1);
+  });
+});
+
+const {
+  validateTelegramImageUrl,
+} = require("../src/services/telegramImageSafety.service");
+
+const imageResponse = (bytes) => ({
+  ok: true,
+  headers: new Headers({ "content-type": "image/webp", "content-length": String(bytes.length) }),
+  arrayBuffer: async () => bytes,
+});
+
+describe("cover validation", () => {
+  it("accepts our own storage URL even though it carries a read token", async () => {
+    const bytes = Buffer.from("cover-bytes");
+    const result = await validateTelegramImageUrl({
+      url: approval.coverImageUrl,
+      fetchImpl: async () => imageResponse(bytes),
+    });
+
+    expect(result.safe).toBe(true);
+    expect(result.mimeType).toBe("image/webp");
+    expect(result.bytes.byteLength).toBe(bytes.byteLength);
+  });
+
+  it("still refuses a tokenised URL on somebody else's host", async () => {
+    await expect(
+      validateTelegramImageUrl({
+        url: "https://cdn.example.com/a.png?token=leak-me",
+        fetchImpl: async () => imageResponse(Buffer.from("x")),
+      }),
+    ).rejects.toThrow();
   });
 });

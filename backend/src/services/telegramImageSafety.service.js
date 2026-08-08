@@ -30,6 +30,22 @@ const readLimitedImage = async (response, maxBytes) => {
     return Buffer.concat(chunks);
 };
 
+// assertSafeUrl vets URLs that came from somewhere else, and one of its rules
+// rejects a query string carrying a token. Storage download URLs this system
+// generated always carry one, so covers could never be checked, let alone sent.
+// Our own bucket is therefore exempted from that rule only; transport, type and
+// size are still enforced below, and the URL itself never leaves the server.
+const OWN_STORAGE_HOST = 'firebasestorage.googleapis.com';
+
+const isOwnStorageAsset = (value) => {
+    try {
+        const parsed = new URL(String(value));
+        return parsed.protocol === 'https:' && parsed.hostname.toLowerCase() === OWN_STORAGE_HOST;
+    } catch {
+        return false;
+    }
+};
+
 const validateTelegramImageUrl = async ({
     url,
     timeoutMs = Number(process.env.TELEGRAM_IMAGE_TIMEOUT_MS || 8000),
@@ -37,7 +53,9 @@ const validateTelegramImageUrl = async ({
     fetchImpl = global.fetch,
     resolveHostname = dns.lookup
 }) => {
-    const canonicalUrl = await assertSafeUrl(url, { resolveHostname });
+    const canonicalUrl = isOwnStorageAsset(url)
+        ? String(url)
+        : await assertSafeUrl(url, { resolveHostname });
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 8000));
     try {
