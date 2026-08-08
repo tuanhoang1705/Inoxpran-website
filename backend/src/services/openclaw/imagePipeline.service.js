@@ -87,9 +87,15 @@ const pendingMetadata = ({ planItem, prompt, seo, reason }) => ({
     : {}),
 });
 
-// Auto-publish means the operator delegated the visual check up front, so an image
-// that reached storage carries the approval a human would otherwise give by hand.
-// One that never reached storage stays pending and still holds the article back.
+// Both publish paths already put a person in front of the whole article: direct
+// auto-publish is a standing approval, and Telegram approval shows the operator the
+// draft before it goes live. Neither asks for a second sign-off image by image.
+const isImageReviewDelegated = (env = process.env) =>
+  parseBoolean(env.SEO_AGENT_AUTO_PUBLISH, false) ||
+  parseBoolean(env.TELEGRAM_BOT_ENABLED, false);
+
+// An image that reached storage carries the approval a human would otherwise give
+// by hand. One that never reached storage stays pending and holds the article back.
 const approveStoredImage = (image) => {
   if (!image?.url) return image;
   return {
@@ -379,7 +385,7 @@ const runImagePipeline = async ({
     }
   }
 
-  const reviewed = parseBoolean(process.env.SEO_AGENT_AUTO_PUBLISH, false)
+  const reviewed = isImageReviewDelegated()
     ? results.map(approveStoredImage)
     : results;
   const coverImage = reviewed[0];
@@ -426,6 +432,7 @@ const runImagePipeline = async ({
 module.exports = {
   IMAGE_ATTEMPT_LIMIT,
   approveStoredImage,
+  isImageReviewDelegated,
   buildStorageFolder,
   runImagePipeline,
   uploadImageWithRetry,

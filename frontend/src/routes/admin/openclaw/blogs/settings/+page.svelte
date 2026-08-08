@@ -72,6 +72,25 @@
 		runtimeControlMap.image_pipeline?.enabled ?? Boolean(automation.imagePipelineEnabled)
 	);
 
+	// The two audited switches already express three publishing postures. Naming
+	// them here keeps the operator choosing an outcome instead of reasoning about
+	// which combination of switches produces it.
+	const publishMode = $derived(
+		autoPublishEnabled ? 'direct' : telegramApprovalEnabled ? 'telegram' : 'draft'
+	);
+	// Each move flips exactly one switch, so it stays inside the existing audited
+	// dialog. Leaving direct publishing hands back to Telegram when it is armed,
+	// so a second step is only needed to fall all the way back to draft-only.
+	const publishModeControl = (mode) => {
+		if (mode === 'direct') return autoPublishEnabled ? null : 'auto_publish';
+		if (mode === 'telegram') {
+			if (autoPublishEnabled) return 'auto_publish';
+			return telegramApprovalEnabled ? null : 'telegram_approval';
+		}
+		if (autoPublishEnabled) return 'auto_publish';
+		return telegramApprovalEnabled ? 'telegram_approval' : null;
+	};
+
 	const enabledSchedules = $derived(schedules.filter((schedule) => schedule?.enabled));
 	const nextRunAt = $derived.by(() => {
 		const upcoming = enabledSchedules
@@ -188,6 +207,22 @@
 		blogCron: 'Blog cron',
 		autoPublish: isEn ? 'Auto publish' : 'Tự động publish',
 		telegram: isEn ? 'Telegram approval' : 'Duyệt qua Telegram',
+		publishMode: isEn ? 'Publishing mode' : 'Chế độ xuất bản',
+		publishModeHint: isEn
+			? 'Both publishing modes approve the article images for you.'
+			: 'Cả hai chế độ xuất bản đều tự duyệt ảnh của bài cho bạn.',
+		modeDraft: isEn ? 'Draft only' : 'Chỉ tạo bản nháp',
+		modeDraftHint: isEn
+			? 'Nothing goes live. You approve each image by hand.'
+			: 'Không có gì lên web. Bạn tự duyệt từng ảnh.',
+		modeTelegram: isEn ? 'Publish after Telegram approval' : 'Publish sau khi duyệt Telegram',
+		modeTelegramHint: isEn
+			? 'The bot sends each draft; approving it publishes the article.'
+			: 'Bot gửi từng bản nháp; bạn bấm duyệt là bài lên web.',
+		modeDirect: isEn ? 'Publish directly' : 'Publish thẳng',
+		modeDirectHint: isEn
+			? 'Articles go live with no one in between.'
+			: 'Bài lên web luôn, không ai chặn ở giữa.',
 		imagePipeline: isEn ? 'Image pipeline' : 'Pipeline ảnh',
 		enabled: isEn ? 'Enabled' : 'Đang bật',
 		disabled: isEn ? 'Disabled' : 'Tắt',
@@ -658,38 +693,30 @@
 						<span class="bos-toggle__track"><span></span></span>
 					</button>
 				</div>
-				<div class="bos-controls__row">
-					<span>{t.autoPublish}</span>
-					<button
-						type="button"
-						class="bos-toggle"
-						class:is-on={autoPublishEnabled}
-						class:is-critical={autoPublishEnabled}
-						role="switch"
-						aria-checked={autoPublishEnabled}
-						aria-label={`${autoPublishEnabled ? t.controlDisable : t.controlEnable} ${t.autoPublish}`}
-						disabled={!canManageRuntimeControls || Boolean(controlBusy)}
-						onclick={() => openRuntimeControlDialog('auto_publish')}
-					>
-						<span>{autoPublishEnabled ? t.autoPublish : t.draftOnly}</span>
-						<span class="bos-toggle__track"><span></span></span>
-					</button>
-				</div>
-				<div class="bos-controls__row">
-					<span>{t.telegram}</span>
-					<button
-						type="button"
-						class="bos-toggle"
-						class:is-on={telegramApprovalEnabled}
-						role="switch"
-						aria-checked={telegramApprovalEnabled}
-						aria-label={`${telegramApprovalEnabled ? t.controlDisable : t.controlEnable} ${t.telegram}`}
-						disabled={!canManageRuntimeControls || Boolean(controlBusy)}
-						onclick={() => openRuntimeControlDialog('telegram_approval')}
-					>
-						<span>{telegramStatus}</span>
-						<span class="bos-toggle__track"><span></span></span>
-					</button>
+				<div class="bos-controls__mode" role="radiogroup" aria-label={t.publishMode}>
+					<p class="bos-controls__mode-title">{t.publishMode}</p>
+					<p class="bos-controls__mode-hint">{t.publishModeHint}</p>
+					{#each [{ id: 'draft', label: t.modeDraft, hint: t.modeDraftHint }, { id: 'telegram', label: t.modeTelegram, hint: t.modeTelegramHint }, { id: 'direct', label: t.modeDirect, hint: t.modeDirectHint }] as mode (mode.id)}
+						<button
+							type="button"
+							class="bos-mode"
+							class:is-active={publishMode === mode.id}
+							class:is-critical={mode.id === 'direct'}
+							role="radio"
+							aria-checked={publishMode === mode.id}
+							disabled={!canManageRuntimeControls ||
+								Boolean(controlBusy) ||
+								publishModeControl(mode.id) === null}
+							onclick={() => {
+								const controlKey = publishModeControl(mode.id);
+								if (controlKey) openRuntimeControlDialog(controlKey);
+							}}
+						>
+							<span class="bos-mode__label">{mode.label}</span>
+							<span class="bos-mode__hint">{mode.hint}</span>
+						</button>
+					{/each}
+					<p class="bos-controls__mode-state">{t.telegram}: {telegramStatus}</p>
 				</div>
 				<div class="bos-controls__row">
 					<span>{t.imagePipeline}</span>
@@ -1099,6 +1126,64 @@
 
 	.bos-controls__row:last-of-type {
 		border-bottom: 0;
+	}
+
+	.bos-controls__mode {
+		display: grid;
+		gap: 8px;
+		padding: 14px 0;
+		border-bottom: 1px solid rgba(17, 24, 39, 0.07);
+	}
+
+	.bos-controls__mode-title {
+		margin: 0;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--admin-text, #111827);
+	}
+
+	.bos-controls__mode-hint,
+	.bos-controls__mode-state {
+		margin: 0;
+		font-size: 0.78rem;
+		color: var(--admin-muted, #6b7280);
+	}
+
+	.bos-mode {
+		display: grid;
+		gap: 2px;
+		width: 100%;
+		padding: 10px 12px;
+		text-align: left;
+		border: 1px solid rgba(17, 24, 39, 0.14);
+		border-radius: 10px;
+		background: transparent;
+		cursor: pointer;
+	}
+
+	.bos-mode:disabled {
+		cursor: default;
+	}
+
+	.bos-mode.is-active {
+		border-color: #0f766e;
+		background: rgba(15, 118, 110, 0.08);
+	}
+
+	.bos-mode.is-active.is-critical {
+		border-color: #b91c1c;
+		background: rgba(185, 28, 28, 0.08);
+	}
+
+	.bos-mode__label {
+		font-size: 0.88rem;
+		font-weight: 600;
+		color: var(--admin-text, #111827);
+	}
+
+	.bos-mode__hint {
+		font-size: 0.76rem;
+		color: var(--admin-muted, #6b7280);
 	}
 
 	.bos-controls__row > span {

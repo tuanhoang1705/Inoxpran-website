@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url);
 const {
   IMAGE_ATTEMPT_LIMIT,
   approveStoredImage,
+  isImageReviewDelegated,
   runImagePipeline,
 } = require("../src/services/openclaw/imagePipeline.service");
 const {
@@ -170,5 +171,34 @@ describe("notifyOperators", () => {
 
     expect(sendMessageImpl).not.toHaveBeenCalled();
     expect(result).toEqual({ sent: false, reason: "telegram_disabled" });
+  });
+});
+
+describe("isImageReviewDelegated", () => {
+  it("delegates when the operator publishes directly", () => {
+    expect(
+      isImageReviewDelegated({
+        SEO_AGENT_AUTO_PUBLISH: "true",
+        TELEGRAM_BOT_ENABLED: "false",
+      }),
+    ).toBe(true);
+  });
+
+  it("delegates when the operator approves each draft in Telegram", () => {
+    expect(
+      isImageReviewDelegated({
+        SEO_AGENT_AUTO_PUBLISH: "false",
+        TELEGRAM_BOT_ENABLED: "true",
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps the per-image sign-off in draft-only mode", () => {
+    expect(
+      isImageReviewDelegated({
+        SEO_AGENT_AUTO_PUBLISH: "false",
+        TELEGRAM_BOT_ENABLED: "false",
+      }),
+    ).toBe(false);
   });
 });
