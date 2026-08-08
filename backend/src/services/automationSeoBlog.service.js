@@ -20,7 +20,7 @@ const {
   ContentOpportunityDecision
 } = require('../models/contentOpportunityDecision.model');
 const { BadRequestError } = require('../core/error.response');
-const { normalizeString } = require('../utils/seoBlogSanitizer');
+const { normalizeString, sanitizeSeoBlogHtml } = require('../utils/seoBlogSanitizer');
 const { normalizeForSimilarity } = require('../utils/agenticBlogCore.util');
 const { validateAutomationPayload } = require('../utils/seoBlogValidation');
 const {
@@ -36,7 +36,10 @@ const { EditorialProductPlacementPlanningService } = require('./editorialProduct
 const { extractProductBlocks, reviewProductLayer } = require('./productSeedingReview.service');
 const { extractPlacementBlocks, reviewEditorialProductPlacement } = require('./editorialProductPlacementReview.service');
 const { TelegramApprovalService } = require('./telegramApproval.service');
-const { enrichProductMentions } = require('./openclaw/productMentionEnrichment.service');
+const {
+    enrichProductMentions,
+    resolveMentionedProduct
+} = require('./openclaw/productMentionEnrichment.service');
 
 const {
   BlogRevisionService
@@ -812,6 +815,7 @@ const createBlogDocument = ({
   contentImages: imagePipeline.contentImages,
   visualPlan: imagePipeline.visualPlan,
   imagePipelineStatus: imagePipeline.status,
+  productMentionEnrichment: normalized.productMentionEnrichment || null,
   blog_category_key: normalized.categoryKey,
   blog_tags: normalized.tags,
   blog_author_name: normalized.authorName,
@@ -1810,6 +1814,8 @@ class AutomationSeoBlogService {
       appendDraftReason(reasons, 'post_publish_verification_disabled');
 
     let imagePipeline;
+    // A revision never runs the pipeline, so it never resolves a mention either.
+    let mention = { found: false, reason: 'image_pipeline_not_invoked_for_revision' };
     if (qaContext && isRevision) {
       throw new BadRequestError('QA executions cannot revise or mutate an existing blog');
     }
@@ -1862,24 +1868,13 @@ class AutomationSeoBlogService {
         publishReady: false
       };
     } else {
-      // The writer can name a model the placement plan never registered, which
-      // leaves the reader a bare code and no way to see what it is. Attaching the
-      // catalog image here means the editorial images are laid out around it.
-      const mentionEnrichment = await enrichProductMentions({
-        html: normalized.contentHtml,
-        disclosureText: verifiedPlacementPlan?.disclosure?.text || ''
-      }).catch((error) => ({
-        html: normalized.contentHtml,
-        applied: false,
-        reason: sanitizeErrorCode(error)
-      }));
-      normalized.contentHtml = mentionEnrichment.html;
-      normalized.productMentionEnrichment = {
-        applied: mentionEnrichment.applied,
-        reason: mentionEnrichment.reason || '',
-        code: mentionEnrichment.code || '',
-        productId: mentionEnrichment.productId || ''
-      };
+      // The writer can name a model the placement plan never registered, leaving
+      // the reader a bare code. Resolving it now gives the cover poster the product
+      // image; the block itself is placed after the pipeline, once the editorial
+      // images exist to judge the never-first-image rule against.
+      mention = await resolveMentionedProduct({
+        html: normalized.contentHtml
+      }).catch((error) => ({ found: false, reason: sanitizeErrorCode(error) }));
 
       try {
         imagePipeline = await runImagePipeline({
@@ -1892,7 +1887,7 @@ class AutomationSeoBlogService {
           primaryKeyword: normalized.primaryKeyword,
           articleType: normalized.articleType,
           imageSearchQuery: normalizeString(payload.imageSearchQuery || ''),
-        posterProductImageUrl: mentionEnrichment.productImageUrl || '',
+        posterProductImageUrl: mention.productImageUrl || '',
           editorialProductPlacement: verifiedPlacementPlan
         });
       } catch (error) {
@@ -1909,6 +1904,27 @@ class AutomationSeoBlogService {
         };
       }
     }
+
+    // Placed here so the rule that a product shot is never the first image is
+    // judged against the article the reader actually gets.
+    const mentionEnrichment = await enrichProductMentions({
+      html: imagePipeline.contentHtml,
+      resolved: mention.found ? mention : null,
+      disclosureText: verifiedPlacementPlan?.disclosure?.text || ''
+    }).catch((error) => ({
+      html: imagePipeline.contentHtml,
+      applied: false,
+      reason: sanitizeErrorCode(error)
+    }));
+    if (mentionEnrichment.applied) {
+      imagePipeline.contentHtml = sanitizeSeoBlogHtml(mentionEnrichment.html);
+    }
+    normalized.productMentionEnrichment = {
+      applied: Boolean(mentionEnrichment.applied),
+      reason: mentionEnrichment.reason || mention.reason || '',
+      code: mentionEnrichment.code || mention.code || '',
+      productId: mentionEnrichment.productId || ''
+    };
 
     await alertOnMissingImages({
       title: normalized.title,

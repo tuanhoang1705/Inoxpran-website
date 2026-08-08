@@ -135,6 +135,14 @@ const blogSchema = new Schema(
             default: 'pending',
             index: true
         },
+        // Why the article did or did not get a block for the model it names, so a
+        // missing product block can be diagnosed from the record alone.
+        productMentionEnrichment: {
+            applied: { type: Boolean, default: false },
+            reason: { type: String, default: '' },
+            code: { type: String, default: '' },
+            productId: { type: String, default: '' }
+        },
         blog_image_crop_state: {
             zoom: { type: Number },
             offsetX: { type: Number },

@@ -132,59 +132,91 @@ const resolveInsertionPoint = ({ html, requireEditorialImageBefore }) => {
 };
 
 /**
- * Attaches the real catalog image and link for the first Inoxpran model the
- * article names in prose. The writer can mention a model the placement plan never
- * registered, which left readers with a bare code and no way to see the product.
+ * Looks up the first Inoxpran model the article names in prose. Resolution is
+ * separate from insertion because the cover poster needs the product image before
+ * the image pipeline runs, while the block itself can only be placed afterwards.
  */
-const enrichProductMentions = async ({
-    html,
-    disclosureText = '',
-    siteUrl = normalizeString(process.env.PUBLIC_SITE_URL || 'https://inoxpran.com').replace(/\/+$/, ''),
-    productModel = product
-} = {}) => {
+const resolveMentionedProduct = async ({ html, productModel = product } = {}) => {
     const source = String(html || '');
     if (!parseBoolean(process.env.PRODUCT_MENTION_IMAGE_ENABLED, true)) {
-        return { html: source, applied: false, reason: 'product_mention_image_disabled' };
+        return { found: false, reason: 'product_mention_image_disabled' };
     }
 
     const codes = findMentionedCodes(source);
-    if (!codes.length) return { html: source, applied: false, reason: 'no_product_mention' };
-
-    const placed = alreadyPlacedProductIds(source);
-    const requireEditorialImageBefore = !parseBoolean(
-        process.env.PRODUCT_PLACEMENT_ALLOW_PRODUCT_IMAGE_FIRST,
-        false
-    );
+    if (!codes.length) return { found: false, reason: 'no_product_mention' };
 
     for (const code of codes) {
         const item = await resolveProductByCode(code, productModel);
         if (!item || !OBJECT_ID.test(String(item._id))) continue;
-        // The planned placement already covers this product; a second block would
-        // read as an advert rather than a reference.
-        if (placed.has(String(item._id).toLowerCase())) {
-            return { html: source, applied: false, reason: 'product_already_placed', code };
-        }
-        const point = resolveInsertionPoint({ html: source, requireEditorialImageBefore });
-        if (!point) return { html: source, applied: false, reason: 'no_eligible_insertion_point', code };
-
-        const block = buildMentionBlock({ item, code, siteUrl, disclosureText });
         return {
-            html: `${source.slice(0, point.index)}${block}${source.slice(point.index)}`,
-            applied: true,
+            found: true,
             reason: '',
             code,
+            item,
             productId: String(item._id),
             productName: item.product_name,
             productImageUrl: normalizeString(item.product_thumb)
         };
     }
 
-    return { html: source, applied: false, reason: 'mentioned_product_not_in_catalog', code: codes[0] };
+    return { found: false, reason: 'mentioned_product_not_in_catalog', code: codes[0] };
+};
+
+/**
+ * Places the resolved product where the reader can finally see what the article is
+ * talking about. Runs after the image pipeline, because the rule that a product
+ * shot must never be the first image can only be judged once the editorial images
+ * are actually in the article.
+ */
+const enrichProductMentions = async ({
+    html,
+    resolved = null,
+    disclosureText = '',
+    siteUrl = normalizeString(process.env.PUBLIC_SITE_URL || 'https://inoxpran.com').replace(/\/+$/, ''),
+    productModel = product
+} = {}) => {
+    const source = String(html || '');
+    const mention = resolved || (await resolveMentionedProduct({ html: source, productModel }));
+    if (!mention.found) {
+        return { html: source, applied: false, reason: mention.reason, code: mention.code || '' };
+    }
+
+    // The planned placement already covers this product; a second block would read
+    // as an advert rather than a reference.
+    if (alreadyPlacedProductIds(source).has(mention.productId.toLowerCase())) {
+        return { html: source, applied: false, reason: 'product_already_placed', code: mention.code };
+    }
+
+    const requireEditorialImageBefore = !parseBoolean(
+        process.env.PRODUCT_PLACEMENT_ALLOW_PRODUCT_IMAGE_FIRST,
+        false
+    );
+    const point = resolveInsertionPoint({ html: source, requireEditorialImageBefore });
+    if (!point) {
+        return { html: source, applied: false, reason: 'no_eligible_insertion_point', code: mention.code };
+    }
+
+    const block = buildMentionBlock({
+        item: mention.item,
+        code: mention.code,
+        siteUrl,
+        disclosureText
+    });
+    return {
+        html: `${source.slice(0, point.index)}${block}${source.slice(point.index)}`,
+        applied: true,
+        reason: '',
+        code: mention.code,
+        productId: mention.productId,
+        productName: mention.productName,
+        productImageUrl: mention.productImageUrl
+    };
 };
 
 module.exports = {
     buildMentionBlock,
     enrichProductMentions,
     findMentionedCodes,
-    resolveInsertionPoint
+    resolveInsertionPoint,
+    resolveMentionedProduct
 };

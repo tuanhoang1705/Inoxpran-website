@@ -6,6 +6,7 @@ const {
   enrichProductMentions,
   findMentionedCodes,
   resolveInsertionPoint,
+  resolveMentionedProduct,
 } = require("../src/services/openclaw/productMentionEnrichment.service");
 const { sanitizeSeoBlogHtml } = require("../src/utils/seoBlogSanitizer");
 
@@ -180,6 +181,76 @@ describe("enrichProductMentions", () => {
       html: article,
       applied: false,
       reason: "product_mention_image_disabled",
+      code: "",
     });
+  });
+});
+
+describe("resolveMentionedProduct", () => {
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  it("finds the product without touching the article", async () => {
+    const result = await resolveMentionedProduct({
+      html: article,
+      productModel: productModel(catalogItem),
+    });
+
+    expect(result.found).toBe(true);
+    expect(result.code).toBe("INP6002");
+    expect(result.productImageUrl).toContain("products%2Finp6002.png");
+  });
+
+  it("reports a code the catalog does not carry", async () => {
+    const result = await resolveMentionedProduct({
+      html: article,
+      productModel: productModel(null),
+    });
+
+    expect(result.found).toBe(false);
+    expect(result.reason).toBe("mentioned_product_not_in_catalog");
+  });
+});
+
+describe("insertion after the image pipeline", () => {
+  it("uses a product resolved earlier instead of looking it up again", async () => {
+    const productModelSpy = { findOne: vi.fn() };
+    const resolved = {
+      found: true,
+      code: "INP6002",
+      item: catalogItem,
+      productId: catalogItem._id,
+      productName: catalogItem.product_name,
+      productImageUrl: catalogItem.product_thumb,
+    };
+
+    const result = await enrichProductMentions({
+      html: article,
+      resolved,
+      productModel: productModelSpy,
+    });
+
+    expect(result.applied).toBe(true);
+    expect(productModelSpy.findOne).not.toHaveBeenCalled();
+    expect(result.html).toContain("products%2Finp6002.png");
+  });
+
+  it("holds back while the article still has no editorial image", async () => {
+    const bare = [
+      "<article>",
+      "<h2>Mot</h2><p>" + words(400) + "</p>",
+      "<h2>Hai</h2><p>" + words(400) + "</p>",
+      "<h2>Ba</h2><p>INP6002 o day. " + words(400) + "</p>",
+      "</article>",
+    ].join("");
+
+    const result = await enrichProductMentions({
+      html: bare,
+      productModel: productModel(catalogItem),
+    });
+
+    expect(result.applied).toBe(false);
+    expect(result.reason).toBe("no_eligible_insertion_point");
   });
 });
