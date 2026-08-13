@@ -2,7 +2,7 @@ import { fail } from '@sveltejs/kit';
 import { API_BASE } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/server.js';
 import { buildUserHeaders, clearSessionAndRedirect, getUserSession } from '$lib/server/userAuth.js';
-import { getHomeFeed, HOME_FEED_CACHE_CONTROL } from '$lib/server/homeFeed.js';
+import { getHomeFeed, resolveHomeFeedForRender } from '$lib/server/homeFeed.js';
 
 const HOME_FEED_SSR_BUDGET_MS = 800;
 
@@ -71,11 +71,16 @@ const fetchCartCount = async ({ fetch, session }) => {
 
 export const load = async ({ setHeaders, fetch, cookies }) => {
 	const t = getTranslator(cookies);
-	const homeFeed = await waitWithTimeout(getHomeFeed({ fetch }), HOME_FEED_SSR_BUDGET_MS);
+	// Missing the budget is not the same as having no data. A cold MongoDB Atlas
+	// connection alone costs more than this whole budget, so a visitor arriving
+	// just after the cache expired could be shown "product request failed" while
+	// a perfectly good feed sat in memory. The abandoned refresh keeps running
+	// and fills the cache for the next visitor, so fall back to the last good
+	// snapshot rather than reporting a failure.
+	const fresh = await waitWithTimeout(getHomeFeed({ fetch }), HOME_FEED_SSR_BUDGET_MS);
+	const { feed: homeFeed, cacheControl } = resolveHomeFeedForRender({ fresh });
 	const hasHomeFeed = Boolean(homeFeed?.loaded);
-	setHeaders({
-		'cache-control': hasHomeFeed ? HOME_FEED_CACHE_CONTROL : 'no-store'
-	});
+	setHeaders({ 'cache-control': cacheControl });
 	return {
 		bestSelling: hasHomeFeed && Array.isArray(homeFeed?.bestSelling) ? homeFeed.bestSelling : [],
 		latestPosts: hasHomeFeed && Array.isArray(homeFeed?.latestPosts) ? homeFeed.latestPosts : [],

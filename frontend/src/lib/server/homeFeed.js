@@ -3,7 +3,10 @@ import { createAsyncTtlCache } from '$lib/server/asyncTtlCache.js';
 import {
 	extractBestSellingItems,
 	extractLatestBlogItems,
-	isCompleteHomeFeed
+	isCompleteHomeFeed,
+	resolveHomeFeedForRender as resolveRender,
+	HOME_FEED_CACHE_CONTROL,
+	STALE_HOME_FEED_CACHE_CONTROL
 } from '$lib/server/homeFeedContract.js';
 
 const HOME_FEED_TTL_MS = 60_000;
@@ -241,5 +244,18 @@ export const getHomeFeed = async ({ fetch }) => {
 	}
 };
 
-export const HOME_FEED_CACHE_CONTROL =
-	'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
+// The last complete feed this process built. Callers that gave up waiting for a
+// refresh can render this instead of an error: it is real data, at worst a
+// little behind, and the refresh they abandoned is still running and will fill
+// the cache for whoever comes next.
+export const peekHomeFeedSnapshot = () => lastHomeFeedSnapshot;
+
+// Defaults to this process's last good feed, so callers only pass a snapshot
+// when they are testing the decision itself.
+export const resolveHomeFeedForRender = ({ fresh = null, snapshot = undefined } = {}) =>
+	resolveRender({
+		fresh,
+		snapshot: snapshot === undefined ? lastHomeFeedSnapshot : snapshot
+	});
+
+export { HOME_FEED_CACHE_CONTROL, STALE_HOME_FEED_CACHE_CONTROL };
