@@ -250,6 +250,31 @@ export const getHomeFeed = async ({ fetch }) => {
 // the cache for whoever comes next.
 export const peekHomeFeedSnapshot = () => lastHomeFeedSnapshot;
 
+// The snapshot only exists in this process's memory, so a freshly started
+// container has none. The first visitor then pays a cold MongoDB Atlas
+// connection — measured at 855ms, more than the entire SSR budget — with
+// nothing to fall back to, which is exactly why the homepage failed right
+// after a deploy. Fill it before anyone arrives. The backend is already
+// healthy by the time this container starts, but a couple of retries cost
+// nothing and cover a slow first connection.
+export const primeHomeFeed = async ({
+	attempts = 3,
+	delayMs = 2_000,
+	fetchImpl = globalThis.fetch,
+	wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+} = {}) => {
+	for (let attempt = 1; attempt <= attempts; attempt += 1) {
+		try {
+			const result = await getHomeFeed({ fetch: fetchImpl });
+			if (result?.loaded) return true;
+		} catch {
+			// A warm-up must never keep the server from serving.
+		}
+		if (attempt < attempts) await wait(delayMs);
+	}
+	return Boolean(lastHomeFeedSnapshot);
+};
+
 // Defaults to this process's last good feed, so callers only pass a snapshot
 // when they are testing the decision itself.
 export const resolveHomeFeedForRender = ({ fresh = null, snapshot = undefined } = {}) =>

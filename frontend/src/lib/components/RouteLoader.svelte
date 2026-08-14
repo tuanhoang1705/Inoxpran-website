@@ -59,7 +59,12 @@
 	.route-loader {
 		position: fixed;
 		inset: 0;
-		z-index: 2000;
+		/* The site header sits at 999999 and the mobile menu lives inside it, so
+		   at 2000 this spinner rendered underneath an open menu: tapping a menu
+		   item looked like nothing happened for the two or three seconds the
+		   next page took to load. Nothing may cover the only feedback the tap
+		   produces. */
+		z-index: 1000000;
 		display: grid;
 		place-items: center;
 		background: rgba(255, 255, 255, 0.75);

@@ -1,7 +1,7 @@
 <script>
 	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { clearClientAccountState } from '$lib/client/accountState.js';
 	import { forceMobileZoomOut100 } from '$lib/client/mobileViewport.js';
@@ -330,6 +330,16 @@
 			window.removeEventListener('resize', handleResize);
 			window.removeEventListener('scroll', handleScroll, true);
 		};
+	});
+
+	// The menu used to stay open until navigation finished. On a phone that meant
+	// tapping an item left the full-screen menu sitting there for the two or three
+	// seconds the next page needed, with no sign the tap had registered — so people
+	// tapped again. Close it the moment navigation starts and let the route loader
+	// answer for the wait.
+	beforeNavigate((navigation) => {
+		if (!navigation?.to?.route?.id) return;
+		resetMobileTransientUi();
 	});
 
 	afterNavigate(() => {

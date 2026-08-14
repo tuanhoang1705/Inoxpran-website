@@ -1,9 +1,17 @@
+import { building } from '$app/environment';
 import { env as privateEnv } from '$env/dynamic/private';
 import { env as publicEnv } from '$env/dynamic/public';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ensureAdminSession, clearAdminCookies } from '$lib/server/adminAuth.js';
 import { clearUserCookies } from '$lib/server/userAuth.js';
+import { primeHomeFeed } from '$lib/server/homeFeed.js';
+
+// Build the homepage feed once at boot so the first visitor after a deploy is
+// not the one who pays for a cold database connection.
+if (!building) {
+	void primeHomeFeed();
+}
 
 const ADMIN_SUBDOMAIN = 'admin.inoxpran.com';
 const shouldSkipTrailingSlashRedirect = (pathname) =>
