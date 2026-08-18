@@ -8,7 +8,13 @@ const getConfig = () => {
     const provider = normalizeString(process.env.AI_IMAGE_PROVIDER || 'disabled').toLowerCase();
     return {
         provider: SUPPORTED_PROVIDERS.has(provider) ? provider : 'disabled',
-        apiKey: normalizeString(process.env.AI_IMAGE_API_KEY)
+        // Boot validation accepts either name as proof the provider is
+        // configured, so reading only the first let a deployment start clean and
+        // then fail every generation with ai_image_api_key_missing. Accept the
+        // same pair the validator does. OPENAI_API_KEY is the fallback only, so
+        // a dedicated image key still wins where one is set.
+        apiKey: normalizeString(process.env.AI_IMAGE_API_KEY) ||
+            (provider === 'openai' ? normalizeString(process.env.OPENAI_API_KEY) : '')
     };
 };
 
