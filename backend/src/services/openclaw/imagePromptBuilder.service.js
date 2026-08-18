@@ -39,6 +39,16 @@ const NEGATIVE_PROMPT = [
     'technical claims printed in image'
 ].join(', ');
 
+// gpt-image-2 has no negative-prompt parameter, and the OpenAI request only ever
+// carried the positive one — so on our default provider every guardrail above was
+// silently unenforced. Stated affirmatively they reach any model, and the models
+// that do accept a negative prompt simply get the same rule twice.
+const POSITIVE_CONSTRAINTS = [
+    'Photographic realism throughout: a real photograph, not a 3D render or CGI.',
+    'Materials behave like real metal and real surfaces, with no glossy luxury sheen, neon glow or fantasy lighting.',
+    'No logo, badge, certification mark, product label, watermark or any lettering anywhere in the frame.'
+].join(' ');
+
 const buildImagePrompt = (planItem = {}) => {
     const subject = normalizeString(planItem.afterHeading || planItem.articleTitle);
     // The article title carries a model code, which means nothing to an image
@@ -72,7 +82,8 @@ const buildImagePrompt = (planItem = {}) => {
                     : 'Realistic Vietnamese home kitchen, natural window light, real countertops, practical stainless steel cookware, believable proportions and materials.',
             careDirection,
             // Varied look + fixed safety clause (no brand marks / no in-image text).
-            `${pickAesthetic(`${normalizeString(planItem.articleTitle)}|${subject}|${planItem.purpose || ''}`)} No visible brand marks, no text inside the image.`
+            `${pickAesthetic(`${normalizeString(planItem.articleTitle)}|${subject}|${planItem.purpose || ''}`)} No visible brand marks, no text inside the image.`,
+            POSITIVE_CONSTRAINTS
         ].filter(Boolean).join(' '),
         negativePrompt: NEGATIVE_PROMPT,
         aspectRatio: planItem.purpose === 'cover' ? '16:9' : `${planItem.width || 1200}:${planItem.height || 800}`
