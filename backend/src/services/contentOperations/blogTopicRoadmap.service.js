@@ -43,6 +43,9 @@ const TRANSIENT_FAILURE_CODES = new Set([
     // The writer produced nothing this run. The topic itself was never the
     // problem, so return it to the queue instead of burning it.
     'WRITER_DRAFT_UNAVAILABLE',
+    // Ideation ran out of its call budget or its deadline. Nothing is broken and
+    // nothing is misconfigured; the next run gets a fresh budget.
+    'OPENCLAW_TOPIC_AGENT_BUDGET_EXHAUSTED',
     'OPENCLAW_AGENT_GATEWAY_UNREACHABLE',
     'OPENCLAW_AGENT_HTTP_408',
     'OPENCLAW_AGENT_HTTP_429',
@@ -123,16 +126,52 @@ const isRegenerationIdempotencyDuplicate = (error) => (
 
 const regenerationError = (code, message = code) => Object.assign(new Error(message), { code })
 
+const isCurrentEvidence = (evidence = {}) => Boolean(
+    text(evidence.evidenceId, 160) &&
+    text(evidence.contentHash, 128) &&
+    evidence.relevanceVersion === SOURCE_RELEVANCE_VERSION &&
+    Number(evidence.relevanceScore || 0) > 0
+)
+
+// One stale citation used to retire the whole topic. Requiring every entry to be
+// current is the same over-rejection already corrected in the scoring service:
+// drop what no longer holds and keep the topic as long as something valid backs
+// it, rather than throwing away a researched candidate over one bad source.
 const hasCurrentEvidenceIntegrity = (item = {}) => (
     Array.isArray(item.marketEvidence) &&
-    item.marketEvidence.length > 0 &&
-    item.marketEvidence.every((evidence) => (
-        text(evidence.evidenceId, 160) &&
-        text(evidence.contentHash, 128) &&
-        evidence.relevanceVersion === SOURCE_RELEVANCE_VERSION &&
-        Number(evidence.relevanceScore || 0) > 0
-    ))
+    item.marketEvidence.some(isCurrentEvidence)
 )
+
+// The claim-time check can only see the persisted row, so the hash has to be
+// built from that row and nothing else. Scoring hashed the candidate and the
+// evidence it held in memory, but persistence truncates the text fields and
+// keeps only the evidence the alignment gate trusted — so any topic whose
+// evidence got filtered could never validate again, and was silently discarded
+// at claim time as score_integrity_failed while the queue drained. Writing and
+// verifying now go through one helper, which cannot drift apart.
+const topicScoreIdentity = (item = {}) => ({
+    idea: {
+        topic: item.topic,
+        angle: item.angle,
+        primaryKeyword: item.primaryKeyword,
+        primaryQuestion: item.primaryQuestion,
+        supportingQuestions: item.supportingQuestions || [],
+        keywords: item.secondaryKeywords || [],
+        userProblems: item.userProblems || [],
+        searchIntent: item.searchIntent,
+        topicAxis: item.topicAxis
+    },
+    candidateId: text(item.candidateProvenance?.candidateId, 160),
+    sourceEvidence: item.marketEvidence || [],
+    productEvidence: item.productEvidence || []
+})
+
+// canonicalScoreReport ignores scoreHash, so hashing a report that already
+// carries one is safe and this can be called before the field is filled in.
+const computeItemScoreHash = (item = {}) => {
+    const identity = topicScoreIdentity(item)
+    return buildTopicScoreHash({ ...identity, report: item.scores || {} })
+}
 
 // The effective policy must be threaded in. Comparing against the compiled-in
 // default while claimableReadyMatch queried the configured one let an item be
@@ -161,30 +200,10 @@ const hasValidTopicScoreIntegrity = (item = {}, policy = {}) => {
         Number(item.scores?.noveltySubtotal || 0) < minimumNoveltySubtotal ||
         (productEvidenceRequired && !(item.productEvidence || []).length)
     ) return false
-    const idea = {
-        topic: item.topic,
-        angle: item.angle,
-        primaryKeyword: item.primaryKeyword,
-        primaryQuestion: item.primaryQuestion,
-        supportingQuestions: item.supportingQuestions || [],
-        keywords: item.secondaryKeywords || [],
-        userProblems: item.userProblems || [],
-        searchIntent: item.searchIntent,
-        topicAxis: item.topicAxis
-    }
-    const alignment = assessTopicEvidenceAlignment({
-        idea,
-        sourceEvidence: item.marketEvidence,
-        productEvidence: item.productEvidence || []
-    })
+    const { idea, sourceEvidence, productEvidence } = topicScoreIdentity(item)
+    const alignment = assessTopicEvidenceAlignment({ idea, sourceEvidence, productEvidence })
     if (!alignment.passed) return false
-    const expected = buildTopicScoreHash({
-        idea,
-        candidateId,
-        sourceEvidence: item.marketEvidence,
-        productEvidence: item.productEvidence || [],
-        report: item.scores || {}
-    })
+    const expected = computeItemScoreHash(item)
     return crypto.timingSafeEqual(Buffer.from(scoreHash, 'hex'), Buffer.from(expected, 'hex'))
 }
 
@@ -1239,7 +1258,7 @@ class BlogTopicRoadmapService {
                     rejected.push({ topic: idea.topic, reason: topicScore?.reasonCodes?.[0] || 'topic_score_below_82' })
                     continue
                 }
-                accepted.push({
+                const acceptedItem = {
                     roadmapId: roadmap._id,
                     scheduleId: schedule._id,
                     directionRevision: roadmap.directionRevision,
@@ -1301,7 +1320,13 @@ class BlogTopicRoadmapService {
                     },
                     uniquenessKey,
                     reasonCode: ''
-                })
+                }
+                // Seal the row that is actually stored. The scoring-time hash was
+                // taken over the unfiltered evidence and the untruncated candidate,
+                // neither of which survives persistence, so it could never be
+                // reproduced at claim time.
+                acceptedItem.scores.scoreHash = computeItemScoreHash(acceptedItem)
+                accepted.push(acceptedItem)
                 seenKeys.add(uniquenessKey)
                 comparisonTexts.push(candidateText)
                 if (accepted.length >= Math.max(0, targetReady - readyCount)) break
@@ -1412,10 +1437,17 @@ class BlogTopicRoadmapService {
             }
             if (!preserveActivePlan) {
                 const remainingReady = await this.ItemModel.countDocuments(this.claimableReadyMatch(roadmap))
+                // Outcomes that leave the roadmap healthy and worth retrying. Any
+                // other code marks it "failed", and a failed roadmap is never
+                // refilled again by a scheduled run — it waits for someone to press
+                // "Nghiên cứu lại" by hand. Running out of the per-run agent call
+                // budget is not a breakage: nothing is misconfigured and the next
+                // run starts with a fresh budget, so it belongs here.
                 const safeNoTopic = [
                     'ROADMAP_NO_ACCEPTABLE_TOPIC',
                     'ROADMAP_NO_SAFE_TOPIC',
                     'ROADMAP_NO_READY_TOPIC',
+                    'OPENCLAW_TOPIC_AGENT_BUDGET_EXHAUSTED',
                     ROADMAP_REQUIRED_EVIDENCE_UNAVAILABLE,
                     ROADMAP_SCORE_UNREACHABLE
                 ].includes(code)
@@ -2140,6 +2172,7 @@ module.exports = {
     BlogTopicRoadmapService,
     classifyTerminalFailure,
     focusMatchesCard,
+    computeItemScoreHash,
     hasCurrentEvidenceIntegrity,
     hasValidTopicScoreIntegrity,
     mapMarketEvidence,

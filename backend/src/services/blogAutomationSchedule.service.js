@@ -58,7 +58,9 @@ const TRANSIENT_EXECUTION_CODE_PATTERNS = [
     // The writer returned nothing this run. Nothing is misconfigured and the
     // topic is still good, so this is worth retrying with backoff rather than
     // failing the schedule.
-    /^WRITER_DRAFT_UNAVAILABLE$/
+    /^WRITER_DRAFT_UNAVAILABLE$/,
+    // Ideation exhausted its per-run call budget. The next run starts a new one.
+    /^OPENCLAW_TOPIC_AGENT_BUDGET_EXHAUSTED$/
 ];
 const TERMINAL_EXECUTION_CODE_PATTERNS = [
     /(?:^|[_-])(?:INVALID|VALIDATION|MALFORMED|UNSUPPORTED|MISSING|NOT_ALLOWED|UNSAFE)(?:$|[_-])/,
