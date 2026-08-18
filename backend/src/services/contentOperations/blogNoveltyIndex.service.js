@@ -10,7 +10,13 @@ const INDEX_VERSION = 'blog-novelty-v2-2026-07-25'
 const TOKENIZER_VERSION = 'vi-unicode-v2'
 const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-large'
 const VALID_SCORE_HASH = /^[a-f0-9]{64}$/
-const NON_INDEXABLE_ROADMAP_STATUSES = Object.freeze(['failed', 'invalidated'])
+// A roadmap entry exists in the corpus to reserve a subject that is planned but
+// not yet written, so two runs cannot propose the same article. Once the topic
+// has been written the blog itself covers that subject, and keeping the plan as
+// well counted every finished article twice — doubling the novelty penalty
+// against its own subject. With 40 finished topics that is 40 phantom rivals,
+// and no new candidate about a covered product could reach the gate again.
+const NON_INDEXABLE_ROADMAP_STATUSES = Object.freeze(['failed', 'invalidated', 'completed'])
 
 const stableObject = (value) => {
     if (Array.isArray(value)) return value.map(stableObject)

@@ -161,7 +161,10 @@ describe('full-corpus novelty index primitives', () => {
         })
         expect(BlogModel.find).toHaveBeenCalledWith({ isQaTest: { $ne: true } })
         expect(RoadmapItemModel.find).toHaveBeenCalledWith(expect.objectContaining({
-            status: { $nin: ['failed', 'invalidated'] },
+            // A finished topic is already in the corpus as its published blog;
+            // indexing the plan as well counted every written article twice and
+            // doubled the novelty penalty against its own subject.
+            status: { $nin: ['failed', 'invalidated', 'completed'] },
             'scores.hardGatesPassed': true,
             'scores.totalScore': { $gte: 82 },
             'scores.noveltySubtotal': { $gte: 48 }
