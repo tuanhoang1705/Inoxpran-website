@@ -409,9 +409,9 @@ if (
 } else if (/^\s{4}internal:\s*true\s*$/m.test(modelNetworkSource)) {
   violations.push("docker-compose.yml modelnet must allow 9router egress");
 }
-if ((composeSource.match(/^\s{6}- modelnet\s*$/gm) ?? []).length !== 4) {
+if ((composeSource.match(/^\s{6}- modelnet\s*$/gm) ?? []).length !== 5) {
   violations.push(
-    "docker-compose.yml must attach only backend, nginx, openclaw and nine-router to modelnet",
+    "docker-compose.yml must attach only backend, nginx, openclaw, openclaw-worker and nine-router to modelnet",
   );
 }
 
@@ -541,6 +541,23 @@ if (composeJsonIndex !== -1) {
         JSON.stringify(["appnet", "modelnet"])
       ) {
         violations.push("rendered backend must join appnet and modelnet only");
+      }
+      const renderedOpenclawWorker = renderedCompose.services?.["openclaw-worker"];
+      if (
+        renderedOpenclawWorker?.environment?.NINE_ROUTER_API_KEY !==
+        process.env.NINE_ROUTER_API_KEY
+      ) {
+        violations.push(
+          "rendered openclaw-worker must receive the reviewed NINE_ROUTER_API_KEY",
+        );
+      }
+      if (
+        JSON.stringify(renderedNetworkNames(renderedOpenclawWorker)) !==
+        JSON.stringify(["appnet", "modelnet"])
+      ) {
+        violations.push(
+          "rendered openclaw-worker must join appnet and modelnet only",
+        );
       }
 
       if (renderedCompose.services?.redis?.user !== "999:1000") {
@@ -672,10 +689,10 @@ if (composeJsonIndex !== -1) {
         .sort();
       if (
         JSON.stringify(modelNetworkConsumers) !==
-        JSON.stringify(["backend", "nginx", "nine-router", "openclaw"])
+        JSON.stringify(["backend", "nginx", "nine-router", "openclaw", "openclaw-worker"])
       ) {
         violations.push(
-          "rendered modelnet must be shared only by backend, nginx, openclaw and nine-router",
+          "rendered modelnet must be shared only by backend, nginx, openclaw, openclaw-worker and nine-router",
         );
       }
 

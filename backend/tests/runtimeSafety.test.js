@@ -161,6 +161,12 @@ describe("runtime production safety", () => {
     expect(openclawService).toMatch(
       /networks:\s*\n\s+- appnet\s*\n\s+- modelnet/,
     );
+    const openclawWorkerService = compose.match(
+      /\n  openclaw-worker:\n([\s\S]*?)\n  frontend:\n/,
+    )?.[1];
+    expect(openclawWorkerService).toMatch(
+      /networks:\s*\n\s+- appnet\s*\n\s+- modelnet/,
+    );
     expect(compose).toMatch(/\n  modelnet:\n\s+driver:\s+bridge/);
     expect(compose).not.toMatch(/\n  modelnet:\n[\s\S]*?internal:\s*true/);
     expect(compose).toMatch(/FIRECRAWL_API_KEY:\s*\$\{FIRECRAWL_API_KEY:-\}/);

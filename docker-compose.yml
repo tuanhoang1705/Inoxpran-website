@@ -483,6 +483,7 @@
       start_period: 30s
     networks:
       - appnet
+      - modelnet
     depends_on:
       backend:
         condition: service_healthy
