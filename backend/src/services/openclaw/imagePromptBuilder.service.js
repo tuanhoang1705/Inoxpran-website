@@ -65,7 +65,18 @@ const buildImagePrompt = (planItem = {}) => {
             : 'When relevant show mild yellow stains, white mineral deposits, light burn marks, a soft cloth, lemon, vinegar, baking soda, or warm water; keep the scene practical and safe.'
         : '';
 
+    // Quality guardrails must inspect only article/editor supplied text. The
+    // fixed safety clauses below intentionally name the styles they prohibit.
+    const subjectText = [
+        normalizeString(planItem.articleTitle),
+        subject,
+        productSubject,
+        normalizeString(planItem.visualRule),
+        normalizeString(planItem.imageSearchQuery)
+    ].filter(Boolean).join(' ');
+
     return {
+        subjectText,
         positivePrompt: [
             purposeDirection,
             // Naming forbidden items backfires once the subject is one of them, so

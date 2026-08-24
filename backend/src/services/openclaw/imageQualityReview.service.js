@@ -11,7 +11,7 @@ const reviewImageQuality = async ({
     buffer,
     mimeType,
     planItem = {},
-    positivePrompt = '',
+    subjectText = '',
     candidate = null,
     optimized = false
 } = {}) => {
@@ -42,9 +42,10 @@ const reviewImageQuality = async ({
     if (metadata.width && metadata.width < minWidth) reasons.push('image_width_too_small');
     if (metadata.height && metadata.height < minHeight) reasons.push('image_height_too_small');
 
-    if (FORBIDDEN_STYLE_PATTERN.test(positivePrompt)) reasons.push('forbidden_visual_style');
     const description = normalizeString(candidate?.description);
-    if (FORBIDDEN_CLAIM_PATTERN.test(`${positivePrompt} ${description}`)) {
+    const untrustedText = `${normalizeString(subjectText)} ${description}`.trim();
+    if (FORBIDDEN_STYLE_PATTERN.test(untrustedText)) reasons.push('forbidden_visual_style');
+    if (FORBIDDEN_CLAIM_PATTERN.test(untrustedText)) {
         reasons.push('fake_badge_or_claim_risk');
     }
     if (/placeholder|og-image|default-image/i.test(`${candidate?.sourceUrl || ''} ${candidate?.downloadUrl || ''}`)) {

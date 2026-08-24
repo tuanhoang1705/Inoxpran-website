@@ -1506,6 +1506,8 @@ export const messages = {
 					suggestions: 'Gợi ý theo nội dung bài viết',
 					generate: 'Tạo ảnh xem trước',
 					generating: 'Đang tạo ảnh...',
+					generationHint: 'Ảnh được tạo qua 9router, thường mất khoảng 30–60 giây.',
+					generationProgress: '9router đang tạo ảnh · đã chờ',
 					searchAria: 'Từ khóa tìm ảnh Pexels',
 					searchPlaceholder: 'Ví dụ: vệ sinh nồi inox',
 					search: 'Tìm',
@@ -1522,11 +1524,9 @@ export const messages = {
 					reference: 'Mã tra cứu',
 					sessionRequired: 'Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.',
 					creditExhausted:
-						'Tài khoản OpenAI API đã hết credit tạo ảnh. Vui lòng nạp credit rồi thử lại.',
-					providerAuth:
-						'Không thể xác thực tài khoản tạo ảnh OpenAI. Vui lòng kiểm tra API key production.',
-					providerAccess:
-						'Tài khoản OpenAI hiện chưa có quyền dùng model tạo ảnh đã cấu hình.',
+						'Tài khoản dịch vụ tạo ảnh đã hết credit. Vui lòng nạp credit rồi thử lại.',
+					providerAuth: 'Không thể xác thực dịch vụ tạo ảnh. Vui lòng kiểm tra API key production.',
+					providerAccess: 'Tài khoản hiện chưa có quyền dùng model tạo ảnh đã cấu hình.',
 					rateLimited: 'Dịch vụ tạo ảnh đang giới hạn tần suất. Vui lòng thử lại sau.',
 					policyRejected:
 						'Prompt bị chính sách an toàn của dịch vụ tạo ảnh từ chối. Vui lòng điều chỉnh prompt.',
@@ -3250,6 +3250,8 @@ export const messages = {
 					suggestions: 'Suggestions from article content',
 					generate: 'Generate preview',
 					generating: 'Generating...',
+					generationHint: 'Images are generated through 9router and usually take 30–60 seconds.',
+					generationProgress: '9router is generating · elapsed',
 					searchAria: 'Pexels image search query',
 					searchPlaceholder: 'Example: cleaning stainless steel cookware',
 					search: 'Search',
@@ -3266,11 +3268,11 @@ export const messages = {
 					reference: 'Reference',
 					sessionRequired: 'The admin session has expired. Please sign in again.',
 					creditExhausted:
-						'The OpenAI API account has no image-generation credit remaining. Add credit and try again.',
+						'The image-provider account has no generation credit remaining. Add credit and try again.',
 					providerAuth:
-						'The OpenAI image account could not be authenticated. Check the production API key.',
+						'The image provider could not be authenticated. Check the production API key.',
 					providerAccess:
-						'The OpenAI account does not currently have access to the configured image model.',
+						'The account does not currently have access to the configured image model.',
 					rateLimited: 'Image generation is temporarily rate limited. Please try again later.',
 					policyRejected:
 						'The prompt was rejected by the image provider safety policy. Adjust the prompt and try again.',

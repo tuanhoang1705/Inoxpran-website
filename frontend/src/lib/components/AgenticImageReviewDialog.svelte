@@ -21,6 +21,8 @@
 	let preview = $state(null);
 	let loading = $state(false);
 	let error = $state('');
+	let generationElapsedSeconds = $state(0);
+	let generationTimer = null;
 	let initializedTarget = '';
 	const MAX_LOCAL_UPLOAD_BYTES = 5 * 1024 * 1024;
 
@@ -55,6 +57,19 @@
 		localFile = null;
 		localDragActive = false;
 		if (fileInput) fileInput.value = '';
+	};
+
+	const stopGenerationTimer = () => {
+		if (generationTimer) clearInterval(generationTimer);
+		generationTimer = null;
+	};
+
+	const startGenerationTimer = () => {
+		stopGenerationTimer();
+		generationElapsedSeconds = 0;
+		generationTimer = setInterval(() => {
+			generationElapsedSeconds += 1;
+		}, 1000);
 	};
 
 	const loadSuggestions = async () => {
@@ -106,6 +121,7 @@
 		}
 		loading = true;
 		error = '';
+		startGenerationTimer();
 		try {
 			preview = await requestJson(apiPath('generate'), {
 				method: 'POST',
@@ -115,6 +131,7 @@
 		} catch (requestError) {
 			error = requestError?.message || $t('admin.blogImageReview.errors.generate');
 		} finally {
+			stopGenerationTimer();
 			loading = false;
 		}
 	};
@@ -242,6 +259,7 @@
 	});
 
 	onDestroy(() => {
+		stopGenerationTimer();
 		clearLocalPreview();
 		if (dialog?.open) dialog.close();
 	});
@@ -342,11 +360,23 @@
 							<button type="button" onclick={() => (prompt = suggestion)}>{suggestion}</button>
 						{/each}
 					</div>
-					<button class="primary generate" type="button" onclick={generateImage} disabled={loading}>
-						{loading
-							? $t('admin.blogImageReview.dialog.generating')
-							: $t('admin.blogImageReview.dialog.generate')}
-					</button>
+					<div class="generation-actions">
+						<p aria-live="polite">
+							{loading
+								? `${$t('admin.blogImageReview.dialog.generationProgress')} ${generationElapsedSeconds}s`
+								: $t('admin.blogImageReview.dialog.generationHint')}
+						</p>
+						<button
+							class="primary generate"
+							type="button"
+							onclick={generateImage}
+							disabled={loading}
+						>
+							{loading
+								? $t('admin.blogImageReview.dialog.generating')
+								: $t('admin.blogImageReview.dialog.generate')}
+						</button>
+					</div>
 				</section>
 			{:else if mode === 'pexels'}
 				<section class="pexels-panel">
@@ -622,6 +652,20 @@
 
 	.generate {
 		justify-self: end;
+	}
+
+	.generation-actions {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	.generation-actions p {
+		margin: 0;
+		color: #65716b;
+		font-size: 0.82rem;
+		line-height: 1.4;
 	}
 
 	button:disabled {

@@ -23,6 +23,9 @@ const {
   optimizeImage,
 } = require("../src/services/openclaw/imageOptimize.service");
 const {
+  reviewImageQuality,
+} = require("../src/services/openclaw/imageQualityReview.service");
+const {
   searchImages,
 } = require("../src/services/openclaw/imageSearch.service");
 const {
@@ -230,6 +233,66 @@ describe("provider and pipeline fallback", () => {
     expect(result.height).toBe(675);
     expect(result.checksum).toMatch(/^[a-f0-9]{64}$/);
     expect(result.sizeBytes).toBeLessThanOrEqual(350 * 1024);
+  });
+
+  it("does not reject a safe generated image because its prompt states negative guardrails", async () => {
+    const source = await sharp({
+      create: {
+        width: 1536,
+        height: 1024,
+        channels: 3,
+        background: "#c8d7de",
+      },
+    })
+      .png()
+      .toBuffer();
+    const planItem = {
+      purpose: "cover",
+      articleTitle: "Cach ve sinh noi inox",
+      visualRule: "Show practical cleaning steps.",
+    };
+    const prompt = buildImagePrompt(planItem);
+
+    expect(prompt.positivePrompt).toContain("not a 3D render or CGI");
+    expect(prompt.subjectText).not.toMatch(/3D render|CGI/i);
+    await expect(
+      reviewImageQuality({
+        buffer: source,
+        mimeType: "image/png",
+        planItem,
+        subjectText: prompt.subjectText,
+      }),
+    ).resolves.toMatchObject({ passes: true, reasons: [] });
+  });
+
+  it("still rejects an explicitly requested forbidden visual style", async () => {
+    const source = await sharp({
+      create: {
+        width: 1536,
+        height: 1024,
+        channels: 3,
+        background: "#c8d7de",
+      },
+    })
+      .png()
+      .toBuffer();
+
+    const prompt = buildImagePrompt({
+      purpose: "cover",
+      articleTitle: "Use a glossy luxury CGI scene",
+    });
+
+    await expect(
+      reviewImageQuality({
+        buffer: source,
+        mimeType: "image/png",
+        planItem: { purpose: "cover" },
+        subjectText: prompt.subjectText,
+      }),
+    ).resolves.toMatchObject({
+      passes: false,
+      reasons: expect.arrayContaining(["forbidden_visual_style"]),
+    });
   });
 
   it("keeps the text draft and visual plan when the image pipeline is disabled", async () => {

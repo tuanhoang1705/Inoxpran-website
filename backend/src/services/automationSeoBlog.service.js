@@ -2230,6 +2230,7 @@ class AutomationSeoBlogService {
       publisherDecision: { allowed: shouldPublish, reasons },
       'metadata.resultReasons': reasons,
       'metadata.imagePipelineStatus': imagePipeline.status,
+      'metadata.imageWarnings': (imagePipeline.warnings || []).slice(0, 20),
       'metadata.editorialProductPlacementPlanId': normalized.editorialProductPlacementPlanId || '',
       'metadata.editorialProductPlacementReview': normalized.editorialProductPlacementReview || null
     };

@@ -2307,6 +2307,7 @@ class BlogAutomationScheduleService {
                         'metadata.dueAt': dueAt,
                         'metadata.resultReasons': result.reasons || [],
                         'metadata.imagePipelineStatus': result.imagePipelineStatus || '',
+                        'metadata.imageWarnings': (result.imageWarnings || []).slice(0, 20),
                         'metadata.pipelineVersion': 'agentic-blog-core-v2',
                         'metadata.decision': payload.contentDecision,
                         'metadata.googleIntelSnapshotId': payload.googleIntelSnapshotId,
