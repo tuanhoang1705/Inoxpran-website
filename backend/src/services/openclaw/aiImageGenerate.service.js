@@ -2,7 +2,7 @@
 
 const { normalizeString } = require('../../utils/seoBlogSanitizer');
 
-const SUPPORTED_PROVIDERS = new Set(['disabled', 'openai', 'stability', 'replicate']);
+const SUPPORTED_PROVIDERS = new Set(['disabled', 'openai', '9router', 'stability', 'replicate']);
 
 const createAiImageProviderError = ({
     code,
@@ -11,14 +11,15 @@ const createAiImageProviderError = ({
     providerStatus = 0,
     providerRequestId = '',
     providerErrorCode = '',
-    providerErrorType = ''
+    providerErrorType = '',
+    provider = 'openai'
 }) => {
     const error = new Error(message);
     error.name = 'AIImageProviderError';
     error.code = code;
     error.publicCode = code;
     error.status = status;
-    error.provider = 'openai';
+    error.provider = provider;
     error.providerStatus = providerStatus;
     error.providerRequestId = String(providerRequestId || '').slice(0, 128);
     error.providerErrorCode = String(providerErrorCode || '').slice(0, 80);
@@ -28,7 +29,7 @@ const createAiImageProviderError = ({
 
 const normalizeProviderToken = (value) => String(value || '').trim().toLowerCase().slice(0, 80);
 
-const classifyOpenAiError = ({ response, payload }) => {
+const classifyOpenAiError = ({ response, payload, provider = 'openai' }) => {
     const providerStatus = Number(response?.status) || 0;
     const providerRequestId = response?.headers?.get?.('x-request-id') || '';
     const providerErrorCode = normalizeProviderToken(payload?.error?.code);
@@ -38,7 +39,8 @@ const classifyOpenAiError = ({ response, payload }) => {
         providerStatus,
         providerRequestId,
         providerErrorCode,
-        providerErrorType
+        providerErrorType,
+        provider
     };
 
     if (
@@ -111,7 +113,7 @@ const classifyOpenAiError = ({ response, payload }) => {
     });
 };
 
-const requestOpenAi = async ({ url, options }) => {
+const requestOpenAi = async ({ url, options, provider = 'openai' }) => {
     let response;
     try {
         response = await fetch(url, options);
@@ -122,7 +124,8 @@ const requestOpenAi = async ({ url, options }) => {
             status: timedOut ? 504 : 502,
             message: timedOut
                 ? 'AI image provider timed out'
-                : 'AI image provider could not be reached'
+                : 'AI image provider could not be reached',
+            provider
         });
     }
 
@@ -130,16 +133,17 @@ const requestOpenAi = async ({ url, options }) => {
     try {
         payload = await response.json();
     } catch {
-        if (!response.ok) throw classifyOpenAiError({ response, payload: null });
+        if (!response.ok) throw classifyOpenAiError({ response, payload: null, provider });
         throw createAiImageProviderError({
             code: 'AI_IMAGE_INVALID_RESPONSE',
             status: 502,
             message: 'AI image provider returned an invalid response',
             providerStatus: Number(response.status) || 0,
-            providerRequestId: response.headers?.get?.('x-request-id') || ''
+            providerRequestId: response.headers?.get?.('x-request-id') || '',
+            provider
         });
     }
-    if (!response.ok) throw classifyOpenAiError({ response, payload });
+    if (!response.ok) throw classifyOpenAiError({ response, payload, provider });
     return {
         payload,
         providerRequestId: response.headers?.get?.('x-request-id') || ''
@@ -150,20 +154,25 @@ const getConfig = () => {
     const provider = normalizeString(process.env.AI_IMAGE_PROVIDER || 'disabled').toLowerCase();
     return {
         provider: SUPPORTED_PROVIDERS.has(provider) ? provider : 'disabled',
-        // Boot validation accepts either name as proof the provider is
-        // configured, so reading only the first let a deployment start clean and
-        // then fail every generation with ai_image_api_key_missing. Accept the
-        // same pair the validator does. OPENAI_API_KEY is the fallback only, so
-        // a dedicated image key still wins where one is set.
-        apiKey: normalizeString(process.env.AI_IMAGE_API_KEY) ||
-            (provider === 'openai' ? normalizeString(process.env.OPENAI_API_KEY) : '')
+        // 9router has its own bearer credential. Other providers keep the
+        // dedicated image key, with OPENAI_API_KEY only as the OpenAI fallback.
+        apiKey: provider === '9router'
+            ? normalizeString(process.env.NINE_ROUTER_API_KEY)
+            : normalizeString(process.env.AI_IMAGE_API_KEY) ||
+                (provider === 'openai' ? normalizeString(process.env.OPENAI_API_KEY) : '')
     };
 };
 
-const generateOpenAi = async ({ prompt, apiKey }) => {
-    const model = normalizeString(process.env.AI_IMAGE_MODEL || 'gpt-image-2');
+const generateOpenAiCompatible = async ({ prompt, apiKey, provider }) => {
+    const isNineRouter = provider === '9router';
+    const model = normalizeString(
+        process.env.AI_IMAGE_MODEL || (isNineRouter ? 'cx/gpt-5.5-image' : 'gpt-image-2')
+    );
     const { payload, providerRequestId } = await requestOpenAi({
-        url: 'https://api.openai.com/v1/images/generations',
+        url: isNineRouter
+            ? 'http://nine-router:20128/v1/images/generations'
+            : 'https://api.openai.com/v1/images/generations',
+        provider,
         options: {
             method: 'POST',
             headers: {
@@ -175,7 +184,8 @@ const generateOpenAi = async ({ prompt, apiKey }) => {
                 prompt: prompt.positivePrompt,
                 size: '1536x1024',
                 quality: normalizeString(process.env.AI_IMAGE_QUALITY || 'medium'),
-                output_format: 'png'
+                output_format: 'png',
+                ...(isNineRouter ? { response_format: 'b64_json' } : {})
             }),
             signal: AbortSignal.timeout(Number(process.env.IMAGE_GENERATION_TIMEOUT_MS || 120000))
         }
@@ -190,9 +200,13 @@ const generateOpenAi = async ({ prompt, apiKey }) => {
         status: 502,
         message: 'AI image provider returned no image',
         providerStatus: 200,
-        providerRequestId
+        providerRequestId,
+        provider
     });
 };
+
+const generateOpenAi = (input) => generateOpenAiCompatible({ ...input, provider: 'openai' });
+const generateNineRouter = (input) => generateOpenAiCompatible({ ...input, provider: '9router' });
 
 const generateStability = async ({ prompt, apiKey }) => {
     const model = normalizeString(process.env.AI_IMAGE_MODEL || 'stable-image-core');
@@ -261,6 +275,7 @@ const generateImage = async ({ prompt } = {}) => {
 
     const handlers = {
         openai: generateOpenAi,
+        '9router': generateNineRouter,
         stability: generateStability,
         replicate: generateReplicate
     };

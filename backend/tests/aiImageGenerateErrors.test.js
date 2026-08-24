@@ -88,4 +88,54 @@ describe('OpenAI image provider failures', () => {
     });
     expect(caught.message).not.toContain('secret');
   });
+
+  it('routes image generation through the private 9router Images API', async () => {
+    process.env.AI_IMAGE_PROVIDER = '9router';
+    process.env.AI_IMAGE_API_KEY = 'must-not-be-used-for-9router';
+    process.env.NINE_ROUTER_API_KEY = 'test-nine-router-key';
+    process.env.AI_IMAGE_MODEL = 'cx/gpt-5.5-image';
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => '' },
+      json: async () => ({ data: [{ b64_json: Buffer.from('image-bytes').toString('base64') }] }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateImage({ prompt });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://nine-router:20128/v1/images/generations');
+    expect(options.headers.Authorization).toBe('Bearer test-nine-router-key');
+    expect(JSON.parse(options.body)).toMatchObject({
+      model: 'cx/gpt-5.5-image',
+      response_format: 'b64_json',
+    });
+    expect(result).toMatchObject({
+      status: 'complete',
+      provider: '9router',
+      model: 'cx/gpt-5.5-image',
+      mimeType: 'image/png',
+    });
+    expect(result.buffer.toString()).toBe('image-bytes');
+  });
+
+  it('attributes compatible upstream failures to 9router', async () => {
+    process.env.AI_IMAGE_PROVIDER = '9router';
+    process.env.AI_IMAGE_API_KEY = '';
+    process.env.NINE_ROUTER_API_KEY = 'test-nine-router-key';
+    process.env.AI_IMAGE_MODEL = 'cx/gpt-5.5-image';
+    vi.stubGlobal('fetch', vi.fn(async () => failedResponse({
+      status: 429,
+      type: 'rate_limit_error',
+      code: 'rate_limit_exceeded',
+    })));
+
+    await expect(generateImage({ prompt })).rejects.toMatchObject({
+      provider: '9router',
+      code: 'AI_IMAGE_RATE_LIMITED',
+      status: 429,
+    });
+  });
 });

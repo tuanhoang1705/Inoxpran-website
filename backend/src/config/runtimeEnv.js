@@ -381,8 +381,10 @@ const validateRuntimeConfig = ({ env = process.env } = {}) => {
       const aiConfigured =
         Boolean(aiProvider && aiProvider !== "disabled") &&
         Boolean(
-          normalizeEnvValue(env.AI_IMAGE_API_KEY) ||
-          normalizeEnvValue(env.OPENAI_API_KEY),
+          aiProvider === "9router"
+            ? normalizeEnvValue(env.NINE_ROUTER_API_KEY)
+            : normalizeEnvValue(env.AI_IMAGE_API_KEY) ||
+                normalizeEnvValue(env.OPENAI_API_KEY),
         );
       if (!searchConfigured && !aiConfigured) {
         errors.push(
@@ -425,6 +427,7 @@ const validateRuntimeConfig = ({ env = process.env } = {}) => {
       "TELEGRAM_WEBHOOK_SECRET",
       "IMAGE_SEARCH_API_KEY",
       "AI_IMAGE_API_KEY",
+      "NINE_ROUTER_API_KEY",
       "FIRECRAWL_API_KEY",
     ];
     for (const key of secretNames) {

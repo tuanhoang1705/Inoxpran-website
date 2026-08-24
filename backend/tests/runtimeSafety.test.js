@@ -146,6 +146,15 @@ describe("runtime production safety", () => {
       /\n  redis:\n([\s\S]*?)\n  backend:\n/,
     )?.[1];
     expect(redisService).toMatch(/user:\s*"999:1000"/);
+    const backendService = compose.match(
+      /\n  backend:\n([\s\S]*?)\n  telegram-relay:\n/,
+    )?.[1];
+    expect(backendService).toMatch(
+      /NINE_ROUTER_API_KEY:\s*\$\{NINE_ROUTER_API_KEY:\?/,
+    );
+    expect(backendService).toMatch(
+      /networks:\s*\n\s+- appnet\s*\n\s+- modelnet/,
+    );
     const openclawService = compose.match(
       /\n  openclaw:\n([\s\S]*?)\n  openclaw-worker:\n/,
     )?.[1];
@@ -455,6 +464,18 @@ describe("runtime production safety", () => {
           OPENCLAW_IMAGE_PIPELINE_ENABLED: "true",
           IMAGE_SEARCH_PROVIDER: "pexels",
           IMAGE_SEARCH_API_KEY: "image-search-key-for-test-only",
+        }),
+      }),
+    ).not.toThrow();
+    expect(() =>
+      validateRuntimeConfig({
+        env: productionEnv({
+          OPENCLAW_IMAGE_PIPELINE_ENABLED: "true",
+          IMAGE_SEARCH_PROVIDER: "disabled",
+          AI_IMAGE_PROVIDER: "9router",
+          OPENAI_API_KEY: "",
+          OPENCLAW_TOPIC_ROADMAP_ENABLED: "false",
+          NINE_ROUTER_API_KEY: "nine-router-key-for-test-only",
         }),
       }),
     ).not.toThrow();
