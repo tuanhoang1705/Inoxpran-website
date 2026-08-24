@@ -4,6 +4,148 @@ const { normalizeString } = require('../../utils/seoBlogSanitizer');
 
 const SUPPORTED_PROVIDERS = new Set(['disabled', 'openai', 'stability', 'replicate']);
 
+const createAiImageProviderError = ({
+    code,
+    status,
+    message,
+    providerStatus = 0,
+    providerRequestId = '',
+    providerErrorCode = '',
+    providerErrorType = ''
+}) => {
+    const error = new Error(message);
+    error.name = 'AIImageProviderError';
+    error.code = code;
+    error.publicCode = code;
+    error.status = status;
+    error.provider = 'openai';
+    error.providerStatus = providerStatus;
+    error.providerRequestId = String(providerRequestId || '').slice(0, 128);
+    error.providerErrorCode = String(providerErrorCode || '').slice(0, 80);
+    error.providerErrorType = String(providerErrorType || '').slice(0, 80);
+    return error;
+};
+
+const normalizeProviderToken = (value) => String(value || '').trim().toLowerCase().slice(0, 80);
+
+const classifyOpenAiError = ({ response, payload }) => {
+    const providerStatus = Number(response?.status) || 0;
+    const providerRequestId = response?.headers?.get?.('x-request-id') || '';
+    const providerErrorCode = normalizeProviderToken(payload?.error?.code);
+    const providerErrorType = normalizeProviderToken(payload?.error?.type);
+    const providerMessage = String(payload?.error?.message || '').toLowerCase();
+    const common = {
+        providerStatus,
+        providerRequestId,
+        providerErrorCode,
+        providerErrorType
+    };
+
+    if (
+        providerErrorType === 'insufficient_quota' ||
+        providerErrorCode === 'credit_balance_exhausted' ||
+        providerErrorCode === 'insufficient_quota' ||
+        providerMessage.includes('no credits remaining') ||
+        providerMessage.includes('current quota')
+    ) {
+        return createAiImageProviderError({
+            ...common,
+            code: 'AI_IMAGE_CREDIT_EXHAUSTED',
+            status: 503,
+            message: 'AI image generation credit is exhausted'
+        });
+    }
+    if (providerStatus === 401 || providerErrorCode === 'invalid_api_key') {
+        return createAiImageProviderError({
+            ...common,
+            code: 'AI_IMAGE_AUTH_FAILED',
+            status: 503,
+            message: 'AI image provider authentication failed'
+        });
+    }
+    if (
+        providerStatus === 403 ||
+        providerErrorCode === 'model_not_found' ||
+        providerErrorCode === 'permission_denied'
+    ) {
+        return createAiImageProviderError({
+            ...common,
+            code: 'AI_IMAGE_ACCESS_DENIED',
+            status: 503,
+            message: 'AI image provider access is not available'
+        });
+    }
+    if (
+        providerErrorCode.includes('content_policy') ||
+        providerErrorType.includes('policy') ||
+        providerMessage.includes('safety system')
+    ) {
+        return createAiImageProviderError({
+            ...common,
+            code: 'AI_IMAGE_POLICY_REJECTED',
+            status: 422,
+            message: 'The image prompt was rejected by the provider policy'
+        });
+    }
+    if (providerStatus === 429) {
+        return createAiImageProviderError({
+            ...common,
+            code: 'AI_IMAGE_RATE_LIMITED',
+            status: 429,
+            message: 'AI image generation is temporarily rate limited'
+        });
+    }
+    if (providerStatus === 400 || providerStatus === 422) {
+        return createAiImageProviderError({
+            ...common,
+            code: 'AI_IMAGE_REQUEST_REJECTED',
+            status: 422,
+            message: 'The AI image provider rejected the image request'
+        });
+    }
+    return createAiImageProviderError({
+        ...common,
+        code: 'AI_IMAGE_PROVIDER_UNAVAILABLE',
+        status: 502,
+        message: 'AI image provider is temporarily unavailable'
+    });
+};
+
+const requestOpenAi = async ({ url, options }) => {
+    let response;
+    try {
+        response = await fetch(url, options);
+    } catch (cause) {
+        const timedOut = cause?.name === 'AbortError' || cause?.name === 'TimeoutError';
+        throw createAiImageProviderError({
+            code: timedOut ? 'AI_IMAGE_TIMEOUT' : 'AI_IMAGE_PROVIDER_UNAVAILABLE',
+            status: timedOut ? 504 : 502,
+            message: timedOut
+                ? 'AI image provider timed out'
+                : 'AI image provider could not be reached'
+        });
+    }
+
+    let payload = null;
+    try {
+        payload = await response.json();
+    } catch {
+        if (!response.ok) throw classifyOpenAiError({ response, payload: null });
+        throw createAiImageProviderError({
+            code: 'AI_IMAGE_INVALID_RESPONSE',
+            status: 502,
+            message: 'AI image provider returned an invalid response',
+            providerStatus: Number(response.status) || 0,
+            providerRequestId: response.headers?.get?.('x-request-id') || ''
+        });
+    }
+    if (!response.ok) throw classifyOpenAiError({ response, payload });
+    return {
+        payload,
+        providerRequestId: response.headers?.get?.('x-request-id') || ''
+    };
+};
+
 const getConfig = () => {
     const provider = normalizeString(process.env.AI_IMAGE_PROVIDER || 'disabled').toLowerCase();
     return {
@@ -20,29 +162,36 @@ const getConfig = () => {
 
 const generateOpenAi = async ({ prompt, apiKey }) => {
     const model = normalizeString(process.env.AI_IMAGE_MODEL || 'gpt-image-2');
-    const response = await fetch('https://api.openai.com/v1/images/generations', {
-        method: 'POST',
-        headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            model,
-            prompt: prompt.positivePrompt,
-            size: '1536x1024',
-            quality: normalizeString(process.env.AI_IMAGE_QUALITY || 'medium'),
-            output_format: 'png'
-        }),
-        signal: AbortSignal.timeout(Number(process.env.IMAGE_GENERATION_TIMEOUT_MS || 120000))
+    const { payload, providerRequestId } = await requestOpenAi({
+        url: 'https://api.openai.com/v1/images/generations',
+        options: {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model,
+                prompt: prompt.positivePrompt,
+                size: '1536x1024',
+                quality: normalizeString(process.env.AI_IMAGE_QUALITY || 'medium'),
+                output_format: 'png'
+            }),
+            signal: AbortSignal.timeout(Number(process.env.IMAGE_GENERATION_TIMEOUT_MS || 120000))
+        }
     });
-    if (!response.ok) throw new Error(`ai_image_openai_http_${response.status}`);
-    const payload = await response.json();
     const item = payload?.data?.[0];
     if (item?.b64_json) {
         return { buffer: Buffer.from(item.b64_json, 'base64'), mimeType: 'image/png', model };
     }
     if (item?.url) return { downloadUrl: item.url, model };
-    throw new Error('ai_image_openai_empty_result');
+    throw createAiImageProviderError({
+        code: 'AI_IMAGE_EMPTY_RESULT',
+        status: 502,
+        message: 'AI image provider returned no image',
+        providerStatus: 200,
+        providerRequestId
+    });
 };
 
 const generateStability = async ({ prompt, apiKey }) => {

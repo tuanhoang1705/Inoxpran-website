@@ -1,6 +1,7 @@
 <script>
 	import { onDestroy } from 'svelte';
 	import { t } from '$lib/i18n/admin/index.js';
+	import { blogImageErrorText, normalizeBlogImageError } from '$lib/blogImageError.js';
 
 	let { open = false, postId = '', target = null, onClose = null, onApplied = null } = $props();
 
@@ -29,8 +30,13 @@
 	const requestJson = async (url, options = {}) => {
 		const response = await fetch(url, options);
 		const payload = await response.json().catch(() => null);
-		if (!response.ok)
-			throw new Error(payload?.message || $t('admin.blogImageReview.errors.process'));
+		if (!response.ok) {
+			const normalized = normalizeBlogImageError(payload, response.headers);
+			const requestError = new Error(blogImageErrorText(normalized, { t: $t }));
+			requestError.code = normalized.errorCode;
+			requestError.requestId = normalized.requestId;
+			throw requestError;
+		}
 		return payload;
 	};
 
@@ -93,6 +99,7 @@
 	};
 
 	const generateImage = async () => {
+		if (loading) return;
 		if (prompt.trim().length < 20) {
 			error = $t('admin.blogImageReview.errors.minPrompt');
 			return;

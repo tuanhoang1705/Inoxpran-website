@@ -1519,6 +1519,23 @@ export const messages = {
 				},
 				errors: {
 					process: 'Không thể xử lý ảnh.',
+					reference: 'Mã tra cứu',
+					sessionRequired: 'Phiên quản trị đã hết hạn. Vui lòng đăng nhập lại.',
+					creditExhausted:
+						'Tài khoản OpenAI API đã hết credit tạo ảnh. Vui lòng nạp credit rồi thử lại.',
+					providerAuth:
+						'Không thể xác thực tài khoản tạo ảnh OpenAI. Vui lòng kiểm tra API key production.',
+					providerAccess:
+						'Tài khoản OpenAI hiện chưa có quyền dùng model tạo ảnh đã cấu hình.',
+					rateLimited: 'Dịch vụ tạo ảnh đang giới hạn tần suất. Vui lòng thử lại sau.',
+					policyRejected:
+						'Prompt bị chính sách an toàn của dịch vụ tạo ảnh từ chối. Vui lòng điều chỉnh prompt.',
+					requestRejected:
+						'Dịch vụ tạo ảnh từ chối yêu cầu này. Vui lòng kiểm tra prompt và thử lại.',
+					providerUnavailable: 'Dịch vụ tạo ảnh đang tạm thời không khả dụng.',
+					backendUnavailable: 'Không thể kết nối tới dịch vụ xử lý ảnh.',
+					timeout: 'Dịch vụ tạo ảnh phản hồi quá thời gian. Vui lòng thử lại.',
+					emptyResult: 'Dịch vụ tạo ảnh không trả về ảnh hợp lệ.',
 					search: 'Không thể tìm ảnh Pexels.',
 					minPrompt: 'Prompt cần ít nhất 20 ký tự.',
 					generate: 'Không thể tạo ảnh AI.',
@@ -3246,6 +3263,23 @@ export const messages = {
 				},
 				errors: {
 					process: 'Unable to process the image.',
+					reference: 'Reference',
+					sessionRequired: 'The admin session has expired. Please sign in again.',
+					creditExhausted:
+						'The OpenAI API account has no image-generation credit remaining. Add credit and try again.',
+					providerAuth:
+						'The OpenAI image account could not be authenticated. Check the production API key.',
+					providerAccess:
+						'The OpenAI account does not currently have access to the configured image model.',
+					rateLimited: 'Image generation is temporarily rate limited. Please try again later.',
+					policyRejected:
+						'The prompt was rejected by the image provider safety policy. Adjust the prompt and try again.',
+					requestRejected:
+						'The image provider rejected this request. Review the prompt and try again.',
+					providerUnavailable: 'The image-generation service is temporarily unavailable.',
+					backendUnavailable: 'Unable to connect to the image-processing service.',
+					timeout: 'The image-generation service took too long to respond. Please try again.',
+					emptyResult: 'The image-generation service did not return a valid image.',
 					search: 'Unable to search Pexels.',
 					minPrompt: 'The prompt must contain at least 20 characters.',
 					generate: 'Unable to generate an AI image.',
