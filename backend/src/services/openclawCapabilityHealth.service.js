@@ -217,7 +217,7 @@ const sanitizeString = (value) => {
     output = output.replace(/sk-[A-Za-z0-9_-]{12,}/g, '[redacted]');
     output = output.replace(/mongodb(\+srv)?:\/\/[^\s"']+/gi, '[redacted]');
     output = output.replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [redacted]');
-    output = output.replace(/\b(API_KEY|OPENCLAW_INTERNAL_API_KEY|SEO_AGENT_API_KEY|SEO_AGENT_HMAC_SECRET|OPENCLAW_GATEWAY_TOKEN|OPENAI_API_KEY|FIRECRAWL_API_KEY|IMAGE_SEARCH_API_KEY|AI_IMAGE_API_KEY|MONGODB_URI|TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET)(\s*[:=]\s*)([^\s"']+)/gi, '$1$2[redacted]');
+    output = output.replace(/\b(API_KEY|OPENCLAW_INTERNAL_API_KEY|SEO_AGENT_API_KEY|SEO_AGENT_HMAC_SECRET|OPENCLAW_GATEWAY_TOKEN|OPENAI_API_KEY|NINE_ROUTER_API_KEY|FIRECRAWL_API_KEY|IMAGE_SEARCH_API_KEY|AI_IMAGE_API_KEY|MONGODB_URI|TELEGRAM_BOT_TOKEN|TELEGRAM_WEBHOOK_SECRET)(\s*[:=]\s*)([^\s"']+)/gi, '$1$2[redacted]');
     return output.slice(0, 1000);
 };
 
@@ -367,7 +367,11 @@ const capabilityStatus = ({ featureKey = 'unknown', labelKey = 'openclaw.capabil
 
 const buildCapabilityDefinitions = (env = process.env, telegramStatus = TelegramApprovalService.status()) => {
     const imageSearchConfigured = providerConfigured(env.IMAGE_SEARCH_PROVIDER) && hasConfiguredValue(env.IMAGE_SEARCH_API_KEY);
-    const aiImageConfigured = providerConfigured(env.AI_IMAGE_PROVIDER) && hasConfiguredValue(env.AI_IMAGE_API_KEY || env.OPENAI_API_KEY);
+    const aiImageProvider = String(env.AI_IMAGE_PROVIDER || '').trim().toLowerCase();
+    const aiImageCredential = aiImageProvider === '9router'
+        ? env.NINE_ROUTER_API_KEY
+        : env.AI_IMAGE_API_KEY || env.OPENAI_API_KEY;
+    const aiImageConfigured = providerConfigured(aiImageProvider) && hasConfiguredValue(aiImageCredential);
     const searchConsoleConfigured = hasConfiguredValue(env.SEARCH_CONSOLE_PROPERTY || env.GOOGLE_SEARCH_CONSOLE_PROPERTY || env.SEARCH_CONSOLE_SITE_URL) && hasConfiguredValue(env.GOOGLE_APPLICATION_CREDENTIALS);
     const trendsProviderConfigured =
         String(env.CONTENT_TRENDS_PROVIDER || '')

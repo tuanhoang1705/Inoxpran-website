@@ -200,9 +200,7 @@
 			: 'Các lượt đang chạy hoặc tự thử lại sẽ cập nhật tự động tại đây.',
 		noActiveWork: isEn ? 'No work is running right now.' : 'Hiện không có lượt nào đang chạy.',
 		attentionTitle: isEn ? 'Needs your attention' : 'Cần bạn xử lý',
-		noIncidents: isEn
-			? 'Nothing needs your attention.'
-			: 'Không có sự cố nào cần bạn can thiệp.',
+		noIncidents: isEn ? 'Nothing needs your attention.' : 'Không có sự cố nào cần bạn can thiệp.',
 		retrying: isEn ? 'Retrying automatically' : 'Đang tự thử lại',
 		retryHint: isEn
 			? 'The same run is kept; no duplicate draft is created.'
@@ -801,10 +799,15 @@
 		</div>
 		<div class="bs-hero__actions">
 			<button type="button" class="bs-btn bs-btn--primary" onclick={startCreate}>
-				<span aria-hidden="true">＋</span> {t.newSchedule}
+				<span aria-hidden="true">＋</span>
+				{t.newSchedule}
 			</button>
-			<a class="bs-btn bs-btn--quiet" href={resolve(resolveAdminPath('/admin/openclaw/blogs/settings'))}>
-				<span aria-hidden="true">⌁</span> {t.settingsLink}
+			<a
+				class="bs-btn bs-btn--quiet"
+				href={resolve(resolveAdminPath('/admin/openclaw/blogs/settings'))}
+			>
+				<span aria-hidden="true">⌁</span>
+				{t.settingsLink}
 			</a>
 		</div>
 	</header>
@@ -868,9 +871,7 @@
 					{#if latestSuccessfulExecution.execution.blogId}
 						<a
 							href={resolve(
-								resolveAdminPath(
-									`/admin/blogs/${latestSuccessfulExecution.execution.blogId}`
-								)
+								resolveAdminPath(`/admin/blogs/${latestSuccessfulExecution.execution.blogId}`)
 							)}>{t.openDraft} →</a
 						>
 					{:else}
@@ -945,7 +946,11 @@
 			{:else}
 				<div class="bs-calm-empty">
 					<span aria-hidden="true">✓</span>
-					<p>{isEn ? 'OpenClaw is ready for the next scheduled run.' : 'OpenClaw đang sẵn sàng cho lượt tiếp theo.'}</p>
+					<p>
+						{isEn
+							? 'OpenClaw is ready for the next scheduled run.'
+							: 'OpenClaw đang sẵn sàng cho lượt tiếp theo.'}
+					</p>
 				</div>
 			{/if}
 		</section>
@@ -996,7 +1001,11 @@
 			{:else}
 				<div class="bs-calm-empty">
 					<span aria-hidden="true">✓</span>
-					<p>{isEn ? 'Retries and safety checks are handled automatically.' : 'Retry và các chốt an toàn đang được xử lý tự động.'}</p>
+					<p>
+						{isEn
+							? 'Retries and safety checks are handled automatically.'
+							: 'Retry và các chốt an toàn đang được xử lý tự động.'}
+					</p>
 				</div>
 			{/if}
 		</section>
@@ -1128,7 +1137,12 @@
 					<button type="submit" class="bs-btn bs-btn--primary" disabled={saving}>
 						{saving ? t.saving : t.save}
 					</button>
-					<button type="button" class="bs-btn" onclick={isEditing ? closeForm : startCreate} disabled={saving}>
+					<button
+						type="button"
+						class="bs-btn"
+						onclick={isEditing ? closeForm : startCreate}
+						disabled={saving}
+					>
 						{isEditing ? t.cancel : t.reset}
 					</button>
 				</div>
@@ -1149,7 +1163,9 @@
 			<div class="bs-empty">
 				<p class="bs-empty__title">{t.empty}</p>
 				<p class="bs-empty__hint">{t.emptyHint}</p>
-				<button type="button" class="bs-btn bs-btn--primary" onclick={startCreate}>{t.newSchedule}</button>
+				<button type="button" class="bs-btn bs-btn--primary" onclick={startCreate}
+					>{t.newSchedule}</button
+				>
 			</div>
 		{:else}
 			<ul class="bs-list">
@@ -1161,7 +1177,11 @@
 									<p class="bs-item__name">{schedule.name}</p>
 									<p class="bs-item__direction">{schedule.direction || schedule.description}</p>
 								</div>
-								<span class="bs-badge" class:is-good={schedule.enabled} class:is-muted={!schedule.enabled}>
+								<span
+									class="bs-badge"
+									class:is-good={schedule.enabled}
+									class:is-muted={!schedule.enabled}
+								>
 									{schedule.enabled ? t.active : t.paused}
 								</span>
 							</div>
@@ -1252,7 +1272,11 @@
 							>
 								{detailScheduleId === schedule.id && roadmapOpen ? t.hideRoadmap : t.topicRoadmap}
 							</button>
-							<button type="button" class="bs-btn bs-btn--quiet" onclick={() => startEdit(schedule)}>
+							<button
+								type="button"
+								class="bs-btn bs-btn--quiet"
+								onclick={() => startEdit(schedule)}
+							>
 								{t.edit}
 							</button>
 							<button
@@ -1270,8 +1294,8 @@
 										type="button"
 										class="bs-btn bs-btn--danger"
 										disabled={busyScheduleId === schedule.id}
-										onclick={() => deleteSchedule(schedule)}
-									>{t.confirmDeleteYes}</button>
+										onclick={() => deleteSchedule(schedule)}>{t.confirmDeleteYes}</button
+									>
 									<button type="button" class="bs-btn" onclick={() => (confirmDeleteId = '')}>
 										{t.confirmDeleteNo}
 									</button>
@@ -1280,8 +1304,8 @@
 								<button
 									type="button"
 									class="bs-btn bs-btn--danger-ghost"
-									onclick={() => (confirmDeleteId = schedule.id)}
-								>{t.remove}</button>
+									onclick={() => (confirmDeleteId = schedule.id)}>{t.remove}</button
+								>
 							{/if}
 						</div>
 					</li>
@@ -1304,8 +1328,8 @@
 						detailScheduleId = '';
 						resultsOpen = false;
 						roadmapOpen = false;
-					}}
-				>{isEn ? 'Close details' : 'Đóng chi tiết'}</button>
+					}}>{isEn ? 'Close details' : 'Đóng chi tiết'}</button
+				>
 			</header>
 
 			<details class="bs-disclosure" open={resultsOpen}>
@@ -1360,7 +1384,8 @@
 										<a
 											class="bs-results__link"
 											href={resolve(resolveAdminPath(`/admin/blogs/${execution.blogId}`))}
-										>{t.openDraft}</a>
+											>{t.openDraft}</a
+										>
 									{/if}
 								</li>
 							{/each}
@@ -2033,9 +2058,7 @@
 		position: relative;
 		overflow: hidden;
 		border: 1px solid var(--bs-line);
-		background:
-			linear-gradient(135deg, rgba(8, 125, 112, 0.06), transparent 38%),
-			#fff;
+		background: linear-gradient(135deg, rgba(8, 125, 112, 0.06), transparent 38%), #fff;
 		padding: clamp(18px, 3vw, 30px);
 	}
 

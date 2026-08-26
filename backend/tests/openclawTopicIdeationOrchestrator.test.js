@@ -223,8 +223,8 @@ describe('topic ideation orchestrator', () => {
         const service = new TopicIdeationOrchestratorService({
             RunModel,
             agentAdapter: adapter,
-            scorer: async () => ({ eligible: true, totalScore: 94, noveltySubtotal: 60, reasonCodes: [] }),
-            policy: { acceptanceScore: 95, minimumNoveltySubtotal: 55 },
+            scorer: async () => ({ eligible: true, totalScore: 93, noveltySubtotal: 60, reasonCodes: [] }),
+            policy: { acceptanceScore: 94, minimumNoveltySubtotal: 55 },
             maxRounds: 1,
             now: () => new Date()
         })

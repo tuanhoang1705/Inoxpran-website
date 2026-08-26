@@ -28,7 +28,7 @@
 		'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
 	const homeProductCardImageSizes = '(max-width: 576px) 50vw, (max-width: 992px) 33vw, 25vw';
 	const categoryImageSizes = '(max-width: 768px) 33vw, 33vw';
-	const latestPostImageSizes = '(max-width: 768px) 50vw, 25vw';
+	const latestPostImageSizes = '(max-width: 480px) 82vw, (max-width: 768px) 70vw, 25vw';
 	const CLIENT_HOME_FEED_TIMEOUT_MS = 1_500;
 	const DEFAULT_SITE_URL = 'https://inoxpran.com';
 	const normalizeSiteUrl = (value) => {
@@ -1997,7 +1997,7 @@
 					>{$t('common.viewAll')}</a
 				>
 			</div>
-			<div class="row">
+			<div class="latest-posts-track" aria-label={$t('home.latestPostsTitle')}>
 				{#if latestPosts.length}
 					{#each latestPosts as post, index (post.id || post._id || post.slug || index)}
 						{@const postImage = getBlogImage(post, index)}
@@ -2005,7 +2005,7 @@
 						{@const postWebpSrcSet = getPostItemWebpSrcSet(postImage)}
 						{@const postCategoryHref = getBlogCategoryHref(post)}
 						<div
-							class="col-6 col-md-3 posts mb-4"
+							class="posts home-post-slide"
 							role="link"
 							tabindex="0"
 							onclick={(event) => handleLatestPostClick(event, getBlogHref(post))}
@@ -2067,7 +2067,7 @@
 					{/each}
 				{:else if isHomeFeedLoading}
 					{#each Array(4).keys() as idx (idx)}
-						<div class="col-6 col-md-3 posts mb-4" aria-hidden="true">
+						<div class="posts home-post-slide" aria-hidden="true">
 							<div class="img-fluid rounded-3 skeleton skeleton-thumb"></div>
 							<div class="skeleton-line lg skeleton"></div>
 							<div class="skeleton-line md skeleton"></div>
@@ -2075,7 +2075,7 @@
 						</div>
 					{/each}
 				{:else}
-					<div class="col-12">
+					<div class="latest-posts-empty">
 						<p class="mb-0 text-black-50">{noLatestPostsText}</p>
 					</div>
 				{/if}
@@ -2539,6 +2539,21 @@
 		object-fit: cover;
 	}
 
+	#latest-posts .latest-posts-track {
+		display: grid;
+		grid-template-columns: repeat(4, minmax(0, 1fr));
+		gap: 1.5rem;
+	}
+
+	#latest-posts .home-post-slide {
+		min-width: 0;
+		margin: 0;
+	}
+
+	#latest-posts .latest-posts-empty {
+		grid-column: 1 / -1;
+	}
+
 	#latest-posts .posts {
 		cursor: pointer;
 	}
@@ -2860,6 +2875,31 @@
 	}
 
 	@media (max-width: 768px) {
+		#latest-posts .latest-posts-track {
+			display: grid;
+			grid-auto-flow: column;
+			grid-auto-columns: minmax(260px, 70vw);
+			grid-template-columns: none;
+			gap: 14px;
+			overflow-x: auto;
+			overflow-y: visible;
+			margin-inline: -12px;
+			padding: 4px 12px 20px;
+			scroll-padding-inline: 12px;
+			scroll-snap-type: x mandatory;
+			scrollbar-width: none;
+			touch-action: pan-x pan-y;
+			overscroll-behavior-x: contain;
+		}
+
+		#latest-posts .latest-posts-track::-webkit-scrollbar {
+			display: none;
+		}
+
+		#latest-posts .home-post-slide {
+			scroll-snap-align: start;
+		}
+
 		#best-selling-items .product-swiper[data-native-slider] .swiper-wrapper {
 			grid-auto-columns: 220px;
 			gap: 14px;
@@ -2931,6 +2971,11 @@
 	}
 
 	@media (max-width: 480px) {
+		#latest-posts .latest-posts-track {
+			grid-auto-columns: minmax(250px, 82vw);
+			gap: 12px;
+		}
+
 		#best-selling-items .product-swiper[data-native-slider] .swiper-wrapper {
 			grid-auto-columns: clamp(156px, calc((100vw - 38px) / 2), 190px);
 			gap: 12px;

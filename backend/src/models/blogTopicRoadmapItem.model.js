@@ -15,6 +15,11 @@ const ROADMAP_ITEM_STATUSES = Object.freeze([
     'failed'
 ])
 const ROADMAP_ITEM_SCOPES = Object.freeze(['catalog', 'product', 'category', 'market', 'mixed'])
+// Which editorial lane produced this topic. `product_led` topics must name and
+// cite a catalog product; `household` topics are useful household knowledge that
+// deliberately carries no product evidence, so the coverage of already-written
+// products cannot starve the queue.
+const ROADMAP_ITEM_LANES = Object.freeze(['product_led', 'household'])
 
 const boundedStringArray = ({ maxItems, maxlength }) => ({
     type: [{ type: String, trim: true, maxlength }],
@@ -122,6 +127,11 @@ const blogTopicRoadmapItemSchema = new Schema(
         secondaryKeywords: { ...boundedStringArray({ maxItems: 20, maxlength: 160 }), immutable: true },
         categoryKey: { type: String, default: '', immutable: true, trim: true, maxlength: 120, index: true },
         productScope: { type: String, default: 'mixed', immutable: true, trim: true, maxlength: 80, index: true },
+        // No dedicated index on purpose: production runs with autoIndex off, so a
+        // declared index that is never built only implies one exists. Lane is
+        // always queried alongside roadmapId and status, which are indexed, over
+        // a collection of a few dozen rows.
+        lane: { type: String, enum: ROADMAP_ITEM_LANES, default: 'product_led', immutable: true },
         topicAxis: { type: String, default: '', immutable: true, trim: true, maxlength: 120 },
         articleType: { type: String, default: 'practical-guide', immutable: true, trim: true, maxlength: 120 },
         searchIntent: { type: String, default: 'informational', immutable: true, trim: true, maxlength: 160 },
@@ -189,6 +199,7 @@ module.exports = {
     COLLECTION_NAME,
     DOCUMENT_NAME,
     ROADMAP_ITEM_SCOPES,
+    ROADMAP_ITEM_LANES,
     ROADMAP_ITEM_STATUSES,
     blogTopicRoadmapItemSchema,
     boundedStringArray,

@@ -1,6 +1,7 @@
 <script>
 	import { onDestroy } from 'svelte';
 	import { t } from '$lib/i18n/admin/index.js';
+	import { blogImageErrorText, normalizeBlogImageError } from '$lib/blogImageError.js';
 
 	let { open = false, postId = '', target = null, onClose = null, onApplied = null } = $props();
 
@@ -20,6 +21,8 @@
 	let preview = $state(null);
 	let loading = $state(false);
 	let error = $state('');
+	let generationElapsedSeconds = $state(0);
+	let generationTimer = null;
 	let initializedTarget = '';
 	const MAX_LOCAL_UPLOAD_BYTES = 5 * 1024 * 1024;
 
@@ -29,8 +32,13 @@
 	const requestJson = async (url, options = {}) => {
 		const response = await fetch(url, options);
 		const payload = await response.json().catch(() => null);
-		if (!response.ok)
-			throw new Error(payload?.message || $t('admin.blogImageReview.errors.process'));
+		if (!response.ok) {
+			const normalized = normalizeBlogImageError(payload, response.headers);
+			const requestError = new Error(blogImageErrorText(normalized, { t: $t }));
+			requestError.code = normalized.errorCode;
+			requestError.requestId = normalized.requestId;
+			throw requestError;
+		}
 		return payload;
 	};
 
@@ -49,6 +57,19 @@
 		localFile = null;
 		localDragActive = false;
 		if (fileInput) fileInput.value = '';
+	};
+
+	const stopGenerationTimer = () => {
+		if (generationTimer) clearInterval(generationTimer);
+		generationTimer = null;
+	};
+
+	const startGenerationTimer = () => {
+		stopGenerationTimer();
+		generationElapsedSeconds = 0;
+		generationTimer = setInterval(() => {
+			generationElapsedSeconds += 1;
+		}, 1000);
 	};
 
 	const loadSuggestions = async () => {
@@ -93,12 +114,14 @@
 	};
 
 	const generateImage = async () => {
+		if (loading) return;
 		if (prompt.trim().length < 20) {
 			error = $t('admin.blogImageReview.errors.minPrompt');
 			return;
 		}
 		loading = true;
 		error = '';
+		startGenerationTimer();
 		try {
 			preview = await requestJson(apiPath('generate'), {
 				method: 'POST',
@@ -108,6 +131,7 @@
 		} catch (requestError) {
 			error = requestError?.message || $t('admin.blogImageReview.errors.generate');
 		} finally {
+			stopGenerationTimer();
 			loading = false;
 		}
 	};
@@ -235,6 +259,7 @@
 	});
 
 	onDestroy(() => {
+		stopGenerationTimer();
 		clearLocalPreview();
 		if (dialog?.open) dialog.close();
 	});
@@ -335,11 +360,23 @@
 							<button type="button" onclick={() => (prompt = suggestion)}>{suggestion}</button>
 						{/each}
 					</div>
-					<button class="primary generate" type="button" onclick={generateImage} disabled={loading}>
-						{loading
-							? $t('admin.blogImageReview.dialog.generating')
-							: $t('admin.blogImageReview.dialog.generate')}
-					</button>
+					<div class="generation-actions">
+						<p aria-live="polite">
+							{loading
+								? `${$t('admin.blogImageReview.dialog.generationProgress')} ${generationElapsedSeconds}s`
+								: $t('admin.blogImageReview.dialog.generationHint')}
+						</p>
+						<button
+							class="primary generate"
+							type="button"
+							onclick={generateImage}
+							disabled={loading}
+						>
+							{loading
+								? $t('admin.blogImageReview.dialog.generating')
+								: $t('admin.blogImageReview.dialog.generate')}
+						</button>
+					</div>
 				</section>
 			{:else if mode === 'pexels'}
 				<section class="pexels-panel">
@@ -615,6 +652,20 @@
 
 	.generate {
 		justify-self: end;
+	}
+
+	.generation-actions {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+	}
+
+	.generation-actions p {
+		margin: 0;
+		color: #65716b;
+		font-size: 0.82rem;
+		line-height: 1.4;
 	}
 
 	button:disabled {

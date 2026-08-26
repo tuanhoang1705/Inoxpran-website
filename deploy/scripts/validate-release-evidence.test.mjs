@@ -207,6 +207,24 @@ const validManifest = () => ({
   },
 });
 
+const rebaseManifestTimestamps = (value, offsetMs) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => rebaseManifestTimestamps(item, offsetMs));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        rebaseManifestTimestamps(item, offsetMs),
+      ]),
+    );
+  }
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+    return new Date(new Date(value).getTime() + offsetMs).toISOString();
+  }
+  return value;
+};
+
 const validate = (manifest, overrides = {}) =>
   validateReleaseEvidence(manifest, {
     expectedCommit: COMMIT,
@@ -361,7 +379,9 @@ test("CLI reads only an external regular manifest and emits a sanitized summary"
   );
   try {
     const manifestPath = path.join(temporaryDirectory, "evidence.json");
-    const manifestSource = JSON.stringify(validManifest());
+    const manifestSource = JSON.stringify(
+      rebaseManifestTimestamps(validManifest(), Date.now() - NOW.getTime()),
+    );
     fs.writeFileSync(manifestPath, manifestSource, {
       encoding: "utf8",
       mode: 0o600,

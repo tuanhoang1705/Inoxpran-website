@@ -33,6 +33,11 @@ const safeErrorCode = (error) => {
     return SAFE_ERROR_CODE.test(candidate) ? candidate.slice(0, 80) : 'INTERNAL_ERROR'
 }
 
+const safePublicErrorCode = (error) => {
+    const candidate = String(error?.publicCode || '').trim()
+    return SAFE_ERROR_CODE.test(candidate) ? candidate.slice(0, 80) : ''
+}
+
 const safeStoredErrorCode = (value, fallback = 'INTERNAL_ERROR') => {
     const candidate = String(value || '').trim()
     if (!candidate) return ''
@@ -68,7 +73,7 @@ const safeClientMessage = ({ error, statusCode, isFileSizeError = false, isJwtEr
 const buildSafeErrorPayload = ({ error, statusCode, message, requestId = '', includeStack = false }) => {
     const candidateErrorCode = safeErrorCode(error)
     const errorCode = statusCode >= 500
-        ? 'INTERNAL_ERROR'
+        ? safePublicErrorCode(error) || 'INTERNAL_ERROR'
         : candidateErrorCode === 'Error'
             ? 'REQUEST_FAILED'
             : candidateErrorCode
@@ -97,6 +102,18 @@ const buildSafeServerLog = ({ error, req, statusCode }) => {
     }
     const requestId = boundedText(req?.requestId, '', 128)
     if (requestId) entry.requestId = requestId
+    const providerStatus = Number(error?.providerStatus)
+    if (Number.isInteger(providerStatus) && providerStatus >= 400 && providerStatus <= 599) {
+        entry.providerStatus = providerStatus
+    }
+    const providerErrorCode = boundedText(error?.providerErrorCode, '', 80)
+    if (providerErrorCode && SAFE_ERROR_CODE.test(providerErrorCode)) {
+        entry.providerErrorCode = providerErrorCode
+    }
+    const providerRequestId = boundedText(error?.providerRequestId, '', 128)
+    if (/^[A-Za-z0-9._:-]{1,128}$/.test(providerRequestId)) {
+        entry.providerRequestId = providerRequestId
+    }
     return entry
 }
 

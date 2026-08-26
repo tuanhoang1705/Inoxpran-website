@@ -250,10 +250,6 @@ const ERROR_LABELS = {
 		vi: 'Bằng chứng bắt buộc cho việc chấm điểm chủ đề chưa sẵn sàng. Lần chạy được dừng an toàn và kế hoạch cũ vẫn được giữ nguyên.',
 		en: 'Required scoring evidence is unavailable. The run stopped safely and the previous roadmap remains active.'
 	},
-	OPENCLAW_TOPIC_AGENT_BUDGET_EXHAUSTED: {
-		vi: 'Lượt nghiên cứu đã dùng hết số lần gọi agent cho phép. Kế hoạch cũ được giữ nguyên và lần chạy kế tiếp sẽ nghiên cứu lại với hạn mức mới.',
-		en: 'Topic research used up its agent call budget for this run. The previous roadmap is kept and the next run researches again with a fresh budget.'
-	},
 	WRITER_DRAFT_UNAVAILABLE: {
 		vi: 'Người viết chưa trả về bản nháp đạt yêu cầu trong lượt này. Hệ thống không lưu bài mẫu thay thế; chủ đề được giữ lại và sẽ thử lại.',
 		en: 'The writer returned no usable draft this run. No template article was saved; the topic is kept and will be retried.'

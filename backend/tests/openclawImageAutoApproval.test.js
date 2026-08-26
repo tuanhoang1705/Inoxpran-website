@@ -4,6 +4,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const {
   IMAGE_ATTEMPT_LIMIT,
+  IMAGE_PIPELINE_CONCURRENCY,
   approveStoredImage,
   isImageReviewDelegated,
   runImagePipeline,
@@ -53,9 +54,10 @@ describe("image pipeline attempts", () => {
     process.env = { ...ORIGINAL_ENV };
   });
 
-  it("retries a plan item before recording it as pending", async () => {
-    expect(IMAGE_ATTEMPT_LIMIT).toBe(3);
-    // Provider named but unkeyed: every attempt gives up locally, no network.
+  it("fails fast with the provider reason instead of repeating slow generation", async () => {
+    expect(IMAGE_ATTEMPT_LIMIT).toBe(1);
+    expect(IMAGE_PIPELINE_CONCURRENCY).toBe(2);
+    // Provider named but unkeyed: the attempt gives up locally, no network.
     process.env.OPENCLAW_IMAGE_PIPELINE_ENABLED = "true";
     process.env.IMAGE_SEARCH_PROVIDER = "pexels";
     process.env.IMAGE_SEARCH_API_KEY = "";
@@ -71,6 +73,7 @@ describe("image pipeline attempts", () => {
     });
 
     expect(result.coverImage.status).toBe("pending_generation");
+    expect(result.coverImage.warning).toBe("ai_image_generation_disabled");
     expect(result.warnings).toContain("image_search_api_key_missing");
     // Auto-publish must not wave through an article whose images do not exist.
     expect(result.coverImage.reviewStatus).toBe("pending_review");

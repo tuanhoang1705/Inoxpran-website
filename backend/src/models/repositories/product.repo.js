@@ -3,6 +3,7 @@
 const { product  } = require('../product.model');
 const { Types } = require('mongoose');
 const { getSelectData, getUnSelectData, convertToObjectIdMongodb } = require('../../utils/index');
+const { buildStrictProductSearchFilter } = require('../../utils/productSearch.util');
 
 const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -39,33 +40,6 @@ const findProductByNormalizedName = async ({ name, excludeId } = {}) => {
         .exec();
 };
 
-const buildSearchTokens = (value) => {
-    const normalized = typeof value === 'string' ? value.trim() : '';
-    if (!normalized) return [];
-
-    const compact = normalized.replace(/[\s._/-]+/g, '');
-    const numeric = normalized.replace(/\D+/g, '');
-
-    return Array.from(new Set([normalized, compact, numeric]))
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 2);
-};
-
-const buildRegexSearchFilter = (searchText) => {
-    const tokens = buildSearchTokens(searchText);
-    if (!tokens.length) return null;
-
-    const clauses = tokens.flatMap((token) => {
-        const escapedToken = escapeRegex(token);
-        return [
-            { product_name: { $regex: escapedToken, $options: 'i' } },
-            { product_slug: { $regex: escapedToken, $options: 'i' } }
-        ];
-    });
-
-    return { $or: clauses };
-};
-
 const findAllDraftsForShop = async ({ query, limit, skip }) => { 
     return await queryProduct({ query, limit, skip });
     
@@ -78,24 +52,11 @@ const findAllPublishForShop = async ({ query, limit, skip }) => {
 const searchProductsByUser = async ({ keySearch }) => { 
     const searchText = typeof keySearch === 'string' ? keySearch.trim() : '';
     if (!searchText) return [];
-    const textResults = await product.find(
-        {
-            isPublished: true,
-            $text: { $search: searchText }
-        },
-        { score: { $meta: 'textScore' } }
-    )
-        .sort({ score: { $meta: 'textScore' } })
-        .lean();
-    if (textResults.length) return textResults;
 
-    const regexFilter = buildRegexSearchFilter(searchText);
-    if (!regexFilter) return [];
-
-    return await product.find({
-        isPublished: true,
-        ...regexFilter
-    })
+    return await product.find(buildStrictProductSearchFilter({
+        baseFilter: { isPublished: true },
+        searchTerm: searchText
+    }))
         .sort({ updatedAt: -1, createdAt: -1 })
         .lean();
 }

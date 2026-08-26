@@ -3,7 +3,6 @@
 const crypto = require('node:crypto');
 const path = require('node:path');
 const { URL } = require('node:url');
-const imageSize = require('image-size');
 const sharp = require('sharp');
 const { BadRequestError } = require('../core/error.response');
 const { getBucket } = require('../config/firebase');
@@ -115,7 +114,7 @@ const resolveValidation = (validation = {}) => {
 
 const formatSizeLimit = (bytes) => `${Math.ceil(bytes / (1024 * 1024))}MB`;
 
-const validateImageBuffer = (buffer, validation) => {
+const validateImageBuffer = async (buffer, validation) => {
     const {
         maxSizeBytes,
         requireDimensions,
@@ -137,7 +136,10 @@ const validateImageBuffer = (buffer, validation) => {
     }
     let dimensions;
     try {
-        dimensions = imageSize(buffer);
+        dimensions = await sharp(buffer, {
+            failOn: 'error',
+            limitInputPixels: 100_000_000
+        }).metadata();
     } catch {
         throw new BadRequestError('Invalid image data');
     }
@@ -217,7 +219,7 @@ const mapWithConcurrency = async (items, concurrency, mapper) => {
 };
 
 const saveImageBuffer = async ({ buffer, mimetype, fileName, folder, validation }) => {
-    validateImageBuffer(buffer, validation);
+    await validateImageBuffer(buffer, validation);
     const bucket = getBucket();
     const destination = buildStoragePath({ folder, fileName });
     return saveBufferToBucket({ bucket, destination, buffer, mimetype });
@@ -305,7 +307,7 @@ const optimizeAndUploadImageBuffer = async ({
     validation,
     optimization
 }) => {
-    validateImageBuffer(buffer, validation);
+    await validateImageBuffer(buffer, validation);
     const profile = resolveOptimizationProfile(optimization);
     if (!profile || !isOptimizableMimeType(mimetype)) {
         return saveImageBuffer({ buffer, mimetype, fileName, folder, validation: { ...validation, requireDimensions: false } });

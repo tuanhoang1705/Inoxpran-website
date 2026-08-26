@@ -4,6 +4,7 @@ import { getTranslator } from '$lib/i18n/admin/server.js';
 import { buildAdminHeaders, getAdminSession } from '$lib/server/adminAuth.js';
 import { adminApiFetch } from '$lib/server/adminApi.js';
 import { setAdminToast } from '$lib/server/adminToast.js';
+import { hasInvalidVariantPricing } from '$lib/admin/productVariants.js';
 
 const toNumber = (value) => {
 	if (value === null || value === undefined || value === '') return undefined;
@@ -16,7 +17,7 @@ const buildAttributesPayload = (form, t, { requireAll = false } = {}) => {
 	const model = String(form.get('product_attribute_model') || '').trim();
 	const color = String(form.get('product_attribute_color') || '').trim();
 	const rawColors = String(form.get('product_attribute_colors') || '').trim();
-	const hasAny = Boolean(manufacturer || model || color);
+	const hasAny = Boolean(manufacturer || model || color || rawColors);
 
 	if (requireAll && !hasAny) {
 		return { error: t('admin.productEditor.errors.attributesRequired') };
@@ -119,6 +120,10 @@ export const actions = {
 		const attributesResult = buildAttributesPayload(form, t);
 		const variationsResult = buildVariationsPayload(form, { allowEmpty: true });
 		const uploadSessionId = String(form.get('upload_session_id') || '').trim();
+		if (hasInvalidVariantPricing(variationsResult.parsed)) {
+			const message = t('admin.productEditor.variantPriceInvalid');
+			return fail(400, { error: message, toast: { tone: 'error', message } });
+		}
 
 		if (attributesResult.error) {
 			const message = attributesResult.error;

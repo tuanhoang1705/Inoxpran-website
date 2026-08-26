@@ -256,6 +256,7 @@ export const load = async ({ fetch, url, cookies }) => {
 	const trimmedProducts = products.slice(0, limit);
 	let finalProducts = trimmedProducts;
 	let finalHasNextPage = hasNextPage;
+	let finalTotal = hasNextPage ? null : trimmedProducts.length;
 	try {
 		const catalogSnapshot = await fetchAllCatalogProducts({ fetch, headers });
 		const facetSourceProducts = catalogSnapshot.products.length
@@ -266,17 +267,16 @@ export const load = async ({ fetch, url, cookies }) => {
 			filters: activeFacetFilters
 		});
 
-		if (tag) {
-			const localPage = paginateCatalogProducts({
-				products: facetSourceProducts,
-				filters: { q, tag, category, minPrice, maxPrice },
-				sort,
-				page,
-				limit
-			});
-			finalProducts = localPage.items;
-			finalHasNextPage = localPage.hasNextPage;
-		}
+		const localPage = paginateCatalogProducts({
+			products: facetSourceProducts,
+			filters: { q, tag, category, minPrice, maxPrice },
+			sort,
+			page,
+			limit
+		});
+		finalProducts = localPage.items;
+		finalHasNextPage = localPage.hasNextPage;
+		finalTotal = localPage.total;
 	} catch {
 		facets = computeCatalogFacetCounts({
 			products,
@@ -292,13 +292,14 @@ export const load = async ({ fetch, url, cookies }) => {
 			});
 			finalProducts = localPage.items;
 			finalHasNextPage = localPage.hasNextPage;
+			finalTotal = localPage.total;
 		}
 	}
 
 	return {
 		products: finalProducts.map(toShopListingProduct),
 		filters: { q, tag, category, minPrice, maxPrice, sort, page, limit },
-		pagination: { hasNextPage: finalHasNextPage },
+		pagination: { hasNextPage: finalHasNextPage, total: finalTotal },
 		facets,
 		basePath: localeAwareShopPath,
 		shopPath: localeAwareShopPath,

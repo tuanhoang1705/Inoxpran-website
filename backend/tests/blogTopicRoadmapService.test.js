@@ -11,6 +11,8 @@ const {
   safeItemView,
   safeRegenerationView,
   scopeCoverageForInterpretation,
+  directionForLane,
+  HOUSEHOLD_LANE_MANDATE,
   uniquenessKeyFor
 } = require('../src/services/contentOperations/blogTopicRoadmap.service');
 const {
@@ -927,5 +929,89 @@ describe('rolling Blog topic roadmap service', () => {
       expect.objectContaining({ activationEpoch: { $ne: 'epoch-new' } }),
       expect.anything()
     );
+  });
+});
+
+// Every topic the system had ever produced was forced to carry product evidence,
+// because requireProductEvidence was global and the catalog always has cards. Once
+// a product family had been written about enough times, no new topic about it
+// could score as novel and the schedule simply stopped producing. Lanes let a
+// share of topics be household knowledge that carries no product at all.
+describe('topic lanes', () => {
+  const roadmap = { _id: ids.roadmap, targetReady: 8, directionRevision: 1, activeEpoch: '' };
+
+  const serviceWith = ({ householdReady = 0, completed = [], share = 0.3 }) => {
+    const service = Object.create(BlogTopicRoadmapService.prototype);
+    service.roadmapConfig = { householdLaneShare: share, targetReady: 8 };
+    service.policy = { acceptanceScore: 82, minimumNoveltySubtotal: 48 };
+    service.ItemModel = {
+      countDocuments: vi.fn(async () => householdReady),
+      find: vi.fn(() => ({
+        select: () => ({ sort: () => ({ limit: () => ({ lean: async () => completed }) }) })
+      }))
+    };
+    return service;
+  };
+
+  it('matches legacy rows as product-led, since none of them had a lane', () => {
+    const service = serviceWith({});
+    expect(service.laneMatch('household')).toEqual({ lane: 'household' });
+    expect(service.laneMatch('product_led')).toEqual({ lane: { $ne: 'household' } });
+  });
+
+  it('refills the household lane while the queue is short of its share', async () => {
+    const service = serviceWith({ householdReady: 1 });
+    await expect(service.resolveRefillLane({ roadmap })).resolves.toBe('household');
+  });
+
+  it('returns to the product lane once the household share is met', async () => {
+    const service = serviceWith({ householdReady: 3 });
+    await expect(service.resolveRefillLane({ roadmap })).resolves.toBe('product_led');
+  });
+
+  it('never opens the household lane when the share is zero', async () => {
+    const service = serviceWith({ householdReady: 0, share: 0 });
+    await expect(service.resolveRefillLane({ roadmap })).resolves.toBe('product_led');
+  });
+
+  // Steering on the queue would let a lane that keeps failing its gate drift the
+  // real published ratio far from the target while the queue looked balanced.
+  it('steers claims on what was actually published, not on the queue', async () => {
+    const allProductLed = Array.from({ length: 10 }, () => ({ lane: 'product_led' }));
+    await expect(
+      serviceWith({ completed: allProductLed }).resolvePreferredClaimLane({ roadmap })
+    ).resolves.toBe('household');
+
+    const mixed = Array.from({ length: 10 }, (_, index) => ({
+      lane: index < 5 ? 'household' : 'product_led'
+    }));
+    await expect(
+      serviceWith({ completed: mixed }).resolvePreferredClaimLane({ roadmap })
+    ).resolves.toBe('product_led');
+  });
+
+  // Emptying the product cards was not enough on its own: an operator direction
+  // that orders "pick a product the blog has not covered" still reached the
+  // ideator, so household refills kept producing product topics and kept failing
+  // the novelty gate they were introduced to escape.
+  it('suspends the product mandate for the household lane only', () => {
+    const direction = 'Mỗi ngày tự chọn một sản phẩm đang xuất bản mà kho bài chưa bao phủ.';
+    expect(directionForLane({ lane: 'product_led', direction })).toBe(direction);
+
+    const household = directionForLane({ lane: 'household', direction });
+    expect(household).toContain(HOUSEHOLD_LANE_MANDATE);
+    // The operator's own words survive verbatim; only their product mandate is
+    // explicitly suspended, so quality and evidence constraints still bind.
+    expect(household).toContain(direction);
+    expect(household).toMatch(/bỏ qua trong lượt này/);
+  });
+
+  it('still produces a usable household direction when the operator left none', () => {
+    const household = directionForLane({ lane: 'household', direction: '' });
+    expect(household).toBe(HOUSEHOLD_LANE_MANDATE);
+  });
+
+  it('expresses no preference before anything has been published', async () => {
+    await expect(serviceWith({ completed: [] }).resolvePreferredClaimLane({ roadmap })).resolves.toBe('');
   });
 });

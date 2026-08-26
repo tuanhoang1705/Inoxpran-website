@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { getTranslator } from '$lib/i18n/admin/server.js';
 import { adminApiFetch } from '$lib/server/adminApi.js';
+import { hasInvalidVariantPricing } from '$lib/admin/productVariants.js';
 
 const toNumber = (value) => {
 	if (value === null || value === undefined || value === '') return undefined;
@@ -21,7 +22,7 @@ const buildAttributesPayload = (form, t, { requireAll = false } = {}) => {
 	const model = String(form.get('product_attribute_model') || '').trim();
 	const color = String(form.get('product_attribute_color') || '').trim();
 	const rawColors = String(form.get('product_attribute_colors') || '').trim();
-	const hasAny = Boolean(manufacturer || model || color);
+	const hasAny = Boolean(manufacturer || model || color || rawColors);
 
 	if (requireAll && !hasAny) {
 		return { error: t('admin.productsNew.errors.attributesRequired') };
@@ -106,6 +107,10 @@ export const actions = {
 		const productRatingsCount = toNumber(form.get('product_ratingsCount'));
 		const variationsResult = buildVariationsPayload(form);
 		const uploadSessionId = String(form.get('upload_session_id') || '').trim();
+		if (hasInvalidVariantPricing(variationsResult.parsed)) {
+			const message = t('admin.productsNew.variantPriceInvalid');
+			return fail(400, { error: message, toast: { tone: 'error', message } });
+		}
 
 		const payload = {
 			product_name: productName,

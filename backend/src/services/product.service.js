@@ -26,6 +26,7 @@ const { findById: findUserById } = require('../models/repositories/user.repo');
 const { order } = require('../models/order');
 const { update, remove } = require('lodash');
 const { removeUndefinedObject, updateNestedObject, convertToObjectIdMongodb } = require('../utils');
+const { buildStrictProductSearchFilter } = require('../utils/productSearch.util');
 const {
     insertInventory,
     findInventoryByProductIds,
@@ -733,36 +734,6 @@ const normalizeSearchTerm = (value) => {
 
 const escapeRegex = (value = '') => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const buildSearchTokens = (value) => {
-    const normalized = normalizeSearchTerm(value);
-    if (!normalized) return [];
-
-    const compact = normalized.replace(/[\s._/-]+/g, '');
-    const numeric = normalized.replace(/\D+/g, '');
-
-    return Array.from(new Set([normalized, compact, numeric]))
-        .map((token) => token.trim())
-        .filter((token) => token.length >= 2);
-};
-
-const buildFallbackSearchFilter = ({ baseFilter = {}, searchTerm }) => {
-    const tokens = buildSearchTokens(searchTerm);
-    if (!tokens.length) return { ...baseFilter };
-
-    const clauses = tokens.flatMap((token) => {
-        const escapedToken = escapeRegex(token);
-        return [
-            { product_name: { $regex: escapedToken, $options: 'i' } },
-            { product_slug: { $regex: escapedToken, $options: 'i' } }
-        ];
-    });
-
-    return {
-        ...baseFilter,
-        $and: [...(Array.isArray(baseFilter.$and) ? baseFilter.$and : []), { $or: clauses }]
-    };
-};
-
 const normalizeInventoryStock = (value) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
@@ -1206,29 +1177,14 @@ class ProductFactory {
         ];
 
         if (searchTerm) {
-            const textSearchProducts = await findAllProducts({
-                limit: normalizedLimit,
-                sort: { score: { $meta: 'textScore' } },
-                page: normalizedPage,
-                filter: {
-                    ...baseFilter,
-                    $text: { $search: searchTerm }
-                },
-                select
-            });
-
-            if (textSearchProducts.length) {
-                return await attachInventoryStock(textSearchProducts);
-            }
-
-            const fallbackProducts = await findAllProducts({
+            const matchedProducts = await findAllProducts({
                 limit: normalizedLimit,
                 sort,
                 page: normalizedPage,
-                filter: buildFallbackSearchFilter({ baseFilter, searchTerm }),
+                filter: buildStrictProductSearchFilter({ baseFilter, searchTerm }),
                 select
             });
-            return await attachInventoryStock(fallbackProducts);
+            return await attachInventoryStock(matchedProducts);
         }
 
         const products = await findAllProducts({

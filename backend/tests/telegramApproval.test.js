@@ -215,6 +215,65 @@ describe('Telegram approval helpers', () => {
         expect(publish).toHaveBeenCalledWith({ blogId: '507f1f77bcf86cd799439011', sendNewsletter: false });
     });
 
+    // Production locks auto-publish off, so Telegram approval is the only path a
+    // live article takes. It called publishBlog directly and ran none of the
+    // post-commit safeguards, which is why no published article had ever been
+    // verified. Approval must verify what it published.
+    it('verifies the publication it just approved', async () => {
+        stubTelegramFetch();
+        const AutomationSeoBlogService = require('../src/services/automationSeoBlog.service');
+        const verify = vi
+            .spyOn(AutomationSeoBlogService, 'verifyApprovedPublication')
+            .mockResolvedValue({ verified: true, verification: { _id: '507f1f77bcf86cd799439099' } });
+        vi.spyOn(TelegramUpdate, 'create').mockResolvedValue({});
+        vi.spyOn(TelegramBlogApproval, 'findOneAndUpdate').mockReturnValue({
+            lean: async () => ({
+                _id: '507f1f77bcf86cd799439031',
+                blogId: '507f1f77bcf86cd799439011',
+                executionId: '507f1f77bcf86cd799439022',
+                blogTitle: 'Draft',
+                status: 'processing'
+            })
+        });
+        vi.spyOn(TelegramBlogApproval, 'updateOne').mockResolvedValue({ modifiedCount: 1 });
+        vi.spyOn(BlogService, 'publishBlog').mockResolvedValue({ title: 'Draft' });
+
+        const result = await TelegramApprovalService.approveCode({ code: 'ABC', userId: '900', updateId: 41 });
+
+        expect(result.status).toBe('approved');
+        expect(verify).toHaveBeenCalledWith({
+            blogId: '507f1f77bcf86cd799439011',
+            executionId: '507f1f77bcf86cd799439022'
+        });
+        expect(result.verification.verified).toBe(true);
+    });
+
+    it('still reports the publication when verification cannot run', async () => {
+        stubTelegramFetch();
+        const AutomationSeoBlogService = require('../src/services/automationSeoBlog.service');
+        vi.spyOn(AutomationSeoBlogService, 'verifyApprovedPublication')
+            .mockRejectedValue(Object.assign(new Error('down'), { code: 'VERIFIER_DOWN' }));
+        vi.spyOn(TelegramUpdate, 'create').mockResolvedValue({});
+        vi.spyOn(TelegramBlogApproval, 'findOneAndUpdate').mockReturnValue({
+            lean: async () => ({
+                _id: '507f1f77bcf86cd799439031',
+                blogId: '507f1f77bcf86cd799439011',
+                executionId: '507f1f77bcf86cd799439022',
+                blogTitle: 'Draft',
+                status: 'processing'
+            })
+        });
+        vi.spyOn(TelegramBlogApproval, 'updateOne').mockResolvedValue({ modifiedCount: 1 });
+        vi.spyOn(BlogService, 'publishBlog').mockResolvedValue({ title: 'Draft' });
+
+        const result = await TelegramApprovalService.approveCode({ code: 'ABC', userId: '900', updateId: 42 });
+
+        // A failed safeguard must never revert a publication that succeeded.
+        expect(result.status).toBe('approved');
+        expect(result.verification.verified).toBe(false);
+        expect(result.verification.reason).toBe('VERIFIER_DOWN');
+    });
+
     it('blocks expired approvals', async () => {
         vi.spyOn(TelegramBlogApproval, 'findOneAndUpdate').mockReturnValue({ lean: async () => null });
         vi.spyOn(TelegramBlogApproval, 'findOne').mockReturnValue({

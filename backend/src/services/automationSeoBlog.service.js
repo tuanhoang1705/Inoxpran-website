@@ -467,7 +467,13 @@ const runPostCommitSafeguards = async (
     }
   }
 
-  if (operationsEnabled && postPublishVerificationEnabled) {
+  // Verification is gated by its own flag alone. Hanging it on
+  // CONTENT_OPERATIONS_ENABLED (default false) while the publish gate demanded
+  // CONTENT_POST_PUBLISH_VERIFY_ENABLED (default true) let an article publish
+  // having satisfied the verification precondition while no verification ever
+  // ran. Monitoring below stays with Content Operations because it writes
+  // Content Operations artifacts; verifying what we just published does not.
+  if (postPublishVerificationEnabled) {
     try {
       const verificationResult = await VerificationService.run({
         blogId,
@@ -874,6 +880,63 @@ class AutomationSeoBlogService {
 
   static async runPostCommitSafeguards(input, dependencies = {}) {
     return runPostCommitSafeguards(input, dependencies);
+  }
+
+  // Production locks auto-publish off, so every live article is published by a
+  // human approving it in Telegram. That path called publishBlog directly and
+  // therefore ran none of the post-commit safeguards, which is why no published
+  // article had ever been verified. Approval now verifies what it published,
+  // through the same code path the auto route uses.
+  static async verifyApprovedPublication(
+    { blogId, executionId = null },
+    dependencies = {}
+  ) {
+    const {
+      BlogModel = blog,
+      ExecutionModel = BlogAutomationExecution,
+      environment = process.env
+    } = dependencies;
+    if (!blogId) return { verified: false, reason: 'blog_id_missing' };
+    if (!parseBoolean(environment.CONTENT_POST_PUBLISH_VERIFY_ENABLED, true)) {
+      return { verified: false, reason: 'post_publish_verification_disabled' };
+    }
+    // The verifier anchors on the work order and readiness report carried by the
+    // originating execution. Without that lineage there is nothing to verify
+    // against, so settle it before touching the database and say so plainly
+    // rather than reporting a verification that never happened.
+    if (!executionId) return { verified: false, reason: 'verification_lineage_incomplete' };
+    const execution = await ExecutionModel.findById(executionId)
+      .select('contentWorkOrderId publishReadinessReportId correlationId')
+      .lean();
+    if (!execution?.contentWorkOrderId || !execution?.publishReadinessReportId) {
+      return { verified: false, reason: 'verification_lineage_incomplete' };
+    }
+    const published = await BlogModel.findById(blogId)
+      .select('+blog_content blog_slug')
+      .lean();
+    if (!published?.blog_slug) return { verified: false, reason: 'blog_not_found' };
+    const result = await runPostCommitSafeguards(
+      {
+        shouldPublish: true,
+        workOrder: { _id: execution.contentWorkOrderId },
+        blogId,
+        executionId,
+        correlationId: execution.correlationId || '',
+        publishedAt: published.publishedAt || new Date(),
+        monitoringWindows: [],
+        postPublishVerificationEnabled: true,
+        publishReadinessReportId: execution.publishReadinessReportId,
+        slug: published.blog_slug,
+        contentHtml: published.blog_content || '',
+        requireCover: false
+      },
+      dependencies
+    );
+    return {
+      verified: Boolean(result.postPublishVerification?._id),
+      verification: result.postPublishVerification || null,
+      warnings: result.postCommitWarnings || []
+    };
   }
 
   static async health() {
@@ -2230,6 +2293,7 @@ class AutomationSeoBlogService {
       publisherDecision: { allowed: shouldPublish, reasons },
       'metadata.resultReasons': reasons,
       'metadata.imagePipelineStatus': imagePipeline.status,
+      'metadata.imageWarnings': (imagePipeline.warnings || []).slice(0, 20),
       'metadata.editorialProductPlacementPlanId': normalized.editorialProductPlacementPlanId || '',
       'metadata.editorialProductPlacementReview': normalized.editorialProductPlacementReview || null
     };

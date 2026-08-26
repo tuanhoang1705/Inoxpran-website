@@ -50,7 +50,11 @@ export const load = async ({ cookies, fetch }) => {
 					limit: '5'
 				})}`
 			})
-		: { ok: schedulesResult.ok, payload: { metadata: { summaries: [] } }, error: schedulesResult.error };
+		: {
+				ok: schedulesResult.ok,
+				payload: { metadata: { summaries: [] } },
+				error: schedulesResult.error
+			};
 
 	return {
 		dashboard: dashboardResult.ok
@@ -75,9 +79,7 @@ export const load = async ({ cookies, fetch }) => {
 				)
 			: null,
 		executionSummaries: executionSummariesResult.ok
-			? sanitizeOpenClawClientPayload(
-					executionSummariesResult.payload?.metadata?.summaries || []
-				)
+			? sanitizeOpenClawClientPayload(executionSummariesResult.payload?.metadata?.summaries || [])
 			: null,
 		availability: {
 			dashboard: dashboardResult.ok,

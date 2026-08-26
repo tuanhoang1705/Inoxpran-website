@@ -206,6 +206,10 @@ if (!backendServiceSource) {
     ["use the Redis service DNS name", /REDIS_HOST:\s*redis/],
     ["require Redis TLS", /REDIS_TLS:\s*["']?true["']?/],
     [
+      "receive the private 9router bearer key",
+      /NINE_ROUTER_API_KEY:\s*\$\{NINE_ROUTER_API_KEY:\?[^}\r\n]+\}/,
+    ],
+    [
       "mount the Redis CA path",
       /REDIS_TLS_CA_FILE:\s*\/run\/secrets\/redis-ca\.crt/,
     ],
@@ -405,9 +409,9 @@ if (
 } else if (/^\s{4}internal:\s*true\s*$/m.test(modelNetworkSource)) {
   violations.push("docker-compose.yml modelnet must allow 9router egress");
 }
-if ((composeSource.match(/^\s{6}- modelnet\s*$/gm) ?? []).length !== 2) {
+if ((composeSource.match(/^\s{6}- modelnet\s*$/gm) ?? []).length !== 5) {
   violations.push(
-    "docker-compose.yml must attach only openclaw and nine-router to modelnet",
+    "docker-compose.yml must attach only backend, nginx, openclaw, openclaw-worker and nine-router to modelnet",
   );
 }
 
@@ -522,6 +526,37 @@ if (composeJsonIndex !== -1) {
       if (renderedBackend?.depends_on?.redis?.condition !== "service_healthy") {
         violations.push(
           "rendered backend must wait for the Redis service healthcheck",
+        );
+      }
+      if (
+        renderedBackendEnvironment.NINE_ROUTER_API_KEY !==
+        process.env.NINE_ROUTER_API_KEY
+      ) {
+        violations.push(
+          "rendered backend must receive the reviewed NINE_ROUTER_API_KEY",
+        );
+      }
+      if (
+        JSON.stringify(renderedNetworkNames(renderedBackend)) !==
+        JSON.stringify(["appnet", "modelnet"])
+      ) {
+        violations.push("rendered backend must join appnet and modelnet only");
+      }
+      const renderedOpenclawWorker = renderedCompose.services?.["openclaw-worker"];
+      if (
+        renderedOpenclawWorker?.environment?.NINE_ROUTER_API_KEY !==
+        process.env.NINE_ROUTER_API_KEY
+      ) {
+        violations.push(
+          "rendered openclaw-worker must receive the reviewed NINE_ROUTER_API_KEY",
+        );
+      }
+      if (
+        JSON.stringify(renderedNetworkNames(renderedOpenclawWorker)) !==
+        JSON.stringify(["appnet", "modelnet"])
+      ) {
+        violations.push(
+          "rendered openclaw-worker must join appnet and modelnet only",
         );
       }
 
@@ -654,10 +689,10 @@ if (composeJsonIndex !== -1) {
         .sort();
       if (
         JSON.stringify(modelNetworkConsumers) !==
-        JSON.stringify(["nine-router", "openclaw"])
+        JSON.stringify(["backend", "nginx", "nine-router", "openclaw", "openclaw-worker"])
       ) {
         violations.push(
-          "rendered modelnet must be shared only by openclaw and nine-router",
+          "rendered modelnet must be shared only by backend, nginx, openclaw, openclaw-worker and nine-router",
         );
       }
 

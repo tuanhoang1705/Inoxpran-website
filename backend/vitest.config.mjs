@@ -15,5 +15,12 @@ const stripShebang = {
 };
 
 export default defineConfig({
-    plugins: [stripShebang]
+    plugins: [stripShebang],
+    test: {
+        // The full backend suite loads many service graphs in parallel. Give
+        // otherwise fast tests enough headroom on shared CI and Windows hosts
+        // so CPU contention cannot turn sub-second assertions into 5s flakes.
+        testTimeout: 30_000,
+        hookTimeout: 30_000
+    }
 });

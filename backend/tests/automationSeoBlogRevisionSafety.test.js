@@ -604,13 +604,34 @@ describe("AutomationSeoBlogService post-commit isolation", () => {
     expect(dependencies.AlertModel.findOneAndUpdate).not.toHaveBeenCalled();
   });
 
-  it("does not run auxiliary operations when the top-level Content Operations flag is off", async () => {
+  // Verification used to hang off CONTENT_OPERATIONS_ENABLED (default false)
+  // while the publish gate demanded CONTENT_POST_PUBLISH_VERIFY_ENABLED
+  // (default true), so an article could publish having satisfied the
+  // verification precondition while no verification ever ran. The two flags now
+  // gate the two concerns separately.
+  it("still verifies the publication when only the Content Operations flag is off", async () => {
+    const dependencies = buildDependencies();
+    dependencies.environment.CONTENT_OPERATIONS_ENABLED = "false";
+    const AutomationSeoBlogService = loadAutomationService();
+
+    await AutomationSeoBlogService.runPostCommitSafeguards(
+      postCommitInput,
+      dependencies,
+    );
+
+    expect(
+      dependencies.PerformanceService.scheduleMonitoring,
+    ).not.toHaveBeenCalled();
+    expect(dependencies.VerificationService.run).toHaveBeenCalled();
+  });
+
+  it("runs no verification when post-publish verification itself is disabled", async () => {
     const dependencies = buildDependencies();
     dependencies.environment.CONTENT_OPERATIONS_ENABLED = "false";
     const AutomationSeoBlogService = loadAutomationService();
 
     const result = await AutomationSeoBlogService.runPostCommitSafeguards(
-      postCommitInput,
+      { ...postCommitInput, postPublishVerificationEnabled: false },
       dependencies,
     );
 

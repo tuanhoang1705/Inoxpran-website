@@ -494,7 +494,13 @@
 		</div>
 		<div class="bos-summary__item" role="listitem">
 			<span>{t.lastSuccess}</span>
-			<b>{schedulesKnown && executionHistoryKnown ? (lastSuccessfulRun ? formatDateTime(lastSuccessfulRun) : t.never) : t.unknown}</b>
+			<b
+				>{schedulesKnown && executionHistoryKnown
+					? lastSuccessfulRun
+						? formatDateTime(lastSuccessfulRun)
+						: t.never
+					: t.unknown}</b
+			>
 		</div>
 		<div class="bos-summary__item" role="listitem">
 			<span>{t.nextRun}</span>
@@ -586,7 +592,11 @@
 				</div>
 				<div class="bos-facts__item">
 					<span>{t.blogCron}</span>
-					<b class="bos-state bos-state--{runtimeControlsKnown && blogCronEnabled ? 'good' : 'muted'}">
+					<b
+						class="bos-state bos-state--{runtimeControlsKnown && blogCronEnabled
+							? 'good'
+							: 'muted'}"
+					>
 						{runtimeControlsKnown ? (blogCronEnabled ? t.enabled : t.disabled) : t.unknown}
 					</b>
 				</div>
@@ -1258,10 +1268,6 @@
 
 	.bos-toggle.is-on .bos-toggle__track {
 		background: var(--admin-accent, #0f766e);
-	}
-
-	.bos-toggle.is-critical .bos-toggle__track {
-		background: var(--admin-warning, #d97706);
 	}
 
 	.bos-toggle.is-on .bos-toggle__track span {

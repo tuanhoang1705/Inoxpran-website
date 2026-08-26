@@ -124,6 +124,29 @@ const isRegenerationIdempotencyDuplicate = (error) => (
     )
 )
 
+// An operator direction is written for the product lane ("choose a product the
+// blog has not covered yet"). Handing that same sentence to a household refill
+// is why emptying the product cards was not enough on its own: the ideator still
+// read a direct order to pick a product. The operator's quality, tone and
+// evidence constraints are kept verbatim; only the product-selection mandate is
+// suspended, and only for this lane.
+const HOUSEHOLD_LANE_MANDATE = [
+    'Chủ đề cho lượt này KHÔNG xoay quanh bất kỳ sản phẩm nào của Inoxpran.',
+    'Hãy chọn một vấn đề gia dụng có thật mà hộ gia đình Việt gặp phải — bảo quản thực phẩm, an toàn bếp núc, vệ sinh nhà bếp, thói quen nấu nướng, tiết kiệm điện nước — và trả lời nó bằng kiến thức kiểm chứng được.',
+    'Không nêu tên, không giới thiệu và không gợi ý mua bất kỳ sản phẩm nào.'
+].join(' ')
+
+const directionForLane = ({ lane, direction }) => {
+    const operatorDirection = text(direction, 1200)
+    if (lane !== 'household') return direction
+    return [
+        HOUSEHOLD_LANE_MANDATE,
+        operatorDirection
+            ? `Định hướng của người vận hành vẫn áp dụng nguyên vẹn về chất lượng, giọng văn và yêu cầu bằng chứng; riêng phần yêu cầu chọn một sản phẩm thì bỏ qua trong lượt này: ${operatorDirection}`
+            : ''
+    ].filter(Boolean).join(' ')
+}
+
 const regenerationError = (code, message = code) => Object.assign(new Error(message), { code })
 
 const isCurrentEvidence = (evidence = {}) => Boolean(
@@ -730,6 +753,43 @@ class BlogTopicRoadmapService {
         }
     }
 
+    // Which lane the next refill should research. Measured on the queue, so a
+    // refill tops up whichever lane is short of its share of targetReady. Legacy
+    // rows carry no lane field and therefore never match 'household', which is
+    // correct: every topic written before this existed was product-led.
+    async resolveRefillLane({ roadmap }) {
+        const share = Number(this.roadmapConfig.householdLaneShare || 0)
+        if (!(share > 0)) return 'product_led'
+        const targetReady = Math.max(1, Number(roadmap.targetReady || this.roadmapConfig.targetReady || 8))
+        const householdReady = await this.ItemModel.countDocuments({
+            ...this.claimableReadyMatch(roadmap),
+            lane: 'household'
+        })
+        return householdReady < Math.round(targetReady * share) ? 'household' : 'product_led'
+    }
+
+    // Rows written before lanes existed carry no field at all, and every one of
+    // them was product-led, so that lane matches on absence rather than value.
+    laneMatch(lane) {
+        return lane === 'household' ? { lane: 'household' } : { lane: { $ne: 'household' } }
+    }
+
+    // Which lane the next claim should prefer, measured on topics that actually
+    // became articles rather than on the queue.
+    async resolvePreferredClaimLane({ roadmap }) {
+        const share = Number(this.roadmapConfig.householdLaneShare || 0)
+        if (!(share > 0)) return ''
+        const recent = await this.ItemModel
+            .find({ roadmapId: roadmap._id, status: 'completed' })
+            .select('lane')
+            .sort({ updatedAt: -1 })
+            .limit(20)
+            .lean()
+        if (!recent.length) return ''
+        const household = recent.filter((entry) => entry.lane === 'household').length
+        return (household / recent.length) < share ? 'household' : 'product_led'
+    }
+
     // Retire ready items on the current revision that can never be claimed because they
     // were scored under an older rubric/corpus version. Mirrors the direction_changed
     // invalidation so counts and the admin UI stop reporting them as ready.
@@ -1044,15 +1104,32 @@ class BlogTopicRoadmapService {
                 error.gateSummary = reachability
                 throw error
             }
+            // The lane is decided before the direction is interpreted, because the
+            // direction itself is what steers the run. Emptying the product cards
+            // was not enough: an operator direction that says "pick a product"
+            // still reached the ideator, so a household refill kept producing
+            // product topics and kept failing the novelty gate.
+            const refillLane = await this.resolveRefillLane({ roadmap })
+            const laneDirection = directionForLane({ lane: refillLane, direction: roadmap.direction })
             const interpretation = await this.DirectionInterpreterService.interpret({
-                direction: roadmap.direction,
-                safeProducts,
+                direction: laneDirection,
+                safeProducts: refillLane === 'household' ? [] : safeProducts,
                 allowHeuristicFallback: false
             })
-            const scopedCoverage = scopeCoverageForInterpretation(coverage, interpretation)
-            const requireProductEvidence = Array.isArray(scopedCoverage.cards) && scopedCoverage.cards.length > 0
+            const fullCoverage = scopeCoverageForInterpretation(coverage, interpretation)
+            // The ideation prompt only forbids non-product ideas when product cards
+            // are present, so an empty card list unlocks the lane without rewriting
+            // a single gate.
+            const scopedCoverage = refillLane === 'household'
+                ? { ...fullCoverage, cards: [], evidenceBackedCount: 0 }
+                : fullCoverage
+            // Was global, and the catalog always has cards, so every topic ever
+            // produced was forced to carry product evidence. It is now a property
+            // of the lane being researched.
+            const requireProductEvidence = refillLane !== 'household' &&
+                Array.isArray(scopedCoverage.cards) && scopedCoverage.cards.length > 0
             const queryPack = buildTopicResearchQueryPack({
-                direction: roadmap.direction,
+                direction: laneDirection,
                 interpretation,
                 productCoverage: scopedCoverage,
                 snapshot: contentSnapshot
@@ -1140,7 +1217,7 @@ class BlogTopicRoadmapService {
                     directionRevision: roadmap.directionRevision,
                     generation: nextGeneration,
                     brief: {
-                        direction: roadmap.direction,
+                        direction: laneDirection,
                         interpretation,
                         productCoverage: scopedCoverage,
                         marketEvidence: { status: marketSnapshot?.status || 'unavailable', signals: marketSignals }
@@ -1170,7 +1247,7 @@ class BlogTopicRoadmapService {
                 ideation = await this.ideationService({
                     snapshot: contentSnapshot,
                     inventoryItems,
-                    direction: roadmap.direction,
+                    direction: laneDirection,
                     directionInterpretation: interpretation,
                     productCoverage: scopedCoverage,
                     marketEvidence: { status: marketSnapshot?.status || 'unavailable', signals: marketSignals },
@@ -1273,6 +1350,7 @@ class BlogTopicRoadmapService {
                     secondaryKeywords: list(idea.keywords, 12, 80),
                     categoryKey: text(idea.categoryKey || 'guide', 80),
                     productScope: text(idea.productScope || 'mixed', 80),
+                    lane: refillLane,
                     articleType: text(idea.articleType || 'practical-guide', 100),
                     searchIntent: text(idea.searchIntent || 'informational', 300),
                     topicAxis: text(idea.topicAxis, 80),
@@ -1516,23 +1594,36 @@ class BlogTopicRoadmapService {
         const now = this.now()
         const claimToken = this.randomUUID()
         const claimUntil = new Date(now.getTime() + Number(this.roadmapConfig.claimLeaseMs || 5_400_000))
-        const item = await this.ItemModel.findOneAndUpdate(
-            {
-                ...this.claimableReadyMatch(roadmap),
-                scheduleId: schedule._id
+        const claimMatch = { ...this.claimableReadyMatch(roadmap), scheduleId: schedule._id }
+        const claimUpdate = {
+            $set: {
+                status: 'claimed',
+                claimToken,
+                claimUntil,
+                claimExecutionId: execution._id,
+                claimedAt: now
             },
-            {
-                $set: {
-                    status: 'claimed',
-                    claimToken,
-                    claimUntil,
-                    claimExecutionId: execution._id,
-                    claimedAt: now
-                },
-                $inc: { attemptCount: 1 }
-            },
-            { sort: { generation: 1, rank: 1, createdAt: 1 }, new: true, runValidators: true }
-        ).select('+claimToken').lean()
+            $inc: { attemptCount: 1 }
+        }
+        const claimOptions = { sort: { generation: 1, rank: 1, createdAt: 1 }, new: true, runValidators: true }
+        // Steer the published mix, not the queue. A lane that keeps failing its
+        // gate would otherwise leave the real output ratio far from the target
+        // while the queue still looked balanced — the same silent drift this
+        // system has been bitten by before. Preference only; if the wanted lane
+        // has nothing claimable the run still takes the next best topic rather
+        // than reporting no topic at all.
+        const preferredLane = await this.resolvePreferredClaimLane({ roadmap })
+        let item = preferredLane
+            ? await this.ItemModel.findOneAndUpdate(
+                { ...claimMatch, ...this.laneMatch(preferredLane) },
+                claimUpdate,
+                claimOptions
+            ).select('+claimToken').lean()
+            : null
+        if (!item) {
+            item = await this.ItemModel.findOneAndUpdate(claimMatch, claimUpdate, claimOptions)
+                .select('+claimToken').lean()
+        }
         if (!item) {
             const error = new Error('No ready topic roadmap item is available')
             error.code = 'ROADMAP_NO_READY_TOPIC'
@@ -2171,6 +2262,8 @@ class BlogTopicRoadmapService {
 module.exports = {
     BlogTopicRoadmapService,
     classifyTerminalFailure,
+    directionForLane,
+    HOUSEHOLD_LANE_MANDATE,
     focusMatchesCard,
     computeItemScoreHash,
     hasCurrentEvidenceIntegrity,

@@ -31,9 +31,14 @@ test('runtime control request helpers enforce exact fail-closed contracts', () =
 
 test('BOS exposes four audited switches and a guarded confirmation dialog', () => {
 	const source = read('src/routes/admin/openclaw/blogs/settings/+page.svelte');
-	for (const key of ['blog_cron', 'auto_publish', 'telegram_approval', 'image_pipeline']) {
+	for (const key of ['blog_cron', 'image_pipeline']) {
 		assert.match(source, new RegExp(`openRuntimeControlDialog\\('${key}'\\)`));
 	}
+	assert.match(
+		source,
+		/const publishModeControl = \(mode\) => \{[\s\S]*?'auto_publish'[\s\S]*?'telegram_approval'[\s\S]*?\n\t\};/
+	);
+	assert.match(source, /openRuntimeControlDialog\(controlKey\)/);
 	assert.match(source, /role="switch"/);
 	assert.match(source, /expectedRevision/);
 	assert.match(source, /Idempotency-Key/);

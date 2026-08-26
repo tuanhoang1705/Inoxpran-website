@@ -211,10 +211,10 @@
 
 	const currentBlogs = $derived(filteredBlogs.slice(0, visibleCount));
 	const hasMoreBlogs = $derived(filteredBlogs.length > visibleCount);
+	const remainingBlogCount = $derived(Math.max(filteredBlogs.length - currentBlogs.length, 0));
+	const nextBlogCount = $derived(Math.min(BLOG_LOAD_MORE_STEP, remainingBlogCount));
 	const blogLoadMoreButtonText = $derived(
-		$locale === 'en'
-			? `Show ${BLOG_LOAD_MORE_STEP} more articles`
-			: `Xem thêm ${BLOG_LOAD_MORE_STEP} bài viết`
+		$locale === 'en' ? `Show ${nextBlogCount} more articles` : `Xem thêm ${nextBlogCount} bài viết`
 	);
 	const blogLoadMoreHint = $derived(
 		$locale === 'en'

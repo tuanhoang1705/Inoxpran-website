@@ -424,7 +424,45 @@ class TelegramApprovalService {
                     approvedByTelegramUserId: String(userId || ''), approvedByTelegramUsername: normalizeString(username)
                 }
             });
-            return { status: 'approved', message: `Published: ${published?.title || approval.blogTitle}`, blog: published };
+            // The article is live at this point, so verification is a safeguard
+            // and never a condition of the approval: a failure here is recorded
+            // and must not revert a publication that already succeeded. Required
+            // lazily because automationSeoBlog requires this module for operator
+            // alerts, and a top-level import would close that cycle.
+            let verification = { verified: false, reason: 'not_attempted' };
+            try {
+                const AutomationSeoBlogService = require('./automationSeoBlog.service');
+                const outcome = await AutomationSeoBlogService.verifyApprovedPublication({
+                    blogId: String(approval.blogId),
+                    executionId: approval.executionId ? String(approval.executionId) : null
+                });
+                verification = {
+                    verified: Boolean(outcome?.verified),
+                    reason: normalizeString(outcome?.reason),
+                    verificationId: outcome?.verification?._id ? String(outcome.verification._id) : '',
+                    checkedAt: new Date()
+                };
+            } catch (verificationError) {
+                verification = {
+                    verified: false,
+                    reason: normalizeString(verificationError?.code || verificationError?.message).slice(0, 300),
+                    verificationId: '',
+                    checkedAt: new Date()
+                };
+            }
+            await TelegramBlogApproval.updateOne(
+                { _id: approval._id },
+                { $set: { 'reviewMetadata.postPublishVerification': verification } }
+            ).catch(() => null);
+            const publishedTitle = published?.title || approval.blogTitle;
+            return {
+                status: 'approved',
+                message: verification.verified
+                    ? `Published: ${publishedTitle}`
+                    : `Published: ${publishedTitle} (chưa xác minh được: ${verification.reason || 'unknown'})`,
+                blog: published,
+                verification
+            };
         } catch (error) {
             await TelegramBlogApproval.updateOne({ _id: approval._id, status: 'processing' }, { $set: { status: 'pending' } });
             throw error;

@@ -192,6 +192,11 @@ const getContentOperationsConfig = (env = process.env) => ({
         // so a live site can be tuned without a code change and a redeploy.
         acceptanceScore: asNumber(env.OPENCLAW_TOPIC_ACCEPTANCE_SCORE, 82, { min: 60, max: 100 }),
         minimumNoveltySubtotal: asNumber(env.OPENCLAW_TOPIC_MIN_NOVELTY_SUBTOTAL, 48, { min: 30, max: 65 }),
+        // Share of topics that deliberately carry no product evidence. Household
+        // knowledge is the one subject area the blog corpus has barely touched, so
+        // it is both the editorial widening and the practical relief valve for a
+        // product family that has been written about too often to score as novel.
+        householdLaneShare: asNumber(env.OPENCLAW_TOPIC_HOUSEHOLD_LANE_SHARE, 0.3, { min: 0, max: 0.8 }),
         agenticIdeationEnabled: asBoolean(env.OPENCLAW_TOPIC_AGENTIC_IDEATION_ENABLED, true),
         maxAgentRounds: asNumber(env.OPENCLAW_TOPIC_MAX_AGENT_ROUNDS, 3, { min: 1, max: 3 }),
         maxAgentCalls: asNumber(env.OPENCLAW_TOPIC_MAX_AGENT_CALLS, 12, { min: 4, max: 12 }),

@@ -73,9 +73,10 @@ export const getProductNameFilterText = (product) => {
 
 export const getProductFilterText = (product) => {
 	const name = String(product?.product_name || '');
-	const description = stripHtmlText(product?.product_description || '');
-	const type = String(product?.product_type || '');
-	return normalizeFilterText(`${name} ${description} ${type}`);
+	const slug = String(product?.product_slug || '');
+	const manufacturer = String(product?.product_attributes?.manufacturer || '');
+	const model = String(product?.product_attributes?.model || '');
+	return normalizeFilterText(`${name} ${slug} ${manufacturer} ${model}`);
 };
 
 const matchesProductFamily = (product, rawTagValue) => {
@@ -104,7 +105,19 @@ const matchesProductFamily = (product, rawTagValue) => {
 export const matchesSearchQuery = (product, query) => {
 	const normalizedQuery = normalizeFilterText(query);
 	if (!normalizedQuery) return true;
-	return getProductFilterText(product).includes(normalizedQuery);
+	const searchableText = getProductFilterText(product);
+	const tokens = Array.from(new Set(normalizedQuery.split(/[^a-z0-9]+/i).filter(Boolean)));
+	return tokens.length > 0 && tokens.every((token) => searchableText.includes(token));
+};
+
+const getSearchRelevance = (product, query) => {
+	const normalizedQuery = normalizeFilterText(query);
+	if (!normalizedQuery) return 0;
+	const productName = getProductNameFilterText(product);
+	if (productName === normalizedQuery) return 400;
+	if (productName.startsWith(normalizedQuery)) return 300;
+	if (productName.includes(normalizedQuery)) return 200;
+	return 100;
 };
 
 export const matchesTagFilter = (product, tagValue) => matchesProductFamily(product, tagValue);
@@ -229,7 +242,11 @@ export const paginateCatalogProducts = ({
 	const filtered = (Array.isArray(products) ? products : []).filter((product) =>
 		matchesCatalogFilters(product, filters)
 	);
-	const sorted = sortCatalogProducts(filtered, sort);
+	const sorted = sort
+		? sortCatalogProducts(filtered, sort)
+		: [...filtered].sort(
+				(a, b) => getSearchRelevance(b, filters?.q) - getSearchRelevance(a, filters?.q)
+			);
 	const startIndex = (normalizedPage - 1) * normalizedLimit;
 	const endIndex = startIndex + normalizedLimit;
 	const items = sorted.slice(startIndex, endIndex);

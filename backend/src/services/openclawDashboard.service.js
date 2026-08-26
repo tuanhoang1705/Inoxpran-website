@@ -1383,6 +1383,7 @@ const buildDashboard = ({ capabilities: checkedCapabilities = null } = {}) => {
     "FIRECRAWL_API_KEY",
     "IMAGE_SEARCH_API_KEY",
     "AI_IMAGE_API_KEY",
+    "NINE_ROUTER_API_KEY",
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_WEBHOOK_SECRET",
     "TELEGRAM_ALLOWED_CHAT_IDS",

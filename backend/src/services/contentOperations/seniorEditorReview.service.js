@@ -57,7 +57,7 @@ class SeniorEditorReviewService {
         sessionKey = ''
     } = {}) {
         const response = await this.agentAdapter.run({
-            agentId: 'qa-agent',
+            agentId: 'senior-editor',
             purpose: 'senior-editorial-acceptance',
             sessionKey: sessionKey ? `${sessionKey}:${attempt}` : '',
             input: {

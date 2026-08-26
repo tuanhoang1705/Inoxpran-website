@@ -56,6 +56,40 @@ describe('HTTP error disclosure boundary', () => {
         })
     })
 
+    it('preserves only an explicitly public 5xx code while keeping its message generic', () => {
+        const error = Object.assign(new Error('provider secret detail'), {
+            status: 503,
+            code: 'AI_IMAGE_CREDIT_EXHAUSTED',
+            publicCode: 'AI_IMAGE_CREDIT_EXHAUSTED',
+            providerStatus: 429,
+            providerErrorCode: 'credit_balance_exhausted',
+            providerRequestId: 'req_credit_test'
+        })
+        const statusCode = resolveStatusCode(error)
+        const payload = buildSafeErrorPayload({
+            error,
+            statusCode,
+            message: safeClientMessage({ error, statusCode }),
+            requestId: 'request-local-test'
+        })
+
+        expect(payload).toEqual({
+            status: 'error',
+            code: 503,
+            message: 'Internal Server Error',
+            errorCode: 'AI_IMAGE_CREDIT_EXHAUSTED',
+            requestId: 'request-local-test'
+        })
+        expect(JSON.stringify(payload)).not.toContain('secret')
+        expect(buildSafeServerLog({ error, req: { method: 'POST', path: '/images/generate' }, statusCode }))
+            .toMatchObject({
+                errorCode: 'AI_IMAGE_CREDIT_EXHAUSTED',
+                providerStatus: 429,
+                providerErrorCode: 'credit_balance_exhausted',
+                providerRequestId: 'req_credit_test'
+            })
+    })
+
     it('logs only bounded metadata and strips query/hash values from request paths', () => {
         const error = Object.assign(new Error('token=secret'), { code: 'UPSTREAM_FAILURE' })
         const req = { method: 'GET', originalUrl: '/admin/jobs?token=secret#private' }

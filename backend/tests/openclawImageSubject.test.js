@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -74,4 +74,106 @@ describe("a subject that is itself common cookware", () => {
     expect(positivePrompt).toContain("must be Ấm điện siêu tốc");
     expect(positivePrompt).not.toContain("kettles");
   });
+});
+
+// The safety clauses in a generated prompt name exactly what they forbid ("not a
+// 3D render", "no glossy luxury sheen"). The quality guardrail scans text as a
+// proxy for the pixels, so scanning the whole prompt made every generated image
+// fail its own instructions and no article got an image for days. It must only
+// ever see text this system did not author.
+describe('image guardrail scans only untrusted text', () => {
+    const STYLE = /\b(3d render|cgi|glossy luxury)\b/i;
+
+    it('keeps the safety clauses in the prompt sent to the model', () => {
+        const prompt = buildImagePrompt({
+            purpose: 'cover',
+            articleTitle: 'Nồi inox có dùng được bếp từ',
+            productSubject: 'bộ nồi inox'
+        });
+        expect(prompt.positivePrompt).toContain('not a 3D render');
+    });
+
+    it('never offers its own safety clauses to the guardrail', () => {
+        const prompt = buildImagePrompt({
+            purpose: 'cover',
+            articleTitle: 'Nồi inox có dùng được bếp từ',
+            productSubject: 'bộ nồi inox'
+        });
+        // Asserting both halves is the point: the full prompt DOES contain the
+        // forbidden phrase, and that is correct. Only conflating the two texts
+        // was ever the bug, so the test fails if subjectText goes missing too.
+        expect(typeof prompt.subjectText).toBe('string');
+        expect(prompt.subjectText.length).toBeGreaterThan(0);
+        expect(STYLE.test(prompt.positivePrompt)).toBe(true);
+        expect(STYLE.test(prompt.subjectText)).toBe(false);
+    });
+
+    it('still surfaces a forbidden style named by the article itself', () => {
+        const prompt = buildImagePrompt({
+            purpose: 'cover',
+            articleTitle: 'Ảnh 3D render nồi inox',
+            productSubject: 'bộ nồi inox'
+        });
+        expect(STYLE.test(prompt.subjectText)).toBe(true);
+    });
+});
+
+// Grounding the frame on the real catalog photograph is the largest single gain
+// in realism, because the model stops inventing the appliance. It must never be
+// load-bearing though: an article with a slightly less real image is far better
+// than an article with none.
+describe('reference-image grounding', () => {
+    const { generateImage } = require("../src/services/openclaw/aiImageGenerate.service");
+    const prompt = { positivePrompt: 'a real kitchen photograph', negativePrompt: '' };
+    const reference = { buffer: Buffer.from('fake-product-photo'), mimeType: 'image/png' };
+    const okBody = { data: [{ b64_json: Buffer.from('generated').toString('base64') }] };
+
+    const stubFetch = (handler) => {
+        vi.stubGlobal('fetch', vi.fn(handler));
+        process.env.AI_IMAGE_PROVIDER = 'openai';
+        process.env.AI_IMAGE_API_KEY = 'sk-test';
+    };
+
+    afterEach(() => {
+        vi.unstubAllGlobals();
+        delete process.env.AI_IMAGE_PROVIDER;
+        delete process.env.AI_IMAGE_API_KEY;
+    });
+
+    it('sends the product photo to the edits endpoint when one is supplied', async () => {
+        const seen = [];
+        stubFetch(async (url) => {
+            seen.push(String(url));
+            return { ok: true, status: 200, json: async () => okBody };
+        });
+        const result = await generateImage({ prompt, referenceImage: reference });
+        expect(seen[0]).toContain('/images/edits');
+        expect(result.grounded).toBe(true);
+        expect(result.status).toBe('complete');
+    });
+
+    it('falls back to plain generation rather than losing the image', async () => {
+        const seen = [];
+        stubFetch(async (url) => {
+            seen.push(String(url));
+            if (String(url).includes('/images/edits')) return { ok: false, status: 500, text: async () => 'boom' };
+            return { ok: true, status: 200, json: async () => okBody };
+        });
+        const result = await generateImage({ prompt, referenceImage: reference });
+        expect(seen[0]).toContain('/images/edits');
+        expect(seen[1]).toContain('/images/generations');
+        expect(result.status).toBe('complete');
+        expect(result.grounded).toBeUndefined();
+    });
+
+    it('uses plain generation when there is no product photo to ground on', async () => {
+        const seen = [];
+        stubFetch(async (url) => {
+            seen.push(String(url));
+            return { ok: true, status: 200, json: async () => okBody };
+        });
+        await generateImage({ prompt });
+        expect(seen).toHaveLength(1);
+        expect(seen[0]).toContain('/images/generations');
+    });
 });

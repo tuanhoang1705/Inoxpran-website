@@ -57,7 +57,7 @@ const {
   comparePresentation
 } = require('./contentOperations/presentationSignature.service');
 const { PresentationBlueprintService } = require('./contentOperations/presentationBlueprint.service');
-const { SeniorEditorReviewService } = require('./contentOperations/seniorEditorReview.service');
+const { SeniorEditorReviewService, SENIOR_EDITOR_VERSION } = require('./contentOperations/seniorEditorReview.service');
 // How many recent articles a new layout must differ from. Large enough that a
 // habit cannot re-emerge after two or three posts, small enough that the space
 // of workable layouts is not exhausted.
@@ -2762,6 +2762,12 @@ const claimed = await ContentWorkOrderService.claimForProduction({
         let editorialPlacementReview = null;
         let editorialReview = null;
         let revisionBrief = null;
+        // The senior editor is the only reviewer that judges meaning rather than
+        // form. Both of these survive the loop because losing that judgement must
+        // never read as approval: an unreachable editor and an editor that still
+        // wants changes each leave the draft flagged for a human.
+        let seniorReview = null;
+        let seniorReviewUnavailable = '';
         for (let attempt = 0; attempt < maxOriginalityAttempts; attempt += 1) {
             originalityAttempts = attempt + 1;
             let generated = null;
@@ -2901,7 +2907,11 @@ const claimed = await ContentWorkOrderService.claimForProduction({
               editorialReview.passed;
             // The senior editor is consulted only once the measurable rules pass,
             // so a draft that already fails one never spends an agent call.
-            let seniorReview = null;
+            // Reset both every attempt, so a reason recorded on an earlier
+            // attempt cannot be reported against a later one that never got as
+            // far as consulting the editor.
+            seniorReview = null;
+            seniorReviewUnavailable = '';
             if (boardPassed && !qaContext) {
               try {
                 seniorReview = await new SeniorEditorReviewService().review({
@@ -2919,8 +2929,12 @@ const claimed = await ContentWorkOrderService.claimForProduction({
                 });
               } catch (error) {
                 // An unreachable editor must not block a draft that already
-                // satisfies every enforceable rule.
+                // satisfies every enforceable rule, but it must not be mistaken
+                // for approval either. The draft proceeds carrying the reason, so
+                // the risk gate below and the human approving it can both see
+                // that nobody judged its substance.
                 seniorReview = null;
+                seniorReviewUnavailable = String(error?.code || error?.name || 'SENIOR_EDITOR_UNAVAILABLE');
               }
             }
             if (boardPassed && (!seniorReview || seniorReview.passed)) {
@@ -3004,7 +3018,25 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             generativeSearchReady: factuality.passed && brandVoice.passed,
             promisesInclusion: false
         };
-        const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed || !productReviews.pass || !editorialPlacementReview.pass || !editorialReview.passed;
+        // A draft nobody judged for substance is not a safe draft. Three cases
+        // reach here without a pass: the editor was unreachable, it still wanted
+        // changes after the last attempt, or the board never passed so it never
+        // ran. All three are risk, not approval. QA runs skip the editor by
+        // design, so they are exempt rather than permanently high-risk.
+        const seniorEditorJudged = Boolean(qaContext) || (Boolean(seniorReview?.passed) && !seniorReviewUnavailable);
+        const seniorEditorReviewSummary = {
+            version: seniorReview?.version || SENIOR_EDITOR_VERSION,
+            ran: Boolean(seniorReview),
+            skipped: Boolean(qaContext),
+            passed: Boolean(seniorReview?.passed),
+            judged: seniorEditorJudged,
+            verdict: seniorReview?.verdict || (seniorReviewUnavailable ? 'unavailable' : ''),
+            unavailableReason: seniorReviewUnavailable,
+            summary: seniorReview?.summary || '',
+            findings: seniorReview?.findings || [],
+            blockingFindings: seniorReview?.blockingFindings || []
+        };
+        const highRisk = !factuality.passed || !originality.passed || !peopleSpam.passed || !brandVoice.passed || !seoAeoGeo.passed || !productReviews.pass || !editorialPlacementReview.pass || !editorialReview.passed || !seniorEditorJudged;
     if (context.contentWorkOrder) {
       const workOrderId = context.contentWorkOrder._id || context.contentWorkOrder.id;
       const claimToken = getActiveClaimToken(context.contentWorkOrder);
@@ -3103,7 +3135,7 @@ const claimed = await ContentWorkOrderService.claimForProduction({
             productClaimReview: productReviews.productClaimReview,
             editorialProductPlacementReview: editorialPlacementReview,
             structuralFingerprint: originality.fingerprint,
-            agenticReviews: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview, editorialProductPlacement: editorialPlacementReview },
+            agenticReviews: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview, editorialProductPlacement: editorialPlacementReview, seniorEditor: seniorEditorReviewSummary },
             metadata: {
                 provider: 'openclaw', executionKey, pipelineVersion: 'agentic-blog-core-v2',
                 ...(roadmapContext
@@ -3168,7 +3200,7 @@ const claimed = await ContentWorkOrderService.claimForProduction({
                 researchCoverage: context.researchBundle.researchCoverage,
                 searchConsoleFallback: context.researchBundle.searchConsole?.fallback !== false,
                 decision: context.opportunity.decision, decisionReason: context.opportunity.reason,
-                reviewerDecisions: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview, editorialProductPlacement: editorialPlacementReview },
+                reviewerDecisions: { factuality, originality, seoAeoGeo, peopleFirstSpam: peopleSpam, brandVoice, productSeeding: productReviews.productSeedingReview, productClaims: productReviews.productClaimReview, editorialProductPlacement: editorialPlacementReview, seniorEditor: seniorEditorReviewSummary },
                 originalityAttempts, originalityRetryExhausted: !originality.passed,
                 wordCount,
                 draftGenerator: llmDraft ? `openai:${llmDraft.model}` : 'template-fallback',

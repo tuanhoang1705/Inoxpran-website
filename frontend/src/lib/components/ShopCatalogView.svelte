@@ -418,15 +418,28 @@
 			: products.length >= visibleLimit
 	);
 	const showingCount = $derived(products.length);
+	const totalMatchingProducts = $derived(
+		Number.isFinite(Number(pagination?.total))
+			? Math.max(Number(pagination.total), showingCount)
+			: null
+	);
+	const remainingProductsCount = $derived(
+		totalMatchingProducts === null
+			? hasNextPage
+				? SHOP_LOAD_MORE_STEP
+				: 0
+			: Math.max(totalMatchingProducts - showingCount, 0)
+	);
+	const nextProductsCount = $derived(Math.min(SHOP_LOAD_MORE_STEP, remainingProductsCount));
 	const loadMoreButtonText = $derived(
 		$locale === 'en'
-			? `Show ${SHOP_LOAD_MORE_STEP} more products`
-			: `Xem thêm ${SHOP_LOAD_MORE_STEP} sản phẩm`
+			? `Show ${nextProductsCount} more products`
+			: `Xem thêm ${nextProductsCount} sản phẩm`
 	);
 	const loadMoreHint = $derived(
 		$locale === 'en'
-			? `Currently showing ${showingCount} products`
-			: `Đang hiển thị ${showingCount} sản phẩm`
+			? `Currently showing ${showingCount}${totalMatchingProducts === null ? '' : ` / ${totalMatchingProducts}`} products`
+			: `Đang hiển thị ${showingCount}${totalMatchingProducts === null ? '' : ` / ${totalMatchingProducts}`} sản phẩm`
 	);
 	const loadMoreDoneText = $derived(
 		$locale === 'en' ? 'All matching products are displayed.' : 'Đã hiển thị hết sản phẩm phù hợp.'

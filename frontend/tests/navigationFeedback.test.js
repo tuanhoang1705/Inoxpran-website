@@ -40,7 +40,10 @@ test('the loader still waits briefly so quick navigations do not flash it', () =
 	const delay = Number(/setTimeout\(\s*\(\)\s*=>\s*\{[^}]*\},\s*(\d+)\)/s.exec(loader)?.[1]);
 
 	assert.ok(Number.isFinite(delay), 'the loader must debounce before showing');
-	assert.ok(delay > 0 && delay <= 300, `debounce ${delay}ms should stay short enough to feel instant`);
+	assert.ok(
+		delay > 0 && delay <= 300,
+		`debounce ${delay}ms should stay short enough to feel instant`
+	);
 });
 
 test('the server warms the home feed so the first visitor after a deploy is not the guinea pig', () => {

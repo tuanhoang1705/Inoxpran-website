@@ -1,6 +1,7 @@
 import { json } from '@sveltejs/kit';
 import { API_BASE } from '$lib/server/api.js';
 import { buildAdminHeaders, getAdminSession } from '$lib/server/adminAuth.js';
+import { normalizeBlogImageError } from '$lib/blogImageError.js';
 
 const OPERATIONS = {
 	suggestions: { method: 'GET', backendMethod: 'GET' },
@@ -21,10 +22,12 @@ const parsePayload = async (response) => {
 const forward = async ({ request, cookies, fetch, params, url }, expectedMethod) => {
 	const operation = OPERATIONS[params.operation];
 	if (!operation || operation.method !== expectedMethod) {
-		return json({ message: 'Image operation not found' }, { status: 404 });
+		return json({ errorCode: 'IMAGE_OPERATION_NOT_FOUND', requestId: '' }, { status: 404 });
 	}
 	const session = getAdminSession(cookies);
-	if (!session) return json({ message: 'Admin session required' }, { status: 401 });
+	if (!session) {
+		return json({ errorCode: 'ADMIN_SESSION_REQUIRED', requestId: '' }, { status: 401 });
+	}
 
 	const headers = buildAdminHeaders(session);
 	const backendUrl = new URL(
@@ -51,14 +54,11 @@ const forward = async ({ request, cookies, fetch, params, url }, expectedMethod)
 			body
 		});
 	} catch {
-		return json({ message: 'Cannot connect to backend image service' }, { status: 502 });
+		return json({ errorCode: 'IMAGE_BACKEND_UNAVAILABLE', requestId: '' }, { status: 502 });
 	}
 	const payload = await parsePayload(response);
 	if (!response.ok) {
-		return json(
-			{ message: payload?.message || 'Image operation failed' },
-			{ status: response.status }
-		);
+		return json(normalizeBlogImageError(payload, response.headers), { status: response.status });
 	}
 	return json(payload?.metadata || payload || {});
 };

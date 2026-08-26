@@ -414,6 +414,19 @@
         ],
       },
       {
+        id: "senior-editor",
+        workspace: "/workspaces/senior-editor",
+        // Judges meaning, not form, on a draft the backend supplies in full.
+        // It needs no filesystem, runtime, web, session, automation or messaging
+        // tool, and must never be able to fetch anything it was not handed.
+        tools: { profile: "minimal", deny: ["session_status"] },
+        skills: [
+          "inoxpran-senior-blog-acceptance",
+          "inoxpran-brand-voice",
+          "inoxpran-source-attribution",
+        ],
+      },
+      {
         id: "senior-blog-acceptance-auditor",
         workspace: "/workspaces/senior-blog-acceptance-auditor",
         // The authenticated backend supplies the complete blind review package.

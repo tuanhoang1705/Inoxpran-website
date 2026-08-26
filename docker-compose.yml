@@ -88,6 +88,17 @@
       OPENCLAW_BLOG_CRON_ENABLED: ${OPENCLAW_BLOG_CRON_ENABLED:-false}
       OPENCLAW_BLOG_CRON_POLL_MS: ${OPENCLAW_BLOG_CRON_POLL_MS:-30000}
       OPENCLAW_TOPIC_ROADMAP_ENABLED: ${OPENCLAW_TOPIC_ROADMAP_ENABLED:-true}
+      # The topic gate and its budgets are documented in .env.example as operator
+      # tunables, but were never declared here, so the containers always ran the
+      # compiled-in defaults and setting them on the host did nothing.
+      OPENCLAW_TOPIC_HOUSEHOLD_LANE_SHARE: ${OPENCLAW_TOPIC_HOUSEHOLD_LANE_SHARE:-0.3}
+      OPENCLAW_TOPIC_ACCEPTANCE_SCORE: ${OPENCLAW_TOPIC_ACCEPTANCE_SCORE:-82}
+      OPENCLAW_TOPIC_MIN_NOVELTY_SUBTOTAL: ${OPENCLAW_TOPIC_MIN_NOVELTY_SUBTOTAL:-48}
+      OPENCLAW_TOPIC_MAX_AGENT_CALLS: ${OPENCLAW_TOPIC_MAX_AGENT_CALLS:-12}
+      OPENCLAW_TOPIC_MAX_AGENT_ROUNDS: ${OPENCLAW_TOPIC_MAX_AGENT_ROUNDS:-3}
+      OPENCLAW_TOPIC_AGENT_DEADLINE_MS: ${OPENCLAW_TOPIC_AGENT_DEADLINE_MS:-600000}
+      OPENCLAW_TOPIC_ROADMAP_SIMILARITY_THRESHOLD: ${OPENCLAW_TOPIC_ROADMAP_SIMILARITY_THRESHOLD:-0.72}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-large}
       OPENAI_WRITER_MODEL: ${OPENAI_WRITER_MODEL:?Set the reviewed writer model identifier}
       OPENAI_IDEATION_MODEL: ${OPENAI_IDEATION_MODEL:?Set the reviewed ideation model identifier}
       OPENCLAW_TOPIC_ALLOWED_RESOLVED_MODELS: ${OPENCLAW_TOPIC_ALLOWED_RESOLVED_MODELS:?Set the reviewed comma-separated resolved-model allowlist}
@@ -164,8 +175,11 @@
       AI_IMAGE_PROVIDER: ${AI_IMAGE_PROVIDER:-disabled}
       AI_IMAGE_API_KEY: ${AI_IMAGE_API_KEY:-}
       AI_IMAGE_MODEL: ${AI_IMAGE_MODEL:-gpt-image-2}
-      AI_IMAGE_QUALITY: ${AI_IMAGE_QUALITY:-medium}
+      AI_IMAGE_QUALITY: ${AI_IMAGE_QUALITY:-high}
+      AI_IMAGE_PIPELINE_ATTEMPT_LIMIT: ${AI_IMAGE_PIPELINE_ATTEMPT_LIMIT:-1}
+      AI_IMAGE_PIPELINE_CONCURRENCY: ${AI_IMAGE_PIPELINE_CONCURRENCY:-2}
       AI_IMAGE_REPLICATE_MODEL: ${AI_IMAGE_REPLICATE_MODEL:-}
+      NINE_ROUTER_API_KEY: ${NINE_ROUTER_API_KEY:?Set the private 9router bearer key through the deployment secret store}
       CONTENT_ACTION_WEIGHT_USER_DEMAND: ${CONTENT_ACTION_WEIGHT_USER_DEMAND:-0.20}
       CONTENT_ACTION_WEIGHT_CONTENT_GAP: ${CONTENT_ACTION_WEIGHT_CONTENT_GAP:-0.15}
       CONTENT_ACTION_WEIGHT_PERFORMANCE: ${CONTENT_ACTION_WEIGHT_PERFORMANCE:-0.15}
@@ -245,6 +259,7 @@
       start_period: 30s
     networks:
       - appnet
+      - modelnet
     depends_on:
       redis:
         condition: service_healthy
@@ -481,6 +496,7 @@
       start_period: 30s
     networks:
       - appnet
+      - modelnet
     depends_on:
       backend:
         condition: service_healthy

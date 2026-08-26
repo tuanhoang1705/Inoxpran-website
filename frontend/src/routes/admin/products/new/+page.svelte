@@ -7,6 +7,13 @@
 	import { pushToast } from '$lib/stores/adminToast.js';
 	import { t } from '$lib/i18n/admin/index.js';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
+	import {
+		hasInvalidVariantPricing,
+		normalizeVariantName,
+		normalizeVariantPrice,
+		reconcileVariantRows,
+		serializeVariantRows
+	} from '$lib/admin/productVariants.js';
 	let { form } = $props();
 
 	const productTypes = $derived([
@@ -75,15 +82,11 @@
 	let dragStartOffsetX = $state(0);
 	let dragStartOffsetY = $state(0);
 	let colorInput = $state('');
-	let colorPriceInput = $state('');
 	let colors = $state([]);
 	let sizeInput = $state('');
-	let sizePriceInput = $state('');
 	let sizes = $state([]);
-	let comboColor = $state('');
-	let comboSize = $state('');
-	let comboPriceInput = $state('');
 	let combos = $state([]);
+	let hasInvalidVariantPrices = $derived(hasInvalidVariantPricing(combos));
 	let descriptionValue = $state('');
 	let uploadSessionId = $state('');
 	let isSavingProduct = $state(false);
@@ -109,7 +112,9 @@
 			isImageUploadPending ||
 			hasImageUploadErrors
 	);
-	let isSaveDisabled = $derived(isSavingProduct || hasUnresolvedImageUploads);
+	let isSaveDisabled = $derived(
+		isSavingProduct || hasUnresolvedImageUploads || hasInvalidVariantPrices
+	);
 
 	const resolveAdminPath = (path) => {
 		if (typeof window === 'undefined' || window.location.hostname !== 'admin.inoxpran.com') {
@@ -335,54 +340,45 @@
 		descriptionUploadStatus = status || 'idle';
 	};
 
-	const normalizeOption = (value) => String(value || '').trim();
-	const normalizePrice = (value) => {
-		const parsed = Number(value);
-		return Number.isFinite(parsed) ? parsed : undefined;
+	const normalizeOption = normalizeVariantName;
+	const syncVariantRows = (rows = combos) => {
+		combos = reconcileVariantRows({
+			colors,
+			sizes,
+			rows,
+			baseOriginalPrice: originalPrice,
+			baseSalePrice: salePrice
+		});
 	};
 
 	const addColor = () => {
 		const name = normalizeOption(colorInput);
 		if (!name) return;
-		const price = normalizePrice(colorPriceInput);
 		const existingIndex = colors.findIndex(
 			(item) => item.name.toLowerCase() === name.toLowerCase()
 		);
-		if (existingIndex >= 0) {
-			colors = colors.map((item, index) =>
-				index === existingIndex ? { ...item, price: price ?? item.price } : item
-			);
-		} else {
-			colors = [...colors, { name, price }];
-		}
+		if (existingIndex < 0) colors = [...colors, { name }];
 		colorInput = '';
-		colorPriceInput = '';
+		syncVariantRows();
 	};
 
 	const removeColor = (name) => {
 		colors = colors.filter((item) => item.name !== name);
-		combos = combos.filter((item) => item.color !== name);
+		syncVariantRows();
 	};
 
 	const addSize = () => {
 		const name = normalizeOption(sizeInput);
 		if (!name) return;
-		const price = normalizePrice(sizePriceInput);
 		const existingIndex = sizes.findIndex((item) => item.name.toLowerCase() === name.toLowerCase());
-		if (existingIndex >= 0) {
-			sizes = sizes.map((item, index) =>
-				index === existingIndex ? { ...item, price: price ?? item.price } : item
-			);
-		} else {
-			sizes = [...sizes, { name, price }];
-		}
+		if (existingIndex < 0) sizes = [...sizes, { name }];
 		sizeInput = '';
-		sizePriceInput = '';
+		syncVariantRows();
 	};
 
 	const removeSize = (name) => {
 		sizes = sizes.filter((item) => item.name !== name);
-		combos = combos.filter((item) => item.size !== name);
+		syncVariantRows();
 	};
 
 	const handleSizeKey = (event) => {
@@ -397,64 +393,26 @@
 		addColor();
 	};
 
-	const addCombo = () => {
-		const color = normalizeOption(comboColor);
-		const size = normalizeOption(comboSize);
-		const price = normalizePrice(comboPriceInput);
-		if (!color || !size || price === undefined) return;
-
-		const key = `${color.toLowerCase()}::${size.toLowerCase()}`;
-		const existingIndex = combos.findIndex(
-			(item) => `${item.color.toLowerCase()}::${item.size.toLowerCase()}` === key
-		);
-		if (existingIndex >= 0) {
-			combos = combos.map((item, index) => (index === existingIndex ? { ...item, price } : item));
-		} else {
-			combos = [...combos, { color, size, price }];
-		}
-		comboPriceInput = '';
-	};
-
-	const removeCombo = (target) => {
-		combos = combos.filter((item) => !(item.color === target.color && item.size === target.size));
-	};
-
-	const updateColorPrice = (name, value) => {
-		colors = colors.map((item) =>
-			item.name === name ? { ...item, price: value === '' ? undefined : value } : item
+	const updateVariantPrice = (target, field, value) => {
+		combos = combos.map((item) =>
+			item.color === target.color && item.size === target.size
+				? { ...item, [field]: value === '' ? undefined : normalizeVariantPrice(value) }
+				: item
 		);
 	};
 
-	const updateSizePrice = (name, value) => {
-		sizes = sizes.map((item) =>
-			item.name === name ? { ...item, price: value === '' ? undefined : value } : item
-		);
+	const applyBasePricesToVariants = () => {
+		const nextOriginalPrice = normalizeVariantPrice(originalPrice);
+		const nextSalePrice = normalizeVariantPrice(salePrice);
+		combos = combos.map((item) => ({
+			...item,
+			originalPrice: nextOriginalPrice,
+			price: nextSalePrice
+		}));
 	};
 
 	const buildVariationsPayload = () => {
-		const variations = [];
-		colors.forEach((item) => {
-			if (!item.name) return;
-			const price = normalizePrice(item.price);
-			const entry = { color: item.name };
-			if (price !== undefined) entry.price = price;
-			variations.push(entry);
-		});
-		sizes.forEach((item) => {
-			if (!item.name) return;
-			const price = normalizePrice(item.price);
-			const entry = { size: item.name };
-			if (price !== undefined) entry.price = price;
-			variations.push(entry);
-		});
-		combos.forEach((item) => {
-			if (!item.color || !item.size) return;
-			const price = normalizePrice(item.price);
-			const entry = { color: item.color, size: item.size };
-			if (price !== undefined) entry.price = price;
-			variations.push(entry);
-		});
-		return JSON.stringify(variations);
+		return serializeVariantRows(combos);
 	};
 
 	const buildColorListPayload = () => {
@@ -1410,48 +1368,46 @@
 		</div>
 		<div class="col-12">
 			<div class="form-label">{$t('admin.productsNew.variantsTitle')}</div>
+			<div class="variant-guide">
+				<div>
+					<strong>{$t('admin.productsNew.variantGuideTitle')}</strong>
+					<span>{$t('admin.productsNew.variantGuide')}</span>
+				</div>
+				<button
+					class="btn btn-outline-dark"
+					type="button"
+					disabled={!combos.length}
+					onclick={applyBasePricesToVariants}
+				>
+					{$t('admin.productsNew.applyBasePrices')}
+				</button>
+			</div>
 			<div class="variant-grid">
 				<div class="variant-card">
 					<h6>{$t('admin.productsNew.colors')}</h6>
-					<div class="variant-row">
+					<div class="variant-add-row">
 						<input
 							class="form-control"
 							placeholder={$t('admin.productsNew.colorNamePlaceholder')}
 							bind:value={colorInput}
 							onkeydown={handleColorKey}
 						/>
-						<input
-							class="form-control"
-							type="number"
-							min="0"
-							step="1"
-							placeholder={$t('admin.productsNew.priceOverride')}
-							bind:value={colorPriceInput}
-						/>
 						<button class="btn btn-outline-dark" type="button" onclick={addColor}>
 							{$t('admin.productsNew.addColor')}
 						</button>
 					</div>
 					{#if colors.length}
-						<div class="variant-list">
+						<div class="variant-option-list">
 							{#each colors as item, __eachIndex6 (item?._id ?? item?.id ?? __eachIndex6)}
-								<div class="variant-pill">
+								<div class="variant-option-chip">
 									<span>{item.name}</span>
-									<input
-										class="form-control form-control-sm"
-										type="number"
-										min="0"
-										step="1"
-										placeholder={$t('admin.productsNew.priceOverride')}
-										value={item.price ?? ''}
-										oninput={(event) => updateColorPrice(item.name, event.currentTarget.value)}
-									/>
 									<button
-										class="btn btn-link text-danger p-0"
+										class="variant-option-remove"
 										type="button"
+										aria-label={`${$t('admin.productsNew.removeVariant')} ${item.name}`}
 										onclick={() => removeColor(item.name)}
 									>
-										x
+										×
 									</button>
 								</div>
 							{/each}
@@ -1463,45 +1419,29 @@
 
 				<div class="variant-card">
 					<h6>{$t('admin.productsNew.sizes')}</h6>
-					<div class="variant-row">
+					<div class="variant-add-row">
 						<input
 							class="form-control"
 							placeholder={$t('admin.productsNew.sizePlaceholder')}
 							bind:value={sizeInput}
 							onkeydown={handleSizeKey}
 						/>
-						<input
-							class="form-control"
-							type="number"
-							min="0"
-							step="1"
-							placeholder={$t('admin.productsNew.priceOverride')}
-							bind:value={sizePriceInput}
-						/>
 						<button class="btn btn-outline-dark" type="button" onclick={addSize}>
 							{$t('admin.productsNew.addSize')}
 						</button>
 					</div>
 					{#if sizes.length}
-						<div class="variant-list">
+						<div class="variant-option-list">
 							{#each sizes as item, __eachIndex7 (item?._id ?? item?.id ?? __eachIndex7)}
-								<div class="variant-pill">
+								<div class="variant-option-chip">
 									<span>{item.name}</span>
-									<input
-										class="form-control form-control-sm"
-										type="number"
-										min="0"
-										step="1"
-										placeholder={$t('admin.productsNew.priceOverride')}
-										value={item.price ?? ''}
-										oninput={(event) => updateSizePrice(item.name, event.currentTarget.value)}
-									/>
 									<button
-										class="btn btn-link text-danger p-0"
+										class="variant-option-remove"
 										type="button"
+										aria-label={`${$t('admin.productsNew.removeVariant')} ${item.name}`}
 										onclick={() => removeSize(item.name)}
 									>
-										x
+										×
 									</button>
 								</div>
 							{/each}
@@ -1512,54 +1452,59 @@
 				</div>
 			</div>
 
-			<div class="variant-card mt-3">
+			<div class="variant-card variant-pricing-card mt-3">
 				<h6>{$t('admin.productsNew.comboTitle')}</h6>
 				<p class="text-black-50 small mb-2">{$t('admin.productsNew.comboHint')}</p>
-				<div class="variant-row">
-					<select class="form-select" bind:value={comboColor}>
-						<option value="">{$t('admin.productsNew.selectColor')}</option>
-						{#each colors as item, __eachIndex2 (item?._id ?? item?.id ?? __eachIndex2)}
-							<option value={item.name}>{item.name}</option>
-						{/each}
-					</select>
-					<select class="form-select" bind:value={comboSize}>
-						<option value="">{$t('admin.productsNew.selectSize')}</option>
-						{#each sizes as item, __eachIndex3 (item?._id ?? item?.id ?? __eachIndex3)}
-							<option value={item.name}>{item.name}</option>
-						{/each}
-					</select>
-					<input
-						class="form-control"
-						type="number"
-						min="0"
-						step="1"
-						placeholder={$t('admin.productsNew.priceOverride')}
-						bind:value={comboPriceInput}
-					/>
-					<button class="btn btn-outline-dark" type="button" onclick={addCombo}>
-						{$t('admin.productsNew.addCombo')}
-					</button>
-				</div>
 				{#if combos.length}
-					<div class="variant-list">
-						{#each combos as item, __eachIndex4 (item?._id ?? item?.id ?? __eachIndex4)}
-							<div class="variant-pill">
-								<span>{item.color} / {item.size}</span>
-								<span class="text-black-50 small">
-									{item.price !== undefined && item.price !== null ? `${item.price}` : '--'}
+					<div class="variant-price-table" role="table">
+						<div class="variant-price-row variant-price-head" role="row">
+							<span role="columnheader">{$t('admin.productsNew.variantColumn')}</span>
+							<span role="columnheader">{$t('admin.productsNew.variantOriginalPrice')}</span>
+							<span role="columnheader">{$t('admin.productsNew.variantSalePrice')}</span>
+							<span role="columnheader">{$t('admin.productsNew.variantStatus')}</span>
+						</div>
+						{#each combos as item (item.color + '::' + item.size)}
+							{@const variantDiscount = computeDiscount(item.originalPrice, item.price)}
+							<div
+								class="variant-price-row"
+								class:is-invalid={item.price > item.originalPrice}
+								role="row"
+							>
+								<strong>{[item.color, item.size].filter(Boolean).join(' / ')}</strong>
+								<input
+									class="form-control"
+									type="number"
+									min="1"
+									step="1"
+									aria-label={`${$t('admin.productsNew.variantOriginalPrice')} ${[item.color, item.size].filter(Boolean).join(' / ')}`}
+									value={item.originalPrice ?? ''}
+									oninput={(event) =>
+										updateVariantPrice(item, 'originalPrice', event.currentTarget.value)}
+								/>
+								<input
+									class="form-control"
+									type="number"
+									min="1"
+									step="1"
+									aria-label={`${$t('admin.productsNew.variantSalePrice')} ${[item.color, item.size].filter(Boolean).join(' / ')}`}
+									value={item.price ?? ''}
+									oninput={(event) => updateVariantPrice(item, 'price', event.currentTarget.value)}
+								/>
+								<span class="variant-price-status" role="cell">
+									{variantDiscount
+										? `-${variantDiscount}%`
+										: $t('admin.productsNew.variantNoDiscount')}
 								</span>
-								<button
-									class="btn btn-link text-danger p-0"
-									type="button"
-									onclick={() => removeCombo(item)}
-								>
-									x
-								</button>
 							</div>
 						{/each}
 					</div>
 				{:else}
-					<div class="text-black-50 small mt-1">{$t('admin.productsNew.comboEmpty')}</div>
+					<div class="variant-empty-state">{$t('admin.productsNew.comboEmpty')}</div>
+				{/if}
+				{#if hasInvalidVariantPrices}
+					<div class="variant-price-error" role="alert">
+						{$t('admin.productsNew.variantPriceInvalid')}
+					</div>
 				{/if}
 			</div>
 
@@ -2226,6 +2171,28 @@
 		grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 	}
 
+	.variant-guide {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 16px;
+		margin: 8px 0 16px;
+		padding: 14px 16px;
+		border: 1px solid #b9ddd8;
+		border-radius: 12px;
+		background: linear-gradient(135deg, #f0faf8, #f8fbfa);
+	}
+
+	.variant-guide div {
+		display: grid;
+		gap: 3px;
+	}
+
+	.variant-guide span {
+		color: #5f6f6d;
+		font-size: 0.8rem;
+	}
+
 	.variant-card {
 		border: 1px solid rgba(0, 0, 0, 0.08);
 		border-radius: 12px;
@@ -2240,30 +2207,131 @@
 		font-weight: 600;
 	}
 
-	.variant-row {
+	.variant-add-row {
 		display: grid;
 		gap: 8px;
-		grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+		grid-template-columns: minmax(0, 1fr) auto;
 		align-items: center;
 	}
 
-	.variant-list {
-		display: grid;
-		gap: 8px;
-	}
-
-	.variant-pill {
+	.variant-option-list {
 		display: flex;
-		align-items: center;
+		flex-wrap: wrap;
 		gap: 8px;
-		background: #fff;
-		border: 1px solid rgba(0, 0, 0, 0.08);
-		border-radius: 999px;
-		padding: 6px 12px;
 	}
 
-	.variant-pill input {
-		max-width: 120px;
+	.variant-option-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		background: #edf8f6;
+		border: 1px solid #b9ddd8;
+		border-radius: 999px;
+		padding: 7px 8px 7px 12px;
+		color: #185d55;
+		font-size: 0.85rem;
+		font-weight: 650;
+	}
+
+	.variant-option-remove {
+		display: grid;
+		width: 22px;
+		height: 22px;
+		place-items: center;
+		border: 0;
+		border-radius: 50%;
+		background: rgba(15, 118, 110, 0.1);
+		color: #0f766e;
+		font-size: 1rem;
+		line-height: 1;
+	}
+
+	.variant-pricing-card {
+		background: #fff;
+	}
+
+	.variant-price-table {
+		display: grid;
+		overflow: hidden;
+		border: 1px solid #dce5e3;
+		border-radius: 10px;
+	}
+
+	.variant-price-row {
+		display: grid;
+		grid-template-columns: minmax(150px, 1.2fr) minmax(130px, 1fr) minmax(130px, 1fr) minmax(
+				92px,
+				0.55fr
+			);
+		gap: 10px;
+		align-items: center;
+		padding: 10px 12px;
+		border-top: 1px solid #e8eeec;
+	}
+
+	.variant-price-row:first-child {
+		border-top: 0;
+	}
+
+	.variant-price-head {
+		background: #f3f7f6;
+		color: #52615f;
+		font-size: 0.72rem;
+		font-weight: 750;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.variant-price-row.is-invalid {
+		background: #fff7f6;
+	}
+
+	.variant-price-status {
+		justify-self: start;
+		padding: 5px 9px;
+		border-radius: 999px;
+		background: #edf8f6;
+		color: #0f766e;
+		font-size: 0.75rem;
+		font-weight: 700;
+	}
+
+	.variant-empty-state {
+		padding: 22px;
+		border: 1px dashed #cbd8d5;
+		border-radius: 10px;
+		color: #72807e;
+		text-align: center;
+	}
+
+	.variant-price-error {
+		padding: 10px 12px;
+		border: 1px solid #f2b8b5;
+		border-radius: 8px;
+		background: #fff3f2;
+		color: #b42318;
+		font-size: 0.8rem;
+		font-weight: 650;
+	}
+
+	@media (max-width: 720px) {
+		.variant-guide {
+			align-items: stretch;
+			flex-direction: column;
+		}
+
+		.variant-price-head {
+			display: none;
+		}
+
+		.variant-price-row {
+			grid-template-columns: 1fr 1fr;
+		}
+
+		.variant-price-row strong,
+		.variant-price-status {
+			grid-column: 1 / -1;
+		}
 	}
 
 	.product-saving-overlay {

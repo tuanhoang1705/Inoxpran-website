@@ -25,7 +25,36 @@ const parseBoolean = (value, fallback = false) => {
   return fallback;
 };
 
-const IMAGE_ATTEMPT_LIMIT = 3;
+const IMAGE_ATTEMPT_LIMIT = 1;
+const IMAGE_PIPELINE_CONCURRENCY = 2;
+
+const boundedInteger = (value, fallback, min, max) => {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) ? Math.max(min, Math.min(max, parsed)) : fallback;
+};
+
+const imageAttemptLimit = () =>
+  boundedInteger(process.env.AI_IMAGE_PIPELINE_ATTEMPT_LIMIT, IMAGE_ATTEMPT_LIMIT, 1, 3);
+
+const imagePipelineConcurrency = () =>
+  boundedInteger(process.env.AI_IMAGE_PIPELINE_CONCURRENCY, IMAGE_PIPELINE_CONCURRENCY, 1, 4);
+
+const mapWithConcurrency = async (items, concurrency, mapper) => {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(Math.max(1, concurrency), items.length) },
+    async () => {
+      while (nextIndex < items.length) {
+        const index = nextIndex;
+        nextIndex += 1;
+        results[index] = await mapper(items[index], index);
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+};
 
 // Storage returns these for its own transient faults; a planned image is lost for
 // good if one of them ends the attempt, so the upload is retried before giving up.
@@ -112,13 +141,17 @@ const approveStoredImage = (image) => {
   };
 };
 
-const resolveSourceImage = async ({ planItem, prompt, warnings }) => {
+const resolveSourceImage = async ({ planItem, prompt, warnings, referenceImage = null }) => {
+  let lastReason = "no_image_provider_result";
   const query = planItem.imageSearchQuery
     ? planItem.imageSearchQuery
     : [planItem.articleTitle, planItem.afterHeading].filter(Boolean).join(" ");
   try {
     const search = await searchImages({ query, limit: 5 });
-    if (search.reason) warnings.push(search.reason);
+    if (search.reason) {
+      lastReason = search.reason;
+      warnings.push(search.reason);
+    }
     for (const candidate of search.candidates || []) {
       // Unsplash requires API hotlinking, which conflicts with this pipeline's no-hotlink rule.
       if (candidate.provider === "unsplash") {
@@ -130,58 +163,72 @@ const resolveSourceImage = async ({ planItem, prompt, warnings }) => {
         const review = await reviewImageQuality({
           ...downloaded,
           planItem,
-          positivePrompt: prompt.positivePrompt,
+          subjectText: prompt.subjectText,
           candidate,
         });
         if (!review.passes) {
+          lastReason = review.reasons.at(-1) || "image_search_quality_rejected";
           warnings.push(...review.reasons);
           continue;
         }
         return {
-          ...downloaded,
-          candidate,
-          sourceType: "licensed_search",
-          provider: candidate.provider,
-          model: "",
-          manualReviewRequired: false,
-          initialReview: review,
+          source: {
+            ...downloaded,
+            candidate,
+            sourceType: "licensed_search",
+            provider: candidate.provider,
+            model: "",
+            manualReviewRequired: false,
+            initialReview: review,
+          },
+          reason: "",
         };
       } catch (error) {
-        warnings.push(error?.message || "image_search_candidate_failed");
+        lastReason = error?.message || "image_search_candidate_failed";
+        warnings.push(lastReason);
       }
     }
   } catch (error) {
-    warnings.push(error?.message || "image_search_failed");
+    lastReason = error?.message || "image_search_failed";
+    warnings.push(lastReason);
   }
 
   try {
-    const generated = await generateImage({ prompt });
-    if (generated.reason) warnings.push(generated.reason);
-    if (generated.status !== "complete") return null;
+    const generated = await generateImage({ prompt, referenceImage });
+    if (generated.reason) {
+      lastReason = generated.reason;
+      warnings.push(generated.reason);
+    }
+    if (generated.status !== "complete") return { source: null, reason: lastReason };
     const downloaded = generated.buffer
       ? { buffer: generated.buffer, mimeType: generated.mimeType }
       : await downloadRemoteImage(generated.downloadUrl);
     const review = await reviewImageQuality({
       ...downloaded,
       planItem,
-      positivePrompt: prompt.positivePrompt,
+      subjectText: prompt.subjectText,
     });
     if (!review.passes) {
-      warnings.push(...review.reasons);
-      return null;
+      lastReason = `ai_image_quality_rejected:${review.reasons.join(",") || "unknown"}`;
+      warnings.push(lastReason);
+      return { source: null, reason: lastReason };
     }
     return {
-      ...downloaded,
-      candidate: null,
-      sourceType: "ai_generation",
-      provider: generated.provider,
-      model: generated.model || "",
-      manualReviewRequired: true,
-      initialReview: review,
+      source: {
+        ...downloaded,
+        candidate: null,
+        sourceType: "ai_generation",
+        provider: generated.provider,
+        model: generated.model || "",
+        manualReviewRequired: true,
+        initialReview: review,
+      },
+      reason: "",
     };
   } catch (error) {
-    warnings.push(error?.message || "ai_image_generation_failed");
-    return null;
+    lastReason = error?.code || error?.message || "ai_image_generation_failed";
+    warnings.push(lastReason);
+    return { source: null, reason: lastReason };
   }
 };
 
@@ -193,8 +240,24 @@ const acquirePlanItemImage = async ({
   warnings,
   posterProductImageUrl = "",
 }) => {
-  const source = await resolveSourceImage({ planItem, prompt, warnings });
-  if (!source) return null;
+  // Downloaded once and used twice: to ground the generated frame on the real
+  // appliance, and as the poster overlay. Its absence must never be fatal.
+  let productImage = null;
+  if (posterProductImageUrl) {
+    try {
+      productImage = await downloadRemoteImage(posterProductImageUrl);
+    } catch (error) {
+      warnings.push(error?.message || "product_reference_image_unavailable");
+    }
+  }
+  const resolved = await resolveSourceImage({
+    planItem,
+    prompt,
+    warnings,
+    referenceImage: productImage
+  });
+  if (!resolved.source) throw new Error(resolved.reason || "no_image_provider_result");
+  const source = resolved.source;
 
   // Composed before optimisation so the existing resize, WebP encode and checksum
   // still describe exactly what gets stored.
@@ -203,9 +266,7 @@ const acquirePlanItemImage = async ({
   let posterDesign = "";
   if (planItem.purpose === "cover" && isPosterEnabled()) {
     try {
-      const productImageBuffer = posterProductImageUrl
-        ? (await downloadRemoteImage(posterProductImageUrl)).buffer
-        : null;
+      const productImageBuffer = productImage?.buffer || null;
       const poster = await composePoster({
         baseBuffer,
         productImageBuffer,
@@ -230,7 +291,7 @@ const acquirePlanItemImage = async ({
   const finalReview = await reviewImageQuality({
     ...optimized,
     planItem,
-    positivePrompt: prompt.positivePrompt,
+    subjectText: prompt.subjectText,
     candidate: source.candidate,
     optimized: true,
   });
@@ -314,7 +375,7 @@ const processPlanItem = async ({
   });
 
   let lastReason = "no_image_provider_result";
-  for (let attempt = 1; attempt <= IMAGE_ATTEMPT_LIMIT; attempt += 1) {
+  for (let attempt = 1; attempt <= imageAttemptLimit(); attempt += 1) {
     try {
       const acquired = await acquirePlanItemImage({
         planItem,
@@ -325,7 +386,6 @@ const processPlanItem = async ({
         posterProductImageUrl,
       });
       if (acquired) return acquired;
-      lastReason = "no_image_provider_result";
     } catch (error) {
       lastReason = error?.message || "image_attempt_failed";
       warnings.push(lastReason);
@@ -396,29 +456,28 @@ const runImagePipeline = async ({
     };
   }
 
-  const results = [];
-  for (const planItem of planItems) {
+  const results = await mapWithConcurrency(
+    planItems,
+    imagePipelineConcurrency(),
+    async (planItem) => {
     try {
-      results.push(
-        await processPlanItem({ planItem, slug, primaryKeyword, warnings, posterProductImageUrl }),
-      );
+      return await processPlanItem({ planItem, slug, primaryKeyword, warnings, posterProductImageUrl });
     } catch (error) {
       warnings.push(error?.message || `${planItem.id}_image_pipeline_failed`);
-      results.push(
-        pendingMetadata({
-          planItem,
-          prompt: buildImagePrompt(planItem),
-          seo: buildImageSeoMetadata({
-            articleTitle: planItem.articleTitle,
-            heading: planItem.afterHeading,
-            primaryKeyword,
-            purpose: planItem.purpose,
-          }),
-          reason: error?.message || "image_pipeline_failed",
+      return pendingMetadata({
+        planItem,
+        prompt: buildImagePrompt(planItem),
+        seo: buildImageSeoMetadata({
+          articleTitle: planItem.articleTitle,
+          heading: planItem.afterHeading,
+          primaryKeyword,
+          purpose: planItem.purpose,
         }),
-      );
+        reason: error?.message || "image_pipeline_failed",
+      });
     }
-  }
+    },
+  );
 
   const reviewed = isImageReviewDelegated()
     ? results.map(approveStoredImage)
@@ -466,6 +525,7 @@ const runImagePipeline = async ({
 
 module.exports = {
   IMAGE_ATTEMPT_LIMIT,
+  IMAGE_PIPELINE_CONCURRENCY,
   approveStoredImage,
   isImageReviewDelegated,
   buildStorageFolder,

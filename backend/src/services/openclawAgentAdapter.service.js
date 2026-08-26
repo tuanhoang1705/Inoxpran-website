@@ -59,7 +59,11 @@ const ALLOWED_TOPIC_AGENTS = Object.freeze([
     'content-writer',
     'fact-checker',
     'seo-reviewer',
-    'brand-voice-reviewer'
+    'brand-voice-reviewer',
+    // The only reviewer that judges meaning rather than form. It was calling a
+    // gateway alias that was never on this list, so every call was refused and
+    // the caller treated the refusal as approval.
+    'senior-editor'
 ])
 const MODEL_IDENTITY_SOURCES = Object.freeze({
     GATEWAY_PROVIDER_METADATA: 'gateway_provider_metadata'
