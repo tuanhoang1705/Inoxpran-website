@@ -2897,7 +2897,12 @@
 		}
 
 		#latest-posts .home-post-slide {
+			width: 100%;
+			max-width: none;
+			min-width: 0;
+			flex: none;
 			scroll-snap-align: start;
+			scroll-snap-stop: always;
 		}
 
 		#best-selling-items .product-swiper[data-native-slider] .swiper-wrapper {
@@ -2972,7 +2977,7 @@
 
 	@media (max-width: 480px) {
 		#latest-posts .latest-posts-track {
-			grid-auto-columns: minmax(250px, 82vw);
+			grid-auto-columns: minmax(272px, calc(100vw - 54px));
 			gap: 12px;
 		}
 
