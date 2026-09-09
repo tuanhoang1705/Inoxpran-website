@@ -943,11 +943,14 @@
 							}
 						}
 					);
+					// Travel only, no autoAlpha: `from` states are applied at load, and a crawler
+					// renders without scrolling, so fading in from zero left this scene's heading
+					// sitting at visibility:hidden in the indexed DOM. The section's own mask
+					// gradient still fades the copy in with the scene.
 					gsap.fromTo(
 						'.hero-copy--two',
-						{ autoAlpha: 0, y: copyTravel },
+						{ y: copyTravel },
 						{
-							autoAlpha: 1,
 							y: 0,
 							ease: 'none',
 							scrollTrigger: { trigger: sectionTwo, start: 'top 80%', end: 'top 32%', scrub: true }
@@ -1025,9 +1028,12 @@
 						scrollTrigger: { trigger: inox, start: 'top 82%' }
 					});
 				}
+				// Travel only. These carry the section's real copy, and a crawler renders the
+				// page without scrolling, so an autoAlpha reveal left them at visibility:hidden
+				// in the indexed DOM. The decorative marquee and orbit chips below are
+				// aria-hidden, so they keep their fade.
 				if (intro.length) {
 					gsap.from(intro, {
-						autoAlpha: 0,
 						y: 42,
 						duration: 0.7,
 						ease: 'power2.out',
@@ -2315,11 +2321,6 @@
 		   xPercent/yPercent + an animated y, so no !important here or GSAP could not take over. */
 		transform: translate(-50%, -50%);
 		will-change: opacity, transform;
-	}
-
-	/* Avoid a flash of the incoming scene-two copy before GSAP hides it (motion only). */
-	.hero-gsap-ready .hero-copy--two {
-		opacity: 0;
 	}
 
 	.hero-eyebrow {
