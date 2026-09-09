@@ -36,15 +36,6 @@ const normalizeBaseUrl = (requestUrl) => {
 const isEnglishPath = (pathname) => pathname === '/en' || pathname.startsWith('/en/');
 const buildLocaleRobots = (pathname) =>
 	isEnglishPath(pathname) ? UNTRANSLATED_ENGLISH_ROBOTS : null;
-const buildLocaleAlternates = ({ baseUrl, path }) => {
-	const normalizedPath = String(path || '').trim() || '/';
-	const basePath = normalizedPath.replace(/^\/en(?=\/|$)/, '') || '/';
-	return {
-		vi: `${baseUrl}${basePath}`,
-		en: `${baseUrl}/en${basePath === '/' ? '' : basePath}`,
-		xDefault: `${baseUrl}${basePath}`
-	};
-};
 
 export const load = async ({ params, fetch, url }) => {
 	const headers = buildHeaders();
@@ -55,20 +46,17 @@ export const load = async ({ params, fetch, url }) => {
 	const localePrefix = isEnglishPath(url.pathname) ? '/en' : '';
 	const useVietnameseCanonical = robots?.index === false;
 	const canonicalLocalePrefix = useVietnameseCanonical ? '' : localePrefix;
-	const includeEnglishAlternate = !useVietnameseCanonical;
 	const canonicalBlogPath = slug ? `/blog/${encodeURIComponent(slug)}` : '';
 	const canonicalPath = canonicalBlogPath ? `${canonicalLocalePrefix}${canonicalBlogPath}` : '';
+	// Posts are only written in Vietnamese, so /en/blog/<slug> renders noindex and
+	// canonicalises back here. Advertising it as the en-US alternate would point the
+	// cluster at a noindexed URL, which makes Google discard the annotations entirely.
 	const hreflang = canonicalBlogPath
-		? includeEnglishAlternate
-			? buildLocaleAlternates({
-					baseUrl,
-					path: canonicalBlogPath
-				})
-			: {
-					vi: `${baseUrl}${canonicalBlogPath}`,
-					en: null,
-					xDefault: `${baseUrl}${canonicalBlogPath}`
-				}
+		? {
+				vi: `${baseUrl}${canonicalBlogPath}`,
+				en: null,
+				xDefault: `${baseUrl}${canonicalBlogPath}`
+			}
 		: null;
 	if (!slug) {
 		return {
@@ -112,16 +100,11 @@ export const load = async ({ params, fetch, url }) => {
 		const canonicalSlug = String(post?.slug || post?.blog_slug || slug).trim() || slug;
 		const postCanonicalBlogPath = `/blog/${encodeURIComponent(canonicalSlug)}`;
 		const postCanonicalPath = `${canonicalLocalePrefix}${postCanonicalBlogPath}`;
-		const postHreflang = includeEnglishAlternate
-			? buildLocaleAlternates({
-					baseUrl,
-					path: postCanonicalBlogPath
-				})
-			: {
-					vi: `${baseUrl}${postCanonicalBlogPath}`,
-					en: null,
-					xDefault: `${baseUrl}${postCanonicalBlogPath}`
-				};
+		const postHreflang = {
+			vi: `${baseUrl}${postCanonicalBlogPath}`,
+			en: null,
+			xDefault: `${baseUrl}${postCanonicalBlogPath}`
+		};
 		const commentsPayload = commentsResponse.ok ? await readJson(commentsResponse) : null;
 		const commentItems = Array.isArray(commentsPayload?.metadata?.items)
 			? commentsPayload.metadata.items

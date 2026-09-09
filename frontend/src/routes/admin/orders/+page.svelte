@@ -200,9 +200,9 @@
 
 	const getOrderSourceLabel = (order) => {
 		if (order?.order_source === 'guest_checkout') {
-			return $locale === 'en' ? 'Guest COD' : 'KhÃ¡ch COD';
+			return $locale === 'en' ? 'Guest COD' : 'Khách COD';
 		}
-		return $locale === 'en' ? 'Account' : 'TÃ i khoáº£n';
+		return $locale === 'en' ? 'Account' : 'Tài khoản';
 	};
 
 	const resolveStatusLabel = (status) => statusLabels[status] || status || '--';

@@ -72,15 +72,6 @@ const normalizeBaseUrl = (requestUrl) => {
 const isEnglishPath = (pathname) => pathname === '/en' || pathname.startsWith('/en/');
 const buildLocaleRobots = (pathname) =>
 	isEnglishPath(pathname) ? UNTRANSLATED_ENGLISH_ROBOTS : null;
-const buildLocaleAlternates = ({ baseUrl, path }) => {
-	const normalizedPath = String(path || '').trim() || '/';
-	const basePath = normalizedPath.replace(/^\/en(?=\/|$)/, '') || '/';
-	return {
-		vi: `${baseUrl}${basePath}`,
-		en: `${baseUrl}/en${basePath === '/' ? '' : basePath}`,
-		xDefault: `${baseUrl}${basePath}`
-	};
-};
 
 const readRequestBody = async (request) => {
 	const contentType = request.headers.get('content-type') || '';
@@ -155,21 +146,21 @@ export const load = async ({ fetch, url, params, cookies }) => {
 	const localePrefix = isEnglishPath(url.pathname) ? '/en' : '';
 	const useVietnameseCanonical = robots?.index === false;
 	const canonicalLocalePrefix = useVietnameseCanonical ? '' : localePrefix;
-	const includeEnglishAlternate = !useVietnameseCanonical;
 	const slug = String(params.slug || '').trim();
 	const mappedCategory = resolveCategoryValue(slug, CATEGORY_VALUES);
 	const canonicalSlug = resolveCategorySlug(mappedCategory || slug);
 	const normalizedCategorySlug = canonicalSlug || slug;
 	const categoryPathVi = `/category/${encodeURIComponent(normalizedCategorySlug)}`;
 	const categoryCanonicalPath = `${canonicalLocalePrefix}${categoryPathVi}`;
+	// The /en category pages are untranslated, so they render noindex and canonicalise back
+	// here. Never advertise them as an hreflang target: Google drops a cluster whose
+	// annotated alternate is noindexed, taking the Vietnamese page's annotations with it.
 	const hreflang = normalizedCategorySlug
-		? includeEnglishAlternate
-			? buildLocaleAlternates({ baseUrl, path: categoryPathVi })
-			: {
-					vi: `${baseUrl}${categoryPathVi}`,
-					en: null,
-					xDefault: `${baseUrl}${categoryPathVi}`
-				}
+		? {
+				vi: `${baseUrl}${categoryPathVi}`,
+				en: null,
+				xDefault: `${baseUrl}${categoryPathVi}`
+			}
 		: null;
 
 	if (canonicalSlug && slug && canonicalSlug !== slug) {

@@ -13,6 +13,7 @@
 	const shippingPolicyHref = $derived(localizeInternalHref('/policies/shipping-policy', $locale));
 	const returnsPolicyHref = $derived(localizeInternalHref('/policies/returns-policy', $locale));
 	const warrantyPolicyHref = $derived(localizeInternalHref('/policies/warranty-policy', $locale));
+	const contactHref = $derived(localizeInternalHref('/contact', $locale));
 	let isSubmittingContact = $state(false);
 	const normalizeToastMessage = (value) =>
 		String(value || '')
@@ -183,6 +184,9 @@
 						<a class="footer-link" href={resolve(warrantyPolicyHref)}>
 							{$locale === 'en' ? 'Warranty policy' : 'Chính sách bảo hành'}
 						</a>
+					</li>
+					<li>
+						<a class="footer-link" href={resolve(contactHref)}>{$t('contact.title')}</a>
 					</li>
 				</ul>
 			</div>

@@ -1,5 +1,6 @@
 <script>
 	import { t } from '$lib/i18n/index.js';
+	import { SITE_CONTACT } from '$lib/config/siteContact.js';
 
 	let { form } = $props();
 </script>
@@ -45,11 +46,13 @@
 				<p>{$t('contact.info.emailValue')}</p>
 				<span>{$t('contact.info.emailNote')}</span>
 			</div>
-			<div class="info-card">
-				<h4>{$t('contact.info.showroomTitle')}</h4>
-				<p>{$t('contact.info.showroomValue')}</p>
-				<span>{$t('contact.info.showroomNote')}</span>
-			</div>
+			{#if SITE_CONTACT.showroomAddress}
+				<div class="info-card">
+					<h4>{$t('contact.info.showroomTitle')}</h4>
+					<p>{SITE_CONTACT.showroomAddress}</p>
+					<span>{$t('contact.info.showroomNote')}</span>
+				</div>
+			{/if}
 			<div class="info-card">
 				<h4>{$t('contact.info.hoursTitle')}</h4>
 				<p>{$t('contact.info.hoursValue')}</p>

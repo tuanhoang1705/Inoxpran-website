@@ -231,9 +231,13 @@ export const handle = async ({ event, resolve }) => {
 		});
 	}
 
+	// The garbage-path heuristic matches any unknown 6-12 character top-level segment, which
+	// is the shape of the injected spam URLs but also the shape of most real pages we might
+	// add (/wishlist, /tuyendung, ...). A path that resolved to a real route is never spam,
+	// so let the router answer it instead of serving a 410 that would deindex a live page.
 	if (
 		isPublicSitePath(pathname, isAdminRequest) &&
-		(hasLegacyGarbagePath(pathname) || hasLegacyGarbageQuery(url.searchParams))
+		((!routeId && hasLegacyGarbagePath(pathname)) || hasLegacyGarbageQuery(url.searchParams))
 	) {
 		return new Response('Gone', {
 			status: 410,

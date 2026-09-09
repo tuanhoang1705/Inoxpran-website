@@ -1,6 +1,7 @@
 import { env } from '$env/dynamic/public';
 import { API_BASE, PUBLIC_API_KEY_HEADER } from '$lib/server/api.js';
 import { CATEGORY_SLUG_MAP, resolveCategorySlug } from '$lib/utils/category.js';
+import { POLICY_DETAIL_SLUGS } from '$lib/content/policies.js';
 
 const DEFAULT_SITE_URL = 'https://inoxpran.com';
 const PRODUCT_PAGE_LIMIT = 100;
@@ -192,10 +193,15 @@ export const GET = async ({ fetch, url }) => {
 		{ path: '/shop', changefreq: 'daily', priority: '0.9' },
 		{ path: '/blog', changefreq: 'daily', priority: '0.9' },
 		{ path: '/faq', changefreq: 'monthly', priority: '0.5' },
+		{ path: '/contact', changefreq: 'monthly', priority: '0.6' },
 		{ path: '/policies', changefreq: 'monthly', priority: '0.4' },
-		{ path: '/policies/returns-policy', changefreq: 'monthly', priority: '0.4' },
-		{ path: '/policies/shipping-policy', changefreq: 'monthly', priority: '0.4' },
-		{ path: '/policies/privacy-policy', changefreq: 'monthly', priority: '0.4' }
+		// Derived from the policy registry so a slug added there (warranty-policy was already
+		// live and linked from every footer, but absent here) cannot go missing from the sitemap.
+		...POLICY_DETAIL_SLUGS.map((slug) => ({
+			path: `/policies/${slug}`,
+			changefreq: 'monthly',
+			priority: '0.4'
+		}))
 	].map((entry) => ({
 		loc: `${baseUrl}${entry.path}`,
 		changefreq: entry.changefreq,

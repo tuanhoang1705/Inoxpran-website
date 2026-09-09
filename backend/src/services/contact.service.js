@@ -6,6 +6,8 @@ const { BadRequestError, NotFoundError } = require('../core/error.response');
 const { convertToObjectIdMongodb, removeUndefinedObject } = require('../utils');
 
 const CONTACT_STATUS = ['new', 'processing', 'contacted', 'closed'];
+const CONTACT_METHODS = ['phone', 'email', 'zalo', 'whatsapp', 'other'];
+const CONTACT_TIMES = ['morning', 'afternoon', 'evening', 'anytime'];
 const normalizeString = (value) => {
 	if (typeof value !== 'string') return '';
 	return value.trim();
@@ -14,6 +16,13 @@ const normalizeString = (value) => {
 const normalizeOptional = (value) => {
 	const trimmed = normalizeString(value);
 	return trimmed ? trimmed : null;
+};
+
+// The schema pins these to an enum, so an unexpected value would reject the whole document.
+// Drop anything outside the allowed set rather than lose the enquiry over a stray select value.
+const normalizeEnum = (value, allowed) => {
+	const trimmed = normalizeString(value).toLowerCase();
+	return allowed.includes(trimmed) ? trimmed : null;
 };
 
 const normalizeEmail = (value) => {
@@ -87,11 +96,22 @@ class ContactService {
 		}
 		if (!message) throw new BadRequestError('Message is required');
 
+		// The contact form collects the full quotation brief and the schema already stores it,
+		// but only name/phone/email/message were ever persisted - every other answer the
+		// customer typed was silently dropped before it reached the sales inbox.
 		const contact = await contactModel.create({
 			fullName,
 			phone,
 			email,
 			message,
+			company: normalizeOptional(payload.company),
+			address: normalizeOptional(payload.address),
+			city: normalizeOptional(payload.city),
+			productInterest: normalizeOptional(payload.productInterest),
+			budgetRange: normalizeOptional(payload.budgetRange),
+			timeline: normalizeOptional(payload.timeline),
+			preferredContactMethod: normalizeEnum(payload.preferredContactMethod, CONTACT_METHODS),
+			preferredContactTime: normalizeEnum(payload.preferredContactTime, CONTACT_TIMES),
 			sourcePage: normalizeOptional(payload.sourcePage),
 			referrer: normalizeOptional(payload.referrer),
 			meta: {

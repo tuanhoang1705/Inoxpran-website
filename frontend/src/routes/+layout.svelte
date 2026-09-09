@@ -281,11 +281,11 @@
 			address: {
 				'@type': 'PostalAddress',
 				addressCountry: 'VN',
-				addressRegion: locale === 'en' ? 'Vietnam' : 'Viá»‡t Nam'
+				addressRegion: locale === 'en' ? 'Vietnam' : 'Việt Nam'
 			},
 			areaServed: {
 				'@type': 'Country',
-				name: locale === 'en' ? 'Vietnam' : 'Viá»‡t Nam'
+				name: locale === 'en' ? 'Vietnam' : 'Việt Nam'
 			},
 			sameAs: brandSameAs
 		})

@@ -519,6 +519,9 @@
       PORT: 4173
       API_BASE_URL: ${API_BASE_URL:?Set API_BASE_URL}
       PUBLIC_SITE_URL: ${PUBLIC_SITE_URL:?Set PUBLIC_SITE_URL}
+      # Optional. Leave unset until a real showroom address exists: the contact page hides
+      # the showroom card rather than publishing a placeholder location.
+      PUBLIC_SHOWROOM_ADDRESS: ${PUBLIC_SHOWROOM_ADDRESS:-}
       ADMIN_BASE_URL: ${ADMIN_BASE_URL:?Set ADMIN_BASE_URL}
       PUBLIC_API_KEY: ${PUBLIC_API_KEY:?Set PUBLIC_API_KEY through the deployment secret store}
       USER_API_KEY: ${USER_API_KEY:?Set USER_API_KEY through the deployment secret store}

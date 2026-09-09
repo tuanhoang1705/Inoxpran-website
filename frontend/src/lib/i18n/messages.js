@@ -299,6 +299,8 @@ export const messages = {
 			eyebrow: 'Inoxpran Store',
 			heading: 'Cửa hàng gia dụng',
 			lede: 'Bộ sưu tập nồi chảo, bếp và phụ kiện nhà bếp. Tìm kiếm sản phẩm theo từ khóa và mức giá.',
+			categoryLede:
+				'Toàn bộ {category} chính hãng Inoxpran, kèm thông số, giá bán và chính sách bảo hành. Lọc theo mức giá hoặc loại sản phẩm để chọn nhanh.',
 			filteringBy: 'Đang lọc theo: {value}',
 			mobileCategoriesTitle: 'Danh mục',
 			mobileTagsTitle: 'Loại sản phẩm',
@@ -613,7 +615,6 @@ export const messages = {
 				emailValue: 'congtytnhhdaututhangvuong@gmail.com',
 				emailNote: 'Gửi yêu cầu báo giá, bản vẽ',
 				showroomTitle: 'Showroom',
-				showroomValue: '123 Đường ABC, Quận 1, TP.HCM',
 				showroomNote: 'Tham quan mẫu và đặt lịch khảo sát',
 				hoursTitle: 'Giờ làm việc',
 				hoursValue: 'Thứ 2 - Thứ 7 · 8:00 - 18:00',
@@ -1081,6 +1082,8 @@ export const messages = {
 			eyebrow: 'Inoxpran Store',
 			heading: 'Cookware store',
 			lede: 'Browse pots, pans, stoves, and kitchen accessories. Filter by keyword or price.',
+			categoryLede:
+				'Every genuine Inoxpran {category}, with specifications, pricing, and warranty terms. Filter by price or product type to narrow the range.',
 			filteringBy: 'Filtering by: {value}',
 			mobileCategoriesTitle: 'Categories',
 			mobileTagsTitle: 'Product type',
@@ -1393,7 +1396,6 @@ export const messages = {
 				emailValue: 'congtytnhhdaututhangvuong@gmail.com',
 				emailNote: 'Send drawings and quote requests',
 				showroomTitle: 'Showroom',
-				showroomValue: '123 ABC Street, District 1, HCMC',
 				showroomNote: 'Visit samples or book a site survey',
 				hoursTitle: 'Working hours',
 				hoursValue: 'Mon - Sat · 8:00 - 18:00',

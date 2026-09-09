@@ -518,6 +518,15 @@
 	const pageTitle = $derived(
 		activeCategoryLabel ? `${activeCategoryLabel} | Inoxpran` : `${$t('shop.title')} | Inoxpran`
 	);
+	// Every /category/* URL used to render the generic shop heading and lede, so the only thing
+	// separating one category page from another was the product grid. Lead with the category so
+	// each page states its own topic instead of competing as a near-duplicate of /shop.
+	const pageHeading = $derived(activeCategoryLabel || $t('shop.heading'));
+	const pageLede = $derived(
+		activeCategoryLabel
+			? $t('shop.categoryLede', { category: activeCategoryLabel })
+			: $t('shop.lede')
+	);
 	const seoDescription = $derived.by(() => {
 		const baseDescription = $t('shop.lede');
 		if (activeCategoryLabel) {
@@ -860,8 +869,8 @@
 <section class="shop-top">
 	<div class="container">
 		<p class="eyebrow">{$t('shop.eyebrow')}</p>
-		<h1 class="shop-title">{$t('shop.heading')}</h1>
-		<p class="shop-lede">{$t('shop.lede')}</p>
+		<h1 class="shop-title">{pageHeading}</h1>
+		<p class="shop-lede">{pageLede}</p>
 		{#if activeSearch}
 			<p class="text-black-50">{$t('shop.filteringBy', { value: activeSearchLabel })}</p>
 		{/if}
