@@ -251,7 +251,11 @@ export const GET = async ({ fetch, url }) => {
 			if (!slug) return null;
 			return {
 				loc: `${baseUrl}/blog/${encodeURIComponent(slug)}`,
-				lastmod: toIsoDate(post?.updatedAt || post?.createdAt),
+				// Date by publication, not updatedAt: a boot-time maintenance pass rewrites
+				// updatedAt on every published post at each deploy, which was telling Google
+				// all 16 articles had just changed when none of them had. Google ignores
+				// lastmod entirely once it catches the site reporting false freshness.
+				lastmod: toIsoDate(post?.publishedAt || post?.createdAt),
 				changefreq: 'weekly',
 				priority: '0.7'
 			};

@@ -366,6 +366,9 @@ const mapBlogSummary = (item) => {
         isPublished: Boolean(item.isPublished),
         isDraft: Boolean(item.isDraft),
         createdAt: item.createdAt,
+        // Exposed raw so the sitemap can date entries by publication rather than by updatedAt,
+        // which boot-time maintenance rewrites on every deploy without the article changing.
+        publishedAt: item.publishedAt || null,
         updatedAt: item.updatedAt
     };
 };
