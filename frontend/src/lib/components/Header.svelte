@@ -7,6 +7,7 @@
 	import { forceMobileZoomOut100 } from '$lib/client/mobileViewport.js';
 	import { locale, setLocale, t } from '$lib/i18n/index.js';
 	import { cartCount } from '$lib/stores/cartCount.js';
+	import { navigateWithFeedback } from '$lib/stores/navigationProgress.js';
 	let { introHidden = false } = $props();
 	let mobileMenuOpen = $state(false);
 	let mobileSearchOpen = $state(false);
@@ -73,7 +74,7 @@
 		logoutPending = true;
 		clearClientAccountState();
 		if (typeof window === 'undefined') return;
-		window.location.assign(localizeInternalHref('/logout'));
+		navigateWithFeedback(localizeInternalHref('/logout'));
 	};
 
 	const handleLogoutClick = (event) => {
@@ -96,7 +97,7 @@
 			window.location.reload();
 			return;
 		}
-		window.location.assign(localizedHomePath);
+		navigateWithFeedback(localizedHomePath);
 	};
 
 	const handleLogoClick = (event) => {
@@ -214,7 +215,7 @@
 			return;
 		}
 
-		window.location.assign(nextHref);
+		navigateWithFeedback(nextHref);
 	};
 
 	const handlePrimaryNavigationClick = (event, href) => {

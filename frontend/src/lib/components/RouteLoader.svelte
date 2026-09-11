@@ -2,9 +2,18 @@
 	import { beforeNavigate, afterNavigate } from '$app/navigation';
 	import { onDestroy } from 'svelte';
 	import { t } from '$lib/i18n/index.js';
+	import {
+		endFullPageNavigation,
+		fullPageNavigationPending
+	} from '$lib/stores/navigationProgress.js';
 
 	let isLoading = $state(false);
 	let showTimer;
+
+	// Two sources, deliberately different in timing. A client-side navigation is
+	// debounced so a fast one does not flash the overlay; a full page navigation is
+	// shown at once, because there the delay being covered is the whole point.
+	const visible = $derived(isLoading || $fullPageNavigationPending);
 
 	const shouldTrackNavigation = (navigation) => {
 		if (typeof window === 'undefined') return false;
@@ -39,6 +48,10 @@
 
 	afterNavigate(() => {
 		stop();
+		// A client-side navigation can interrupt one that was about to leave the page
+		// (a link tapped while the previous target was still resolving), so the full
+		// page flag has to be cleared here too or the overlay would outlive it.
+		endFullPageNavigation();
 	});
 
 	onDestroy(() => {
@@ -46,7 +59,7 @@
 	});
 </script>
 
-{#if isLoading}
+{#if visible}
 	<div class="route-loader" aria-live="polite" aria-busy="true">
 		<div class="route-loader-panel">
 			<div class="route-loader-spinner" aria-hidden="true"></div>

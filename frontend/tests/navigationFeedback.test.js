@@ -56,3 +56,60 @@ test('the server warms the home feed so the first visitor after a deploy is not 
 	// there and slow every build down for nothing.
 	assert.match(hooks, /if\s*\(!building\)/);
 });
+
+test('a full page navigation announces itself instead of leaving the tap unanswered', () => {
+	// beforeNavigate's "leave" only fires once the browser starts unloading, and a
+	// browser does not unload until the server has answered - seconds after the tap on
+	// a slow page. So nothing in the storefront may hand a URL straight to the browser.
+	const storefront = [
+		'src/lib/components/Header.svelte',
+		'src/lib/components/ShopCatalogView.svelte',
+		'src/routes/+page.svelte',
+		'src/routes/product/[slug]/+page.svelte'
+	];
+	for (const file of storefront) {
+		const source = read(file);
+		assert.doesNotMatch(
+			source,
+			/window\.location\.assign\(/,
+			`${file} must navigate through navigateWithFeedback so the loader appears`
+		);
+	}
+
+	const header = read('src/lib/components/Header.svelte');
+	assert.match(header, /navigateWithFeedback/);
+});
+
+test('the loader reacts to a full page navigation without the client-side debounce', () => {
+	const loader = read('src/lib/components/RouteLoader.svelte');
+
+	assert.match(loader, /fullPageNavigationPending/);
+	// The debounce exists to stop a fast client navigation flashing the overlay. A full
+	// page navigation is the opposite case: the wait is exactly what needs covering.
+	const derived = /const visible = \$derived\(([^)]*)\)/.exec(loader)?.[1] || '';
+	assert.match(derived, /\$fullPageNavigationPending/);
+	assert.match(loader, /\{#if visible\}/);
+});
+
+test('a full page navigation that never happens releases the overlay', () => {
+	const store = read('src/lib/stores/navigationProgress.js');
+
+	// A dismissed beforeunload prompt would otherwise leave a spinner over a page that
+	// is working perfectly well.
+	assert.match(store, /NAVIGATION_ABANDONED_MS/);
+	assert.match(store, /setTimeout\(endFullPageNavigation/);
+	// The flag has to be set before control passes to the browser.
+	const order = /beginFullPageNavigation\(\);\s*\n\s*window\.location\.assign/.test(store);
+	assert.ok(order, 'the loader must be shown before location.assign hands over the page');
+});
+
+test('keydown handling tolerates events that carry no key', () => {
+	// IME composition, autofill and extension-synthesised events arrive without one,
+	// and reading startsWith off undefined threw on every such keystroke.
+	const layout = read('src/routes/+layout.svelte');
+	const handler = /const revealFromKey = \(event\) => \{[\s\S]*?\n\t\t\};/.exec(layout)?.[0] || '';
+
+	assert.ok(handler, 'revealFromKey must exist');
+	assert.doesNotMatch(handler, /event\.key\.startsWith/);
+	assert.match(handler, /typeof event\?\.key === 'string'/);
+});

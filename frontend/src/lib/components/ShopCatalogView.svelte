@@ -14,6 +14,7 @@
 	import { addGuestCartItem } from '$lib/client/guestCart.js';
 	import { syncCartCountFromActionResult } from '$lib/client/cartCountSync.js';
 	import { cartToast } from '$lib/stores/cartToast.js';
+	import { navigateWithFeedback } from '$lib/stores/navigationProgress.js';
 	import { getMarketingRatingSummary } from '$lib/data/staticReviews.js';
 	import { resolveCategorySlug } from '$lib/utils/category.js';
 	import {
@@ -134,7 +135,7 @@
 			void goto(resolve(loginHref));
 			return;
 		}
-		window.location.assign(loginHref);
+		navigateWithFeedback(loginHref);
 	};
 
 	const FLY_TO_CART_Y_OFFSET = -60;

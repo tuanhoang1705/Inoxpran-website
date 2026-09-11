@@ -396,7 +396,12 @@
 			homeIntroHeaderRevealed = true;
 		};
 		const revealFromKey = (event) => {
-			if (event.key === 'Tab' || event.key.startsWith('Arrow') || event.key === 'PageDown') {
+			// Not every keydown carries a key. IME composition, some autofill flows and
+			// events synthesised by browser extensions arrive without one, and reading
+			// startsWith off undefined threw on every such keystroke - which both filled
+			// the console and stopped the header ever revealing from the keyboard again.
+			const key = typeof event?.key === 'string' ? event.key : '';
+			if (key === 'Tab' || key.startsWith('Arrow') || key === 'PageDown') {
 				revealHomeHeader(event);
 			}
 		};

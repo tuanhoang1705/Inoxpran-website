@@ -12,6 +12,7 @@
 	import { addGuestCartItem } from '$lib/client/guestCart.js';
 	import { syncCartCountFromActionResult } from '$lib/client/cartCountSync.js';
 	import { cartToast } from '$lib/stores/cartToast.js';
+	import { navigateWithFeedback } from '$lib/stores/navigationProgress.js';
 	import { getMarketingRatingSummary } from '$lib/data/staticReviews.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
 	let { data } = $props();
@@ -699,7 +700,7 @@
 			void goto(resolve(loginHref));
 			return;
 		}
-		window.location.assign(loginHref);
+		navigateWithFeedback(loginHref);
 	};
 
 	const requestHomeFeed = async () => {

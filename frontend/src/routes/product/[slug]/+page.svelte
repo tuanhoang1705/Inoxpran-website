@@ -18,6 +18,7 @@
 	} from '$lib/data/staticReviews.js';
 	import { buildOfferShippingDetailsJsonLd } from '$lib/seo/shippingSchema.js';
 	import { cartToast } from '$lib/stores/cartToast.js';
+	import { navigateWithFeedback } from '$lib/stores/navigationProgress.js';
 	import { localizeInternalHref } from '$lib/utils/localePath.js';
 	import { resolveCategorySlug } from '$lib/utils/category.js';
 
@@ -1468,7 +1469,7 @@
 			void goto(resolve(loginHref));
 			return;
 		}
-		window.location.assign(loginHref);
+		navigateWithFeedback(loginHref);
 	};
 
 	const initTooltips = () => {
