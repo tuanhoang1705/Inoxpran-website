@@ -32,8 +32,11 @@ const failWithToast = (status, message) =>
 const loadRelatedOptions = async ({ fetch, headers }) => {
 	const params = new URLSearchParams();
 	params.set('status', 'all');
-	params.set('limit', '200');
+	params.set('limit', '100');
 	params.set('page', '1');
+	// The picker draws a checkbox and a title. Without this it pulled whole documents -
+	// article body, visual plan, generation metadata - for every post in the catalogue.
+	params.set('view', 'options');
 	const response = await fetch(`${API_BASE}/blog/admin/all?${params.toString()}`, {
 		headers
 	});

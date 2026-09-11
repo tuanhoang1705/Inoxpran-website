@@ -5,12 +5,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ensureAdminSession, clearAdminCookies } from '$lib/server/adminAuth.js';
 import { clearUserCookies } from '$lib/server/userAuth.js';
-import { primeHomeFeed } from '$lib/server/homeFeed.js';
+import { startHomeFeedWarmLoop } from '$lib/server/homeFeed.js';
 
-// Build the homepage feed once at boot so the first visitor after a deploy is
-// not the one who pays for a cold database connection.
+// Keep the homepage feed warm from the background, starting at boot. Refreshing on a
+// schedule rather than on a cache miss means no visitor ever waits on the database,
+// and the snapshot it maintains lives in Redis, so a restart or an extra replica
+// starts from the last good feed instead of from nothing.
 if (!building) {
-	void primeHomeFeed();
+	startHomeFeedWarmLoop();
 }
 
 const ADMIN_SUBDOMAIN = 'admin.inoxpran.com';

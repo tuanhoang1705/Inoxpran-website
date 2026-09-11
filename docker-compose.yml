@@ -529,6 +529,21 @@
       OPENAI_API_KEY: ${OPENAI_API_KEY:?Set OPENAI_API_KEY through the deployment secret store}
       OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-}
       BODY_SIZE_LIMIT: ${BODY_SIZE_LIMIT:-50M}
+      # Holds the homepage feed snapshot. Losing Redis degrades the frontend to a
+      # per-process cache - the behaviour it had before - and never fails a render,
+      # so this is deliberately not marked required.
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_TLS: "true"
+      REDIS_TLS_CA_FILE: /run/secrets/redis-ca.crt
+      REDIS_TLS_SERVERNAME: redis
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-inoxpran:fe}
+      HOME_FEED_API_TIMEOUT_MS: ${HOME_FEED_API_TIMEOUT_MS:-20000}
+      HOME_FEED_REFRESH_INTERVAL_MS: ${HOME_FEED_REFRESH_INTERVAL_MS:-45000}
+      HOME_FEED_SNAPSHOT_TTL_SECONDS: ${HOME_FEED_SNAPSHOT_TTL_SECONDS:-604800}
+    volumes:
+      - ${REDIS_TLS_CERT_DIR:?Set REDIS_TLS_CERT_DIR}/ca.crt:/run/secrets/redis-ca.crt:ro
     restart: unless-stopped
     init: true
     read_only: true
@@ -554,6 +569,10 @@
     depends_on:
       backend:
         condition: service_healthy
+      # Ordering only. The frontend treats Redis as a cache it can lose, so an
+      # unhealthy Redis must never be the reason the storefront fails to start.
+      redis:
+        condition: service_started
 
   nginx:
     image: ${NGINX_IMAGE:?Set NGINX_IMAGE to a reviewed immutable digest}

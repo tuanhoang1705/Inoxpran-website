@@ -29,7 +29,14 @@
 	const homeProductCardImageSizes = '(max-width: 576px) 50vw, (max-width: 992px) 33vw, 25vw';
 	const categoryImageSizes = '(max-width: 768px) 33vw, 33vw';
 	const latestPostImageSizes = '(max-width: 480px) 82vw, (max-width: 768px) 70vw, 25vw';
-	const CLIENT_HOME_FEED_TIMEOUT_MS = 1_500;
+	// The endpoint this calls answers from a server-side cache, but the call that has
+	// to fill a cold cache waits on the upstream. 1.5s was below even the warm round
+	// trip, so the retry that was supposed to rescue a failed render aborted every
+	// time and the visitor was left with the error the render had already produced.
+	const CLIENT_HOME_FEED_TIMEOUT_MS = 12_000;
+	// Delay after each failed attempt; the last entry must be 0 - there is no attempt
+	// after it to wait for. Three attempts, roughly 30s of patience in the worst case.
+	const CLIENT_HOME_FEED_RETRY_DELAYS_MS = [1_500, 4_000, 0];
 	const DEFAULT_SITE_URL = 'https://inoxpran.com';
 	const normalizeSiteUrl = (value) => {
 		const raw = String(value || '').trim();
@@ -695,11 +702,9 @@
 		window.location.assign(loginHref);
 	};
 
-	const loadHomeFeed = async () => {
-		if (typeof window === 'undefined') return;
+	const requestHomeFeed = async () => {
 		const controller = new AbortController();
 		let timeoutId = null;
-		isHomeFeedLoading = true;
 		try {
 			timeoutId = window.setTimeout(() => controller.abort(), CLIENT_HOME_FEED_TIMEOUT_MS);
 			const response = await fetch('/api/home-feed', {
@@ -714,15 +719,38 @@
 			if (!payload?.success) {
 				throw new Error('home-feed returned unsuccessful payload');
 			}
-			bestSelling = Array.isArray(payload?.bestSelling) ? payload.bestSelling : [];
-			latestPosts = Array.isArray(payload?.latestPosts) ? payload.latestPosts.slice(0, 4) : [];
-			apiError = '';
-		} catch {
-			bestSelling = [];
-			latestPosts = [];
-			apiError = $t('common.errors.productRequestFailed');
+			return payload;
 		} finally {
 			if (timeoutId) window.clearTimeout(timeoutId);
+		}
+	};
+
+	const loadHomeFeed = async () => {
+		if (typeof window === 'undefined') return;
+		isHomeFeedLoading = true;
+		try {
+			// A first attempt that misses is not the same as an outage. It is also what
+			// starts the server refreshing, so the attempt after it usually lands - which
+			// is precisely why reloading the page "fixed" this by hand. Do that here
+			// instead of leaving it to the visitor.
+			for (let attempt = 0; attempt < CLIENT_HOME_FEED_RETRY_DELAYS_MS.length; attempt += 1) {
+				try {
+					const payload = await requestHomeFeed();
+					bestSelling = Array.isArray(payload?.bestSelling) ? payload.bestSelling : [];
+					latestPosts = Array.isArray(payload?.latestPosts) ? payload.latestPosts.slice(0, 4) : [];
+					apiError = '';
+					return;
+				} catch {
+					const delay = CLIENT_HOME_FEED_RETRY_DELAYS_MS[attempt];
+					if (delay > 0) await new Promise((resolve) => window.setTimeout(resolve, delay));
+				}
+			}
+			// Only now is this a failure worth showing. Anything already on screen stays:
+			// an older rail beats replacing it with an error message.
+			if (!bestSelling.length && !latestPosts.length) {
+				apiError = $t('common.errors.productRequestFailed');
+			}
+		} finally {
 			isHomeFeedLoading = false;
 		}
 	};

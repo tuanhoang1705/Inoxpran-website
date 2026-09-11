@@ -22,7 +22,11 @@ const readJson = async (response) => {
 export const load = async ({ fetch, url }) => {
 	const headers = buildHeaders();
 	const endpoint = new URL(`${API_BASE}/blog`);
-	endpoint.searchParams.set('limit', '200');
+	// The API caps a page at 100, so asking for 200 never returned more than 100 - it
+	// only hid the fact that this page shows no post past the hundredth. Stated
+	// explicitly here: once the catalogue passes 100 published posts this page needs
+	// real pagination rather than a bigger number.
+	endpoint.searchParams.set('limit', '100');
 	endpoint.searchParams.set('page', '1');
 	endpoint.searchParams.set('sort', 'published');
 

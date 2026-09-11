@@ -7,6 +7,41 @@ export const extractLatestBlogItems = (payload) =>
 export const isCompleteHomeFeed = ({ bestSellingItems, latestBlogItems } = {}) =>
 	Array.isArray(bestSellingItems) && Array.isArray(latestBlogItems);
 
+// The product rail and the blog rail are two different upstream queries that fail for
+// two different reasons, so one failing must not blank the other. Requiring both to be
+// fresh is what put "product request failed" over a shelf whose own query had answered
+// perfectly well - the blog query was the slow one. A source that did not answer keeps
+// the last value we hold for it; only a source with no value at all is unavailable.
+export const mergeHomeFeedSources = ({
+	bestSellingItems = null,
+	latestBlogItems = null,
+	previous = null
+} = {}) => {
+	const carryOver = (fresh, remembered) =>
+		Array.isArray(fresh) ? fresh : Array.isArray(remembered) ? remembered : null;
+
+	const bestSelling = carryOver(bestSellingItems, previous?.bestSelling);
+	const latestPosts = carryOver(latestBlogItems, previous?.latestPosts);
+	const health = (fresh, resolved) =>
+		Array.isArray(fresh) ? 'ready' : resolved ? 'stale' : 'unavailable';
+
+	return {
+		bestSelling: bestSelling || [],
+		latestPosts: latestPosts || [],
+		loaded: isCompleteHomeFeed({
+			bestSellingItems: bestSelling,
+			latestBlogItems: latestPosts
+		}),
+		// True only when at least one rail is genuinely new, so a refresh that answered
+		// nothing does not get written back over the snapshot it just read.
+		hasFreshSource: Array.isArray(bestSellingItems) || Array.isArray(latestBlogItems),
+		sourceHealth: {
+			bestSelling: health(bestSellingItems, bestSelling),
+			latestPosts: health(latestBlogItems, latestPosts)
+		}
+	};
+};
+
 export const HOME_FEED_CACHE_CONTROL =
 	'public, max-age=60, s-maxage=300, stale-while-revalidate=600';
 

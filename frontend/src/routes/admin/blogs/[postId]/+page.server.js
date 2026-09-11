@@ -36,7 +36,9 @@ export const load = async ({ cookies, fetch, params }) => {
 
 	const [postResponse, optionsResponse] = await Promise.all([
 		fetch(`${API_BASE}/blog/admin/${params.postId}`, { headers }),
-		fetch(`${API_BASE}/blog/admin/all?status=all&limit=200&page=1`, { headers })
+		// view=options keeps the related-post picker to ids and titles instead of
+		// pulling every post's full document to render a list of checkboxes.
+		fetch(`${API_BASE}/blog/admin/all?status=all&limit=100&page=1&view=options`, { headers })
 	]);
 
 	if (!postResponse.ok) {

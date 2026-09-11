@@ -1162,6 +1162,10 @@ class ProductFactory {
         }
 
         const searchTerm = normalizeSearchTerm(q || search || keyword);
+        // product_gallery is half the weight of a product document (437 KB of the
+        // 896 KB these 75 products occupy) and only the detail page ever opens it -
+        // a card in a grid shows product_thumb. Selecting it here made every shop,
+        // sitemap and related-products request carry the full gallery of every row.
         const select = [
             'product_name',
             'product_thumb',
@@ -1170,7 +1174,6 @@ class ProductFactory {
             'product_ratingsAverage',
             'product_ratingsCount',
             'product_description',
-            'product_gallery',
             'product_type',
             'product_shop',
             'product_slug'
@@ -1250,7 +1253,6 @@ class ProductFactory {
                 'product_ratingsAverage',
                 'product_ratingsCount',
                 'product_description',
-                'product_gallery',
                 'product_type',
                 'product_shop',
                 'product_slug',

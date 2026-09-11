@@ -78,6 +78,27 @@ export const createAsyncTtlCache = ({
 		}
 	};
 
+	// Seeds a value computed outside the cache - a scheduled refresh, say - so the next
+	// reader gets it without the cache having to ask for it again. Kept separate from
+	// getOrLoad because a refresh that only fires on a miss is not a refresh: it still
+	// leaves whoever arrives at the moment of expiry waiting on the upstream.
+	const set = (key, value) => {
+		const cacheKey = String(key || '');
+		const time = now();
+		const entry = store.get(cacheKey) || {
+			value: undefined,
+			expiresAt: 0,
+			lastAccessAt: time,
+			pending: null
+		};
+		entry.value = value;
+		entry.expiresAt = time + Math.max(0, Number(ttlMs) || 0);
+		entry.lastAccessAt = time;
+		store.set(cacheKey, entry);
+		evictIfNeeded();
+		return value;
+	};
+
 	const peek = (key) => {
 		const cacheKey = String(key || '');
 		const time = now();
@@ -95,6 +116,7 @@ export const createAsyncTtlCache = ({
 
 	return {
 		getOrLoad,
+		set,
 		peek,
 		clear
 	};

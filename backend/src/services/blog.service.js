@@ -27,6 +27,43 @@ const WORDS_PER_MINUTE = 220;
 const DEFAULT_RELATED_LIMIT = 3;
 const MAX_SEO_SLUG_LENGTH = Number(process.env.BLOG_SLUG_MAX_LENGTH || 80);
 
+// A list never renders an article, so it must never pull one across the wire.
+// Measured on production: the 16 published posts weigh 636 KB as whole documents,
+// of which only 151 KB is summary data. The rest is blog_content (32%),
+// contentImages (20%), generationMetadata (16%) and visualPlan (9%) - all written
+// by the generation pipeline and all useless to a card in a list. Projecting them
+// away cuts a list response by roughly four times, and the saving grows with every
+// post the pipeline adds rather than staying constant.
+const BLOG_PUBLIC_LIST_FIELDS = [
+    'blog_slug',
+    'blog_title',
+    'blog_excerpt',
+    'blog_image',
+    'blog_category_key',
+    'blog_author_name',
+    'blog_author_avatar',
+    'blog_tags',
+    'blog_read_time_minutes',
+    'blog_views',
+    'blog_comments_count',
+    'blog_seo_title',
+    'blog_seo_description',
+    'publishedAt',
+    'createdAt',
+    'updatedAt',
+    'isPublished',
+    'isDraft'
+].join(' ');
+
+// The admin list still shows pipeline state (the agentic/manual chip, image review
+// progress), so it keeps those discriminators and drops only what a list can never
+// show: the article body and the cropping state of its cover.
+const BLOG_ADMIN_LIST_FIELDS = '-blog_content -blog_image_crop_state';
+
+// The related-post picker renders a checkbox and a title, nothing else. It used to
+// pull up to 100 whole documents - about 3.3 MB - to draw that list.
+const BLOG_ADMIN_OPTION_FIELDS = 'blog_title blog_slug blog_category_key isPublished';
+
 const normalizeString = (value) => {
     if (typeof value !== 'string') return '';
     return value.trim();
@@ -370,6 +407,53 @@ const mapBlogSummary = (item) => {
         // which boot-time maintenance rewrites on every deploy without the article changing.
         publishedAt: item.publishedAt || null,
         updatedAt: item.updatedAt
+    };
+};
+
+// The public counterpart of mapBlogSummary, for documents fetched through
+// BLOG_PUBLIC_LIST_FIELDS. It deliberately omits the pipeline keys rather than
+// deriving them: resolveBlogSourceType infers "manual" from a document whose
+// visualPlan and contentImages were simply not selected, and publishing that guess
+// would be worse than publishing nothing. No storefront surface reads them.
+const mapBlogListItem = (item) => {
+    if (!item) return null;
+    return {
+        id: String(item._id),
+        _id: String(item._id),
+        slug: item.blog_slug,
+        title: item.blog_title,
+        excerpt: item.blog_excerpt,
+        image: item.blog_image,
+        categoryKey: item.blog_category_key,
+        author: item.blog_author_name || 'Inoxpran',
+        authorAvatar:
+            item.blog_author_avatar || buildAuthorAvatar({ authorName: item.blog_author_name }),
+        date: formatDate(item.publishedAt || item.createdAt),
+        readTimeMinutes: Math.max(1, Number(item.blog_read_time_minutes) || 1),
+        views: Math.max(0, Number(item.blog_views) || 0),
+        comments: Math.max(0, Number(item.blog_comments_count) || 0),
+        tags: Array.isArray(item.blog_tags) ? item.blog_tags : [],
+        seoTitle: item.blog_seo_title || '',
+        seoDescription: item.blog_seo_description || '',
+        isPublished: Boolean(item.isPublished),
+        isDraft: Boolean(item.isDraft),
+        createdAt: item.createdAt,
+        // Kept raw so the sitemap can date entries by publication rather than by
+        // updatedAt, which boot-time maintenance rewrites on every deploy.
+        publishedAt: item.publishedAt || null,
+        updatedAt: item.updatedAt
+    };
+};
+
+const mapBlogOption = (item) => {
+    if (!item) return null;
+    return {
+        id: String(item._id),
+        _id: String(item._id),
+        slug: item.blog_slug,
+        title: item.blog_title,
+        categoryKey: item.blog_category_key,
+        isPublished: Boolean(item.isPublished)
     };
 };
 
@@ -893,7 +977,8 @@ class BlogService {
         sort = 'updated',
         category,
         source,
-        q
+        q,
+        view
     } = {}) {
         const safeLimit = Math.min(Math.max(parseNumber(limit, 20), 1), MAX_LIMIT);
         const safePage = Math.max(parseNumber(page, 1), 1);
@@ -922,18 +1007,21 @@ class BlogService {
             ];
         }
 
+        const wantsOptions = normalizeString(view).toLowerCase() === 'options';
         const [items, total] = await Promise.all([
             blog
                 .find(filter)
                 .sort(resolveSortOption(sort))
                 .skip(skip)
                 .limit(safeLimit)
+                .select(wantsOptions ? BLOG_ADMIN_OPTION_FIELDS : BLOG_ADMIN_LIST_FIELDS)
                 .lean(),
             blog.countDocuments(filter)
         ]);
 
+        const mapItem = wantsOptions ? mapBlogOption : mapBlogSummary;
         return {
-            items: items.map((item) => mapBlogSummary(item)).filter(Boolean),
+            items: items.map((item) => mapItem(item)).filter(Boolean),
             total,
             page: safePage,
             limit: safeLimit
@@ -1003,12 +1091,13 @@ class BlogService {
                 .sort(resolveSortOption(sort))
                 .skip(skip)
                 .limit(safeLimit)
+                .select(BLOG_PUBLIC_LIST_FIELDS)
                 .lean(),
             blog.countDocuments(filter)
         ]);
 
         return {
-            items: items.map((item) => mapBlogSummary(item)).filter(Boolean),
+            items: items.map((item) => mapBlogListItem(item)).filter(Boolean),
             total,
             page: safePage,
             limit: safeLimit,

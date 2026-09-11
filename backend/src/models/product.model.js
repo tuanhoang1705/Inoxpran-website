@@ -162,6 +162,19 @@ const productSchema = new Schema({
 productSchema.index({ product_name: 'text', product_description: 'text' });
 productSchema.index({ 'product_reviews.userId': 1 });
 
+// Mirrors the two hot storefront queries so neither needs an in-memory sort as the
+// catalogue grows: the best-selling rail (isPublished + a non-null rank, ordered by
+// rank) and the shop grid (isPublished, newest first).
+// autoIndex is off in production - create them with scripts/ensure-query-indexes.js.
+productSchema.index(
+    { isPublished: 1, product_best_selling_rank: 1, updatedAt: -1 },
+    { name: 'product_published_best_selling' }
+);
+productSchema.index(
+    { isPublished: 1, product_type: 1, _id: -1 },
+    { name: 'product_published_type_recent' }
+);
+
 // Document middleware: run before .save() and .create()
 productSchema.pre('save', function (next) { 
     const slugSource = String(this.product_name || '').replace(

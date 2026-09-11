@@ -2,8 +2,15 @@ import { fail } from '@sveltejs/kit';
 import { API_BASE } from '$lib/server/api.js';
 import { getTranslator } from '$lib/i18n/server.js';
 import { buildUserHeaders, clearSessionAndRedirect, getUserSession } from '$lib/server/userAuth.js';
-import { getHomeFeed, resolveHomeFeedForRender } from '$lib/server/homeFeed.js';
+import {
+	getHomeFeed,
+	readHomeFeedSnapshot,
+	resolveHomeFeedForRender
+} from '$lib/server/homeFeed.js';
 
+// Deliberately short. A render is not the place to wait for the database: the warm
+// loop in homeFeed.js keeps a snapshot current in the background, so missing this
+// budget costs a visitor a slightly older feed, not an error page.
 const HOME_FEED_SSR_BUDGET_MS = 800;
 
 const readJson = async (response) => {
@@ -71,14 +78,17 @@ const fetchCartCount = async ({ fetch, session }) => {
 
 export const load = async ({ setHeaders, fetch, cookies }) => {
 	const t = getTranslator(cookies);
-	// Missing the budget is not the same as having no data. A cold MongoDB Atlas
-	// connection alone costs more than this whole budget, so a visitor arriving
-	// just after the cache expired could be shown "product request failed" while
-	// a perfectly good feed sat in memory. The abandoned refresh keeps running
-	// and fills the cache for the next visitor, so fall back to the last good
-	// snapshot rather than reporting a failure.
+	// Missing the budget is not the same as having no data. A single upstream list
+	// query costs more than this whole budget when the database is slow, so a visitor
+	// arriving on a cache miss could be shown "product request failed" while a
+	// perfectly good feed sat one lookup away. Fall back to the last good snapshot
+	// rather than reporting a failure; the refresh this abandons keeps running.
 	const fresh = await waitWithTimeout(getHomeFeed({ fetch }), HOME_FEED_SSR_BUDGET_MS);
-	const { feed: homeFeed, cacheControl } = resolveHomeFeedForRender({ fresh });
+	// Only pay for the snapshot lookup when the fresh path did not deliver. The lookup
+	// is process memory first and Redis second, so a restarted or newly scaled-out
+	// container starts warm instead of showing the first visitors an error.
+	const snapshot = fresh?.loaded ? null : await readHomeFeedSnapshot();
+	const { feed: homeFeed, cacheControl } = resolveHomeFeedForRender({ fresh, snapshot });
 	const hasHomeFeed = Boolean(homeFeed?.loaded);
 	setHeaders({ 'cache-control': cacheControl });
 	return {

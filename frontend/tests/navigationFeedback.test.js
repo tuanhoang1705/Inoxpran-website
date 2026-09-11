@@ -49,7 +49,9 @@ test('the loader still waits briefly so quick navigations do not flash it', () =
 test('the server warms the home feed so the first visitor after a deploy is not the guinea pig', () => {
 	const hooks = read('src/hooks.server.js');
 
-	assert.match(hooks, /primeHomeFeed/);
+	// Warming once at boot only covered the deploy. The loop keeps covering every
+	// later moment the cache would otherwise go cold under a visitor.
+	assert.match(hooks, /startHomeFeedWarmLoop/);
 	// Running it during the build would fire a request at a backend that is not
 	// there and slow every build down for nothing.
 	assert.match(hooks, /if\s*\(!building\)/);

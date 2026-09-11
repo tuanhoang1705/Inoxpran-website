@@ -182,6 +182,22 @@ blogSchema.index({
     blog_excerpt: 'text',
     blog_tags: 'text'
 });
+
+// The storefront list filters on isPublished and sorts by publication date. With only
+// the single-field isPublished index, MongoDB has to load every published post and sort
+// it in memory; that is survivable at 16 posts and fatal at a few thousand, where the
+// blocking sort hits the 32 MB limit and the query starts erroring instead of slowing.
+// These compound indexes let the sort be served by the index, so .limit() stops early
+// and the cost stays flat as the pipeline keeps publishing.
+// autoIndex is off in production - create them with scripts/ensure-query-indexes.js.
+blogSchema.index(
+    { isPublished: 1, publishedAt: -1, createdAt: -1 },
+    { name: 'blog_published_recent' }
+);
+blogSchema.index(
+    { isPublished: 1, blog_category_key: 1, publishedAt: -1 },
+    { name: 'blog_published_category_recent' }
+);
 blogSchema.index({ qaBatchId: 1, qaCaseId: 1 }, { name: 'qa_blog_batch_case' });
 blogSchema.index(
     { qaCaseId: 1, qaIteration: 1 },
