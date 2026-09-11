@@ -114,3 +114,28 @@ test('the render reaches for the shared snapshot before it reports an error', ()
 	// The snapshot lookup is the fallback, so it must not be paid for on the happy path.
 	assert.match(loader, /fresh\?\.loaded\s*\?\s*null\s*:/);
 });
+
+test('the shop catalogue is kept warm the same way, not on a visitor request', () => {
+	const source = read('src/lib/server/shopCatalogData.js');
+	const warmLoop = /startCatalogWarmLoop[\s\S]*?\n};/.exec(source)?.[0] || '';
+
+	// The shop pulls the whole catalogue to count facets, so a cold cache there costs
+	// a visitor exactly what a cold home feed used to.
+	assert.match(warmLoop, /refreshCatalogSnapshot/);
+	assert.doesNotMatch(warmLoop, /fetchAllCatalogProducts/);
+	assert.match(source, /catalogSnapshotCache\.set\(/);
+	// And it must fall back to the stored catalogue rather than rendering an empty grid.
+	assert.match(source, /readCatalogSnapshot/);
+
+	const refresh = Number(
+		/SHOP_CATALOG_REFRESH_INTERVAL_MS'\s*,\s*([\d_]+)/.exec(source)?.[1]?.replace(/_/g, '')
+	);
+	const ttl = Number(/SHOP_CATALOG_TTL_MS'\s*,\s*([\d_]+)/.exec(source)?.[1]?.replace(/_/g, ''));
+	assert.ok(refresh < ttl, `refresh (${refresh}ms) must beat the TTL (${ttl}ms)`);
+});
+
+test('both warm loops start at boot', () => {
+	const hooks = read('src/hooks.server.js');
+	assert.match(hooks, /startHomeFeedWarmLoop/);
+	assert.match(hooks, /startCatalogWarmLoop/);
+});

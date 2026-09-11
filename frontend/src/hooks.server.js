@@ -6,13 +6,16 @@ import path from 'node:path';
 import { ensureAdminSession, clearAdminCookies } from '$lib/server/adminAuth.js';
 import { clearUserCookies } from '$lib/server/userAuth.js';
 import { startHomeFeedWarmLoop } from '$lib/server/homeFeed.js';
+import { startCatalogWarmLoop } from '$lib/server/shopCatalogData.js';
 
-// Keep the homepage feed warm from the background, starting at boot. Refreshing on a
-// schedule rather than on a cache miss means no visitor ever waits on the database,
-// and the snapshot it maintains lives in Redis, so a restart or an extra replica
-// starts from the last good feed instead of from nothing.
+// Keep the two collection-wide reads warm from the background, starting at boot: the
+// homepage feed and the shop's catalogue snapshot. Refreshing on a schedule rather
+// than on a cache miss means no visitor ever waits on the database, and the snapshots
+// live in Redis, so a restart or an extra replica starts from the last good data
+// instead of from nothing.
 if (!building) {
 	startHomeFeedWarmLoop();
+	startCatalogWarmLoop();
 }
 
 const ADMIN_SUBDOMAIN = 'admin.inoxpran.com';
