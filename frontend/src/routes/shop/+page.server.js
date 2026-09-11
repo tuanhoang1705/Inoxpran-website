@@ -200,7 +200,16 @@ export const load = async ({ fetch, url, cookies }) => {
 	let hadSuccessfulResponse = false;
 	let facets = createEmptyFacetCounts();
 
-	for (const apiUrl of requestUrls) {
+	// The catalogue snapshot is kept warm in the background and holds every product,
+	// and the local pagination further down is what actually produces the rendered
+	// page. So whenever the snapshot is available, the paged API query below is work
+	// whose result is thrown away - it was costing a visitor a full round trip to the
+	// database for nothing. Ask for the snapshot first and skip that query entirely.
+	const catalogProducts = await fetchAllCatalogProducts({ fetch, headers })
+		.then((snapshot) => (Array.isArray(snapshot?.products) ? snapshot.products : []))
+		.catch(() => []);
+
+	for (const apiUrl of catalogProducts.length ? [] : requestUrls) {
 		try {
 			const response = await fetch(apiUrl, { headers });
 			if (!response.ok) {
@@ -224,7 +233,12 @@ export const load = async ({ fetch, url, cookies }) => {
 	}
 
 	const products = resolvedProducts.length ? resolvedProducts : fallbackProducts;
-	if (!products.length && !hadSuccessfulResponse && errorStatus !== null) {
+	if (
+		!catalogProducts.length &&
+		!products.length &&
+		!hadSuccessfulResponse &&
+		errorStatus !== null
+	) {
 		return {
 			products: [],
 			filters: { q, tag, category, minPrice, maxPrice, sort, page, limit },
@@ -238,7 +252,7 @@ export const load = async ({ fetch, url, cookies }) => {
 		};
 	}
 
-	if (!products.length && !hadSuccessfulResponse && hadNetworkFailure) {
+	if (!catalogProducts.length && !products.length && !hadSuccessfulResponse && hadNetworkFailure) {
 		return {
 			products: [],
 			filters: { q, tag, category, minPrice, maxPrice, sort, page, limit },
@@ -257,16 +271,18 @@ export const load = async ({ fetch, url, cookies }) => {
 	let finalProducts = trimmedProducts;
 	let finalHasNextPage = hasNextPage;
 	let finalTotal = hasNextPage ? null : trimmedProducts.length;
-	try {
-		const catalogSnapshot = await fetchAllCatalogProducts({ fetch, headers });
-		const facetSourceProducts = catalogSnapshot.products.length
-			? catalogSnapshot.products
-			: products;
-		facets = computeCatalogFacetCounts({
-			products: facetSourceProducts,
-			filters: activeFacetFilters
-		});
 
+	// The snapshot was already fetched above, so this no longer costs a second trip.
+	const facetSourceProducts = catalogProducts.length ? catalogProducts : products;
+	facets = computeCatalogFacetCounts({
+		products: facetSourceProducts,
+		filters: activeFacetFilters
+	});
+
+	// Paginating locally is only right over the whole catalogue. Falling back to one
+	// page of API results, the sole filter still needing local work is the tag, which
+	// the API does not apply.
+	if (catalogProducts.length || tag) {
 		const localPage = paginateCatalogProducts({
 			products: facetSourceProducts,
 			filters: { q, tag, category, minPrice, maxPrice },
@@ -277,23 +293,6 @@ export const load = async ({ fetch, url, cookies }) => {
 		finalProducts = localPage.items;
 		finalHasNextPage = localPage.hasNextPage;
 		finalTotal = localPage.total;
-	} catch {
-		facets = computeCatalogFacetCounts({
-			products,
-			filters: activeFacetFilters
-		});
-		if (tag) {
-			const localPage = paginateCatalogProducts({
-				products: products,
-				filters: { q, tag, category, minPrice, maxPrice },
-				sort,
-				page,
-				limit
-			});
-			finalProducts = localPage.items;
-			finalHasNextPage = localPage.hasNextPage;
-			finalTotal = localPage.total;
-		}
 	}
 
 	return {
